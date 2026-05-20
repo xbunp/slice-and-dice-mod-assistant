@@ -2,13 +2,15 @@ using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI; // Added to support the Button component
 
-public enum CellType { Input, Dropdown, Label }
+public enum CellType { Input, Dropdown, Label, Button }
 
 public class GridReferences
 {
     public Dictionary<string, TMP_InputField> Inputs = new Dictionary<string, TMP_InputField>();
     public Dictionary<string, TMP_Dropdown> Dropdowns = new Dictionary<string, TMP_Dropdown>();
+    public Dictionary<string, Button> Buttons = new Dictionary<string, Button>();
 }
 
 public class GridRowSpec
@@ -26,6 +28,7 @@ public class GridCellSpec
     public List<string> dropdownOptions = new List<string>();
     public Action<string> onStringChanged;
     public Action<int> onIntChanged;
+    public Action onClicked; // Action for button clicks
 
     public static GridCellSpec CreateInput(string key, string label, float ratio, Action<string> onChanged)
     {
@@ -52,7 +55,20 @@ public class GridCellSpec
     {
         return new GridCellSpec { type = CellType.Dropdown, key = key, labelText = label, widthRatio = ratio, dropdownOptions = new List<string>(options), onIntChanged = onChanged };
     }
+
+    public static GridCellSpec CreateButton(string key, string label, float ratio, Action onClicked)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.Button,
+            key = key,
+            labelText = label,
+            widthRatio = ratio,
+            onClicked = onClicked
+        };
+    }
 }
+
 public class ColumnSpec
 {
     public string name;

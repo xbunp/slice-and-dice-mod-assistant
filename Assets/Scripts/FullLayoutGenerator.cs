@@ -11,6 +11,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject dropdownPrefab;
     public GameObject labelPrefab;
     public GameObject diceButtonPrefab;
+    public GameObject buttonPrefab;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;

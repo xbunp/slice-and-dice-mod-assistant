@@ -6,10 +6,10 @@ public class HeroData
 {
     [Header("Core Info")]
     public string heroName = "NewHero";
-    public string baseReplica = "statue"; // e.g., statue, lost, thief
-    public string imageOverride = "Statue"; // Default fallback
+    public string baseReplica = "Statue"; // e.g., statue, lost, thief
+    public string imageOverride = "None"; // Default fallback
     public string colorClass = "y";       // y, o, r, b, g, etc.
-    public int hp = 10;
+    public int hp = 7;
     public int tier = 1;
 
     [Header("Dice Definition (6 Sides)")]
@@ -77,7 +77,7 @@ public enum TargetType
     self        // Passive/Hero wide
 }
 
-public enum AllNames
+public enum AllHeroNames
 {
     None,
     Acolyte,

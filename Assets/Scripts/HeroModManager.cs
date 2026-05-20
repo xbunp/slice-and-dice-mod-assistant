@@ -28,6 +28,9 @@ public class HeroModManager : MonoBehaviour
     private Image heroIconBackground;
     private TextMeshProUGUI syntaxHighlighterText;
 
+    // Internal shit. 
+    private Sprite[] atlasSprites;
+
     void Start()
     {
         uiGenerator = GetComponent<FullScreenUIGenerator>();
@@ -41,7 +44,7 @@ public class HeroModManager : MonoBehaviour
 
     private void BuildUIAndBind()
     {
-        string[] heroNamesList = Enum.GetNames(typeof(AllNames));
+        string[] heroNamesList = Enum.GetNames(typeof(AllHeroNames));
 
         // 1. Core Stats Layout Specification
         // Each row contains a pair of: [Label (0.35 width) | Input/Dropdown (0.65 width)]
@@ -87,40 +90,76 @@ public class HeroModManager : MonoBehaviour
             )
         };
 
-        // 2. Dice Layout Specification
-        // Order: Left, Middle, Top, Bottom, Right, Rightmost
-        string[] diceNames = { "Left", "Middle", "Top", "Bottom", "Right", "Rightmost" };
-        // 2. Dice Layout Specification (Expanded to 2 rows per face)
+        // 2. Dice Layout Specification (Expanded dynamically based on active keywords)
         var diceLayout = new List<GridRowSpec>();
+        string[] defaultKwOptions = GetDefaultKeywordOptions();
+
         for (int i = 0; i < 6; i++)
         {
             int index = i;
             string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
 
-            // Top Row: Base Action & Pips
+            // Row 1: Base Action & Pips
             diceLayout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel($"Lbl_{index}", $"{faceName}:", 0.2f),
-                GridCellSpec.CreateInput($"ID_{index}", "Base ID", 0.4f, (val) => {
+                GridCellSpec.CreateInput($"ID_{index}", "Base ID", 0.4f, (val) =>
+                {
                     if (int.TryParse(val, out int id)) { currentHero.diceSides[index].effectID = id; UpdateDiceIcon(index); OnUIChanged(); }
                 }),
-                GridCellSpec.CreateInput($"Pips_{index}", "Pips", 0.4f, (val) => {
+                GridCellSpec.CreateInput($"Pips_{index}", "Pips", 0.4f, (val) =>
+                {
                     if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); }
                 })
             ));
 
-            // Bottom Row: Facades & Keywords
+            // Row 2: Facade & Color
             diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateInput($"Facade_{index}", "Facade ID", 0.3f, (val) => { currentHero.diceSides[index].facadeID = val; OnUIChanged(); }),
-                GridCellSpec.CreateInput($"Color_{index}", "Color", 0.3f, (val) => { currentHero.diceSides[index].facadeColor = val; OnUIChanged(); }),
-                GridCellSpec.CreateInput($"Kw_{index}", "Keywords (csv)", 0.4f, (val) => {
-                    currentHero.diceSides[index].keywords = val.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(k => k.Trim()).ToList();
-                    OnUIChanged();
-                })
+                GridCellSpec.CreateLabel($"LblFac_{index}", "Facade:", 0.2f),
+                GridCellSpec.CreateInput($"Facade_{index}", "ID (e.g. The0)", 0.4f, (val) => { currentHero.diceSides[index].facadeID = val; OnUIChanged(); }),
+                GridCellSpec.CreateInput($"Color_{index}", "Color (ID or H:S:V)", 0.4f, (val) => { currentHero.diceSides[index].facadeColor = val; OnUIChanged(); })
             ));
 
-            // Tiny spacer row so faces don't bleed together
+            // Row 3: Keyword Search & Dropdown (CSV input removed)
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateInput($"KwSearch_{index}", "Search Kw...", 0.4f, (val) => FilterKeywordDropdown(index, val)),
+                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.6f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
+            ));
+
+            // Row(s) 4+: Dynamic Keyword Tags
+            var activeKeywords = currentHero.diceSides[index].keywords;
+            if (activeKeywords != null && activeKeywords.Count > 0)
+            {
+                // Display tags in rows of up to 2 items to keep the layout compact
+                for (int k = 0; k < activeKeywords.Count; k += 2)
+                {
+                    var tagCells = new List<GridCellSpec>();
+
+                    // First tag in pair
+                    string kw1 = activeKeywords[k];
+                    tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw1}", kw1, 0.35f));
+                    tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw1}", "[X]", 0.15f, () => RemoveKeyword(index, kw1)));
+
+                    // Second tag in pair (if available)
+                    if (k + 1 < activeKeywords.Count)
+                    {
+                        string kw2 = activeKeywords[k + 1];
+                        tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw2}", kw2, 0.35f));
+                        tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw2}", "[X]", 0.15f, () => RemoveKeyword(index, kw2)));
+                    }
+                    else
+                    {
+                        // Fill remaining width if odd number of elements
+                        tagCells.Add(GridCellSpec.CreateLabel($"KwPad_{index}_{k}", "", 0.5f));
+                    }
+
+                    diceLayout.Add(new GridRowSpec(tagCells.ToArray()));
+                }
+            }
+
+            // Spacer row
             if (i < 5) diceLayout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
         }
+
 
         // 3. Define the column split mapping
         var columns = new List<ColumnSpec>
@@ -153,14 +192,12 @@ public class HeroModManager : MonoBehaviour
         GameObject iconObj = Instantiate(framedIconPrefab, containerRt);
         heroIcon = iconObj.GetComponent<FramedIcon>();
         RectTransform iconRt = iconObj.GetComponent<RectTransform>();
-        // Set max X to 0.33f
         FullScreenUIGenerator.SetAnchors(iconRt, 0.0f, 0.0f, 0.33f, 1.0f);
 
-        // 3. Instantiate Dice Preview (Right: 38% to 100% to allow a 5% gap)
+        // 3. Instantiate Dice Preview (Right: 38% to 100%)
         GameObject diceObj = Instantiate(dicePreviewPrefab, containerRt);
         dicePreview = diceObj.GetComponent<DicePreview>();
         RectTransform diceRt = diceObj.GetComponent<RectTransform>();
-        // Set min X to 0.38f
         FullScreenUIGenerator.SetAnchors(diceRt, 0.38f, 0.0f, 1.0f, 1.0f);
 
         // 4. Label (Middle portion of the panel)
@@ -182,9 +219,23 @@ public class HeroModManager : MonoBehaviour
         rawTextOutput.customCaretColor = true;
         rawTextOutput.caretColor = Color.white;
 
+        // Force Auto Sizing OFF on the input field text component
+        rawTextOutput.textComponent.enableAutoSizing = false;
+        rawTextOutput.pointSize = 16;
+        rawTextOutput.textComponent.autoSizeTextContainer = false;
+
         GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
         highlighterObj.name = "SyntaxHighlighter";
         syntaxHighlighterText = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
+
+        // Strip custom scripts and layout controllers
+        foreach (var script in highlighterObj.GetComponents<MonoBehaviour>())
+        {
+            if (script != null && !(script is TextMeshProUGUI))
+            {
+                DestroyImmediate(script);
+            }
+        }
 
         RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
         RectTransform textCompRt = rawTextOutput.textComponent.GetComponent<RectTransform>();
@@ -194,10 +245,14 @@ public class HeroModManager : MonoBehaviour
         highlightRt.offsetMax = textCompRt.offsetMax;
         highlightRt.pivot = textCompRt.pivot;
 
+        // Force Auto Sizing OFF on the highlighter and set size to 16
+        syntaxHighlighterText.enableAutoSizing = false; // <-- This disables the auto-shrink behavior
+        syntaxHighlighterText.fontSize = 16;
+
         syntaxHighlighterText.alignment = rawTextOutput.textComponent.alignment;
-        syntaxHighlighterText.fontSize = rawTextOutput.textComponent.fontSize;
         syntaxHighlighterText.margin = rawTextOutput.textComponent.margin;
         syntaxHighlighterText.enableWordWrapping = rawTextOutput.textComponent.enableWordWrapping;
+        syntaxHighlighterText.autoSizeTextContainer = false;
         syntaxHighlighterText.richText = true;
         // ----------------------------------
 
@@ -211,6 +266,7 @@ public class HeroModManager : MonoBehaviour
     {
         if (isSyncing) return;
         GenerateRawText();
+        UpdateHeroIcon();
     }
 
     private void OnRawTextChanged(string rawText)
@@ -234,13 +290,13 @@ public class HeroModManager : MonoBehaviour
 
         if (statsUI.Dropdowns.TryGetValue("Replica", out var repDrop))
         {
-            if (Enum.TryParse(currentHero.baseReplica, true, out AllNames parsedName))
+            if (Enum.TryParse(currentHero.baseReplica, true, out AllHeroNames parsedName))
                 repDrop.value = (int)parsedName;
         }
 
         if (statsUI.Dropdowns.TryGetValue("ImageOverride", out var imgDrop))
         {
-            if (Enum.TryParse(currentHero.imageOverride, true, out AllNames parsedName))
+            if (Enum.TryParse(currentHero.imageOverride, true, out AllHeroNames parsedName))
                 imgDrop.value = (int)parsedName;
         }
 
@@ -264,12 +320,17 @@ public class HeroModManager : MonoBehaviour
             UpdateDiceIcon(i);
         }
 
+        // Apply the updated icon changes here
+        UpdateHeroIcon();
+
         isSyncing = false;
     }
 
     private void GenerateRawText()
     {
         isSyncing = true;
+
+        // 1. Build Base SD Array
         string sdString = "";
         for (int i = 0; i < 6; i++)
         {
@@ -278,19 +339,55 @@ public class HeroModManager : MonoBehaviour
             if (i < 5) sdString += ":";
         }
 
+        // 2. Base Hero String (without image override in the middle)
+        string baseHeroStr = $"replica.{currentHero.baseReplica}.n.{currentHero.heroName}.col.{currentHero.colorClass}.hp.{currentHero.hp}.tier.{currentHero.tier}.sd.{sdString}";
+
+        // 3. Build Item Modifiers (.i.) for Keywords and Facades
+        string modifiersStr = "";
+        for (int i = 0; i < 6; i++)
+        {
+            var face = currentHero.diceSides[i];
+            List<string> modChunks = new List<string>();
+
+            // Keywords 
+            foreach (var kw in face.keywords)
+            {
+                if (!string.IsNullOrWhiteSpace(kw))
+                    modChunks.Add($"k.{kw.Trim().ToLower()}");
+            }
+
+            // Facade 
+            if (!string.IsNullOrWhiteSpace(face.facadeID))
+            {
+                string facStr = $"facade.{face.facadeID.Trim()}";
+                if (!string.IsNullOrWhiteSpace(face.facadeColor))
+                    facStr += $":{face.facadeColor.Trim()}";
+
+                modChunks.Add(facStr);
+            }
+
+            if (modChunks.Count > 0)
+            {
+                string joinedMods = string.Join("#", modChunks);
+                string faceTargetName = DiceTargetHelper.FaceNames[i];
+                modifiersStr += $".i.{faceTargetName}.{joinedMods}";
+            }
+        }
+
+        // 4. Image Override Condition (constructed to be appended at the end of the string)
         string imgOverrideStr = "";
-        if (!string.IsNullOrEmpty(currentHero.imageOverride) && currentHero.imageOverride != "Statue")
+        if (!string.IsNullOrEmpty(currentHero.imageOverride)
+            && currentHero.imageOverride != AllHeroNames.None.ToString()
+            && currentHero.imageOverride != currentHero.baseReplica)
         {
             imgOverrideStr = $".img.{currentHero.imageOverride}";
         }
 
-        // The pure text buffer used for copying/pasting
-        string plainText = $"(replica.{currentHero.baseReplica}{imgOverrideStr}.n.{currentHero.heroName}.col.{currentHero.colorClass}.hp.{currentHero.hp}.tier.{currentHero.tier}.sd.{sdString})";
+        // 5. Assemble final string placing the image override at the absolute end
+        string plainText = $"({baseHeroStr}{modifiersStr}{imgOverrideStr})";
         rawTextOutput.text = plainText;
 
-        // The colored text used for display
-        syntaxHighlighterText.fontSize = 16;
-        syntaxHighlighterText.autoSizeTextContainer = false;
+        // Update syntax highlighting
         syntaxHighlighterText.text = FormatSyntaxHighlighting(plainText);
 
         isSyncing = false;
@@ -304,7 +401,7 @@ public class HeroModManager : MonoBehaviour
         // Image override parser
         Match mImage = Regex.Match(rawText, @"\.img\.([a-zA-Z]+)");
         if (mImage.Success) currentHero.imageOverride = mImage.Groups[1].Value;
-        else currentHero.imageOverride = "Statue"; // fallback
+        else currentHero.imageOverride = "None"; // fallback
 
         Match mName = Regex.Match(rawText, @"n\.([a-zA-Z0-9_\s]+)");
         if (mName.Success) currentHero.heroName = mName.Groups[1].Value;
@@ -351,7 +448,6 @@ public class HeroModManager : MonoBehaviour
         return HeroColors.ColorOption.Yellow;
     }
 
-    // --- SYNTAX HIGHLIGHTING LOGIC ---
     private string FormatSyntaxHighlighting(string plainText)
     {
         if (string.IsNullOrEmpty(plainText)) return "";
@@ -386,6 +482,41 @@ public class HeroModManager : MonoBehaviour
             string coloredSdBlock = $"<color=#{GetFixedColorForTag("sd")}>sd.</color>" + string.Join(":", coloredFaces);
             result = result.Replace(fullSdBlock, coloredSdBlock);
         }
+
+        // 3. Coordinate modifier blocks (.i.) with their matching face color
+        string[] targetNames = { "left", "mid", "top", "bot", "right", "rightmost", "all", "row", "col", "topbot", "left2", "mid2", "right2", "right3", "right5" };
+        string targetPattern = string.Join("|", targetNames);
+
+        // FIX: Match everything up to the next .i., closing parenthesis, space, or end of string
+        string patternTargeted = @"\.i\.(" + targetPattern + @")\.(.*?)(?=\.i\.|\)|\s|$)";
+
+        result = Regex.Replace(result, patternTargeted, (match) =>
+        {
+            string target = match.Groups[1].Value;
+            string content = match.Groups[2].Value;
+
+            string hexColor;
+            int faceIndex = Array.IndexOf(DiceTargetHelper.FaceNames, target.ToLower());
+
+            if (faceIndex != -1)
+            {
+                // Single face target matches the exact face color assigned in step 2
+                hexColor = GetFixedColorForTag("face_" + faceIndex + "_unique");
+            }
+            else
+            {
+                // Group combinations get their own distinct color
+                hexColor = GetFixedColorForTag("target_combo_" + target.ToLower());
+            }
+
+            return $"<color=#{hexColor}>.i.{target}.{content}</color>";
+        }, RegexOptions.IgnoreCase);
+
+        // 4. Highlight global modifiers (e.g. .i.k.wither or .i.facade.The0 missing a target)
+        // FIX: Ensure it doesn't break at inner dots
+        string patternGlobal = @"\.i\.(k\..*?|facade\..*?)(?=\.i\.|\)|\s|$)";
+        string globalHex = GetFixedColorForTag("global_modifier");
+        result = Regex.Replace(result, patternGlobal, $"<color=#{globalHex}>.i.$1</color>", RegexOptions.IgnoreCase);
 
         return result;
     }
@@ -427,5 +558,120 @@ public class HeroModManager : MonoBehaviour
 
         if (targetImage != null)
             dicePreview.SetDiceIcon(targetImage, "bas", effectId);
+    }
+
+    private void UpdateHeroIcon()
+    {
+        if (heroIcon == null) return;
+
+        // Determine which hero name is active based on the override rules
+        string activeHeroNameStr = currentHero.baseReplica;
+        if (!string.IsNullOrEmpty(currentHero.imageOverride)
+            && currentHero.imageOverride != AllHeroNames.None.ToString()
+            && currentHero.imageOverride != currentHero.baseReplica)
+        {
+            activeHeroNameStr = currentHero.imageOverride;
+        }
+
+        if (Enum.TryParse(activeHeroNameStr, true, out AllHeroNames activeHero))
+        {
+            if (HeroSpriteDatabase.HeroSpriteMap.TryGetValue(activeHero, out string spriteName))
+            {
+                // Lazy-load the sliced spritesheet array once
+                if (atlasSprites == null || atlasSprites.Length == 0)
+                {
+                    atlasSprites = Resources.LoadAll<Sprite>("base_atlas_image");
+                }
+
+                // Find the specific sub-sprite by name from the sliced array
+                Sprite targetSprite = Array.Find(atlasSprites, s => s.name == spriteName);
+
+                if (targetSprite != null && heroIcon.icon != null)
+                {
+                    heroIcon.icon.sprite = targetSprite;
+                }
+                else if (targetSprite == null)
+                {
+                    Debug.LogWarning($"Could not find sliced sprite '{spriteName}' inside 'base_atlas_image' spritesheet.");
+                }
+            }
+        }
+    }
+
+    // --- KEYWORD SEARCH & SELECT LOGIC ---
+
+    private string[] GetDefaultKeywordOptions()
+    {
+        var list = new List<string> { "Keyword" };
+        list.AddRange(Enum.GetNames(typeof(EffectKeyword)));
+        return list.ToArray();
+    }
+
+    private void FilterKeywordDropdown(int index, string search)
+    {
+        if (isSyncing) return;
+
+        if (diceUI.Dropdowns.TryGetValue($"KwDrop_{index}", out var drop))
+        {
+            drop.ClearOptions();
+
+            // Filter Enum names based on search string
+            List<string> filtered = Enum.GetNames(typeof(EffectKeyword))
+                .Where(k => string.IsNullOrEmpty(search) || k.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+
+            filtered.Insert(0, "[ Select Keyword to Add ]");
+
+            drop.AddOptions(filtered);
+            drop.value = 0;
+            drop.RefreshShownValue();
+        }
+    }
+
+
+    private void AddKeywordFromDropdown(int index, int dropVal)
+    {
+        if (isSyncing || dropVal == 0) return; // 0 is the placeholder
+
+        if (diceUI.Dropdowns.TryGetValue($"KwDrop_{index}", out var drop))
+        {
+            string selectedKw = drop.options[dropVal].text;
+
+            // Add to data if not already present
+            if (!currentHero.diceSides[index].keywords.Contains(selectedKw, StringComparer.OrdinalIgnoreCase))
+            {
+                currentHero.diceSides[index].keywords.Add(selectedKw);
+
+                isSyncing = true;
+                drop.value = 0;
+                drop.RefreshShownValue();
+
+                // Clear the search field if active
+                if (diceUI.Inputs.TryGetValue($"KwSearch_{index}", out var searchInput))
+                {
+                    searchInput.text = "";
+                    FilterKeywordDropdown(index, "");
+                }
+                isSyncing = false;
+
+                // Trigger UI refresh to redraw the dynamic tag list
+                OnUIChanged();
+            }
+        }
+    }
+
+    private void RemoveKeyword(int index, string keyword)
+    {
+        if (isSyncing) return;
+
+        var keywordsList = currentHero.diceSides[index].keywords;
+        if (keywordsList.Contains(keyword))
+        {
+            keywordsList.Remove(keyword);
+
+            // Trigger UI refresh to update the displayed list of tags
+            OnUIChanged();
+        }
+
     }
 }
