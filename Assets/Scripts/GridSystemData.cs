@@ -4,13 +4,14 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI; // Added to support the Button component
 
-public enum CellType { Input, Dropdown, Label, Button }
+public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider }
 
 public class GridReferences
 {
     public Dictionary<string, TMP_InputField> Inputs = new Dictionary<string, TMP_InputField>();
     public Dictionary<string, TMP_Dropdown> Dropdowns = new Dictionary<string, TMP_Dropdown>();
     public Dictionary<string, Button> Buttons = new Dictionary<string, Button>();
+    public Dictionary<string, Slider> Sliders = new Dictionary<string, Slider>();
 }
 
 public class GridRowSpec
@@ -28,7 +29,13 @@ public class GridCellSpec
     public List<string> dropdownOptions = new List<string>();
     public Action<string> onStringChanged;
     public Action<int> onIntChanged;
-    public Action onClicked; // Action for button clicks
+    public Action onClicked;
+
+    //Sliders
+    public float sliderMin;
+    public float sliderMax;
+    public bool sliderWholeNumbers;
+    public Action<float> onFloatChanged;
 
     public static GridCellSpec CreateInput(string key, string label, float ratio, Action<string> onChanged)
     {
@@ -67,6 +74,32 @@ public class GridCellSpec
             onClicked = onClicked
         };
     }
+
+    public static GridCellSpec CreateDiceButton(string key, string label, float ratio, Action onClicked)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.DiceButton,
+            key = key,
+            labelText = label,
+            widthRatio = ratio,
+            onClicked = onClicked
+        };
+    }
+
+    public static GridCellSpec CreateSlider(string key, float min, float max, bool wholeNumbers, float ratio, Action<float> onChanged)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.Slider,
+            key = key,
+            sliderMin = min,
+            sliderMax = max,
+            sliderWholeNumbers = wholeNumbers,
+            widthRatio = ratio,
+            onFloatChanged = onChanged
+        };
+    }
 }
 
 public class ColumnSpec
@@ -98,5 +131,6 @@ public class ColumnSpec
 public class GeneratedScreen
 {
     public Dictionary<string, GridReferences> ColumnRefs = new Dictionary<string, GridReferences>();
+    public Dictionary<string, RectTransform> ColumnPanels = new Dictionary<string, RectTransform>();
     public Dictionary<string, RectTransform> CustomPanels = new Dictionary<string, RectTransform>();
 }

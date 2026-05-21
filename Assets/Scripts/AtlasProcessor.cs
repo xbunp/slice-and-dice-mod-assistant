@@ -268,8 +268,15 @@ public class AtlasProcessor : AssetPostprocessor
         for (int i = 0; i < lines.Length; i++)
         {
             string line = lines[i].Trim();
-            if (string.IsNullOrEmpty(line) || line.Contains(":") || line.EndsWith(".png"))
+
+            // Skip empty lines, lines with metadata colons, raw image references, and "3dlink/" entries
+            if (string.IsNullOrEmpty(line) ||
+                line.Contains(":") ||
+                line.EndsWith(".png") ||
+                line.StartsWith("3dlink/"))
+            {
                 continue;
+            }
 
             string originalPath = line;
             string[] pathParts = originalPath.Split('/');
@@ -415,124 +422,3 @@ public class AtlasProcessor : AssetPostprocessor
         dataProvider.Apply();
     }
 }
-/*
-public class AtlasProcessor : AssetPostprocessor
-{
-    // Add your atlas filenames here
-    private readonly string[] TargetFileNames = { "base_atlas_image.png", "community_atlas_image.png" };
-    private const int AtlasHeight = 1024;
-
-    void OnPreprocessTexture()
-    {
-        string fileName = Path.GetFileName(assetPath);
-
-        foreach (string target in TargetFileNames)
-        {
-            if (fileName == target)
-            {
-                ProcessAtlas(assetImporter, target);
-                break;
-            }
-        }
-    }
-
-    private void ProcessAtlas(AssetImporter importer, string targetFileName)
-    {
-        TextureImporter textureImporter = (TextureImporter)importer;
-        textureImporter.textureType = TextureImporterType.Sprite;
-        textureImporter.spriteImportMode = SpriteImportMode.Multiple;
-
-        var factory = new SpriteDataProviderFactories();
-        factory.Init();
-        var dataProvider = factory.GetSpriteEditorDataProviderFromObject(textureImporter);
-        dataProvider.InitSpriteEditorDataProvider();
-
-        string textPath = assetPath.Replace(".png", ".txt");
-        if (!File.Exists(textPath))
-        {
-            Debug.LogError("Could not find: " + textPath);
-            return;
-        }
-
-        string[] lines = File.ReadAllLines(textPath);
-        var spriteRects = new List<SpriteRect>();
-        Dictionary<string, int> folderCounters = new Dictionary<string, int>();
-
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string line = lines[i].Trim();
-            if (string.IsNullOrEmpty(line) || line.Contains(":") || line.EndsWith(".png"))
-                continue;
-
-            // Logic to handle naming based on folder path
-            string[] pathParts = line.Split('/');
-            string folderName = "Atm";
-            string spriteSubName = pathParts[pathParts.Length - 1];
-
-            if (pathParts.Length >= 2)
-            {
-                // If it's in a folder, use the folder name for the prefix
-                folderName = pathParts[pathParts.Length - 2];
-            }
-            else
-            {
-                // If at root, use the filename itself
-                folderName = pathParts[0];
-            }
-
-            folderName = folderName.Trim();
-            if (folderName.Length < 3) folderName = folderName.PadRight(3, '_');
-            string prefix = folderName.Substring(0, 3);
-
-            if (!folderCounters.ContainsKey(prefix)) folderCounters[prefix] = 0;
-            string finalName = $"{prefix}_{folderCounters[prefix]}_{spriteSubName}";
-            folderCounters[prefix]++;
-
-            // Parsing Metadata
-            int x = 0, y = 0, w = 0, h = 0;
-            bool foundXY = false, foundSize = false;
-
-            for (int j = 1; j <= 6 && (i + j) < lines.Length; j++)
-            {
-                string metaLine = lines[i + j].Trim();
-                if (!metaLine.Contains(":")) break;
-
-                if (metaLine.StartsWith("xy:"))
-                {
-                    string[] parts = metaLine.Replace("xy:", "").Split(',');
-                    if (parts.Length >= 2)
-                    {
-                        int.TryParse(parts[0].Trim(), out x);
-                        int.TryParse(parts[1].Trim(), out y);
-                        foundXY = true;
-                    }
-                }
-                else if (metaLine.StartsWith("size:"))
-                {
-                    string[] parts = metaLine.Replace("size:", "").Split(',');
-                    if (parts.Length >= 2)
-                    {
-                        int.TryParse(parts[0].Trim(), out w);
-                        int.TryParse(parts[1].Trim(), out h);
-                        foundSize = true;
-                    }
-                }
-            }
-
-            if (foundXY && foundSize)
-            {
-                spriteRects.Add(new SpriteRect
-                {
-                    name = finalName,
-                    rect = new Rect(x, AtlasHeight - y - h, w, h),
-                    alignment = SpriteAlignment.Center,
-                    pivot = new Vector2(0.5f, 0.5f)
-                });
-            }
-        }
-
-        dataProvider.SetSpriteRects(spriteRects.ToArray());
-        dataProvider.Apply();
-    }
-}
-*/

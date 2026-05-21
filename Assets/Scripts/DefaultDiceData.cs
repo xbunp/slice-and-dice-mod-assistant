@@ -397,10 +397,9 @@ public class DiceSideData
     public int effectID = 0;
     public int pips = 0;
 
-    // New Fields
     public List<string> keywords = new List<string>();
     public string facadeID = "";
-    public string facadeColor = ""; // Can hold "41" or "h:s:v"
+    public string facadeColor = "";
 }
 
 public static class DiceTargetHelper

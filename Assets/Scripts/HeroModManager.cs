@@ -30,16 +30,62 @@ public class HeroModManager : MonoBehaviour
 
     // Internal shit. 
     private Sprite[] atlasSprites;
+    private GeneratedScreen currentScreen = new GeneratedScreen();
+
+    [Header("UI Modal References")]
+    [SerializeField] private IconPickerModal diceFaceIconPicker;
+
+    // Sprite Caches
+    private Sprite[] _baseActionSprites;
+    private Dictionary<int, string> _baseActionNames;
+
+    private Sprite[] _allActionSprites;
+    private Dictionary<int, string> _allActionNames;
 
     void Start()
     {
         uiGenerator = GetComponent<FullScreenUIGenerator>();
         currentHero = new HeroData();
 
+        LoadAllSprites();
         BuildUIAndBind();
 
         UpdateUIFromData();
         GenerateRawText();
+    }
+
+    private void LoadAllSprites()
+    {
+        Sprite[] baseAtlas = SpriteCache.GetBaseSprites();
+        Sprite[] commAtlas = SpriteCache.GetCommunitySprites();
+
+        List<Sprite> allSp = new List<Sprite>();
+        allSp.AddRange(baseAtlas);
+        allSp.AddRange(commAtlas);
+
+        List<Sprite> basSp = new List<Sprite>();
+
+        _allActionSprites = allSp.ToArray();
+        _allActionNames = new Dictionary<int, string>();
+
+        for (int i = 0; i < _allActionSprites.Length; i++)
+        {
+            string sName = _allActionSprites[i].name;
+            _allActionNames[i] = sName;
+
+            // Gather only "bas" items for the Base Actions filter
+            if (sName.StartsWith("bas_", StringComparison.OrdinalIgnoreCase))
+            {
+                basSp.Add(_allActionSprites[i]);
+            }
+        }
+
+        _baseActionSprites = basSp.ToArray();
+        _baseActionNames = new Dictionary<int, string>();
+        for (int i = 0; i < _baseActionSprites.Length; i++)
+        {
+            _baseActionNames[i] = _baseActionSprites[i].name;
+        }
     }
 
     private void BuildUIAndBind()
@@ -90,76 +136,7 @@ public class HeroModManager : MonoBehaviour
             )
         };
 
-        // 2. Dice Layout Specification (Expanded dynamically based on active keywords)
-        var diceLayout = new List<GridRowSpec>();
-        string[] defaultKwOptions = GetDefaultKeywordOptions();
-
-        for (int i = 0; i < 6; i++)
-        {
-            int index = i;
-            string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
-
-            // Row 1: Base Action & Pips
-            diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"Lbl_{index}", $"{faceName}:", 0.2f),
-                GridCellSpec.CreateInput($"ID_{index}", "Base ID", 0.4f, (val) =>
-                {
-                    if (int.TryParse(val, out int id)) { currentHero.diceSides[index].effectID = id; UpdateDiceIcon(index); OnUIChanged(); }
-                }),
-                GridCellSpec.CreateInput($"Pips_{index}", "Pips", 0.4f, (val) =>
-                {
-                    if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); }
-                })
-            ));
-
-            // Row 2: Facade & Color
-            diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"LblFac_{index}", "Facade:", 0.2f),
-                GridCellSpec.CreateInput($"Facade_{index}", "ID (e.g. The0)", 0.4f, (val) => { currentHero.diceSides[index].facadeID = val; OnUIChanged(); }),
-                GridCellSpec.CreateInput($"Color_{index}", "Color (ID or H:S:V)", 0.4f, (val) => { currentHero.diceSides[index].facadeColor = val; OnUIChanged(); })
-            ));
-
-            // Row 3: Keyword Search & Dropdown (CSV input removed)
-            diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateInput($"KwSearch_{index}", "Search Kw...", 0.4f, (val) => FilterKeywordDropdown(index, val)),
-                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.6f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
-            ));
-
-            // Row(s) 4+: Dynamic Keyword Tags
-            var activeKeywords = currentHero.diceSides[index].keywords;
-            if (activeKeywords != null && activeKeywords.Count > 0)
-            {
-                // Display tags in rows of up to 2 items to keep the layout compact
-                for (int k = 0; k < activeKeywords.Count; k += 2)
-                {
-                    var tagCells = new List<GridCellSpec>();
-
-                    // First tag in pair
-                    string kw1 = activeKeywords[k];
-                    tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw1}", kw1, 0.35f));
-                    tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw1}", "[X]", 0.15f, () => RemoveKeyword(index, kw1)));
-
-                    // Second tag in pair (if available)
-                    if (k + 1 < activeKeywords.Count)
-                    {
-                        string kw2 = activeKeywords[k + 1];
-                        tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw2}", kw2, 0.35f));
-                        tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw2}", "[X]", 0.15f, () => RemoveKeyword(index, kw2)));
-                    }
-                    else
-                    {
-                        // Fill remaining width if odd number of elements
-                        tagCells.Add(GridCellSpec.CreateLabel($"KwPad_{index}_{k}", "", 0.5f));
-                    }
-
-                    diceLayout.Add(new GridRowSpec(tagCells.ToArray()));
-                }
-            }
-
-            // Spacer row
-            if (i < 5) diceLayout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
-        }
-
+        var diceLayout = GenerateDiceLayout();
 
         // 3. Define the column split mapping
         var columns = new List<ColumnSpec>
@@ -170,14 +147,152 @@ public class HeroModManager : MonoBehaviour
         };
 
         GeneratedScreen screen = uiGenerator.SetupScreen(columns);
-
-        statsUI = screen.ColumnRefs["LeftStats"];
-        diceUI = screen.ColumnRefs["MiddleDice"];
+        currentScreen = screen;
+        statsUI = currentScreen.ColumnRefs["LeftStats"];
+        diceUI = currentScreen.ColumnRefs["MiddleDice"];
 
         if (screen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
         {
             BuildRightPanelContent(rightPanel);
         }
+
+        if (diceFaceIconPicker != null)
+        {
+            diceFaceIconPicker.transform.SetAsLastSibling();
+        }
+    }
+
+    private List<GridRowSpec> GenerateDiceLayout()
+    {
+        var diceLayout = new List<GridRowSpec>();
+        string[] defaultKwOptions = GetDefaultKeywordOptions();
+
+        for (int i = 0; i < 6; i++)
+        {
+            int index = i;
+            string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
+
+            // Row 1: Base Action & Pips (With Button)
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"Lbl_{index}", $"{faceName}:", 0.15f),
+                GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.15f, () => OpenBaseModal(index)),
+                GridCellSpec.CreateInput($"ID_{index}", "Base ID", 0.35f, (val) => { if (int.TryParse(val, out int id)) { currentHero.diceSides[index].effectID = id; UpdateDiceIcon(index); OnUIChanged(); } }),
+                GridCellSpec.CreateInput($"Pips_{index}", "Pips", 0.35f, (val) => { if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); } })
+            ));
+
+            // Row 2: Facade (With Button)
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblFac_{index}", "Facade:", 0.15f),
+                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.15f, () => OpenFacadeModal(index)),
+                GridCellSpec.CreateInput($"Facade_{index}", "ID (e.g. The0)", 0.70f, (val) => { currentHero.diceSides[index].facadeID = val; UpdateDiceIcon(index); OnUIChanged(); })
+            ));
+
+            // Row 3: HSV Sliders and Text Inputs
+            diceLayout.Add(new GridRowSpec(
+                // Hue (33%)
+                GridCellSpec.CreateLabel($"LblH_{index}", "H:", 0.07f),
+                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.16f, (val) => { UpdateHsvFromSlider(index, 0, val); }),
+                GridCellSpec.CreateInput($"FacH_{index}", "0", 0.10f, (val) => { UpdateHsvInput(index, 0, val); }),
+
+                // Saturation (33%)
+                GridCellSpec.CreateLabel($"LblS_{index}", "S:", 0.07f),
+                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.16f, (val) => { UpdateHsvFromSlider(index, 1, val); }),
+                GridCellSpec.CreateInput($"FacS_{index}", "0", 0.10f, (val) => { UpdateHsvInput(index, 1, val); }),
+
+                // Value (34% to hit 1.0 total)
+                GridCellSpec.CreateLabel($"LblV_{index}", "V:", 0.07f),
+                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.16f, (val) => { UpdateHsvFromSlider(index, 2, val); }),
+                GridCellSpec.CreateInput($"FacV_{index}", "0", 0.11f, (val) => { UpdateHsvInput(index, 2, val); })
+            ));
+
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateInput($"KwSearch_{index}", "Search Kw...", 0.4f, (val) => FilterKeywordDropdown(index, val)),
+                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.6f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
+            ));
+
+            var activeKeywords = currentHero.diceSides[index].keywords;
+            if (activeKeywords != null && activeKeywords.Count > 0)
+            {
+                for (int k = 0; k < activeKeywords.Count; k += 2)
+                {
+                    var tagCells = new List<GridCellSpec>();
+
+                    string kw1 = activeKeywords[k];
+                    tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw1}", kw1, 0.35f));
+                    tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw1}", "[X]", 0.15f, () => RemoveKeyword(index, kw1)));
+
+                    if (k + 1 < activeKeywords.Count)
+                    {
+                        string kw2 = activeKeywords[k + 1];
+                        tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw2}", kw2, 0.35f));
+                        tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw2}", "[X]", 0.15f, () => RemoveKeyword(index, kw2)));
+                    }
+                    else
+                    {
+                        tagCells.Add(GridCellSpec.CreateLabel($"KwPad_{index}_{k}", "", 0.5f));
+                    }
+
+                    diceLayout.Add(new GridRowSpec(tagCells.ToArray()));
+                }
+            }
+
+            // Optional Spacer
+            //if (i < 5) diceLayout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
+        }
+        return diceLayout;
+    }
+
+    private void OpenBaseModal(int faceIndex)
+    {
+        if (diceFaceIconPicker == null) return;
+
+        diceFaceIconPicker.OpenModal(_baseActionSprites, _baseActionNames, (index, sprite) =>
+        {
+            string filename = _baseActionNames[index]; // e.g. "bas_15_dmg"
+            string[] parts = filename.Split('_');
+
+            if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
+            {
+                currentHero.diceSides[faceIndex].effectID = parsedId;
+                RefreshDiceUI();
+            }
+        });
+    }
+
+    private void OpenFacadeModal(int faceIndex)
+    {
+        if (diceFaceIconPicker == null) return;
+
+        diceFaceIconPicker.OpenModal(_allActionSprites, _allActionNames, (index, sprite) =>
+        {
+            string filename = _allActionNames[index]; // e.g. "Che_6_dmgFlame"
+            string[] parts = filename.Split('_');
+
+            if (parts.Length >= 2)
+            {
+                // Joins the prefix "Che" and the number "6" -> "Che6"
+                string facadeStr = $"{parts[0]}{parts[1]}";
+                currentHero.diceSides[faceIndex].facadeID = facadeStr;
+                RefreshDiceUI();
+            }
+        });
+    }
+
+    // THIS IS THE MAGIC METHOD that redraws the middle column
+    private void RefreshDiceUI()
+    {
+        // 1. Generate the new layout blueprint (now recognizing the new keywords)
+        var newDiceLayout = GenerateDiceLayout();
+
+        // 2. Tear down the old UI and build the new UI
+        RectTransform dicePanel = currentScreen.ColumnPanels["MiddleDice"];
+        diceUI = uiGenerator.RebuildGrid(dicePanel, newDiceLayout);
+
+        // 3. Populate the newly spawned input fields with your current data!
+        UpdateUIFromData();
+
+        // 4. Fire the standard text output updates
+        OnUIChanged();
     }
 
     private void BuildRightPanelContent(RectTransform parent)
@@ -314,13 +429,40 @@ public class HeroModManager : MonoBehaviour
             if (diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.text = face.effectID.ToString();
             if (diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.text = face.pips.ToString();
             if (diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.text = face.facadeID;
-            if (diceUI.Inputs.TryGetValue($"Color_{i}", out var dCol)) dCol.text = face.facadeColor;
-            if (diceUI.Inputs.TryGetValue($"Kw_{i}", out var dKw)) dKw.text = string.Join(", ", face.keywords);
+
+            int h = 0, s = 0, v = 0;
+            string[] hsv = (face.facadeColor ?? "").Split(':');
+
+            if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
+            if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
+            if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
+
+            // Set text boxes
+            if (diceUI.Inputs.TryGetValue($"FacH_{i}", out var dH)) dH.text = hsv.Length > 0 ? hsv[0] : "";
+            if (diceUI.Inputs.TryGetValue($"FacS_{i}", out var dS)) dS.text = hsv.Length > 1 ? hsv[1] : "";
+            if (diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.text = hsv.Length > 2 ? hsv[2] : "";
+
+            // Set sliders
+            if (diceUI.Sliders.TryGetValue($"SliH_{i}", out var sliH)) sliH.SetValueWithoutNotify(h);
+            if (diceUI.Sliders.TryGetValue($"SliS_{i}", out var sliS)) sliS.SetValueWithoutNotify(s);
+            if (diceUI.Sliders.TryGetValue($"SliV_{i}", out var sliV)) sliV.SetValueWithoutNotify(v);
+
+            // --- Update buttons ---
+            if (diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
+            {
+                Sprite sSprite = GetSpriteForBase(face.effectID);
+                SetButtonIcon(baseBtn, sSprite);
+            }
+
+            if (diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
+            {
+                Sprite sSprite = GetSpriteForFacade(face.facadeID);
+                SetButtonIcon(facBtn, sSprite);
+            }
 
             UpdateDiceIcon(i);
         }
 
-        // Apply the updated icon changes here
         UpdateHeroIcon();
 
         isSyncing = false;
@@ -360,8 +502,27 @@ public class HeroModManager : MonoBehaviour
             if (!string.IsNullOrWhiteSpace(face.facadeID))
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
-                if (!string.IsNullOrWhiteSpace(face.facadeColor))
-                    facStr += $":{face.facadeColor.Trim()}";
+
+                string[] hsv = (face.facadeColor ?? "").Split(':');
+                string h = (hsv.Length > 0 && !string.IsNullOrWhiteSpace(hsv[0])) ? hsv[0].Trim() : "0";
+                string s = (hsv.Length > 1 && !string.IsNullOrWhiteSpace(hsv[1])) ? hsv[1].Trim() : "";
+                string v = (hsv.Length > 2 && !string.IsNullOrWhiteSpace(hsv[2])) ? hsv[2].Trim() : "";
+
+                // Format logic:
+                // If V exists, we must include S (default to 0 if left blank).
+                if (!string.IsNullOrEmpty(v))
+                {
+                    s = string.IsNullOrEmpty(s) ? "0" : s;
+                    facStr += $":{h}:{s}:{v}";
+                }
+                else if (!string.IsNullOrEmpty(s))
+                {
+                    facStr += $":{h}:{s}";
+                }
+                else
+                {
+                    facStr += $":{h}"; // Minimum requirement
+                }
 
                 modChunks.Add(facStr);
             }
@@ -542,9 +703,18 @@ public class HeroModManager : MonoBehaviour
     private void UpdateDiceIcon(int index)
     {
         if (dicePreview == null) return;
-        int effectId = currentHero.diceSides[index].effectID;
 
-        // Map index to the specific image slot in the prefab
+        var face = currentHero.diceSides[index];
+        int effectId = face.effectID;
+        string facadeId = face.facadeID;
+
+        // Parse the H:S:V string into integers, defaulting to 0
+        int h = 0, s = 0, v = 0;
+        string[] hsv = (face.facadeColor ?? "").Split(':');
+        if (hsv.Length > 0 && int.TryParse(hsv[0], out int parsedH)) h = parsedH;
+        if (hsv.Length > 1 && int.TryParse(hsv[1], out int parsedS)) s = parsedS;
+        if (hsv.Length > 2 && int.TryParse(hsv[2], out int parsedV)) v = parsedV;
+
         Image targetImage = index switch
         {
             0 => dicePreview.Left,
@@ -557,7 +727,23 @@ public class HeroModManager : MonoBehaviour
         };
 
         if (targetImage != null)
-            dicePreview.SetDiceIcon(targetImage, "bas", effectId);
+        {
+            if (!string.IsNullOrWhiteSpace(facadeId) && facadeId.Length >= 4)
+            {
+                string prefix = facadeId.Substring(0, 3);
+                string idString = facadeId.Substring(3);
+
+                if (int.TryParse(idString, out int parsedFacadeId))
+                {
+                    // Pass H, S, V down to the material
+                    dicePreview.SetDiceIcon(targetImage, prefix, parsedFacadeId, h, s, v);
+                    return;
+                }
+            }
+
+            // Also pass H, S, V even if falling back to base action
+            dicePreview.SetDiceIcon(targetImage, "bas", effectId, h, s, v);
+        }
     }
 
     private void UpdateHeroIcon()
@@ -580,7 +766,7 @@ public class HeroModManager : MonoBehaviour
                 // Lazy-load the sliced spritesheet array once
                 if (atlasSprites == null || atlasSprites.Length == 0)
                 {
-                    atlasSprites = Resources.LoadAll<Sprite>("base_atlas_image");
+                    atlasSprites = SpriteCache.GetBaseSprites();
                 }
 
                 // Find the specific sub-sprite by name from the sliced array
@@ -631,31 +817,19 @@ public class HeroModManager : MonoBehaviour
 
     private void AddKeywordFromDropdown(int index, int dropVal)
     {
-        if (isSyncing || dropVal == 0) return; // 0 is the placeholder
+        if (isSyncing || dropVal == 0) return;
 
         if (diceUI.Dropdowns.TryGetValue($"KwDrop_{index}", out var drop))
         {
             string selectedKw = drop.options[dropVal].text;
 
-            // Add to data if not already present
             if (!currentHero.diceSides[index].keywords.Contains(selectedKw, StringComparer.OrdinalIgnoreCase))
             {
+                // Add keyword
                 currentHero.diceSides[index].keywords.Add(selectedKw);
 
-                isSyncing = true;
-                drop.value = 0;
-                drop.RefreshShownValue();
-
-                // Clear the search field if active
-                if (diceUI.Inputs.TryGetValue($"KwSearch_{index}", out var searchInput))
-                {
-                    searchInput.text = "";
-                    FilterKeywordDropdown(index, "");
-                }
-                isSyncing = false;
-
-                // Trigger UI refresh to redraw the dynamic tag list
-                OnUIChanged();
+                // REBUILD THE ENTIRE DICE COLUMN
+                RefreshDiceUI();
             }
         }
     }
@@ -667,11 +841,121 @@ public class HeroModManager : MonoBehaviour
         var keywordsList = currentHero.diceSides[index].keywords;
         if (keywordsList.Contains(keyword))
         {
+            // Remove keyword
             keywordsList.Remove(keyword);
 
-            // Trigger UI refresh to update the displayed list of tags
+            // REBUILD THE ENTIRE DICE COLUMN
+            RefreshDiceUI();
+        }
+    }
+
+    private Sprite GetSpriteForBase(int id)
+    {
+        string search = $"bas_{id}";
+        return Array.Find(_baseActionSprites, s => s != null && (s.name == search || s.name.StartsWith($"{search}_")));
+    }
+
+    private Sprite GetSpriteForFacade(string facadeId)
+    {
+        if (string.IsNullOrWhiteSpace(facadeId) || facadeId.Length < 4) return null;
+
+        // Split "Che6" back into "Che" and "6" for finding "Che_6_..."
+        string prefix = facadeId.Substring(0, 3);
+        string num = facadeId.Substring(3);
+        string search = $"{prefix}_{num}";
+
+        return Array.Find(_allActionSprites, s => s != null && (s.name == search || s.name.StartsWith($"{search}_")));
+    }
+
+    private void SetButtonIcon(Button btn, Sprite sprite)
+    {
+        if (btn == null) return;
+
+        // Try to get the specific DiceFaceUIElement script from the prefab
+        DiceFaceUIElement diceUIElement = btn.GetComponentInParent<DiceFaceUIElement>();
+
+        if (diceUIElement != null)
+        {
+            // Use the component's clean wrapper method
+            diceUIElement.SetIcon(sprite);
+        }
+        else
+        {
+            // Fallback for standard buttons without the script
+            Transform iconTransform = btn.transform.Find("Icon");
+            Image targetImg = iconTransform != null ? iconTransform.GetComponent<Image>() : btn.image;
+
+            if (targetImg != null)
+            {
+                if (sprite != null)
+                {
+                    targetImg.sprite = sprite;
+                    targetImg.color = Color.white;
+                }
+                else
+                {
+                    targetImg.sprite = null;
+                    targetImg.color = new Color(1, 1, 1, 0.2f);
+                }
+            }
+        }
+    }
+
+    private void UpdateFacadeColor(int index, int componentIndex, string val)
+    {
+        var face = currentHero.diceSides[index];
+        string[] parts = (face.facadeColor ?? "").Split(':');
+
+        // Ensure we always have 3 slots to work with
+        List<string> list = new List<string>(parts);
+        while (list.Count < 3) list.Add("");
+
+        list[componentIndex] = val;
+        face.facadeColor = string.Join(":", list);
+    }
+
+    private void UpdateHsvInput(int index, int componentIndex, string val)
+    {
+        if (isSyncing) return;
+
+        if (string.IsNullOrEmpty(val) || val == "-")
+        {
+            UpdateFacadeColor(index, componentIndex, val);
+            UpdateDiceIcon(index);
             OnUIChanged();
+            return;
         }
 
+        if (int.TryParse(val, out int num))
+        {
+            num = Mathf.Clamp(num, -99, 99);
+            UpdateFacadeColor(index, componentIndex, num.ToString());
+
+            // Silently sync the corresponding slider without causing an infinite loop
+            isSyncing = true;
+            string sliKey = componentIndex == 0 ? $"SliH_{index}" : componentIndex == 1 ? $"SliS_{index}" : $"SliV_{index}";
+            if (diceUI.Sliders.TryGetValue(sliKey, out var slider)) slider.value = num;
+            isSyncing = false;
+        }
+
+        UpdateDiceIcon(index);
+        OnUIChanged();
+    }
+
+    private void UpdateHsvFromSlider(int index, int componentIndex, float val)
+    {
+        if (isSyncing) return;
+
+        int num = Mathf.RoundToInt(val);
+        UpdateFacadeColor(index, componentIndex, num.ToString());
+
+        // Silently sync the corresponding text input without causing an infinite loop
+        isSyncing = true;
+        string inpKey = componentIndex == 0 ? $"FacH_{index}" : componentIndex == 1 ? $"FacS_{index}" : $"FacV_{index}";
+        if (diceUI.Inputs.TryGetValue(inpKey, out var input)) input.text = num.ToString();
+        isSyncing = false;
+
+        UpdateDiceIcon(index);
+        OnUIChanged();
     }
 }

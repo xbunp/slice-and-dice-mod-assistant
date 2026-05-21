@@ -645,6 +645,7 @@ MonoBehaviour:
   iconButtonPrefab: {fileID: 2635577496961467931, guid: 5ba1b65049c94cd4586e142fd73fd50e, type: 3}
   searchInputField: {fileID: 3687584775542258672}
   cancelButton: {fileID: 5728720501679001268}
+  spawnBatchSize: 250
 --- !u!1 &3699348782989556346
 GameObject:
   m_ObjectHideFlags: 0
@@ -1470,7 +1471,7 @@ MonoBehaviour:
   m_Elasticity: 0.1
   m_Inertia: 1
   m_DecelerationRate: 0.135
-  m_ScrollSensitivity: 1
+  m_ScrollSensitivity: 18
   m_Viewport: {fileID: 2547760031910828096}
   m_HorizontalScrollbar: {fileID: 5890837126759868690}
   m_VerticalScrollbar: {fileID: 269457721299681111}

@@ -12,6 +12,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject labelPrefab;
     public GameObject diceButtonPrefab;
     public GameObject buttonPrefab;
+    public GameObject sliderPrefab;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -47,6 +48,8 @@ public class FullScreenUIGenerator : MonoBehaviour
         {
             RectTransform colPanel = CreateUIObject(colSpec.name, wrapper.transform).GetComponent<RectTransform>();
             SetAnchors(colPanel, colSpec.anchorMinX, 0.0f, colSpec.anchorMaxX, 1.0f);
+
+            screen.ColumnPanels[colSpec.name] = colPanel;
 
             if (colSpec.isCustomLayout)
             {
@@ -108,6 +111,37 @@ public class FullScreenUIGenerator : MonoBehaviour
                     case CellType.Label:
                         cellObj = Instantiate(labelPrefab, rowRt);
                         break;
+
+                    case CellType.Button:
+                        cellObj = Instantiate(buttonPrefab, rowRt);
+                        Button btn = cellObj.GetComponentInChildren<Button>();
+                        refs.Buttons[cell.key] = btn;
+
+                        if (cell.onClicked != null)
+                            btn.onClick.AddListener(() => cell.onClicked());
+                        break;
+
+                    case CellType.DiceButton:
+                        cellObj = Instantiate(diceButtonPrefab, rowRt);
+                        Button diceBtn = cellObj.GetComponentInChildren<Button>();
+                        refs.Buttons[cell.key] = diceBtn;
+
+                        if (cell.onClicked != null)
+                            diceBtn.onClick.AddListener(() => cell.onClicked());
+                        break;
+
+                    case CellType.Slider:
+                        cellObj = Instantiate(sliderPrefab, rowRt);
+                        Slider slider = cellObj.GetComponentInChildren<Slider>();
+                        refs.Sliders[cell.key] = slider;
+
+                        slider.minValue = cell.sliderMin;
+                        slider.maxValue = cell.sliderMax;
+                        slider.wholeNumbers = cell.sliderWholeNumbers;
+
+                        if (cell.onFloatChanged != null)
+                            slider.onValueChanged.AddListener((val) => cell.onFloatChanged(val));
+                        break;
                 }
 
                 if (cellObj != null)
@@ -149,5 +183,16 @@ public class FullScreenUIGenerator : MonoBehaviour
         rt.offsetMin = Vector2.zero;
         rt.offsetMax = Vector2.zero;
         rt.localScale = Vector3.one;
+    }
+
+    public GridReferences RebuildGrid(RectTransform panel, List<GridRowSpec> rows)
+    {
+        // Destroy old UI elements
+        foreach (Transform child in panel)
+        {
+            Destroy(child.gameObject);
+        }
+        // Build new ones
+        return BuildGrid(panel, rows);
     }
 }
