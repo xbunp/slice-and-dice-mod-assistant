@@ -86,6 +86,33 @@ public class FullScreenUIGenerator : MonoBehaviour
             {
                 GameObject cellObj = null;
 
+                if (cellObj != null)
+                {
+                    // FORCE clean, consistent font configurations on all instantiated prefabs
+                    var textComponents = cellObj.GetComponentsInChildren<TextMeshProUGUI>(true);
+                    foreach (var txt in textComponents)
+                    {
+                        txt.enableAutoSizing = false;
+                        txt.fontSize = 13f; // Clean, highly readable, standard editor font size
+                    }
+
+                    // Apply layout spec label text if it exists
+                    var mainLabel = cellObj.GetComponentInChildren<TextMeshProUGUI>();
+                    if (mainLabel != null && !string.IsNullOrEmpty(cell.labelText))
+                        mainLabel.text = cell.labelText;
+
+                    RectTransform cellRt = cellObj.GetComponent<RectTransform>();
+                    cellRt.localScale = Vector3.one;
+
+                    cellRt.anchorMin = new Vector2(currentX, 0);
+                    cellRt.anchorMax = new Vector2(currentX + cell.widthRatio, 1);
+                    cellRt.pivot = new Vector2(0.5f, 0.5f);
+                    cellRt.offsetMin = new Vector2(4, 2);
+                    cellRt.offsetMax = new Vector2(-4, -2);
+
+                    currentX += cell.widthRatio;
+                }
+
                 switch (cell.type)
                 {
                     case CellType.Input:

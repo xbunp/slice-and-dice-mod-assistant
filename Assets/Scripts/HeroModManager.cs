@@ -172,72 +172,81 @@ public class HeroModManager : MonoBehaviour
             int index = i;
             string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
 
-            // Row 1: Base Action & Pips (With Button)
+            // Row 1: Spacious, Explicitly Labeled Base Action & Pips
             diceLayout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel($"Lbl_{index}", $"{faceName}:", 0.15f),
-                GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.15f, () => OpenBaseModal(index)),
-                GridCellSpec.CreateInput($"ID_{index}", "Base ID", 0.35f, (val) => { if (int.TryParse(val, out int id)) { currentHero.diceSides[index].effectID = id; UpdateDiceIcon(index); OnUIChanged(); } }),
-                GridCellSpec.CreateInput($"Pips_{index}", "Pips", 0.35f, (val) => { if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); } })
+                GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.08f, () => OpenBaseModal(index)),
+                GridCellSpec.CreateLabel($"LblId_{index}", "ID:", 0.08f),
+                GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { currentHero.diceSides[index].effectID = id; UpdateDiceIcon(index); OnUIChanged(); } }),
+                GridCellSpec.CreateLabel($"LblPip_{index}", "Pips:", 0.12f),
+                GridCellSpec.CreateInput($"Pips_{index}", "Pips", 0.37f, (val) => { if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); } })
             ));
 
-            // Row 2: Facade (With Button)
+            // Row 2: Spacious Facade Selector & Keyword Dropdown
             diceLayout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel($"LblFac_{index}", "Facade:", 0.15f),
-                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.15f, () => OpenFacadeModal(index)),
-                GridCellSpec.CreateInput($"Facade_{index}", "ID (e.g. The0)", 0.70f, (val) => { currentHero.diceSides[index].facadeID = val; UpdateDiceIcon(index); OnUIChanged(); })
+                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.08f, () => OpenFacadeModal(index)),
+                GridCellSpec.CreateInput($"Facade_{index}", "Facade ID", 0.27f, (val) => { currentHero.diceSides[index].facadeID = val; UpdateDiceIcon(index); OnUIChanged(); }),
+                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.50f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
             ));
 
-            // Row 3: HSV Sliders and Text Inputs
+            // Row 3: Perfectly Aligned HSV Sliders with Placeholders as Labels
             diceLayout.Add(new GridRowSpec(
-                // Hue (33%)
-                GridCellSpec.CreateLabel($"LblH_{index}", "H:", 0.07f),
-                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.16f, (val) => { UpdateHsvFromSlider(index, 0, val); }),
-                GridCellSpec.CreateInput($"FacH_{index}", "0", 0.10f, (val) => { UpdateHsvInput(index, 0, val); }),
+                GridCellSpec.CreateLabel($"LblHsv_{index}", "HSV Adjust:", 0.16f),
 
-                // Saturation (33%)
-                GridCellSpec.CreateLabel($"LblS_{index}", "S:", 0.07f),
-                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.16f, (val) => { UpdateHsvFromSlider(index, 1, val); }),
-                GridCellSpec.CreateInput($"FacS_{index}", "0", 0.10f, (val) => { UpdateHsvInput(index, 1, val); }),
+                // Hue (28%)
+                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.18f, (val) => { UpdateHsvFromSlider(index, 0, val); }),
+                GridCellSpec.CreateInput($"FacH_{index}", "H", 0.10f, (val) => { UpdateHsvInput(index, 0, val); }),
 
-                // Value (34% to hit 1.0 total)
-                GridCellSpec.CreateLabel($"LblV_{index}", "V:", 0.07f),
-                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.16f, (val) => { UpdateHsvFromSlider(index, 2, val); }),
-                GridCellSpec.CreateInput($"FacV_{index}", "0", 0.11f, (val) => { UpdateHsvInput(index, 2, val); })
+                // Saturation (28%)
+                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.18f, (val) => { UpdateHsvFromSlider(index, 1, val); }),
+                GridCellSpec.CreateInput($"FacS_{index}", "S", 0.10f, (val) => { UpdateHsvInput(index, 1, val); }),
+
+                // Value (28%)
+                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.18f, (val) => { UpdateHsvFromSlider(index, 2, val); }),
+                GridCellSpec.CreateInput($"FacV_{index}", "V", 0.10f, (val) => { UpdateHsvInput(index, 2, val); })
             ));
-
-            diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateInput($"KwSearch_{index}", "Search Kw...", 0.4f, (val) => FilterKeywordDropdown(index, val)),
-                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.6f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
-            ));
-
+            // Row 4+: Dynamic Inline Keywords (Rendered as clean 4-column badges)
             var activeKeywords = currentHero.diceSides[index].keywords;
             if (activeKeywords != null && activeKeywords.Count > 0)
             {
-                for (int k = 0; k < activeKeywords.Count; k += 2)
+                int tagsPerRow = 4;
+                float tagWidth = 0.18f;
+                float delWidth = 0.07f;
+
+                for (int k = 0; k < activeKeywords.Count; k += tagsPerRow)
                 {
                     var tagCells = new List<GridCellSpec>();
 
-                    string kw1 = activeKeywords[k];
-                    tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw1}", kw1, 0.35f));
-                    tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw1}", "[X]", 0.15f, () => RemoveKeyword(index, kw1)));
+                    for (int j = 0; j < tagsPerRow; j++)
+                    {
+                        int targetIdx = k + j;
+                        if (targetIdx < activeKeywords.Count)
+                        {
+                            string kw = activeKeywords[targetIdx];
+                            string displayLabel = kw;
 
-                    if (k + 1 < activeKeywords.Count)
-                    {
-                        string kw2 = activeKeywords[k + 1];
-                        tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw2}", kw2, 0.35f));
-                        tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw2}", "[X]", 0.15f, () => RemoveKeyword(index, kw2)));
-                    }
-                    else
-                    {
-                        tagCells.Add(GridCellSpec.CreateLabel($"KwPad_{index}_{k}", "", 0.5f));
+                            if (System.Enum.TryParse(kw, true, out EffectKeyword parsedKw))
+                            {
+                                if (EffectKeywordColors.Map.TryGetValue(parsedKw, out Color colorValue))
+                                {
+                                    string hex = ColorUtility.ToHtmlStringRGB(colorValue);
+                                    displayLabel = $"<color=#{hex}>{kw}</color>";
+                                }
+                            }
+
+                            tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw}", displayLabel, tagWidth));
+                            tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw}", "[X]", delWidth, () => RemoveKeyword(index, kw)));
+                        }
+                        else
+                        {
+                            tagCells.Add(GridCellSpec.CreateLabel($"KwPad_{index}_{targetIdx}", "", tagWidth + delWidth));
+                        }
                     }
 
                     diceLayout.Add(new GridRowSpec(tagCells.ToArray()));
                 }
             }
-
-            // Optional Spacer
-            //if (i < 5) diceLayout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
         }
         return diceLayout;
     }
@@ -789,7 +798,18 @@ public class HeroModManager : MonoBehaviour
     private string[] GetDefaultKeywordOptions()
     {
         var list = new List<string> { "Keyword" };
-        list.AddRange(Enum.GetNames(typeof(EffectKeyword)));
+        foreach (string name in Enum.GetNames(typeof(EffectKeyword)))
+        {
+            if (Enum.TryParse(name, out EffectKeyword kw) && EffectKeywordColors.Map.TryGetValue(kw, out Color col))
+            {
+                string hex = ColorUtility.ToHtmlStringRGB(col);
+                list.Add($"<color=#{hex}>{name}</color>");
+            }
+            else
+            {
+                list.Add(name);
+            }
+        }
         return list.ToArray();
     }
 
@@ -801,14 +821,25 @@ public class HeroModManager : MonoBehaviour
         {
             drop.ClearOptions();
 
-            // Filter Enum names based on search string
-            List<string> filtered = Enum.GetNames(typeof(EffectKeyword))
-                .Where(k => string.IsNullOrEmpty(search) || k.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)
-                .ToList();
+            // Filter original clean Enum names
+            var filteredNames = Enum.GetNames(typeof(EffectKeyword))
+                .Where(k => string.IsNullOrEmpty(search) || k.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0);
 
-            filtered.Insert(0, "[ Select Keyword to Add ]");
+            List<string> options = new List<string> { "[ Select Keyword to Add ]" };
+            foreach (string name in filteredNames)
+            {
+                if (Enum.TryParse(name, out EffectKeyword kw) && EffectKeywordColors.Map.TryGetValue(kw, out Color col))
+                {
+                    string hex = ColorUtility.ToHtmlStringRGB(col);
+                    options.Add($"<color=#{hex}>{name}</color>");
+                }
+                else
+                {
+                    options.Add(name);
+                }
+            }
 
-            drop.AddOptions(filtered);
+            drop.AddOptions(options);
             drop.value = 0;
             drop.RefreshShownValue();
         }
