@@ -13,6 +13,9 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject diceButtonPrefab;
     public GameObject buttonPrefab;
     public GameObject sliderPrefab;
+    public GameObject scrollViewPrefab;
+    public GameObject navigationTabs;
+    public GameObject imagePanelPrefab;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -86,33 +89,6 @@ public class FullScreenUIGenerator : MonoBehaviour
             {
                 GameObject cellObj = null;
 
-                if (cellObj != null)
-                {
-                    // FORCE clean, consistent font configurations on all instantiated prefabs
-                    var textComponents = cellObj.GetComponentsInChildren<TextMeshProUGUI>(true);
-                    foreach (var txt in textComponents)
-                    {
-                        txt.enableAutoSizing = false;
-                        txt.fontSize = 13f; // Clean, highly readable, standard editor font size
-                    }
-
-                    // Apply layout spec label text if it exists
-                    var mainLabel = cellObj.GetComponentInChildren<TextMeshProUGUI>();
-                    if (mainLabel != null && !string.IsNullOrEmpty(cell.labelText))
-                        mainLabel.text = cell.labelText;
-
-                    RectTransform cellRt = cellObj.GetComponent<RectTransform>();
-                    cellRt.localScale = Vector3.one;
-
-                    cellRt.anchorMin = new Vector2(currentX, 0);
-                    cellRt.anchorMax = new Vector2(currentX + cell.widthRatio, 1);
-                    cellRt.pivot = new Vector2(0.5f, 0.5f);
-                    cellRt.offsetMin = new Vector2(4, 2);
-                    cellRt.offsetMax = new Vector2(-4, -2);
-
-                    currentX += cell.widthRatio;
-                }
-
                 switch (cell.type)
                 {
                     case CellType.Input:
@@ -122,6 +98,21 @@ public class FullScreenUIGenerator : MonoBehaviour
 
                         if (cell.onStringChanged != null)
                             input.onValueChanged.AddListener((val) => cell.onStringChanged(val));
+                        break;
+
+                    case CellType.ImagePanel:
+                        cellObj = Instantiate(imagePanelPrefab, rowRt);
+                        Image img = cellObj.GetComponentInChildren<Image>();
+                        if (img != null)
+                        {
+                            img.color = cell.panelColor;
+                            if (cell.panelSprite != null)
+                            {
+                                img.sprite = cell.panelSprite;
+                                img.type = Image.Type.Sliced;
+                            }
+                            refs.ImagePanels[cell.key] = img;
+                        }
                         break;
 
                     case CellType.Dropdown:
@@ -169,13 +160,45 @@ public class FullScreenUIGenerator : MonoBehaviour
                         if (cell.onFloatChanged != null)
                             slider.onValueChanged.AddListener((val) => cell.onFloatChanged(val));
                         break;
+
+                    case CellType.ScrollView:
+                        cellObj = Instantiate(scrollViewPrefab, rowRt);
+                        ScrollRect scrollRect = cellObj.GetComponentInChildren<ScrollRect>();
+                        if (scrollRect != null)
+                        {
+                            refs.ScrollViews[cell.key] = scrollRect;
+                        }
+                        break;
+
+                    case CellType.NavigationTabs:
+                        cellObj = Instantiate(navigationTabs, rowRt);
+                        NavigationTabsController navTabs = cellObj.GetComponent<NavigationTabsController>();
+                        if (navTabs != null)
+                        {
+                            navTabs.Initialize(cell.tabNames, cell.tabTargetPanels, buttonPrefab, cell.onIntChanged);
+                            refs.NavigationTabs[cell.key] = navTabs;
+                        }
+                        break;
                 }
 
                 if (cellObj != null)
                 {
-                    var labelText = cellObj.GetComponentInChildren<TextMeshProUGUI>();
-                    if (labelText != null) labelText.text = cell.labelText;
+                    // 1. Configure all child texts (previously unreachable)
+                    var textComponents = cellObj.GetComponentsInChildren<TextMeshProUGUI>(true);
+                    foreach (var txt in textComponents)
+                    {
+                        txt.enableAutoSizing = false;
+                        txt.fontSize = 13f;
+                    }
 
+                    // 2. Set the main label text
+                    var mainLabel = cellObj.GetComponentInChildren<TextMeshProUGUI>();
+                    if (mainLabel != null && !string.IsNullOrEmpty(cell.labelText))
+                    {
+                        mainLabel.text = cell.labelText;
+                    }
+
+                    // 3. Apply anchoring & layouts (only once per cell)
                     RectTransform cellRt = cellObj.GetComponent<RectTransform>();
                     cellRt.localScale = Vector3.one;
 

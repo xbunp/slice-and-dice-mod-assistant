@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI; // Added to support the Button component
 
-public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider }
+public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel }
 
 public class GridReferences
 {
@@ -12,6 +12,10 @@ public class GridReferences
     public Dictionary<string, TMP_Dropdown> Dropdowns = new Dictionary<string, TMP_Dropdown>();
     public Dictionary<string, Button> Buttons = new Dictionary<string, Button>();
     public Dictionary<string, Slider> Sliders = new Dictionary<string, Slider>();
+    public Dictionary<string, ScrollRect> ScrollViews = new Dictionary<string, ScrollRect>();
+    public Dictionary<string, NavigationTabsController> NavigationTabs = new Dictionary<string, NavigationTabsController>();
+    public Dictionary<string, Image> ImagePanels = new Dictionary<string, Image>();
+
 }
 
 public class GridRowSpec
@@ -31,11 +35,18 @@ public class GridCellSpec
     public Action<int> onIntChanged;
     public Action onClicked;
 
+    // Panel
+    public Color panelColor = Color.white;
+    public Sprite panelSprite = null;
+
     //Sliders
     public float sliderMin;
     public float sliderMax;
     public bool sliderWholeNumbers;
     public Action<float> onFloatChanged;
+
+    public List<string> tabNames = new List<string>();
+    public List<GameObject> tabTargetPanels = new List<GameObject>();
 
     public static GridCellSpec CreateInput(string key, string label, float ratio, Action<string> onChanged)
     {
@@ -55,6 +66,18 @@ public class GridCellSpec
             key = key,
             labelText = label,
             widthRatio = ratio
+        };
+    }
+
+    public static GridCellSpec CreateImagePanel(string key, float ratio, Color? color = null, Sprite sprite = null)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.ImagePanel,
+            key = key,
+            widthRatio = ratio,
+            panelColor = color ?? Color.white,
+            panelSprite = sprite
         };
     }
 
@@ -98,6 +121,29 @@ public class GridCellSpec
             sliderWholeNumbers = wholeNumbers,
             widthRatio = ratio,
             onFloatChanged = onChanged
+        };
+    }
+
+    public static GridCellSpec CreateScrollView(string key, float ratio)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.ScrollView,
+            key = key,
+            widthRatio = ratio
+        };
+    }
+
+    public static GridCellSpec CreateNavigationTabs(string key, List<string> tabNames, List<GameObject> targetPanels, float ratio, Action<int> onTabChanged = null)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.NavigationTabs,
+            key = key,
+            tabNames = tabNames,
+            tabTargetPanels = targetPanels,
+            widthRatio = ratio,
+            onIntChanged = onTabChanged
         };
     }
 }
