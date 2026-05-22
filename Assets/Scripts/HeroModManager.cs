@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using static SDColors;
 
 [RequireComponent(typeof(FullScreenUIGenerator))]
 public class HeroModManager : MonoBehaviour
@@ -120,10 +121,10 @@ public class HeroModManager : MonoBehaviour
             // Row 4: Color Class
             new GridRowSpec(
                 GridCellSpec.CreateLabel("Color Label", "Color Class:", 0.35f),
-                GridCellSpec.CreateDropdown("Color", "", 0.65f, HeroColors.GetFormattedColorNames(), (val) => {
-                    HeroColors.ColorOption selectedColor = (HeroColors.ColorOption)val;
-                    currentHero.colorClass = HeroColors.GetCode(selectedColor);
-                    heroIcon.frame.color = HeroColors.GetColor(selectedColor);
+                GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
+                    SDColors.HeroColorOption selectedColor = (SDColors.HeroColorOption)val;
+                    currentHero.colorClass = SDColors.GetCode(selectedColor);
+                    heroIcon.frame.color = SDColors.GetColor(selectedColor);
                     OnUIChanged();
                 })
             ),
@@ -426,9 +427,9 @@ public class HeroModManager : MonoBehaviour
 
         if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
         {
-            HeroColors.ColorOption colOpt = ReverseLookupColor(currentHero.colorClass);
+            SDColors.HeroColorOption colOpt = ReverseLookupColor(currentHero.colorClass);
             colDrop.value = (int)colOpt;
-            if (heroIconBackground) heroIconBackground.color = HeroColors.GetColor(colOpt);
+            if (heroIconBackground) heroIconBackground.color = SDColors.GetColor(colOpt);
         }
 
         for (int i = 0; i < 6; i++)
@@ -490,8 +491,24 @@ public class HeroModManager : MonoBehaviour
             if (i < 5) sdString += ":";
         }
 
+        // Determine if the colorClass should be omitted because it matches the default replica color
+        string colorSegment = $".col.{currentHero.colorClass}";
+        if (System.Enum.TryParse(currentHero.baseReplica, true, out AllHeroNames baseHeroEnum))
+        {
+            if (Colors.TryGetValue(baseHeroEnum, out HeroColorOption defaultColorOption))
+            {
+                string defaultColorCode = GetCode(defaultColorOption);
+
+                // If current color matches the base replica's default color, omit the color segment
+                if (currentHero.colorClass == defaultColorCode)
+                {
+                    colorSegment = "";
+                }
+            }
+        }
+
         // 2. Base Hero String (without image override in the middle)
-        string baseHeroStr = $"replica.{currentHero.baseReplica}.n.{currentHero.heroName}.col.{currentHero.colorClass}.hp.{currentHero.hp}.tier.{currentHero.tier}.sd.{sdString}";
+        string baseHeroStr = $"replica.{currentHero.baseReplica}.n.{currentHero.heroName}{colorSegment}.hp.{currentHero.hp}.tier.{currentHero.tier}.sd.{sdString}";
 
         // 3. Build Item Modifiers (.i.) for Keywords and Facades
         string modifiersStr = "";
@@ -609,13 +626,13 @@ public class HeroModManager : MonoBehaviour
         }
     }
 
-    private HeroColors.ColorOption ReverseLookupColor(string code)
+    private SDColors.HeroColorOption ReverseLookupColor(string code)
     {
-        foreach (HeroColors.ColorOption opt in Enum.GetValues(typeof(HeroColors.ColorOption)))
+        foreach (SDColors.HeroColorOption opt in Enum.GetValues(typeof(SDColors.HeroColorOption)))
         {
-            if (HeroColors.GetCode(opt) == code) return opt;
+            if (SDColors.GetCode(opt) == code) return opt;
         }
-        return HeroColors.ColorOption.Yellow;
+        return SDColors.HeroColorOption.Yellow;
     }
 
     private string FormatSyntaxHighlighting(string plainText)
@@ -935,6 +952,26 @@ public class HeroModManager : MonoBehaviour
     private void UpdateFacadeColor(int index, int componentIndex, string val)
     {
         var face = currentHero.diceSides[index];
+
+        // If no facade is currently assigned, automatically assign one matching the base action
+        if (string.IsNullOrWhiteSpace(face.facadeID))
+        {
+            face.facadeID = $"bas{face.effectID}";
+
+            // Update the facade text field to reflect the change
+            if (diceUI != null && diceUI.Inputs.TryGetValue($"Facade_{index}", out var dFac))
+            {
+                dFac.text = face.facadeID;
+            }
+
+            // Update the facade button icon
+            if (diceUI != null && diceUI.Buttons.TryGetValue($"FacBtn_{index}", out var facBtn))
+            {
+                Sprite sSprite = GetSpriteForFacade(face.facadeID);
+                SetButtonIcon(facBtn, sSprite);
+            }
+        }
+
         string[] parts = (face.facadeColor ?? "").Split(':');
 
         // Ensure we always have 3 slots to work with

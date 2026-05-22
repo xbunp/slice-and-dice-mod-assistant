@@ -12,11 +12,6 @@ public static class HeroDatabaseGenerator
     private const string AtlasPath = "base_atlas_image";
     private const string OutputFilePath = "Assets/Scripts/HeroSpriteDatabase.cs";
 
-    private static readonly Dictionary<string, string> NameOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        { "Presense", "Presence" },
-        { "Spellbalde", "Spellblade" }
-    };
 
     private static readonly Regex HeroSpriteRegex = new Regex(
         @"^([a-z]+)_(\d+)_([a-z\-]+?)((?:[RUL]\d+)+)?$",
@@ -56,11 +51,6 @@ public static class HeroDatabaseGenerator
             }
 
             string enumName = hero.ToString();
-
-            if (NameOverrides.TryGetValue(enumName, out string correctedName))
-            {
-                enumName = correctedName;
-            }
 
             List<SpriteMatchResult> matches = new List<SpriteMatchResult>();
 

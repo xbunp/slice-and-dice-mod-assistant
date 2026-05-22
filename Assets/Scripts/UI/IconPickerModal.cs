@@ -18,6 +18,17 @@ public class IconPickerModal : MonoBehaviour
     [Tooltip("How many buttons to spawn/enable per frame. Higher = faster load, Lower = smoother framerate.")]
     public int spawnBatchSize = 250;
 
+    [Header("Size Filter")]
+    public Color selectedFilterColor = Color.gray;
+    [Space]
+    public Button regularSizeButton;
+    public Button bigSizeButton;
+    public Button hugeSizeButton;
+    public Button smallSizeButton;
+    private int _activeSizeFilter = -1; // -1 means no size filter active
+    private Dictionary<Button, int> _sizeButtonsMap;
+    private Dictionary<Button, Color> _defaultButtonColors = new Dictionary<Button, Color>();
+
     private Action<int, Sprite> _onIconSelectedCallback;
     private Sprite[] _currentIconSet;
     private Dictionary<int, string> _currentIconNames;
@@ -26,6 +37,13 @@ public class IconPickerModal : MonoBehaviour
     private List<IconEntry> _activeIcons = new List<IconEntry>();
     private Stack<GameObject> _pool = new Stack<GameObject>();
 
+    private static readonly HashSet<string> AllowedBasePrefixes = new HashSet<string>
+    {
+        "bas", "ite", "spe", "alp", "Lem", "eba", "pos", "Ese", "kas", "Eme", "dee", "har",
+        "Spi", "Yca", "Ber", "Sef", "Leo", "Col", "OkN", "Mut", "Ric", "dar", "sym", "Sea",
+        "Bal", "The", "ale", "Dog", "the", "Can", "Liz", "Che", "Ale", "dan", "PEP", "Aid",
+        "Enc", "Ksy", "pow", "Fre", "Med", "Sul"
+    };
     private class IconEntry
     {
         public GameObject gameObject;
@@ -37,6 +55,55 @@ public class IconPickerModal : MonoBehaviour
         cancelButton.onClick.AddListener(CloseModal);
         searchInputField.onValueChanged.AddListener(FilterIcons);
         modalPanel.SetActive(false);
+
+        InitializeSizeFilters();
+    }
+
+    private void InitializeSizeFilters()
+    {
+        // Map buttons directly to their integer target widths
+        _sizeButtonsMap = new Dictionary<Button, int>
+        {
+            { smallSizeButton, 12 },
+            { regularSizeButton, 16 },
+            { bigSizeButton, 22 },
+            { hugeSizeButton, 28 }
+        };
+
+        foreach (var kvp in _sizeButtonsMap)
+        {
+            Button btn = kvp.Key;
+            int targetSize = kvp.Value;
+
+            if (btn != null)
+            {
+                if (btn.image != null)
+                {
+                    _defaultButtonColors[btn] = btn.image.color;
+                }
+                btn.onClick.AddListener(() => OnSizeFilterClicked(btn, targetSize));
+            }
+        }
+    }
+
+    private void OnSizeFilterClicked(Button clickedButton, int targetSize)
+    {
+        _activeSizeFilter = (_activeSizeFilter == targetSize) ? -1 : targetSize;
+        UpdateSizeButtonVisuals();
+        FilterIcons(searchInputField.text);
+    }
+
+    private void UpdateSizeButtonVisuals()
+    {
+        foreach (var kvp in _sizeButtonsMap)
+        {
+            Button btn = kvp.Key;
+            if (btn == null || btn.image == null) continue;
+
+            btn.image.color = (kvp.Value == _activeSizeFilter)
+                ? selectedFilterColor
+                : (_defaultButtonColors.TryGetValue(btn, out Color defColor) ? defColor : Color.white);
+        }
     }
 
     public void OpenModal(Sprite[] iconSet, Dictionary<int, string> iconNames, Action<int, Sprite> onSelectionMade)
@@ -56,6 +123,9 @@ public class IconPickerModal : MonoBehaviour
 
         // Start progressive loading
         _populateRoutine = StartCoroutine(PopulateGridRoutine(""));
+
+        _activeSizeFilter = -1;
+        UpdateSizeButtonVisuals();
     }
 
     private void FilterIcons(string searchQuery)
@@ -88,7 +158,30 @@ public class IconPickerModal : MonoBehaviour
 
         for (int i = 0; i < _currentIconSet.Length; i++)
         {
-            if (_currentIconSet[i] == null) continue;
+            Sprite sprite = _currentIconSet[i];
+            if (sprite == null) continue;
+
+            bool isBaseAtlas = sprite.texture != null && sprite.texture.name.Contains("base_atlas");
+            if (isBaseAtlas)
+            {
+                int underscoreIndex = sprite.name.IndexOf('_');
+                string prefix = underscoreIndex > 0 ? sprite.name.Substring(0, underscoreIndex) : string.Empty;
+
+                if (!AllowedBasePrefixes.Contains(prefix))
+                {
+                    continue; // Discard unneeded base atlas sprites
+                }
+            }
+
+            // Size comparison check added here (Float-to-int comparison)
+            if (_activeSizeFilter != -1)
+            {
+                int spriteWidth = Mathf.RoundToInt(sprite.rect.width);
+                if (spriteWidth != _activeSizeFilter)
+                {
+                    continue; // Skip icons that do not match the selected size
+                }
+            }
 
             string iconName = _currentIconNames.ContainsKey(i) ? _currentIconNames[i] : $"Unknown_{i}";
 

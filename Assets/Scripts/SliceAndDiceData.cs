@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+using static SDColors;
 
 public enum KeywordColor
 {
@@ -418,4 +421,879 @@ public enum EffectKeyword
     Wham,
     Wither,
     Zeroed
+}
+
+public static class SDColors
+{
+    public enum HeroColorOption
+    {
+        Orange, Yellow, Grey, Red, Blue, Green,
+        Purple, Cyan, DarkBlue, Black, White, Magenta,
+        Pink, Violet, Brown, DarkBrown, Lime, DarkGreen,
+        StrongOrange, StrongYellow, LightGrey, StrongRed, StrongGreen,
+        WeakGreen, WeakBlue
+    }
+
+    public static string[] GetFormattedColorNames()
+    {
+        // We iterate through the enum to ensure the dropdown order 
+        // matches the order defined in ColorOption
+        return Enum.GetValues(typeof(HeroColorOption))
+                   .Cast<HeroColorOption>()
+                   .Select(option => HeroColorNames[GetCode(option)])
+                   .ToArray();
+    }
+
+    // Maps Enum to the "code" letter
+    public static string GetCode(HeroColorOption option)
+    {
+        return option switch
+        {
+            HeroColorOption.Orange => "o",
+            HeroColorOption.Yellow => "y",
+            HeroColorOption.Grey => "g",
+            HeroColorOption.Red => "r",
+            HeroColorOption.Blue => "b",
+            HeroColorOption.Green => "n",
+            HeroColorOption.Purple => "p",
+            HeroColorOption.Cyan => "c",
+            HeroColorOption.DarkBlue => "s",
+            HeroColorOption.Black => "d",
+            HeroColorOption.White => "w",
+            HeroColorOption.Magenta => "k",
+            HeroColorOption.Pink => "u",
+            HeroColorOption.Violet => "v",
+            HeroColorOption.Brown => "h",
+            HeroColorOption.DarkBrown => "m",
+            HeroColorOption.Lime => "l",
+            HeroColorOption.DarkGreen => "t",
+            HeroColorOption.StrongOrange => "z",
+            HeroColorOption.StrongYellow => "a",
+            HeroColorOption.LightGrey => "i",
+            HeroColorOption.StrongRed => "q",
+            HeroColorOption.StrongGreen => "x",
+            HeroColorOption.WeakGreen => "f",
+            HeroColorOption.WeakBlue => "j",
+            _ => "w"
+        };
+    }
+
+    // Maps Enum to the actual Unity Color
+    public static Color GetColor(HeroColorOption option)
+    {
+        string code = GetCode(option);
+        // Reuse the dictionary logic from the previous step
+        return GetHeroColor(code);
+    }
+
+    // Dictionary storing "code" as key and "Nicename" as value
+    private static readonly Dictionary<string, string> HeroColorNames = new Dictionary<string, string>
+    {
+        { "o", "O: Orange" },
+        { "y", "Y: Yellow" },
+        { "g", "G: Grey" },
+        { "r", "R: Red" },
+        { "b", "B: Blue" },
+        { "n", "N: Green" },
+        { "p", "P: Purple" },
+        { "c", "C: Cyan" },
+        { "s", "S: Dark Blue" },
+        { "d", "D: Black" },
+        { "w", "W: White" },
+        { "k", "K: Magenta" },
+        { "u", "U: Pink" },
+        { "v", "V: Violet" },
+        { "h", "H: Brown" },
+        { "m", "M: Dark Brown" },
+        { "l", "L: Lime" },
+        { "t", "T: Dark Green" },
+        { "z", "Z: Strong Orange" },
+        { "a", "A: Strong Yellow" },
+        { "i", "I: Light Grey" },
+        { "q", "Q: Strong Red" },
+        { "x", "X: Strong Green" },
+        { "f", "F: Weak Green" },
+        { "j", "J: Weak Blue" }
+    };
+
+    private static readonly Dictionary<string, Color> HeroColorMap = new Dictionary<string, Color>
+    {
+        { "o", FromHex("c45e16") },    // Orange
+        { "y", FromHex("b59e09") },    // Yellow
+        { "g", FromHex("5a6670") },    // Grey
+        { "r", FromHex("ad1f1f") },    // Red
+        { "b", FromHex("217b91") },    // Blue
+        { "n", FromHex("388044") },    // Green
+        { "p", FromHex("6a4484") },    // Purple
+        { "c", FromHex("4ed6ec") },    // Cyan
+        { "s", FromHex("14397d") },    // Dark Blue (Sea)
+        { "d", FromHex("120f17") },    // Black (Dark)
+        { "w", FromHex("f1e5b5") },    // White (Light)
+        { "k", FromHex("9e78cf") },    // Magenta (Kuish)
+        { "u", FromHex("ffc4fc") },    // Pink (Uuish)
+        { "v", FromHex("d32be3") },    // Violet (Pink hex)
+        { "h", FromHex("a67060") },    // Brown (Huish)
+        { "m", FromHex("5e1602") },    // Dark Brown (Mahogany)
+        { "l", FromHex("08d008") },    // Lime
+        { "t", FromHex("233f23") },    // Dark Green (Tuish)
+        { "z", FromHex("f55c0b") },    // Strong Orange (Zuish)
+        { "a", FromHex("ffbf00") },    // Strong Yellow (Amber)
+        { "i", FromHex("a8a8a8") },    // Light Grey (Iuish)
+        { "q", FromHex("ff4343") },    // Strong Red (Quish)
+        { "x", FromHex("e8f123") },    // Strong Green (Xuish)
+        { "f", FromHex("c8eca1") },    // Weak Green (Fuish)
+        { "j", FromHex("def8ff") }     // Weak Blue (Juish)
+    };
+
+
+    public static readonly Dictionary<AllHeroNames, HeroColorOption> Colors = new Dictionary<AllHeroNames, HeroColorOption>
+    {
+        // --- Orange ---
+        { AllHeroNames.Thief, HeroColorOption.Orange },
+        { AllHeroNames.Scoundrel, HeroColorOption.Orange },
+        { AllHeroNames.Lost, HeroColorOption.Orange },
+        { AllHeroNames.Dabble, HeroColorOption.Orange },
+        { AllHeroNames.Clumsy, HeroColorOption.Orange },
+        { AllHeroNames.Juggler, HeroColorOption.Orange },
+        { AllHeroNames.Ninja, HeroColorOption.Orange },
+        { AllHeroNames.Ranger, HeroColorOption.Orange },
+        { AllHeroNames.Trapper, HeroColorOption.Orange },
+        { AllHeroNames.Dabbler, HeroColorOption.Orange },
+        { AllHeroNames.Spellbalde, HeroColorOption.Orange },
+        { AllHeroNames.Gambler, HeroColorOption.Orange },
+        { AllHeroNames.Dancer, HeroColorOption.Orange },
+        { AllHeroNames.Roulette, HeroColorOption.Orange },
+        { AllHeroNames.Dabblest, HeroColorOption.Orange },
+        { AllHeroNames.Ludus, HeroColorOption.Orange },
+        { AllHeroNames.Venom, HeroColorOption.Orange },
+        { AllHeroNames.Assassin, HeroColorOption.Orange },
+        { AllHeroNames.Fencer, HeroColorOption.Orange },
+        { AllHeroNames.Sharpshot, HeroColorOption.Orange },
+
+        // --- Yellow ---
+        { AllHeroNames.Fighter, HeroColorOption.Yellow },
+        { AllHeroNames.Brigand, HeroColorOption.Yellow },
+        { AllHeroNames.Ruffian, HeroColorOption.Yellow },
+        { AllHeroNames.Hoarder, HeroColorOption.Yellow },
+        { AllHeroNames.Lazy, HeroColorOption.Yellow },
+        { AllHeroNames.Soldier, HeroColorOption.Yellow },
+        { AllHeroNames.Gladiator, HeroColorOption.Yellow },
+        { AllHeroNames.Scrapper, HeroColorOption.Yellow },
+        { AllHeroNames.Collector, HeroColorOption.Yellow },
+        { AllHeroNames.Sinew, HeroColorOption.Yellow },
+        { AllHeroNames.Berserker, HeroColorOption.Yellow },
+        { AllHeroNames.Whirl, HeroColorOption.Yellow },
+        { AllHeroNames.Brute, HeroColorOption.Yellow },
+        { AllHeroNames.Leader, HeroColorOption.Yellow },
+        { AllHeroNames.Bash, HeroColorOption.Yellow },
+        { AllHeroNames.Curator, HeroColorOption.Yellow },
+        { AllHeroNames.Barbarian, HeroColorOption.Yellow },
+        { AllHeroNames.Brawler, HeroColorOption.Yellow },
+        { AllHeroNames.Wanderer, HeroColorOption.Yellow },
+        { AllHeroNames.Eccentric, HeroColorOption.Yellow },
+        { AllHeroNames.Veteran, HeroColorOption.Yellow },
+
+        // --- Grey ---
+        { AllHeroNames.Defender, HeroColorOption.Grey },
+        { AllHeroNames.Buckle, HeroColorOption.Grey },
+        { AllHeroNames.Squire, HeroColorOption.Grey },
+        { AllHeroNames.Alloy, HeroColorOption.Grey },
+        { AllHeroNames.Wallop, HeroColorOption.Grey },
+        { AllHeroNames.Monk, HeroColorOption.Grey },
+        { AllHeroNames.Armorer, HeroColorOption.Grey },
+        { AllHeroNames.Bard, HeroColorOption.Grey },
+        { AllHeroNames.Guardian, HeroColorOption.Grey },
+        { AllHeroNames.Warden, HeroColorOption.Grey },
+        { AllHeroNames.Knight, HeroColorOption.Grey },
+        { AllHeroNames.Cleric, HeroColorOption.Grey },
+        { AllHeroNames.Pilgrim, HeroColorOption.Grey },
+        { AllHeroNames.Valkyrie, HeroColorOption.Grey },
+        { AllHeroNames.Mimic, HeroColorOption.Grey },
+        { AllHeroNames.Stalwart, HeroColorOption.Grey },
+        { AllHeroNames.Poet, HeroColorOption.Grey },
+        { AllHeroNames.Paladin, HeroColorOption.Grey },
+        { AllHeroNames.Keeper, HeroColorOption.Grey },
+
+        // --- Red ---
+        { AllHeroNames.Healer, HeroColorOption.Red },
+        { AllHeroNames.Acolyte, HeroColorOption.Red },
+        { AllHeroNames.Mystic, HeroColorOption.Red },
+        { AllHeroNames.Splint, HeroColorOption.Red },
+        { AllHeroNames.Gardener, HeroColorOption.Red },
+        { AllHeroNames.Fey, HeroColorOption.Red },
+        { AllHeroNames.Druid, HeroColorOption.Red },
+        { AllHeroNames.Priestess, HeroColorOption.Red },
+        { AllHeroNames.Disciple, HeroColorOption.Red },
+        { AllHeroNames.Medic, HeroColorOption.Red },
+        { AllHeroNames.Enchanter, HeroColorOption.Red },
+        { AllHeroNames.Herbalist, HeroColorOption.Red },
+        { AllHeroNames.Vampire, HeroColorOption.Red },
+        { AllHeroNames.Shaman, HeroColorOption.Red },
+        { AllHeroNames.Witch, HeroColorOption.Red },
+        { AllHeroNames.Doctor, HeroColorOption.Red },
+        { AllHeroNames.Forsaken, HeroColorOption.Red },
+        { AllHeroNames.Fate, HeroColorOption.Red },
+        { AllHeroNames.Wraith, HeroColorOption.Red },
+        { AllHeroNames.Prophet, HeroColorOption.Red },
+        { AllHeroNames.Surgeon, HeroColorOption.Red },
+
+        // --- Blue ---
+        { AllHeroNames.Mage, HeroColorOption.Blue },
+        { AllHeroNames.Student, HeroColorOption.Blue },
+        { AllHeroNames.Initiate, HeroColorOption.Blue },
+        { AllHeroNames.Cultist, HeroColorOption.Blue },
+        { AllHeroNames.Prodigy, HeroColorOption.Blue },
+        { AllHeroNames.Meddler, HeroColorOption.Blue },
+        { AllHeroNames.Sparky, HeroColorOption.Blue },
+        { AllHeroNames.Seer, HeroColorOption.Blue },
+        { AllHeroNames.Myco, HeroColorOption.Blue },
+        { AllHeroNames.Fiend, HeroColorOption.Blue },
+        { AllHeroNames.Glacia, HeroColorOption.Blue },
+        { AllHeroNames.Jester, HeroColorOption.Blue },
+        { AllHeroNames.Caldera, HeroColorOption.Blue },
+        { AllHeroNames.Evoker, HeroColorOption.Blue },
+        { AllHeroNames.Sorcerer, HeroColorOption.Blue },
+        { AllHeroNames.Artificer, HeroColorOption.Blue },
+        { AllHeroNames.Chronos, HeroColorOption.Blue },
+        { AllHeroNames.Ghast, HeroColorOption.Blue },
+        { AllHeroNames.Wizard, HeroColorOption.Blue },
+        { AllHeroNames.Weaver, HeroColorOption.Blue },
+        { AllHeroNames.Ace, HeroColorOption.Blue },
+        { AllHeroNames.Warlock, HeroColorOption.Blue },
+
+        // --- Green (Unlisted/Missed Heroes) ---
+        { AllHeroNames.Alien, HeroColorOption.Green },
+        { AllHeroNames.Coffin, HeroColorOption.Green },
+        { AllHeroNames.Dice, HeroColorOption.Green },
+        { AllHeroNames.Housecat, HeroColorOption.Green },
+        { AllHeroNames.Jumble, HeroColorOption.Green },
+        { AllHeroNames.Luggage, HeroColorOption.Green },
+        { AllHeroNames.Pockets, HeroColorOption.Green },
+        { AllHeroNames.Presense, HeroColorOption.Green },
+        { AllHeroNames.Primrose, HeroColorOption.Green },
+        { AllHeroNames.Reflection, HeroColorOption.Green },
+        { AllHeroNames.Robot, HeroColorOption.Green },
+        { AllHeroNames.Spade, HeroColorOption.Green },
+        { AllHeroNames.Sphere, HeroColorOption.Green },
+        { AllHeroNames.Spine, HeroColorOption.Green },
+        { AllHeroNames.Statue, HeroColorOption.Green },
+        { AllHeroNames.Tainted, HeroColorOption.Green },
+        { AllHeroNames.Tinder, HeroColorOption.Green },
+        { AllHeroNames.Vessel, HeroColorOption.Green },
+        { AllHeroNames.Granite, HeroColorOption.Green },
+        { AllHeroNames.Twin, HeroColorOption.Green }
+    };
+
+    public static string GetHeroColorName(string code)
+    {
+        // Remove the "col." prefix if it exists
+        string key = code.Replace("col.", "").ToLower();
+
+        if (HeroColorNames.TryGetValue(key, out string name))
+        {
+            return name;
+        }
+        return "Unknown Color";
+    }
+
+    public static Color GetHeroColor(string code)
+    {
+        string key = code.Replace("col.", "").ToLower();
+        if (HeroColorMap.TryGetValue(key, out Color color))
+        {
+            return color;
+        }
+        return Color.white; // Default fallback
+    }
+
+    private static Color FromHex(string hex)
+    {
+        if (ColorUtility.TryParseHtmlString("#" + hex, out Color color))
+        {
+            return color;
+        }
+        return Color.white;
+    }
+}
+
+public static class DefaultDiceData
+{
+    public enum EffectType
+    {
+        Blank = 0,
+        BlankUnset = 1,
+        BlankPetrified = 2,
+        BlankUsed = 3,
+        BlankItem = 4,
+        BlankCurse = 5,
+        BlankStasis = 6,
+        BlankSticky = 7,
+        BlankExert = 8,
+        BlankFumble = 9,
+        AddCleanseAndSelfCleanse = 10,
+        DamageToAllyMandatoryGenerousStasis = 11,
+        SelfDamageCantrip = 12,
+        IDieCantrip = 13,
+        SelfDamageMandatory = 14,
+        Damage = 15,
+        DamageGrowth = 16,
+        DamageEngage = 17,
+        DamageManagain = 18,
+        DamagePain = 19,
+        DamageDeathwish = 20,
+        DamageDeath = 21,
+        DamageSerrated = 22,
+        DamageExert = 23,
+        DamageDoubleUse = 24,
+        DamageQuadUse = 25,
+        DamageBloodlust = 26,
+        DamageCopycat = 27,
+        DamagePristine = 28,
+        DamageGuilt = 29,
+        DamageCruel = 30,
+        DamageShifter = 31,
+        DamageFocus = 32,
+        DamageInspired = 33,
+        DamageToAll = 34,
+        ReviveManagain = 35,
+        DamageCleave = 36,
+        DamageDescend = 37,
+        DamageCleaveChain = 38,
+        DamageHeavy = 39,
+        DamageInflictSingleUse = 40,
+        DamageSteel = 41,
+        DamageCharged = 42,
+        StunBully = 43,
+        DamageVulnerable = 44,
+        DamageEra = 45,
+        DamageRanged = 46,
+        DamageRangedPoison = 47,
+        DamageRangedDuplicate = 48,
+        DamageRangedCleave = 49,
+        DamageRangedCopycat = 50,
+        DamageSelfShield = 51,
+        DamageSelfHeal = 52,
+        DamagePoison = 53,
+        DamageToAllPoison = 54,
+        DamagePoisonPlague = 55,
+        Shield = 56,
+        ShieldFlesh = 57,
+        ShieldGrowth = 58,
+        ShieldEngage = 59,
+        ShieldEnduringDeath = 60,
+        ShieldManaGain = 61,
+        ShieldDoubleUse = 62,
+        ShieldSteel = 63,
+        ShieldRescue = 64,
+        ShieldPristine = 65,
+        ShieldCantrip = 66,
+        ShieldCopycat = 67,
+        ShieldFocus = 68,
+        ShieldCleave = 69,
+        ShieldCharged = 70,
+        ShieldCleanse = 71,
+        ShieldToAll = 72,
+        ShieldToAllCantrip = 73,
+        ShieldAndHeal = 74,
+        ShieldSmith = 75,
+        Mana = 76,
+        ManaCantrip = 77,
+        ManaCantripBoned = 78,
+        ManaGrowth = 79,
+        ManaDecay = 80,
+        ManaDeath = 81,
+        ManaPain = 82,
+        ManaBloodlust = 83,
+        ManaPair = 84,
+        ManaTrio = 85,
+        HealShieldManaGain = 86,
+        ManaCharged = 87,
+        DamageSingleUseCharged = 88,
+        DamageSingleUseInflictPain = 89,
+        DamageSingleUseCruel = 90,
+        DamageSingleUsePoison = 91,
+        DamageSingleUseSelfHeal = 92,
+        ManaSingleUse = 93,
+        ShieldSingleUsePermaBoost = 94,
+        DamageSingleUseWeaken = 95,
+        DamageSingleUseFierce = 96,
+        DamageSingleUseEcho = 97,
+        DamageSingleUseDispel = 98,
+        DamageSingleUseInflictExert = 99,
+        StunSingleUse = 100,
+        DamageSingleUseWeakenVulnerableCleaveEngageSelfheal = 101, // Chaos Wand
+        DamageLead = 102,
+        Heal = 103,
+        HealSingleUse = 104,
+        HealVitality = 105,
+        HealRescue = 106,
+        HealAll = 107,
+        HealBoost = 108,
+        HealCleave = 109,
+        HealRegen = 110,
+        HealCleanse = 111,
+        HealManaGain = 112,
+        HealGroooooowth = 113,
+        HealDoubleUse = 114,
+        DamageSingleUse = 115,
+        KillIfLessThanHp = 116,
+        Undying = 117,
+        RedirectSelfShield = 118,
+        ShieldRepel = 119,
+        ShieldRepelRampageRescue = 120,
+        ShieldPain = 121,
+        KillIfLessThanHpRanged = 122,
+        Dodge = 123,
+        DodgeCantrip = 124,
+        RerollCantrip = 125,
+        DamageCantrip = 126,
+        DamageStickyMandatoryDeath = 127,
+        DamageToAllRampagePain = 128,
+        DamageChargedRampagePain = 129,
+        Reuse = 130,
+        DamageWeaken = 131,
+        DamageDuplicate = 132,
+        ShieldDuplicate = 133,
+        ManaDuplicate = 134,
+        DamageRangedEngage = 135,
+        Revive = 136,
+        DamageRampage = 137,
+        AddDoubleUse = 138,
+        AddCantrip = 139,
+        AddNothing = 140,
+        AddCopycat = 141,
+        AddCleaveSingleUse = 142,
+        AddCruelDeathwish = 143,
+        AddManaGain = 144,
+        AddPoison = 145,
+        AddSelfShield = 146,
+        AddSelfHeal = 147,
+        AddSelfHealSelfShield = 148,
+        AddPainManaGain = 149,
+        AddEngage = 150,
+        AddGrowth = 151,
+        BlankShield = 152,
+        BlankDamage = 153,
+        BlankMana = 154,
+        BlankSummon = 155,
+        BlankHeal = 156,
+        RedirectCleave = 157, // Red Flag
+        DamageToAllRampage = 158, // Spinning Scythe
+        DamageFleshPain = 159, // Viscera
+        DamageToAllChargedManaCost = 160, // Mana Bomb
+        DamageSingleUseInflictSingleUse = 161, // Wand of Wand
+        HealBoostInflictPain = 162, // Demon Horn
+        DamageHeavyCharged = 163, // Charged Hammer
+        HealRegenCleanseManaCost = 164, // Infused Herbs
+        DamagePainDrink = 165, // Potion Shard
+        ReviveDrink = 166, // Revive Potion
+        ManaDrink = 167, // Mana Potion
+        DamageEliminate = 168,
+        DamagePoisonEnemy = 169,
+        DamageEnemy = 170,
+        DamageCleaveEnemy = 171,
+        SummonDragonsDeath = 172,
+        DamageCleaveTrio = 173,
+        DamageDefy = 174,
+        DamageCritical = 175,
+        TargetAlly = 176,
+        TargetAllyPips = 177,
+        AllAlliesPips = 178,
+        AllAllies = 179,
+        TargetEnemy = 180,
+        TargetEnemyPips = 181,
+        AllEnemiesPips = 182,
+        AllEnemies = 183,
+        TargetAllPips = 184,
+        TargetAll = 185,
+        TargetSelf = 186,
+        TargetSelfPips = 187
+    }
+
+    public static readonly Dictionary<string, EffectType> EffectMap = new Dictionary<string, EffectType>
+    {
+        { "Blank", EffectType.Blank },
+        { "Blank (Unset)", EffectType.BlankUnset },
+        { "Blank (Petrified)", EffectType.BlankPetrified },
+        { "Blank (Used)", EffectType.BlankUsed },
+        { "Blank (Item)", EffectType.BlankItem },
+        { "Blank (Curse)", EffectType.BlankCurse },
+        { "Blank (Stasis)", EffectType.BlankStasis },
+        { "Blank (Sticky)", EffectType.BlankSticky },
+        { "Blank (Exert)", EffectType.BlankExert },
+        { "Blank (Fumble)", EffectType.BlankFumble },
+        { "Add Cleanse and SelfCleanse", EffectType.AddCleanseAndSelfCleanse },
+        { "Damage to Ally Mandatory Generous Stasis", EffectType.DamageToAllyMandatoryGenerousStasis },
+        { "Self damage Cantrip", EffectType.SelfDamageCantrip },
+        { "I Die Cantrip", EffectType.IDieCantrip },
+        { "Self damage Mandatory", EffectType.SelfDamageMandatory },
+        { "Damage", EffectType.Damage },
+        { "Damage Growth", EffectType.DamageGrowth },
+        { "Damage Engage", EffectType.DamageEngage },
+        { "Damage Managain", EffectType.DamageManagain },
+        { "Damage Pain", EffectType.DamagePain },
+        { "Damage Deathwish", EffectType.DamageDeathwish },
+        { "Damage Death", EffectType.DamageDeath },
+        { "Damage serrated", EffectType.DamageSerrated },
+        { "Damage Exert", EffectType.DamageExert },
+        { "Damage DoubleUse", EffectType.DamageDoubleUse },
+        { "Damage QuadUse", EffectType.DamageQuadUse },
+        { "Damage Bloodlust", EffectType.DamageBloodlust },
+        { "Damage Copycat", EffectType.DamageCopycat },
+        { "Damage Pristine", EffectType.DamagePristine },
+        { "Damage Guilt", EffectType.DamageGuilt },
+        { "Damage Cruel", EffectType.DamageCruel },
+        { "Damage Shifter", EffectType.DamageShifter },
+        { "Damage Focus", EffectType.DamageFocus },
+        { "Damage Inspired", EffectType.DamageInspired },
+        { "Damage to all", EffectType.DamageToAll },
+        { "Revive Managain", EffectType.ReviveManagain },
+        { "Damage Cleave", EffectType.DamageCleave },
+        { "Damage Descend", EffectType.DamageDescend },
+        { "Damage Cleave Chain", EffectType.DamageCleaveChain },
+        { "Damage Heavy", EffectType.DamageHeavy },
+        { "Damage InflictSingleUse", EffectType.DamageInflictSingleUse },
+        { "Damage Steel", EffectType.DamageSteel },
+        { "Damage Charged", EffectType.DamageCharged },
+        { "Stun Bully", EffectType.StunBully },
+        { "Damage Vulnerable", EffectType.DamageVulnerable },
+        { "Damage Era", EffectType.DamageEra },
+        { "Damage Ranged", EffectType.DamageRanged },
+        { "Damage Ranged Poison", EffectType.DamageRangedPoison },
+        { "Damage Ranged Duplicate", EffectType.DamageRangedDuplicate },
+        { "Damage Ranged Cleave", EffectType.DamageRangedCleave },
+        { "Damage Ranged Copycat", EffectType.DamageRangedCopycat },
+        { "Damage SelfShield", EffectType.DamageSelfShield },
+        { "Damage SelfHeal", EffectType.DamageSelfHeal },
+        { "Damage Poison", EffectType.DamagePoison },
+        { "Damage to ALL Poison", EffectType.DamageToAllPoison },
+        { "Damage Poison Plague", EffectType.DamagePoisonPlague },
+        { "Shield", EffectType.Shield },
+        { "Shield flesh", EffectType.ShieldFlesh },
+        { "Shield Growth", EffectType.ShieldGrowth },
+        { "Shield Engage", EffectType.ShieldEngage },
+        { "Shield Enduring Death", EffectType.ShieldEnduringDeath },
+        { "Shield ManaGain", EffectType.ShieldManaGain },
+        { "Shield DoubleUse", EffectType.ShieldDoubleUse },
+        { "Shield Steel", EffectType.ShieldSteel },
+        { "Shield Rescue", EffectType.ShieldRescue },
+        { "Shield Pristine", EffectType.ShieldPristine },
+        { "Shield Cantrip", EffectType.ShieldCantrip },
+        { "Shield Copycat", EffectType.ShieldCopycat },
+        { "Shield Focus", EffectType.ShieldFocus },
+        { "Shield Cleave", EffectType.ShieldCleave },
+        { "Shield Charged", EffectType.ShieldCharged },
+        { "Shield Cleanse", EffectType.ShieldCleanse },
+        { "Shield to all", EffectType.ShieldToAll },
+        { "Shield to all Cantrip", EffectType.ShieldToAllCantrip },
+        { "Shield and Heal", EffectType.ShieldAndHeal },
+        { "Shield Smith", EffectType.ShieldSmith },
+        { "Mana", EffectType.Mana },
+        { "Mana Cantrip", EffectType.ManaCantrip },
+        { "Mana Cantrip Boned", EffectType.ManaCantripBoned },
+        { "Mana Growth", EffectType.ManaGrowth },
+        { "Mana Decay", EffectType.ManaDecay },
+        { "Mana Death", EffectType.ManaDeath },
+        { "Mana Pain", EffectType.ManaPain },
+        { "Mana Bloodlust", EffectType.ManaBloodlust },
+        { "Mana Pair", EffectType.ManaPair },
+        { "Mana trio", EffectType.ManaTrio },
+        { "Heal Shield ManaGain", EffectType.HealShieldManaGain },
+        { "Mana Charged", EffectType.ManaCharged },
+        { "Damage Single-use Charged", EffectType.DamageSingleUseCharged },
+        { "Damage SIngle-use InflictPain", EffectType.DamageSingleUseInflictPain },
+        { "Damage SIngle-use Cruel", EffectType.DamageSingleUseCruel },
+        { "Damage Single-use Poison", EffectType.DamageSingleUsePoison },
+        { "Damage Single-use SelfHeal", EffectType.DamageSingleUseSelfHeal },
+        { "Mana Single-use", EffectType.ManaSingleUse },
+        { "Shield Single-use PermaBoost", EffectType.ShieldSingleUsePermaBoost },
+        { "Damage Single-use Weaken", EffectType.DamageSingleUseWeaken },
+        { "Damage Single-use Fierce", EffectType.DamageSingleUseFierce },
+        { "Damage Single-use Echo", EffectType.DamageSingleUseEcho },
+        { "Damage Single-use Dispel", EffectType.DamageSingleUseDispel },
+        { "Damage Single-use InflictExert", EffectType.DamageSingleUseInflictExert },
+        { "Stun Single-use", EffectType.StunSingleUse },
+        { "Damage Singleuse Weaken Vulnerable Cleave Engage Selfheal - [Chaos Wand]", EffectType.DamageSingleUseWeakenVulnerableCleaveEngageSelfheal },
+        { "Damage Lead", EffectType.DamageLead },
+        { "Heal", EffectType.Heal },
+        { "Heal Single-use", EffectType.HealSingleUse },
+        { "Heal Vitality", EffectType.HealVitality },
+        { "Heal Rescue", EffectType.HealRescue },
+        { "Heal All", EffectType.HealAll },
+        { "Heal Boost", EffectType.HealBoost },
+        { "Heal Cleave", EffectType.HealCleave },
+        { "Heal Regen", EffectType.HealRegen },
+        { "Heal Cleanse", EffectType.HealCleanse },
+        { "Heal ManaGain", EffectType.HealManaGain },
+        { "Heal Groooooowth", EffectType.HealGroooooowth },
+        { "Heal DoubleUse", EffectType.HealDoubleUse },
+        { "Damage Single-use", EffectType.DamageSingleUse },
+        { "Kill if less than hp ", EffectType.KillIfLessThanHp },
+        { "Undying", EffectType.Undying },
+        { "Redirect SelfShield", EffectType.RedirectSelfShield },
+        { "Shield Repel", EffectType.ShieldRepel },
+        { "Shield Repel Rampage Rescue", EffectType.ShieldRepelRampageRescue },
+        { "Shield Pain", EffectType.ShieldPain },
+        { "Kill if less than hp Ranged", EffectType.KillIfLessThanHpRanged },
+        { "Dodge", EffectType.Dodge },
+        { "Dodge Cantrip", EffectType.DodgeCantrip },
+        { "Reroll Cantrip", EffectType.RerollCantrip },
+        { "Damage Cantrip", EffectType.DamageCantrip },
+        { "Damage Sticky Mandatory Death", EffectType.DamageStickyMandatoryDeath },
+        { "Damage to all Rampage Pain", EffectType.DamageToAllRampagePain },
+        { "Damage Charged Rampage Pain", EffectType.DamageChargedRampagePain },
+        { "Reuse", EffectType.Reuse },
+        { "Damage Weaken", EffectType.DamageWeaken },
+        { "Damage Duplicate", EffectType.DamageDuplicate },
+        { "Shield Duplicate", EffectType.ShieldDuplicate },
+        { "Mana Duplicate", EffectType.ManaDuplicate },
+        { "Damage Ranged Engage", EffectType.DamageRangedEngage },
+        { "Revive", EffectType.Revive },
+        { "Damage Rampage", EffectType.DamageRampage },
+        { "Add DoubleUse", EffectType.AddDoubleUse },
+        { "Add Cantrip", EffectType.AddCantrip },
+        { "Add Nothing", EffectType.AddNothing },
+        { "Add Copycat", EffectType.AddCopycat },
+        { "Add Cleave Single-use", EffectType.AddCleaveSingleUse },
+        { "Add Cruel Deathwish", EffectType.AddCruelDeathwish },
+        { "Add ManaGain", EffectType.AddManaGain },
+        { "Add Poison", EffectType.AddPoison },
+        { "Add SelfShield", EffectType.AddSelfShield },
+        { "Add SeflHeal", EffectType.AddSelfHeal },
+        { "Add SelfHeal SelfShield", EffectType.AddSelfHealSelfShield },
+        { "Add Pain ManaGain", EffectType.AddPainManaGain },
+        { "Add Engage", EffectType.AddEngage },
+        { "Add Growth", EffectType.AddGrowth },
+        { "Blank (Shield)", EffectType.BlankShield },
+        { "Blank (Damage)", EffectType.BlankDamage },
+        { "Blank (Mana)", EffectType.BlankMana },
+        { "Blank (Summon)", EffectType.BlankSummon },
+        { "Blank (Heal)", EffectType.BlankHeal },
+        { "Redirect Cleave - [Red Flag]", EffectType.RedirectCleave },
+        { "Damage to ALL Rampage - [Spinning Scythe]", EffectType.DamageToAllRampage },
+        { "Damage Flesh Pain - [Viscera]", EffectType.DamageFleshPain },
+        { "Damage to ALL Charged ManaCost - [Mana Bomb]", EffectType.DamageToAllChargedManaCost },
+        { "Damage SingleUse InflictSingleUse - [Wand of Wand]", EffectType.DamageSingleUseInflictSingleUse },
+        { "Heal Boost InflictPain - [Demon Horn]", EffectType.HealBoostInflictPain },
+        { "Damage Heavy Charged - [Charged Hammer]", EffectType.DamageHeavyCharged },
+        { "Heal Regen Cleanse ManaCost - [Infused Herbs]", EffectType.HealRegenCleanseManaCost },
+        { "Damage Pain Drink - [Potion Shard]", EffectType.DamagePainDrink },
+        { "Revive Drink - [Revive Potion]", EffectType.ReviveDrink },
+        { "Mana Drink - [Mana Potion]", EffectType.ManaDrink },
+        { "Damage Eliminate", EffectType.DamageEliminate },
+        { "Damage Poison (Enemy)", EffectType.DamagePoisonEnemy },
+        { "Damage (Enemy)", EffectType.DamageEnemy },
+        { "Damage Cleave (Enemy)", EffectType.DamageCleaveEnemy },
+        { "Summon Dragons Death", EffectType.SummonDragonsDeath },
+        { "Damage Cleave Trio", EffectType.DamageCleaveTrio },
+        { "Damage Defy", EffectType.DamageDefy },
+        { "Damage Critical", EffectType.DamageCritical },
+        { "Target Ally", EffectType.TargetAlly },
+        { "Target Ally (Pips)", EffectType.TargetAllyPips },
+        { "All Allies (Pips)", EffectType.AllAlliesPips },
+        { "All Allies ", EffectType.AllAllies },
+        { "Target Enemy", EffectType.TargetEnemy },
+        { "Target Enemy (Pips)", EffectType.TargetEnemyPips },
+        { "All Enemies (Pips)", EffectType.AllEnemiesPips },
+        { "All Enemies", EffectType.AllEnemies },
+        { "Target ALL (Pips)", EffectType.TargetAllPips },
+        { "Target ALL", EffectType.TargetAll },
+        { "Target Self", EffectType.TargetSelf },
+        { "Target Self (Pips)", EffectType.TargetSelfPips }
+    };
+}
+
+
+[Serializable]
+public class DiceSideData
+{
+    public int effectID = 0;
+    public int pips = 0;
+
+    public List<string> keywords = new List<string>();
+    public string facadeID = "";
+    public string facadeColor = "";
+}
+
+public static class DiceTargetHelper
+{
+    // Indices: 0:left, 1:mid, 2:top, 3:bot, 4:right, 5:rightmost
+    public static readonly string[] FaceNames = { "left", "mid", "top", "bot", "right", "rightmost" };
+
+    public static List<int> GetIndicesForTarget(string target)
+    {
+        target = target?.ToLower() ?? "";
+
+        return target switch
+        {
+            "left" => new List<int> { 0 },
+            "mid" => new List<int> { 1 },
+            "top" => new List<int> { 2 },
+            "bot" => new List<int> { 3 },
+            "right" => new List<int> { 4 },
+            "rightmost" => new List<int> { 5 },
+
+            // Logic definitions
+            "all" => new List<int> { 0, 1, 2, 3, 4, 5 },
+            "row" => new List<int> { 0, 1, 4 },      // Middle Row: Left, Mid, Right
+            "col" => new List<int> { 1, 2, 3 },      // Column: Mid, Top, Bot
+
+            // Combinations
+            "topbot" => new List<int> { 2, 3 },         // Top and Bottom
+            "left2" => new List<int> { 0, 1 },         // Middle and left
+            "mid2" => new List<int> { 1, 4 },         // Middle and right
+            "right2" => new List<int> { 4, 5 },         // Right and rightmost
+            "right3" => new List<int> { 1, 4, 5 },      // Middle, right and rightmost
+            "right5" => new List<int> { 1, 2, 3, 4, 5 },// All except left
+
+            _ => new List<int>()
+        };
+    }
+}
+
+
+public enum TargetType
+{
+    left,       // index 0
+    left2,      // index 1
+    top,        // index 2
+    bot,        // index 3
+    topbot,     // indices 2 & 3
+    right2,     // index 4
+    right,      // index 5
+    rightmost,  // Also index 5? Sometimes used differently in UI
+    mid,        // Middle column?
+    mid2,
+    row,        // Middle row
+    all,        // All sides
+    col,        // Color wide
+    self        // Passive/Hero wide
+}
+
+public enum AllHeroNames
+{
+    None,
+    Acolyte,
+    Ace,
+    Alien,
+    Alloy,
+    Armorer,
+    Artificer,
+    Assassin,
+    Barbarian,
+    Bard,
+    Bash,
+    Berserker,
+    Brawler,
+    Brigand,
+    Brute,
+    Buckle,
+    Caldera,
+    Chronos,
+    Cleric,
+    Clumsy,
+    Coffin,
+    Collector,
+    Cultist,
+    Curator,
+    Dabble,
+    Dabbler,
+    Dabblest,
+    Dancer,
+    Defender,
+    Dice,
+    Disciple,
+    Doctor,
+    Druid,
+    Eccentric,
+    Enchanter,
+    Evoker,
+    Fate,
+    Fencer,
+    Fey,
+    Fiend,
+    Fighter,
+    Forsaken,
+    Gambler,
+    Gardener,
+    Ghast,
+    Glacia,
+    Gladiator,
+    Granite,
+    Guardian,
+    Healer,
+    Herbalist,
+    Hoarder,
+    Housecat,
+    Initiate,
+    Jester,
+    Juggler,
+    Jumble,
+    Keeper,
+    Knight,
+    Lazy,
+    Leader,
+    Lost,
+    Ludus,
+    Luggage,
+    Mage,
+    Meddler,
+    Medic,
+    Mimic,
+    Monk,
+    Myco,
+    Mystic,
+    Ninja,
+    Paladin,
+    Pilgrim,
+    Pockets,
+    Poet,
+    Presense,
+    Priestess,
+    Primrose,
+    Prodigy,
+    Prophet,
+    Ranger,
+    Reflection,
+    Robot,
+    Roulette,
+    Ruffian,
+    Scrapper,
+    Scoundrel,
+    Seer,
+    Shaman,
+    Sharpshot,
+    Sinew,
+    Soldier,
+    Sorcerer,
+    Spade,
+    Sparky,
+    Spellbalde,
+    Sphere,
+    Spine,
+    Splint,
+    Squire,
+    Stalwart,
+    Statue,
+    Student,
+    Surgeon,
+    Tainted,
+    Thief,
+    Tinder,
+    Trapper,
+    Twin,
+    Valkyrie,
+    Vampire,
+    Venom,
+    Vessel,
+    Veteran,
+    Wallop,
+    Wanderer,
+    Warden,
+    Warlock,
+    Weaver,
+    Whirl,
+    Witch,
+    Wizard,
+    Wraith
 }

@@ -1,5 +1,6 @@
-using System.IO;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.U2D.Sprites;
 using UnityEngine;
@@ -26,9 +27,9 @@ public class AtlasProcessor : AssetPostprocessor
                 { "reg/face/blank/exerted", 8 },
                 { "reg/face/blank/fumble", 9 },
                 { "reg/face/special/addKeyword/cleanseselfcleanse", 10 },
-                { "reg/face/backstab", 11 },
-                { "reg/face/pinkSkull", 12 },
-                { "reg/face/special/addKeyword/old/cantripdeath", 13 },
+                { "reg/face/item/backstab", 11 },
+                { "reg/face/dmgSelfCantrip", 12 },
+                { "reg/face/pinkSkull", 13 },
                 { "reg/face/dmgSelfMandatory", 14 },
                 { "reg/face/sword", 15 },
                 { "reg/face/dmgGrowth", 16 },
@@ -87,7 +88,7 @@ public class AtlasProcessor : AssetPostprocessor
                 { "reg/face/shieldPlusAdjacent", 69 },
                 { "reg/face/shieldCharged", 70 },
                 { "reg/face/shieldCure", 71 },
-                { "reg/face/wardingChort", 72 },
+                { "reg/face/wardingChord", 72 },
                 { "reg/face/flute", 73 },
                 { "reg/face/shieldHeart", 74 },
                 { "reg/face/smith", 75 },
@@ -157,14 +158,14 @@ public class AtlasProcessor : AssetPostprocessor
                 { "reg/face/special/addKeyword/cantrip", 139 },
                 { "reg/face/special/addKeyword/nothing", 140 },
                 { "reg/face/special/addKeyword/copycat", 141 },
-                { "reg/face/special/addKeyword/addCleaveSingleUse", 142 },
-                { "reg/face/special/addKeyword/addCruelDeathwish", 143 },
-                { "reg/face/special/addKeyword/addManaGain", 144 },
-                { "reg/face/special/addKeyword/addPoison", 145 },
-                { "reg/face/special/addKeyword/addSelfShield", 146 },
-                { "reg/face/special/addKeyword/addSelfHeal", 147 },
-                { "reg/face/special/addKeyword/addSelfHealSelfShield", 148 },
-                { "reg/face/special/addKeyword/addManaGainPain", 149 },
+                { "reg/face/special/addKeyword/cleavesingleuse", 142 },
+                { "reg/face/special/addKeyword/crueldeathwish", 143 },
+                { "reg/face/special/addKeyword/managain", 144 },
+                { "reg/face/special/addKeyword/poison", 145 },
+                { "reg/face/special/addKeyword/selfshield", 146 },
+                { "reg/face/special/addKeyword/selfheal", 147 },
+                { "reg/face/special/addKeyword/selfhealselfshield", 148 },
+                { "reg/face/special/addKeyword/managainpain", 149 },
                 { "reg/face/special/addKeyword/engage", 150 },
                 { "reg/face/special/addKeyword/growth", 151 },
                 { "reg/face/special/generic/shield", 152 },
@@ -203,8 +204,6 @@ public class AtlasProcessor : AssetPostprocessor
                 { "reg/face/special/target/justTargetAny", 185 },
                 { "reg/face/special/target/justTargetSelf", 186 },
                 { "reg/face/special/target/justTargetSelfPips", 187 },
-
-                // Non-Regular categoric assignments
                 { "big/face/wolfBite", 215 },
                 { "huge/face/summonSaber", 235 },
                 { "small/face/boneStrike", 256 }
@@ -215,10 +214,129 @@ public class AtlasProcessor : AssetPostprocessor
     private class ParsedSprite
     {
         public string originalPath;
+        public string normalizedPath;
         public string prefix;
         public string leafName;
         public Rect rect;
         public int assignedId = -1;
+    }
+
+    // A stateless helper to strip structural folders, ensuring items match across both configurations
+    private static string NormalizePath(string path)
+    {
+        string normalized = path.Replace('\\', '/').ToLower();
+
+        if (normalized.StartsWith("3dlink/"))
+        {
+            normalized = normalized.Substring("3dlink/".Length);
+        }
+        if (normalized.StartsWith("extra/"))
+        {
+            normalized = normalized.Substring("extra/".Length);
+        }
+
+        // Unifies plural differences like "extra/items/poem" vs "item/poem"
+        normalized = normalized.Replace("items/", "item/");
+
+        return normalized;
+    }
+
+    private static class SpriteRegistry
+    {
+        private const string RegistryPath = "ProjectSettings/SpriteIdRegistry.json";
+
+        [Serializable]
+        private class Entry
+        {
+            public string prefix;
+            public string path;
+            public int id;
+        }
+
+        [Serializable]
+        private class Wrapper
+        {
+            public List<Entry> entries = new List<Entry>();
+        }
+
+        private static readonly Dictionary<string, Dictionary<string, int>> Database = new Dictionary<string, Dictionary<string, int>>();
+
+        public static void Load()
+        {
+            Database.Clear();
+            if (!File.Exists(RegistryPath)) return;
+
+            try
+            {
+                string json = File.ReadAllText(RegistryPath);
+                var wrapper = JsonUtility.FromJson<Wrapper>(json);
+                if (wrapper != null && wrapper.entries != null)
+                {
+                    foreach (var entry in wrapper.entries)
+                    {
+                        if (!Database.ContainsKey(entry.prefix))
+                        {
+                            Database[entry.prefix] = new Dictionary<string, int>();
+                        }
+                        Database[entry.prefix][entry.path] = entry.id;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[AtlasProcessor] Failed to load sprite registry: {ex.Message}");
+            }
+        }
+
+        public static void Save()
+        {
+            try
+            {
+                var wrapper = new Wrapper();
+                foreach (var prefixGroup in Database)
+                {
+                    foreach (var pathEntry in prefixGroup.Value)
+                    {
+                        wrapper.entries.Add(new Entry
+                        {
+                            prefix = prefixGroup.Key,
+                            path = pathEntry.Key,
+                            id = pathEntry.Value
+                        });
+                    }
+                }
+                string json = JsonUtility.ToJson(wrapper, true);
+                File.WriteAllText(RegistryPath, json);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[AtlasProcessor] Failed to save sprite registry: {ex.Message}");
+            }
+        }
+
+        public static int GetOrAssignId(string prefix, string normalizedPath, HashSet<int> reservedIds)
+        {
+            if (!Database.ContainsKey(prefix))
+            {
+                Database[prefix] = new Dictionary<string, int>();
+            }
+
+            if (Database[prefix].TryGetValue(normalizedPath, out int existingId))
+            {
+                return existingId;
+            }
+
+            // Sequentially allocate the next ID, skipping hardcoded reservations
+            int nextId = 0;
+            var assignedInPrefix = new HashSet<int>(Database[prefix].Values);
+            while (reservedIds.Contains(nextId) || assignedInPrefix.Contains(nextId))
+            {
+                nextId++;
+            }
+
+            Database[prefix][normalizedPath] = nextId;
+            return nextId;
+        }
     }
 
     void OnPreprocessTexture()
@@ -229,7 +347,7 @@ public class AtlasProcessor : AssetPostprocessor
         {
             if (fileName == target)
             {
-                ProcessAtlas(assetImporter, target);
+                ProcessAtlas(assetImporter);
                 break;
             }
         }
@@ -244,7 +362,7 @@ public class AtlasProcessor : AssetPostprocessor
         return 4;
     }
 
-    private void ProcessAtlas(AssetImporter importer, string targetFileName)
+    private void ProcessAtlas(AssetImporter importer)
     {
         TextureImporter textureImporter = (TextureImporter)importer;
         textureImporter.textureType = TextureImporterType.Sprite;
@@ -258,7 +376,7 @@ public class AtlasProcessor : AssetPostprocessor
         string textPath = assetPath.Replace(".png", ".txt");
         if (!File.Exists(textPath))
         {
-            Debug.LogError("Could not find: " + textPath);
+            Debug.LogError("Could not find atlas text file: " + textPath);
             return;
         }
 
@@ -267,22 +385,26 @@ public class AtlasProcessor : AssetPostprocessor
 
         for (int i = 0; i < lines.Length; i++)
         {
-            string line = lines[i].Trim();
+            string line = lines[i].Trim().Replace('\\', '/');
 
-            // Skip empty lines, lines with metadata colons, raw image references, and "3dlink/" entries
             if (string.IsNullOrEmpty(line) ||
                 line.Contains(":") ||
-                line.EndsWith(".png") ||
-                line.StartsWith("3dlink/"))
+                line.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
             string originalPath = line;
+
+            if (originalPath.StartsWith("3dlink/", StringComparison.OrdinalIgnoreCase))
+            {
+                originalPath = originalPath.Substring("3dlink/".Length);
+            }
+
+            string normalizedPath = NormalizePath(originalPath);
             string[] pathParts = originalPath.Split('/');
             string spriteSubName = pathParts[pathParts.Length - 1];
 
-            // Assign unified bas prefix to all base faces regardless of size
             string prefix = "Atm";
             if (originalPath.StartsWith("reg/face/") ||
                 originalPath.StartsWith("big/face/") ||
@@ -290,6 +412,18 @@ public class AtlasProcessor : AssetPostprocessor
                 originalPath.StartsWith("small/face/"))
             {
                 prefix = "bas";
+            }
+            else if (originalPath.StartsWith("portrait/"))
+            {
+                prefix = "prt";
+            }
+            else if (originalPath.StartsWith("trigger/"))
+            {
+                prefix = "trg";
+            }
+            else if (originalPath.StartsWith("ui/"))
+            {
+                prefix = "ui_";
             }
             else if (pathParts.Length >= 2)
             {
@@ -299,7 +433,6 @@ public class AtlasProcessor : AssetPostprocessor
                 prefix = folderName.Substring(0, 3);
             }
 
-            // Parsing Metadata
             int x = 0, y = 0, w = 0, h = 0;
             bool foundXY = false, foundSize = false;
 
@@ -335,6 +468,7 @@ public class AtlasProcessor : AssetPostprocessor
                 parsedSprites.Add(new ParsedSprite
                 {
                     originalPath = originalPath,
+                    normalizedPath = normalizedPath,
                     prefix = prefix,
                     leafName = spriteSubName,
                     rect = new Rect(x, AtlasHeight - y - h, w, h)
@@ -342,7 +476,6 @@ public class AtlasProcessor : AssetPostprocessor
             }
         }
 
-        // Sort all parsed elements based on size group (reg -> big -> huge -> small) then original relative path
         parsedSprites.Sort((a, b) =>
         {
             int orderA = GetGroupOrder(a.originalPath);
@@ -351,10 +484,11 @@ public class AtlasProcessor : AssetPostprocessor
             {
                 return orderA.CompareTo(orderB);
             }
-            return a.originalPath.CompareTo(b.originalPath);
+            return a.normalizedPath.CompareTo(b.normalizedPath);
         });
 
-        // Group sprites by prefix to isolate scope counts
+        SpriteRegistry.Load();
+
         var prefixGroups = new Dictionary<string, List<ParsedSprite>>();
         foreach (var sprite in parsedSprites)
         {
@@ -371,43 +505,48 @@ public class AtlasProcessor : AssetPostprocessor
         {
             string prefix = group.Key;
             var list = group.Value;
-            var allocatedIds = new HashSet<int>();
+            var reservedIds = new HashSet<int>();
 
-            // First Pass: Assign custom exact ID mappings
-            if (PrefixCustomIds.ContainsKey(prefix))
+            if (PrefixCustomIds.TryGetValue(prefix, out var customMappings))
             {
-                var customMappings = PrefixCustomIds[prefix];
+                foreach (var id in customMappings.Values)
+                {
+                    reservedIds.Add(id);
+                }
+            }
+
+            // Step 1: Assign strict defined database overrides
+            if (customMappings != null)
+            {
                 foreach (var sprite in list)
                 {
-                    if (customMappings.ContainsKey(sprite.originalPath))
+                    foreach (var kvp in customMappings)
                     {
-                        int customId = customMappings[sprite.originalPath];
-                        sprite.assignedId = customId;
-                        allocatedIds.Add(customId);
+                        if (NormalizePath(kvp.Key) == sprite.normalizedPath)
+                        {
+                            sprite.assignedId = kvp.Value;
+                            break;
+                        }
                     }
                 }
             }
 
-            // Second Pass: Fill remaining sequential indices
-            int nextId = 0;
+            // Step 2: Dynamically query/assign sequentially stable IDs from the persistent project settings db
             foreach (var sprite in list)
             {
                 if (sprite.assignedId == -1)
                 {
-                    while (allocatedIds.Contains(nextId))
-                    {
-                        nextId++;
-                    }
-                    sprite.assignedId = nextId;
-                    allocatedIds.Add(nextId);
-                    nextId++;
+                    sprite.assignedId = SpriteRegistry.GetOrAssignId(sprite.prefix, sprite.normalizedPath, reservedIds);
                 }
             }
 
-            // Create SpriteRect configurations
             foreach (var sprite in list)
             {
-                string finalName = $"{sprite.prefix}_{sprite.assignedId}_{sprite.leafName}";
+                int width = Mathf.RoundToInt(sprite.rect.width);
+                int height = Mathf.RoundToInt(sprite.rect.height);
+
+                string finalName = $"{sprite.prefix}_{sprite.assignedId}_{sprite.leafName}_{width}x{height}";
+
                 spriteRects.Add(new SpriteRect
                 {
                     name = finalName,
@@ -417,6 +556,8 @@ public class AtlasProcessor : AssetPostprocessor
                 });
             }
         }
+
+        SpriteRegistry.Save();
 
         dataProvider.SetSpriteRects(spriteRects.ToArray());
         dataProvider.Apply();
