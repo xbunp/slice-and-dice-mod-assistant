@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class FullScreenUIGenerator : MonoBehaviour
 {
+    public Canvas canvas;
+
     [Header("UI Prefabs")]
     public GameObject inputFieldPrefab;
     public GameObject dropdownPrefab;
@@ -29,16 +32,10 @@ public class FullScreenUIGenerator : MonoBehaviour
         GeneratedScreen screen = new GeneratedScreen();
 
         // 1. Get or Create Canvas
-        Canvas canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null)
         {
-            GameObject canvasObj = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            canvas = canvasObj.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-
-            CanvasScaler scaler = canvasObj.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            Debug.LogError("NO CANVAS");
+            return null;
         }
 
         // 2. Screen Wrapper (removes edge bleeding)
@@ -81,7 +78,10 @@ public class FullScreenUIGenerator : MonoBehaviour
             RectTransform rowRt = rowObj.GetComponent<RectTransform>();
             SetAnchors(rowRt, 0.0f, 1.0f, 1.0f, 1.0f); // Top stretch
             rowRt.anchoredPosition = new Vector2(0, currentY);
-            rowRt.sizeDelta = new Vector2(0, rowHeight);
+            rowRt.pivot = new Vector2(0.5f, 1.0f); // Force the row to pivot from its top edge
+
+            float activeHeight = rowSpec.customHeight > 0 ? rowSpec.customHeight : rowHeight;
+            rowRt.sizeDelta = new Vector2(0, activeHeight);
 
             float currentX = 0;
 
@@ -132,11 +132,56 @@ public class FullScreenUIGenerator : MonoBehaviour
 
                     case CellType.Button:
                         cellObj = Instantiate(buttonPrefab, rowRt);
-                        Button btn = cellObj.GetComponentInChildren<Button>();
+                        ImageButton imgBtn = cellObj.GetComponent<ImageButton>();
+                        Button btn = null;
+
+                        if (imgBtn != null)
+                        {
+                            btn = imgBtn.button;
+
+                            // Configure Text Component
+                            if (imgBtn.text != null)
+                            {
+                                if (cell.labelText != null) // Passing null means NO text. "" means empty text.
+                                {
+                                    imgBtn.text.text = cell.labelText;
+                                    imgBtn.text.gameObject.SetActive(true);
+                                }
+                                else
+                                {
+                                    imgBtn.text.gameObject.SetActive(false);
+                                }
+                            }
+
+                            // Configure Image Component
+                            if (imgBtn.image != null)
+                            {
+                                if (cell.buttonSprite != null) // Passing null means NO image.
+                                {
+                                    imgBtn.image.sprite = cell.buttonSprite;
+                                    imgBtn.image.gameObject.SetActive(true);
+                                }
+                                else
+                                {
+                                    imgBtn.image.gameObject.SetActive(false);
+                                }
+                            }
+
+                            // CRITICAL: Wipe the labelText so the generic text applicator at the 
+                            // bottom of the BuildGrid loop doesn't forcibly turn the text back on.
+                            cell.labelText = null;
+                        }
+                        else
+                        {
+                            btn = cellObj.GetComponentInChildren<Button>();
+                        }
+
                         refs.Buttons[cell.key] = btn;
 
-                        if (cell.onClicked != null)
+                        if (btn != null && cell.onClicked != null)
+                        {
                             btn.onClick.AddListener(() => cell.onClicked());
+                        }
                         break;
 
                     case CellType.DiceButton:
@@ -212,7 +257,7 @@ public class FullScreenUIGenerator : MonoBehaviour
                 }
             }
 
-            currentY -= (rowHeight + rowSpacing);
+            currentY -= (activeHeight + rowSpacing);
         }
 
         return refs;

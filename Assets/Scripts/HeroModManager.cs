@@ -43,6 +43,9 @@ public class HeroModManager : MonoBehaviour
     private Sprite[] _allActionSprites;
     private Dictionary<int, string> _allActionNames;
 
+    private int currentDiceTab = 0; // 0 = All, 1 = Left, 2 = Middle, etc.
+    private ScrollRect diceScrollRect;
+
     void Start()
     {
         uiGenerator = GetComponent<FullScreenUIGenerator>();
@@ -94,7 +97,6 @@ public class HeroModManager : MonoBehaviour
         string[] heroNamesList = Enum.GetNames(typeof(AllHeroNames));
 
         // 1. Core Stats Layout Specification
-        // Each row contains a pair of: [Label (0.35 width) | Input/Dropdown (0.65 width)]
         var statsLayout = new List<GridRowSpec>
         {
             // Row 1: Name
@@ -128,7 +130,7 @@ public class HeroModManager : MonoBehaviour
                     OnUIChanged();
                 })
             ),
-            // Row 5: HP & Tier (Stacked in half-columns to preserve label space)
+            // Row 5: HP & Tier
             new GridRowSpec(
                 GridCellSpec.CreateLabel("HP Label", "HP:", 0.2f),
                 GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) currentHero.hp = hp; OnUIChanged(); }),
@@ -137,20 +139,32 @@ public class HeroModManager : MonoBehaviour
             )
         };
 
-        var diceLayout = GenerateDiceLayout();
+        // 2. Middle Column: Tabs + ScrollView Base
+        List<string> tabNames = new List<string> { "All", "Left", "Middle", "Top", "Bottom", "Right", "Rightmost" };
+        var middleBaseLayout = new List<GridRowSpec>
+        {
+            new GridRowSpec(GridCellSpec.CreateNavigationTabs("DiceTabs", tabNames, new List<GameObject>(), 1.0f, OnDiceTabSelected)),
+            new GridRowSpec(900f, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
+        };
 
         // 3. Define the column split mapping
         var columns = new List<ColumnSpec>
         {
-            new ColumnSpec("LeftStats", 0.02f, 0.35f, statsLayout),     // Slightly wider to fit text labels
-            new ColumnSpec("MiddleDice", 0.38f, 0.68f, diceLayout),
-            new ColumnSpec("RightOutput", 0.71f, 0.98f)                 // Custom layout
+            new ColumnSpec("LeftStats", 0.02f, 0.35f, statsLayout),
+            new ColumnSpec("MiddleDiceBase", 0.38f, 0.68f, middleBaseLayout),
+            new ColumnSpec("RightOutput", 0.71f, 0.98f)
         };
 
         GeneratedScreen screen = uiGenerator.SetupScreen(columns);
         currentScreen = screen;
         statsUI = currentScreen.ColumnRefs["LeftStats"];
-        diceUI = currentScreen.ColumnRefs["MiddleDice"];
+
+        // Grab the ScrollView so we can inject the dice UI into it
+        var middleRefs = currentScreen.ColumnRefs["MiddleDiceBase"];
+        diceScrollRect = middleRefs.ScrollViews["DiceScrollView"];
+
+        // Initial Build of the Dice Content
+        RebuildDiceScrollView();
 
         if (screen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
         {
@@ -163,90 +177,130 @@ public class HeroModManager : MonoBehaviour
         }
     }
 
-    private List<GridRowSpec> GenerateDiceLayout()
+    private void OnDiceTabSelected(int index)
+    {
+        currentDiceTab = index;
+        RebuildDiceScrollView();
+    }
+
+    private void RebuildDiceScrollView()
+    {
+        if (diceScrollRect == null) return;
+
+        var diceLayout = GenerateDiceLayout(currentDiceTab);
+
+        // Rebuild inside the scroll view's content panel
+        diceUI = uiGenerator.RebuildGrid(diceScrollRect.content, diceLayout);
+
+        // Resize the scroll content manually based on generated row count so the scrollbar works properly
+        float totalHeight = diceLayout.Count * (uiGenerator.rowHeight + uiGenerator.rowSpacing);
+        diceScrollRect.content.sizeDelta = new Vector2(0, totalHeight);
+    }
+
+    private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
     {
         var diceLayout = new List<GridRowSpec>();
         string[] defaultKwOptions = GetDefaultKeywordOptions();
 
-        for (int i = 0; i < 6; i++)
+        // If index is 0 ("All"), show 0-5. Otherwise, show specific face (tabIndex - 1).
+        int startIndex = (tabIndex == 0) ? 0 : tabIndex - 1;
+        int endIndex = (tabIndex == 0) ? 6 : tabIndex;
+
+        for (int i = startIndex; i < endIndex; i++)
         {
             int index = i;
             string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
 
-            // Row 1: Spacious, Explicitly Labeled Base Action & Pips
+            // Row 1: ImagePanel Background for the Dice Block
             diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"Lbl_{index}", $"{faceName}:", 0.15f),
-                GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.08f, () => OpenBaseModal(index)),
-                GridCellSpec.CreateLabel($"LblId_{index}", "ID:", 0.08f),
+                GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f, new Color(0.15f, 0.15f, 0.15f, 1f))
+            ));
+
+            // Row 2: Name (Alone on its own row)
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f)
+            ));
+
+            // Row 3: Base image and Facade image side by side
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblBase_{index}", "Base:", 0.15f),
+                GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.10f, () => OpenBaseModal(index)),
                 GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { currentHero.diceSides[index].effectID = id; UpdateDiceIcon(index); OnUIChanged(); } }),
-                GridCellSpec.CreateLabel($"LblPip_{index}", "Pips:", 0.12f),
-                GridCellSpec.CreateInput($"Pips_{index}", "Pips", 0.37f, (val) => { if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); } })
-            ));
 
-            // Row 2: Spacious Facade Selector & Keyword Dropdown
-            diceLayout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel($"LblFac_{index}", "Facade:", 0.15f),
-                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.08f, () => OpenFacadeModal(index)),
-                GridCellSpec.CreateInput($"Facade_{index}", "Facade ID", 0.27f, (val) => { currentHero.diceSides[index].facadeID = val; UpdateDiceIcon(index); OnUIChanged(); }),
-                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.50f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
+                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.10f, () => OpenFacadeModal(index)),
+                GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.30f, (val) => { currentHero.diceSides[index].facadeID = val; UpdateDiceIcon(index); OnUIChanged(); })
             ));
 
-            // Row 3: Perfectly Aligned HSV Sliders with Placeholders as Labels
+            // Row 4: Pips (Shifted to its own row for spacing)
             diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"LblHsv_{index}", "HSV Adjust:", 0.16f),
-
-                // Hue (28%)
-                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.18f, (val) => { UpdateHsvFromSlider(index, 0, val); }),
-                GridCellSpec.CreateInput($"FacH_{index}", "H", 0.10f, (val) => { UpdateHsvInput(index, 0, val); }),
-
-                // Saturation (28%)
-                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.18f, (val) => { UpdateHsvFromSlider(index, 1, val); }),
-                GridCellSpec.CreateInput($"FacS_{index}", "S", 0.10f, (val) => { UpdateHsvInput(index, 1, val); }),
-
-                // Value (28%)
-                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.18f, (val) => { UpdateHsvFromSlider(index, 2, val); }),
-                GridCellSpec.CreateInput($"FacV_{index}", "V", 0.10f, (val) => { UpdateHsvInput(index, 2, val); })
+                GridCellSpec.CreateLabel($"LblPip_{index}", "Pips:", 0.30f),
+                GridCellSpec.CreateInput($"Pips_{index}", "Pips amount", 0.70f, (val) => { if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); } })
             ));
-            // Row 4+: Dynamic Inline Keywords (Rendered as clean 4-column badges)
+
+            // Rows 5-7: HSV Sliders separated
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblHue_{index}", "Hue:", 0.30f),
+                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 0, val); }),
+                GridCellSpec.CreateInput($"FacH_{index}", "H", 0.20f, (val) => { UpdateHsvInput(index, 0, val); })
+            ));
+
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblSat_{index}", "Saturation:", 0.30f),
+                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 1, val); }),
+                GridCellSpec.CreateInput($"FacS_{index}", "S", 0.20f, (val) => { UpdateHsvInput(index, 1, val); })
+            ));
+
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblVal_{index}", "Value:", 0.30f),
+                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 2, val); }),
+                GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { UpdateHsvInput(index, 2, val); })
+            ));
+
+            // Row 8: ImagePanel Background for the Keywords Block
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateImagePanel($"BgKw_{index}", 1.0f, new Color(0.2f, 0.2f, 0.2f, 1f))
+            ));
+
+            // Row 9: Keywords Dropdown
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblKw_{index}", "Add Keyword:", 0.30f),
+                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.70f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
+            ));
+
+            // Row 10+: Keyword entries (1 per row)
             var activeKeywords = currentHero.diceSides[index].keywords;
             if (activeKeywords != null && activeKeywords.Count > 0)
             {
-                int tagsPerRow = 4;
-                float tagWidth = 0.18f;
-                float delWidth = 0.07f;
-
-                for (int k = 0; k < activeKeywords.Count; k += tagsPerRow)
+                foreach (string kw in activeKeywords)
                 {
-                    var tagCells = new List<GridCellSpec>();
-
-                    for (int j = 0; j < tagsPerRow; j++)
+                    string displayLabel = kw;
+                    if (System.Enum.TryParse(kw, true, out EffectKeyword parsedKw))
                     {
-                        int targetIdx = k + j;
-                        if (targetIdx < activeKeywords.Count)
+                        if (EffectKeywordColors.Map.TryGetValue(parsedKw, out Color colorValue))
                         {
-                            string kw = activeKeywords[targetIdx];
-                            string displayLabel = kw;
-
-                            if (System.Enum.TryParse(kw, true, out EffectKeyword parsedKw))
-                            {
-                                if (EffectKeywordColors.Map.TryGetValue(parsedKw, out Color colorValue))
-                                {
-                                    string hex = ColorUtility.ToHtmlStringRGB(colorValue);
-                                    displayLabel = $"<color=#{hex}>{kw}</color>";
-                                }
-                            }
-
-                            tagCells.Add(GridCellSpec.CreateLabel($"KwTag_{index}_{kw}", displayLabel, tagWidth));
-                            tagCells.Add(GridCellSpec.CreateButton($"KwDel_{index}_{kw}", "[X]", delWidth, () => RemoveKeyword(index, kw)));
-                        }
-                        else
-                        {
-                            tagCells.Add(GridCellSpec.CreateLabel($"KwPad_{index}_{targetIdx}", "", tagWidth + delWidth));
+                            string hex = ColorUtility.ToHtmlStringRGB(colorValue);
+                            displayLabel = $"<color=#{hex}>{kw}</color>";
                         }
                     }
 
-                    diceLayout.Add(new GridRowSpec(tagCells.ToArray()));
+                    diceLayout.Add(new GridRowSpec(
+                        GridCellSpec.CreateLabel($"KwTag_{index}_{kw}", displayLabel, 0.80f),
+                        GridCellSpec.CreateButton($"KwDel_{index}_{kw}", "[X]", 0.20f, () => RemoveKeyword(index, kw))
+                    ));
                 }
+            }
+
+            // Row Last: Copy/Paste Buttons
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => { /* Add copy functionality here */ }),
+                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => { /* Add paste functionality here */ })
+            ));
+
+            // Layout spacer if displaying ALL dice
+            if (tabIndex == 0 && i < 5)
+            {
+                diceLayout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
             }
         }
         return diceLayout;
@@ -288,20 +342,15 @@ public class HeroModManager : MonoBehaviour
         });
     }
 
-    // THIS IS THE MAGIC METHOD that redraws the middle column
     private void RefreshDiceUI()
     {
-        // 1. Generate the new layout blueprint (now recognizing the new keywords)
-        var newDiceLayout = GenerateDiceLayout();
+        // 1. Rebuild ONLY the inside of the scroll view, leaving Tabs & Scrollrect intact
+        RebuildDiceScrollView();
 
-        // 2. Tear down the old UI and build the new UI
-        RectTransform dicePanel = currentScreen.ColumnPanels["MiddleDice"];
-        diceUI = uiGenerator.RebuildGrid(dicePanel, newDiceLayout);
-
-        // 3. Populate the newly spawned input fields with your current data!
+        // 2. Populate the newly spawned input fields with your current data
         UpdateUIFromData();
 
-        // 4. Fire the standard text output updates
+        // 3. Fire the standard text output updates
         OnUIChanged();
     }
 
@@ -919,32 +968,46 @@ public class HeroModManager : MonoBehaviour
     {
         if (btn == null) return;
 
-        // Try to get the specific DiceFaceUIElement script from the prefab
+        // 1. Try DiceFaceUIElement first (Leave this alone, it handles DiceButtons)
         DiceFaceUIElement diceUIElement = btn.GetComponentInParent<DiceFaceUIElement>();
-
         if (diceUIElement != null)
         {
-            // Use the component's clean wrapper method
             diceUIElement.SetIcon(sprite);
+            return;
         }
-        else
-        {
-            // Fallback for standard buttons without the script
-            Transform iconTransform = btn.transform.Find("Icon");
-            Image targetImg = iconTransform != null ? iconTransform.GetComponent<Image>() : btn.image;
 
-            if (targetImg != null)
+        // 2. Try the new ImageButton logic for standard buttons
+        ImageButton imgBtn = btn.GetComponent<ImageButton>();
+        if (imgBtn != null && imgBtn.image != null)
+        {
+            if (sprite != null)
             {
-                if (sprite != null)
-                {
-                    targetImg.sprite = sprite;
-                    targetImg.color = Color.white;
-                }
-                else
-                {
-                    targetImg.sprite = null;
-                    targetImg.color = new Color(1, 1, 1, 0.2f);
-                }
+                imgBtn.image.sprite = sprite;
+                imgBtn.image.gameObject.SetActive(true);
+            }
+            else
+            {
+                imgBtn.image.sprite = null;
+                imgBtn.image.gameObject.SetActive(false); // Turn off if null
+            }
+            return;
+        }
+
+        // 3. Fallback for generic buttons
+        Transform iconTransform = btn.transform.Find("Icon");
+        Image targetImg = iconTransform != null ? iconTransform.GetComponent<Image>() : btn.image;
+
+        if (targetImg != null)
+        {
+            if (sprite != null)
+            {
+                targetImg.sprite = sprite;
+                targetImg.color = Color.white;
+            }
+            else
+            {
+                targetImg.sprite = null;
+                targetImg.color = new Color(1, 1, 1, 0.2f);
             }
         }
     }

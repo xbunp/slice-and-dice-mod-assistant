@@ -21,7 +21,14 @@ public class GridReferences
 public class GridRowSpec
 {
     public List<GridCellSpec> cells = new List<GridCellSpec>();
+    public float customHeight = -1f;
+
     public GridRowSpec(params GridCellSpec[] cells) { this.cells.AddRange(cells); }
+    public GridRowSpec(float customHeight, params GridCellSpec[] cells)
+    {
+        this.cells.AddRange(cells);
+        this.customHeight = customHeight;
+    }
 }
 
 public class GridCellSpec
@@ -34,6 +41,8 @@ public class GridCellSpec
     public Action<string> onStringChanged;
     public Action<int> onIntChanged;
     public Action onClicked;
+
+    public Sprite buttonSprite;
 
     // Panel
     public Color panelColor = Color.white;
@@ -86,7 +95,7 @@ public class GridCellSpec
         return new GridCellSpec { type = CellType.Dropdown, key = key, labelText = label, widthRatio = ratio, dropdownOptions = new List<string>(options), onIntChanged = onChanged };
     }
 
-    public static GridCellSpec CreateButton(string key, string label, float ratio, Action onClicked)
+    public static GridCellSpec CreateButton(string key, string label, float ratio, Action onClicked, Sprite sprite = null)
     {
         return new GridCellSpec
         {
@@ -94,7 +103,8 @@ public class GridCellSpec
             key = key,
             labelText = label,
             widthRatio = ratio,
-            onClicked = onClicked
+            onClicked = onClicked,
+            buttonSprite = sprite
         };
     }
 

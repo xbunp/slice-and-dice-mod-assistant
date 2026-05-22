@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.U2D;
 using UnityEngine.UI;
 
 public class IconPickerModal : MonoBehaviour
@@ -10,12 +11,11 @@ public class IconPickerModal : MonoBehaviour
     [Header("UI References")]
     public GameObject modalPanel;
     public Transform gridContent;
-    public GameObject iconButtonPrefab;
+    public IconPickerItem iconButtonPrefab; // Use the dedicated script!
     public TMP_InputField searchInputField;
     public Button cancelButton;
 
     [Header("Performance Settings")]
-    [Tooltip("How many buttons to spawn/enable per frame. Higher = faster load, Lower = smoother framerate.")]
     public int spawnBatchSize = 250;
 
     [Header("Size Filter")]
@@ -25,17 +25,38 @@ public class IconPickerModal : MonoBehaviour
     public Button bigSizeButton;
     public Button hugeSizeButton;
     public Button smallSizeButton;
-    private int _activeSizeFilter = -1; // -1 means no size filter active
+
+    private int _activeSizeFilter = -1;
     private Dictionary<Button, int> _sizeButtonsMap;
     private Dictionary<Button, Color> _defaultButtonColors = new Dictionary<Button, Color>();
 
     private Action<int, Sprite> _onIconSelectedCallback;
-    private Sprite[] _currentIconSet;
-    private Dictionary<int, string> _currentIconNames;
     private Coroutine _populateRoutine;
 
-    private List<IconEntry> _activeIcons = new List<IconEntry>();
-    private Stack<GameObject> _pool = new Stack<GameObject>();
+    // Object Pooling
+    private List<IconPickerItem> _activeIcons = new List<IconPickerItem>(500);
+    private Stack<IconPickerItem> _pool = new Stack<IconPickerItem>(500);
+
+    private static string[] _basTooltipNames;
+    private static bool _tooltipsInitialized = false;
+
+    // Cached References
+    private LayoutGroup _layoutGroup;
+    private ScrollRect _scrollRect;
+
+    // Data Caching - Prevents evaluating heavy strings inside tight loops
+    private struct CachedIcon
+    {
+        public int OriginalIndex;
+        public Sprite Sprite;
+        public string SearchName;
+        public string TooltipText;
+        public int Width;
+        public bool IsValid;
+    }
+
+    private Sprite[] _lastIconSet;
+    private CachedIcon[] _cachedIcons;
 
     private static readonly HashSet<string> AllowedBasePrefixes = new HashSet<string>
     {
@@ -44,24 +65,67 @@ public class IconPickerModal : MonoBehaviour
         "Bal", "The", "ale", "Dog", "the", "Can", "Liz", "Che", "Ale", "dan", "PEP", "Aid",
         "Enc", "Ksy", "pow", "Fre", "Med", "Sul"
     };
-    private class IconEntry
-    {
-        public GameObject gameObject;
-        public string searchableName;
-    }
 
     private void Awake()
     {
+        _layoutGroup = gridContent.GetComponent<LayoutGroup>();
+        _scrollRect = gridContent.GetComponentInParent<ScrollRect>();
+
         cancelButton.onClick.AddListener(CloseModal);
         searchInputField.onValueChanged.AddListener(FilterIcons);
         modalPanel.SetActive(false);
 
         InitializeSizeFilters();
+        InitializeTooltipNames();
+    }
+
+    private void InitializeTooltipNames()
+    {
+        if (_tooltipsInitialized) return;
+
+        _basTooltipNames = new string[188];
+        for (int i = 0; i < _basTooltipNames.Length; i++)
+        {
+            _basTooltipNames[i] = $"Base Icon {i}";
+        }
+
+        foreach (var kvp in DefaultDiceData.EffectMap)
+        {
+            int enumIndex = (int)kvp.Value;
+            if (enumIndex >= 0 && enumIndex < _basTooltipNames.Length)
+            {
+                _basTooltipNames[enumIndex] = kvp.Key;
+            }
+        }
+
+        _tooltipsInitialized = true;
+    }
+
+    private static bool TryGetBasValue(string spriteName, out int basValue)
+    {
+        basValue = -1;
+        if (string.IsNullOrEmpty(spriteName)) return false;
+
+        if (spriteName.StartsWith("bas_", StringComparison.OrdinalIgnoreCase))
+        {
+            int startIndex = 4; // Length of "bas_"
+            int endIndex = startIndex;
+            while (endIndex < spriteName.Length && char.IsDigit(spriteName[endIndex]))
+            {
+                endIndex++;
+            }
+
+            if (endIndex > startIndex)
+            {
+                string numStr = spriteName.Substring(startIndex, endIndex - startIndex);
+                return int.TryParse(numStr, out basValue);
+            }
+        }
+        return false;
     }
 
     private void InitializeSizeFilters()
     {
-        // Map buttons directly to their integer target widths
         _sizeButtonsMap = new Dictionary<Button, int>
         {
             { smallSizeButton, 12 },
@@ -77,10 +141,7 @@ public class IconPickerModal : MonoBehaviour
 
             if (btn != null)
             {
-                if (btn.image != null)
-                {
-                    _defaultButtonColors[btn] = btn.image.color;
-                }
+                if (btn.image != null) _defaultButtonColors[btn] = btn.image.color;
                 btn.onClick.AddListener(() => OnSizeFilterClicked(btn, targetSize));
             }
         }
@@ -109,23 +170,78 @@ public class IconPickerModal : MonoBehaviour
     public void OpenModal(Sprite[] iconSet, Dictionary<int, string> iconNames, Action<int, Sprite> onSelectionMade)
     {
         _onIconSelectedCallback = onSelectionMade;
-        _currentIconSet = iconSet;
-        _currentIconNames = iconNames;
+
+        // Build a cache ONCE so searching and filtering is instantaneous
+        BuildCache(iconSet, iconNames);
 
         modalPanel.SetActive(true);
 
-        // Clear any loading currently in progress
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);
 
-        searchInputField.onValueChanged.RemoveListener(FilterIcons);
-        searchInputField.text = "";
-        searchInputField.onValueChanged.AddListener(FilterIcons);
-
-        // Start progressive loading
-        _populateRoutine = StartCoroutine(PopulateGridRoutine(""));
+        searchInputField.SetTextWithoutNotify(""); // Prevents triggering the event listener during setup
 
         _activeSizeFilter = -1;
         UpdateSizeButtonVisuals();
+
+        _populateRoutine = StartCoroutine(PopulateGridRoutine(""));
+    }
+
+    // Process all expensive string manipulations ONCE up front
+    private void BuildCache(Sprite[] iconSet, Dictionary<int, string> iconNames)
+    {
+        if (_lastIconSet == iconSet && _cachedIcons != null && _cachedIcons.Length == iconSet.Length)
+            return; // Already cached this set!
+
+        _lastIconSet = iconSet;
+        _cachedIcons = new CachedIcon[iconSet.Length];
+
+        for (int i = 0; i < iconSet.Length; i++)
+        {
+            Sprite sprite = iconSet[i];
+            bool isValid = false;
+            int width = -1;
+            string searchName = iconNames.TryGetValue(i, out string name) ? name : $"Unknown_{i}";
+            string tooltipText = string.Empty;
+
+            if (sprite != null)
+            {
+                isValid = true;
+                width = Mathf.RoundToInt(sprite.rect.width);
+                tooltipText = sprite.name; // Default: Facade mode
+
+                bool isBaseAtlas = sprite.texture != null && sprite.texture.name.Contains("base_atlas");
+                if (isBaseAtlas)
+                {
+                    int underscoreIndex = sprite.name.IndexOf('_');
+                    string prefix = underscoreIndex > 0 ? sprite.name.Substring(0, underscoreIndex) : string.Empty;
+
+                    if (!AllowedBasePrefixes.Contains(prefix))
+                    {
+                        isValid = false;
+                    }
+                    else if (prefix.Equals("bas", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (TryGetBasValue(sprite.name, out int basVal))
+                        {
+                            if (basVal >= 0 && basVal < _basTooltipNames.Length)
+                            {
+                                tooltipText = _basTooltipNames[basVal];
+                            }
+                        }
+                    }
+                }
+            }
+
+            _cachedIcons[i] = new CachedIcon
+            {
+                OriginalIndex = i,
+                Sprite = sprite,
+                SearchName = searchName,
+                TooltipText = tooltipText,
+                Width = width,
+                IsValid = isValid
+            };
+        }
     }
 
     private void FilterIcons(string searchQuery)
@@ -140,104 +256,59 @@ public class IconPickerModal : MonoBehaviour
     {
         ReturnAllToPool();
 
-        // FIX: Reset scroll position to the top IMMEDIATELY before we start loading.
-        // This ensures the view starts at the top, but won't snap you back later if you scroll.
-        ScrollRect scrollRect = gridContent.GetComponentInParent<ScrollRect>();
-        if (scrollRect != null)
-        {
-            scrollRect.verticalNormalizedPosition = 1f;
-        }
-        else
-        {
-            RectTransform rt = gridContent.GetComponent<RectTransform>();
-            if (rt != null) rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, 0);
-        }
+        if (_scrollRect != null) _scrollRect.verticalNormalizedPosition = 1f;
+
+        // Suspend layout rebuilding to completely eliminate layout lag while pooling
+        if (_layoutGroup != null) _layoutGroup.enabled = false;
 
         bool isSearchEmpty = string.IsNullOrWhiteSpace(searchQuery);
         int spawnedThisFrame = 0;
 
-        for (int i = 0; i < _currentIconSet.Length; i++)
+        for (int i = 0; i < _cachedIcons.Length; i++)
         {
-            Sprite sprite = _currentIconSet[i];
-            if (sprite == null) continue;
+            // Removed 'ref'. This copies the struct by value, which is very cheap.
+            CachedIcon icon = _cachedIcons[i];
 
-            bool isBaseAtlas = sprite.texture != null && sprite.texture.name.Contains("base_atlas");
-            if (isBaseAtlas)
+            if (!icon.IsValid) continue;
+            if (_activeSizeFilter != -1 && icon.Width != _activeSizeFilter) continue;
+            if (!isSearchEmpty && icon.SearchName.IndexOf(searchQuery, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+            SpawnIconUI(icon); // Removed 'ref' here as well
+            spawnedThisFrame++;
+
+            if (spawnedThisFrame >= spawnBatchSize)
             {
-                int underscoreIndex = sprite.name.IndexOf('_');
-                string prefix = underscoreIndex > 0 ? sprite.name.Substring(0, underscoreIndex) : string.Empty;
+                if (_layoutGroup != null) _layoutGroup.enabled = true;
 
-                if (!AllowedBasePrefixes.Contains(prefix))
-                {
-                    continue; // Discard unneeded base atlas sprites
-                }
-            }
+                spawnedThisFrame = 0;
+                yield return null;
 
-            // Size comparison check added here (Float-to-int comparison)
-            if (_activeSizeFilter != -1)
-            {
-                int spriteWidth = Mathf.RoundToInt(sprite.rect.width);
-                if (spriteWidth != _activeSizeFilter)
-                {
-                    continue; // Skip icons that do not match the selected size
-                }
-            }
-
-            string iconName = _currentIconNames.ContainsKey(i) ? _currentIconNames[i] : $"Unknown_{i}";
-
-            if (isSearchEmpty || iconName.IndexOf(searchQuery, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                SpawnIconUI(i, _currentIconSet[i], iconName);
-                spawnedThisFrame++;
-
-                // Pause here to let Unity render the frame, then resume on the next frame
-                if (spawnedThisFrame >= spawnBatchSize)
-                {
-                    spawnedThisFrame = 0;
-                    yield return null;
-                }
+                if (_layoutGroup != null) _layoutGroup.enabled = false;
             }
         }
 
-        // Snapping code has been removed from this position.
+        // Finalize Layout
+        if (_layoutGroup != null) _layoutGroup.enabled = true;
         _populateRoutine = null;
     }
 
-    private void SpawnIconUI(int index, Sprite sprite, string searchableName)
+    private void SpawnIconUI(CachedIcon iconCache)
     {
-        GameObject btnObj = GetFromPool();
-        Button btn = btnObj.GetComponent<Button>();
-
-        Image img = btnObj.transform.Find("Icon") != null ?
-                    btnObj.transform.Find("Icon").GetComponent<Image>() :
-                    btnObj.GetComponent<Image>();
-
-        if (img != null) img.sprite = sprite;
-
-        btn.onClick.RemoveAllListeners();
-        int capturedIndex = index;
-        Sprite capturedSprite = sprite;
-        btn.onClick.AddListener(() => OnIconClicked(capturedIndex, capturedSprite));
-
-        _activeIcons.Add(new IconEntry { gameObject = btnObj, searchableName = searchableName });
-    }
-
-    private GameObject GetFromPool()
-    {
-        GameObject obj;
+        IconPickerItem item;
         if (_pool.Count > 0)
         {
-            obj = _pool.Pop();
-            obj.SetActive(true);
-            obj.transform.SetParent(gridContent, false);
+            item = _pool.Pop();
+            item.gameObject.SetActive(true);
+            item.transform.SetAsLastSibling();
         }
         else
         {
-            obj = Instantiate(iconButtonPrefab, gridContent);
+            item = Instantiate(iconButtonPrefab, gridContent);
         }
 
-        obj.transform.SetAsLastSibling();
-        return obj;
+        // Pass the new tooltip parameter to Setup
+        item.Setup(iconCache.OriginalIndex, iconCache.Sprite, iconCache.TooltipText, OnIconClicked);
+        _activeIcons.Add(item);
     }
 
     private void OnIconClicked(int effectIndex, Sprite selectedSprite)
@@ -249,17 +320,27 @@ public class IconPickerModal : MonoBehaviour
     public void CloseModal()
     {
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);
-        modalPanel.SetActive(false);
+
         ReturnAllToPool();
+
+        modalPanel.SetActive(false);
     }
 
     private void ReturnAllToPool()
     {
-        foreach (var entry in _activeIcons)
+        // Disabling the layout group prevents Unity from calculating a layout rebuild 
+        // for EVERY single item being disabled, making closure instant.
+        if (_layoutGroup != null) _layoutGroup.enabled = false;
+
+        foreach (var item in _activeIcons)
         {
-            entry.gameObject.SetActive(false);
-            _pool.Push(entry.gameObject);
+            item.gameObject.SetActive(false);
+            _pool.Push(item);
         }
+
         _activeIcons.Clear();
+
+        // Re-enable ready for the next opening
+        if (_layoutGroup != null) _layoutGroup.enabled = true;
     }
 }

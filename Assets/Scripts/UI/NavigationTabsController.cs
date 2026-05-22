@@ -31,7 +31,10 @@ public class NavigationTabsController : MonoBehaviour
         // Clear existing generated elements
         foreach (Transform child in tabsContainer)
         {
-            Destroy(child.gameObject);
+            if (child.GetComponent<Button>() != null)
+            {
+                Destroy(child.gameObject);
+            }
         }
 
         tabButtons.Clear();
