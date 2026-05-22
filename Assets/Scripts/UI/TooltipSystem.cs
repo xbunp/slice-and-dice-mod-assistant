@@ -5,7 +5,15 @@ public class TooltipSystem : MonoBehaviour
     private static TooltipSystem instance;
 
     public Tooltip tooltip;
-    public Vector2 offset = new Vector2(0, -25);
+
+    [Header("Position Offsets")]
+    [Tooltip("Offset used on Desktop (usually negative to place below cursor)")]
+    public Vector2 offset = new Vector2(0, -30);
+
+    [Tooltip("Offset used on Mobile/WebGL touch screens (usually positive to place above finger)")]
+    public Vector2 mobileOffset = new Vector2(0, 100);
+
+    private bool isMobileDevice;
 
     private void Awake()
     {
@@ -16,6 +24,9 @@ public class TooltipSystem : MonoBehaviour
             return;
         }
         instance = this;
+
+        // Detect if the running device is a mobile platform
+        isMobileDevice = Application.isMobilePlatform;
 
         // Ensure the tooltip is hidden on start
         if (tooltip != null)
@@ -38,14 +49,17 @@ public class TooltipSystem : MonoBehaviour
 
     private void UpdatePosition()
     {
-        Vector2 mousePos = Input.mousePosition;
-        Vector2 newPos = mousePos + offset;
+        Vector2 inputPos = Input.mousePosition;
+
+        // Use the appropriate offset based on the platform
+        Vector2 currentOffset = isMobileDevice ? mobileOffset : offset;
+        Vector2 newPos = inputPos + currentOffset;
 
         // Use the safe public RectTransform property
         float width = tooltip.RectTransform.rect.width;
         float height = tooltip.RectTransform.rect.height;
 
-        // Clamp horizontally
+        // Clamp horizontally (applies to both PC and Mobile)
         if (newPos.x < 0)
         {
             newPos.x = 0;
@@ -56,13 +70,29 @@ public class TooltipSystem : MonoBehaviour
         }
 
         // Clamp vertically
-        if (newPos.y - height < 0)
+        if (isMobileDevice)
         {
-            newPos.y = mousePos.y - offset.y; // Flip above cursor
+            // MOBILE LOGIC: Keep it above the finger, clamp to top of screen if it goes too high
+            if (newPos.y > Screen.height)
+            {
+                newPos.y = Screen.height;
+            }
+            else if (newPos.y - height < 0)
+            {
+                newPos.y = height;
+            }
         }
-        else if (newPos.y > Screen.height)
+        else
         {
-            newPos.y = Screen.height;
+            // PC LOGIC: Default below-cursor logic, flip above if it hits the bottom edge
+            if (newPos.y - height < 0)
+            {
+                newPos.y = inputPos.y - offset.y; // Flip above cursor
+            }
+            else if (newPos.y > Screen.height)
+            {
+                newPos.y = Screen.height;
+            }
         }
 
         tooltip.transform.position = newPos;
