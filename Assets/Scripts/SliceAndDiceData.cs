@@ -938,6 +938,199 @@ public static class DefaultDiceData
         TargetSelfPips = 187
     }
 
+    public static readonly string[] BaseTooltipNames = new string[]
+{
+    "Blank", // 0
+    "Blank (Unset)", // 1
+    "Blank (Petrified)", // 2
+    "Blank (Used)", // 3
+    "Blank (Item)", // 4
+    "Blank (Curse)", // 5
+    "Blank (Stasis)", // 6
+    "Blank (Sticky)", // 7
+    "Blank (Exert)", // 8
+    "Blank (Fumble)", // 9
+    "Add Cleanse and SelfCleanse", // 10
+    "Damage to Ally Mandatory Generous Stasis", // 11
+    "Self damage Cantrip", // 12
+    "I Die Cantrip", // 13
+    "Self damage Mandatory", // 14
+    "Damage", // 15
+    "Damage Growth", // 16
+    "Damage Engage", // 17
+    "Damage Managain", // 18
+    "Damage Pain", // 19
+    "Damage Deathwish", // 20
+    "Damage Death", // 21
+    "Damage serrated", // 22
+    "Damage Exert", // 23
+    "Damage DoubleUse", // 24
+    "Damage QuadUse", // 25
+    "Damage Bloodlust", // 26
+    "Damage Copycat", // 27
+    "Damage Pristine", // 28
+    "Damage Guilt", // 29
+    "Damage Cruel", // 30
+    "Damage Shifter", // 31
+    "Damage Focus", // 32
+    "Damage Inspired", // 33
+    "Damage to all", // 34
+    "Revive Managain", // 35
+    "Damage Cleave", // 36
+    "Damage Descend", // 37
+    "Damage Cleave Chain", // 38
+    "Damage Heavy", // 39
+    "Damage InflictSingleUse", // 40
+    "Damage Steel", // 41
+    "Damage Charged", // 42
+    "Stun Bully", // 43
+    "Damage Vulnerable", // 44
+    "Damage Era", // 45
+    "Damage Ranged", // 46
+    "Damage Ranged Poison", // 47
+    "Damage Ranged Duplicate", // 48
+    "Damage Ranged Cleave", // 49
+    "Damage Ranged Copycat", // 50
+    "Damage SelfShield", // 51
+    "Damage SelfHeal", // 52
+    "Damage Poison", // 53
+    "Damage to ALL Poison", // 54
+    "Damage Poison Plague", // 55
+    "Shield", // 56
+    "Shield flesh", // 57
+    "Shield Growth", // 58
+    "Shield Engage", // 59
+    "Shield Enduring Death", // 60
+    "Shield ManaGain", // 61
+    "Shield DoubleUse", // 62
+    "Shield Steel", // 63
+    "Shield Rescue", // 64
+    "Shield Pristine", // 65
+    "Shield Cantrip", // 66
+    "Shield Copycat", // 67
+    "Shield Focus", // 68
+    "Shield Cleave", // 69
+    "Shield Charged", // 70
+    "Shield Cleanse", // 71
+    "Shield to all", // 72
+    "Shield to all Cantrip", // 73
+    "Shield and Heal", // 74
+    "Shield Smith", // 75
+    "Mana", // 76
+    "Mana Cantrip", // 77
+    "Mana Cantrip Boned", // 78
+    "Mana Growth", // 79
+    "Mana Decay", // 80
+    "Mana Death", // 81
+    "Mana Pain", // 82
+    "Mana Bloodlust", // 83
+    "Mana Pair", // 84
+    "Mana trio", // 85
+    "Heal Shield ManaGain", // 86
+    "Mana Charged", // 87
+    "Damage Single-use Charged", // 88
+    "Damage SIngle-use InflictPain", // 89
+    "Damage SIngle-use Cruel", // 90
+    "Damage Single-use Poison", // 91
+    "Damage Single-use SelfHeal", // 92
+    "Mana Single-use", // 93
+    "Shield Single-use PermaBoost", // 94
+    "Damage Single-use Weaken", // 95
+    "Damage Single-use Fierce", // 96
+    "Damage Single-use Echo", // 97
+    "Damage Single-use Dispel", // 98
+    "Damage Single-use InflictExert", // 99
+    "Stun Single-use", // 100
+    "Damage Singleuse Weaken Vulnerable Cleave Engage Selfheal - [Chaos Wand]", // 101
+    "Damage Lead", // 102
+    "Heal", // 103
+    "Heal Single-use", // 104
+    "Heal Vitality", // 105
+    "Heal Rescue", // 106
+    "Heal All", // 107
+    "Heal Boost", // 108
+    "Heal Cleave", // 109
+    "Heal Regen", // 110
+    "Heal Cleanse", // 111
+    "Heal ManaGain", // 112
+    "Heal Groooooowth", // 113
+    "Heal DoubleUse", // 114
+    "Damage Single-use", // 115
+    "Kill if less than hp ", // 116
+    "Undying", // 117
+    "Redirect SelfShield", // 118
+    "Shield Repel", // 119
+    "Shield Repel Rampage Rescue", // 120
+    "Shield Pain", // 121
+    "Kill if less than hp Ranged", // 122
+    "Dodge", // 123
+    "Dodge Cantrip", // 124
+    "Reroll Cantrip", // 125
+    "Damage Cantrip", // 126
+    "Damage Sticky Mandatory Death", // 127
+    "Damage to all Rampage Pain", // 128
+    "Damage Charged Rampage Pain", // 129
+    "Reuse", // 130
+    "Damage Weaken", // 131
+    "Damage Duplicate", // 132
+    "Shield Duplicate", // 133
+    "Mana Duplicate", // 134
+    "Damage Ranged Engage", // 135
+    "Revive", // 136
+    "Damage Rampage", // 137
+    "Add DoubleUse", // 138
+    "Add Cantrip", // 139
+    "Add Nothing", // 140
+    "Add Copycat", // 141
+    "Add Cleave Single-use", // 142
+    "Add Cruel Deathwish", // 143
+    "Add ManaGain", // 144
+    "Add Poison", // 145
+    "Add SelfShield", // 146
+    "Add SeflHeal", // 147
+    "Add SelfHeal SelfShield", // 148
+    "Add Pain ManaGain", // 149
+    "Add Engage", // 150
+    "Add Growth", // 151
+    "Blank (Shield)", // 152
+    "Blank (Damage)", // 153
+    "Blank (Mana)", // 154
+    "Blank (Summon)", // 155
+    "Blank (Heal)", // 156
+    "Redirect Cleave - [Red Flag]", // 157
+    "Damage to ALL Rampage - [Spinning Scythe]", // 158
+    "Damage Flesh Pain - [Viscera]", // 159
+    "Damage to ALL Charged ManaCost - [Mana Bomb]", // 160
+    "Damage SingleUse InflictSingleUse - [Wand of Wand]", // 161
+    "Heal Boost InflictPain - [Demon Horn]", // 162
+    "Damage Heavy Charged - [Charged Hammer]", // 163
+    "Heal Regen Cleanse ManaCost - [Infused Herbs]", // 164
+    "Damage Pain Drink - [Potion Shard]", // 165
+    "Revive Drink - [Revive Potion]", // 166
+    "Mana Drink - [Mana Potion]", // 167
+    "Damage Eliminate", // 168
+    "Damage Poison (Enemy)", // 169
+    "Damage (Enemy)", // 170
+    "Damage Cleave (Enemy)", // 171
+    "Summon Dragons Death", // 172
+    "Damage Cleave Trio", // 173
+    "Damage Defy", // 174
+    "Damage Critical", // 175
+    "Target Ally", // 176
+    "Target Ally (Pips)", // 177
+    "All Allies (Pips)", // 178
+    "All Allies ", // 179
+    "Target Enemy", // 180
+    "Target Enemy (Pips)", // 181
+    "All Enemies (Pips)", // 182
+    "All Enemies", // 183
+    "Target ALL (Pips)", // 184
+    "Target ALL", // 185
+    "Target Self", // 186
+    "Target Self (Pips)" // 187
+};
+
+    /*
     public static readonly Dictionary<string, EffectType> EffectMap = new Dictionary<string, EffectType>
     {
         { "Blank", EffectType.Blank },
@@ -1129,6 +1322,8 @@ public static class DefaultDiceData
         { "Target Self", EffectType.TargetSelf },
         { "Target Self (Pips)", EffectType.TargetSelfPips }
     };
+    */
+
 }
 
 

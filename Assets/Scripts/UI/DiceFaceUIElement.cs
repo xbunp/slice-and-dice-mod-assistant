@@ -16,6 +16,7 @@ public class DiceFaceUIElement : MonoBehaviour
 
         if (sprite != null)
         {
+            targetFaceImage.type = Image.Type.Simple;
             targetFaceImage.sprite = sprite;
             targetFaceImage.color = Color.white;
         }

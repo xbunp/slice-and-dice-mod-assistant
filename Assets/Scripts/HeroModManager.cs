@@ -117,16 +117,34 @@ public class HeroModManager : MonoBehaviour
             // Row 2: Base Class
             new GridRowSpec(
                 GridCellSpec.CreateLabel("Base Class Label", "Replica Base:", 0.35f),
-                GridCellSpec.CreateDropdown("Replica", "", 0.65f, heroNamesList, (val) => {
-                    currentHero.baseReplica = heroNamesList[val];
+                GridCellSpec.CreateDiceButton("ReplicaBtn", "P", 0.15f, () =>
+                {
+                    OpenHeroPortraitsModal((selectedHero, selectedSprite) =>
+                    {
+                        currentHero.baseReplica = selectedHero.ToString();
+                        OnUIChanged();
+                    });
+                }),
+                GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) => {
+                    currentHero.baseReplica = val;
                     OnUIChanged();
                 })
             ),
             // Row 3: Image Override
             new GridRowSpec(
                 GridCellSpec.CreateLabel("Image Override Label", "Icon Override:", 0.35f),
-                GridCellSpec.CreateDropdown("ImageOverride", "", 0.65f, heroNamesList, (val) => {
-                    currentHero.imageOverride = heroNamesList[val];
+                GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () =>
+                {
+                    OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
+                    {
+                        currentHero.imageOverride = isHero
+                            ? ((HeroType)enumValue).ToString()
+                            : ((MonsterType)enumValue).ToString();
+                        OnUIChanged();
+                    });
+                }),
+                GridCellSpec.CreateInput("OverrideName", "None", 0.50f, (val) => {
+                    currentHero.imageOverride = val;
                     OnUIChanged();
                 })
             ),
@@ -463,7 +481,52 @@ public class HeroModManager : MonoBehaviour
         return diceLayout;
     }
 */
+    /*
+    private void AddPortraitControls(List<GridRowSpec> layout)
+    {
+        layout.Add(new GridRowSpec(
+            // Hero Portrait Button & Input
+            GridCellSpec.CreateLabel("LblHeroPortrait", "Hero Portrait:", 0.20f),
+            GridCellSpec.CreateDiceButton("HeroPortraitBtn", "P", 0.10f, () =>
+            {
+                // We call the method and define the callback inline
+                OpenHeroPortraitsModal((selectedHero, selectedSprite) =>
+                {
+                    // This code runs AFTER the user clicks a portrait in the modal
+                    currentHero.heroType = selectedHero;
 
+                    // Update your character's portrait visual in the GUI
+                    UpdateHeroPortraitUI(selectedSprite);
+                    OnUIChanged();
+                });
+            }),
+
+            // Combined Hero/Monster Portrait Button (for general targets, summons, etc.)
+            GridCellSpec.CreateLabel("LblAllPortrait", "Target Portrait:", 0.20f),
+            GridCellSpec.CreateDiceButton("AllPortraitBtn", "AP", 0.10f, () =>
+            {
+                OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
+                {
+                    if (isHero)
+                    {
+                        HeroType hero = (HeroType)enumValue;
+                        Debug.Log($"Selected Hero: {hero}");
+                        // Apply to your data structure...
+                    }
+                    else
+                    {
+                        MonsterType monster = (MonsterType)enumValue;
+                        Debug.Log($"Selected Monster: {monster}");
+                        // Apply to your data structure...
+                    }
+
+                    UpdateTargetPortraitUI(selectedSprite);
+                    OnUIChanged();
+                });
+            })
+        ));
+    }
+    */
     //==================================================================================================
 
     private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
@@ -682,41 +745,218 @@ public class HeroModManager : MonoBehaviour
         RefreshDiceUI();
     }
 
+    //===================================================================================================
+
     private void OpenBaseModal(int faceIndex)
     {
         if (diceFaceIconPicker == null) return;
 
-        diceFaceIconPicker.OpenModal(_baseActionSprites, _baseActionNames, (index, sprite) =>
+        IconPickerConfig config = new IconPickerConfig
         {
-            string filename = _baseActionNames[index]; // e.g. "bas_15_dmg"
-            string[] parts = filename.Split('_');
+            Sprites = _baseActionSprites,
 
-            if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
+            // Use helper methods (defined below) to preserve your old atlas-specific validation and tooltips
+            IsValid = (index, sprite) => IsSpriteValid(sprite),
+            GetTooltip = (index, sprite) => GetBaseTooltip(sprite),
+
+            GetSearchName = (index, sprite) =>
+                _baseActionNames.TryGetValue(index, out string name) ? name : sprite.name,
+
+            OnSelectionMade = (index, sprite) =>
             {
-                currentHero.diceSides[faceIndex].effectID = parsedId;
-                RefreshDiceUI();
+                if (!_baseActionNames.TryGetValue(index, out string filename)) return;
+
+                string[] parts = filename.Split('_');
+                if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
+                {
+                    currentHero.diceSides[faceIndex].effectID = parsedId;
+                    RefreshDiceUI();
+                }
             }
-        });
+        };
+
+        diceFaceIconPicker.OpenModal(config);
     }
 
     private void OpenFacadeModal(int faceIndex)
     {
         if (diceFaceIconPicker == null) return;
 
-        diceFaceIconPicker.OpenModal(_allActionSprites, _allActionNames, (index, sprite) =>
+        IconPickerConfig config = new IconPickerConfig
         {
-            string filename = _allActionNames[index]; // e.g. "Che_6_dmgFlame"
-            string[] parts = filename.Split('_');
+            Sprites = _allActionSprites,
 
-            if (parts.Length >= 2)
+            IsValid = (index, sprite) => IsSpriteValid(sprite),
+            GetTooltip = (index, sprite) => sprite != null ? sprite.name : string.Empty, // Default facade behavior
+
+            GetSearchName = (index, sprite) =>
+                _allActionNames.TryGetValue(index, out string name) ? name : sprite.name,
+
+            OnSelectionMade = (index, sprite) =>
             {
-                // Joins the prefix "Che" and the number "6" -> "Che6"
-                string facadeStr = $"{parts[0]}{parts[1]}";
-                currentHero.diceSides[faceIndex].facadeID = facadeStr;
-                RefreshDiceUI();
+                if (!_allActionNames.TryGetValue(index, out string filename)) return;
+
+                string[] parts = filename.Split('_');
+                if (parts.Length >= 2)
+                {
+                    string facadeStr = $"{parts[0]}{parts[1]}";
+                    currentHero.diceSides[faceIndex].facadeID = facadeStr;
+                    RefreshDiceUI();
+                }
             }
-        });
+        };
+
+        diceFaceIconPicker.OpenModal(config);
     }
+
+    private static readonly HashSet<string> AllowedBasePrefixes = new HashSet<string>
+{
+    "bas", "ite", "spe", "alp", "Lem", "eba", "pos", "Ese", "kas", "Eme", "dee", "har",
+    "Spi", "Yca", "Ber", "Sef", "Leo", "Col", "OkN", "Mut", "Ric", "dar", "sym", "Sea",
+    "Bal", "The", "ale", "Dog", "the", "Can", "Liz", "Che", "Ale", "dan", "PEP", "Aid",
+    "Enc", "Ksy", "pow", "Fre", "Med", "Sul"
+};
+
+    private bool IsSpriteValid(Sprite sprite)
+    {
+        if (sprite == null) return false;
+
+        bool isBaseAtlas = sprite.texture != null && sprite.texture.name.Contains("base_atlas");
+        if (isBaseAtlas)
+        {
+            int underscoreIndex = sprite.name.IndexOf('_');
+            string prefix = underscoreIndex > 0 ? sprite.name.Substring(0, underscoreIndex) : string.Empty;
+            return AllowedBasePrefixes.Contains(prefix);
+        }
+
+        return true;
+    }
+
+    private string GetBaseTooltip(Sprite sprite)
+    {
+        if (sprite == null) return string.Empty;
+
+        if (TryGetBasValue(sprite.name, out int basVal))
+        {
+            // Safe bounds check against our new string array
+            if (basVal >= 0 && basVal < DefaultDiceData.BaseTooltipNames.Length)
+            {
+                return DefaultDiceData.BaseTooltipNames[basVal];
+            }
+        }
+
+        return sprite.name;
+    }
+
+    private bool TryGetBasValue(string spriteName, out int basValue)
+    {
+        basValue = -1;
+        if (string.IsNullOrEmpty(spriteName)) return false;
+
+        if (spriteName.StartsWith("bas_", StringComparison.OrdinalIgnoreCase))
+        {
+            int startIndex = 4;
+            int endIndex = startIndex;
+            while (endIndex < spriteName.Length && char.IsDigit(spriteName[endIndex]))
+            {
+                endIndex++;
+            }
+
+            if (endIndex > startIndex)
+            {
+                string numStr = spriteName.Substring(startIndex, endIndex - startIndex);
+                return int.TryParse(numStr, out basValue);
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Opens the modal showing only Hero portraits. 
+    /// Passes the mapped HeroType enum and selected Sprite to the callback.
+    /// </summary>
+    public void OpenHeroPortraitsModal(Action<HeroType, Sprite> onHeroSelected)
+    {
+        if (diceFaceIconPicker == null) return;
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = _allActionSprites, // <--- CHANGED THIS TO _allActionSprites
+
+            IsValid = (index, sprite) =>
+                sprite != null && HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name),
+
+            // Display and search by the readable Enum name (e.g., "Warrior" instead of "bas_hero_01")
+            GetSearchName = (index, sprite) =>
+                HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero) ? hero.ToString() : sprite.name,
+
+            GetTooltip = (index, sprite) =>
+                HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero) ? hero.ToString() : sprite.name,
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero))
+                {
+                    onHeroSelected?.Invoke(hero, sprite);
+                }
+            }
+        };
+
+        diceFaceIconPicker.OpenModal(config);
+    }
+
+    /// <summary>
+    /// Opens the modal showing both Hero and Monster portraits.
+    /// Callback format: Action<isHero, enumIntValue, selectedSprite>
+    /// </summary>
+    public void OpenAllPortraitsModal(Action<bool, int, Sprite> onPortraitSelected)
+    {
+        if (diceFaceIconPicker == null) return;
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = _allActionSprites, // <--- CHANGED THIS TO _allActionSprites
+
+            IsValid = (index, sprite) =>
+                sprite != null && (HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name) || HeroSpriteDatabase.SpriteToMonsterMap.ContainsKey(sprite.name)),
+
+            GetSearchName = (index, sprite) => GetPortraitDisplayName(sprite),
+            GetTooltip = (index, sprite) => GetPortraitDisplayName(sprite),
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero))
+                {
+                    onPortraitSelected?.Invoke(true, (int)hero, sprite);
+                }
+                else if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster))
+                {
+                    onPortraitSelected?.Invoke(false, (int)monster, sprite);
+                }
+            }
+        };
+
+        diceFaceIconPicker.OpenModal(config);
+    }
+
+    /// <summary>
+    /// Shared helper to determine display names for tooltips and search queries.
+    /// </summary>
+    private string GetPortraitDisplayName(Sprite sprite)
+    {
+        if (sprite == null) return string.Empty;
+
+        if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero))
+            return hero.ToString();
+
+        if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster))
+            return monster.ToString();
+
+        return sprite.name;
+    }
+
+    //===================================================================================================
+
 
     private void RefreshDiceUI()
     {
@@ -854,6 +1094,7 @@ public class HeroModManager : MonoBehaviour
         if (isSyncing) return;
         GenerateRawText();
         UpdateHeroIcon();
+        UpdateUIFromData(); // <--- ADDED THIS LINE
     }
 
     private void OnRawTextChanged(string rawText)
@@ -885,17 +1126,20 @@ public class HeroModManager : MonoBehaviour
         if (statsUI.Inputs.TryGetValue("HP", out var hpIn)) hpIn.text = currentHero.hp.ToString();
         if (statsUI.Inputs.TryGetValue("Tier", out var tierIn)) tierIn.text = currentHero.tier.ToString();
 
-        if (statsUI.Dropdowns.TryGetValue("Replica", out var repDrop))
-        {
-            if (Enum.TryParse(currentHero.baseReplica, true, out HeroType parsedName))
-                repDrop.value = (int)parsedName;
-        }
+        // HERO ICON AND LABEL
+        /////////////////////////
+        if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(currentHero.baseReplica);
+        if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(currentHero.imageOverride);
 
-        if (statsUI.Dropdowns.TryGetValue("ImageOverride", out var imgDrop))
+        if (statsUI.Buttons.TryGetValue("ReplicaBtn", out var repBtn))
         {
-            if (Enum.TryParse(currentHero.imageOverride, true, out HeroType parsedName))
-                imgDrop.value = (int)parsedName;
+            SetButtonIcon(repBtn, GetSpriteForPortrait(currentHero.baseReplica));
         }
+        if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overBtn))
+        {
+            SetButtonIcon(overBtn, GetSpriteForPortrait(currentHero.imageOverride));
+        }
+        /////////////////////////
 
         if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
         {
@@ -963,15 +1207,12 @@ public class HeroModManager : MonoBehaviour
             if (i < 5) sdString += ":";
         }
 
-        // Determine if the colorClass should be omitted because it matches the default replica color
         string colorSegment = $".col.{currentHero.colorClass}";
         if (System.Enum.TryParse(currentHero.baseReplica, true, out HeroType baseHeroEnum))
         {
             if (HeroColorMap.TryGetValue(baseHeroEnum, out HeroColorOption defaultColorOption))
             {
                 string defaultColorCode = GetCode(defaultColorOption);
-
-                // If current color matches the base replica's default color, omit the color segment
                 if (currentHero.colorClass == defaultColorCode)
                 {
                     colorSegment = "";
@@ -979,24 +1220,27 @@ public class HeroModManager : MonoBehaviour
             }
         }
 
-        // 2. Base Hero String (without image override in the middle)
-        string baseHeroStr = $"replica.{currentHero.baseReplica}.n.{currentHero.heroName}{colorSegment}.hp.{currentHero.hp}.tier.{currentHero.tier}.sd.{sdString}";
+        // --- NEW: Format replica name ---
+        string formattedReplica = FormatHeroNameForOutput(currentHero.baseReplica);
+
+        // 2. Base Hero String
+        string baseHeroStr = $"replica.{formattedReplica}.n.{currentHero.heroName}{colorSegment}.hp.{currentHero.hp}.tier.{currentHero.tier}.sd.{sdString}";
 
         // 3. Build Item Modifiers (.i.) for Keywords and Facades
+        // ... (Keep your existing modifier loops exactly as they are here) ...
         string modifiersStr = "";
         for (int i = 0; i < 6; i++)
         {
+            // ... (Your existing keyword & facade logic remains untouched)
             var face = currentHero.diceSides[i];
             List<string> modChunks = new List<string>();
 
-            // Keywords 
             foreach (var kw in face.keywords)
             {
                 if (!string.IsNullOrWhiteSpace(kw))
                     modChunks.Add($"k.{kw.Trim().ToLower()}");
             }
 
-            // Facade 
             if (!string.IsNullOrWhiteSpace(face.facadeID))
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
@@ -1006,21 +1250,9 @@ public class HeroModManager : MonoBehaviour
                 string s = (hsv.Length > 1 && !string.IsNullOrWhiteSpace(hsv[1])) ? hsv[1].Trim() : "";
                 string v = (hsv.Length > 2 && !string.IsNullOrWhiteSpace(hsv[2])) ? hsv[2].Trim() : "";
 
-                // Format logic:
-                // If V exists, we must include S (default to 0 if left blank).
-                if (!string.IsNullOrEmpty(v))
-                {
-                    s = string.IsNullOrEmpty(s) ? "0" : s;
-                    facStr += $":{h}:{s}:{v}";
-                }
-                else if (!string.IsNullOrEmpty(s))
-                {
-                    facStr += $":{h}:{s}";
-                }
-                else
-                {
-                    facStr += $":{h}"; // Minimum requirement
-                }
+                if (!string.IsNullOrEmpty(v)) { s = string.IsNullOrEmpty(s) ? "0" : s; facStr += $":{h}:{s}:{v}"; }
+                else if (!string.IsNullOrEmpty(s)) facStr += $":{h}:{s}";
+                else facStr += $":{h}";
 
                 modChunks.Add(facStr);
             }
@@ -1033,13 +1265,14 @@ public class HeroModManager : MonoBehaviour
             }
         }
 
-        // 4. Image Override Condition (constructed to be appended at the end of the string)
+        // --- NEW: Format image override name ---
         string imgOverrideStr = "";
         if (!string.IsNullOrEmpty(currentHero.imageOverride)
             && currentHero.imageOverride != HeroType.None.ToString()
             && currentHero.imageOverride != currentHero.baseReplica)
         {
-            imgOverrideStr = $".img.{currentHero.imageOverride}";
+            string formattedImage = FormatHeroNameForOutput(currentHero.imageOverride);
+            imgOverrideStr = $".img.{formattedImage}";
         }
 
         // 5. Assemble final string placing the image override at the absolute end
@@ -1054,7 +1287,7 @@ public class HeroModManager : MonoBehaviour
 
     private void ParseRawText(string rawText)
     {
-        // 1. Wipe volatile nested data so deleted items in the string actually disappear from the UI
+        // 1. Wipe volatile nested data
         for (int i = 0; i < 6; i++)
         {
             if (currentHero.diceSides[i].keywords == null)
@@ -1066,12 +1299,14 @@ public class HeroModManager : MonoBehaviour
             currentHero.diceSides[i].facadeColor = "";
         }
 
-        // 2. Parse Standard Core Variables (Using lookbehinds to prevent false matches)
-        Match mReplica = Regex.Match(rawText, @"replica\.([a-zA-Z]+)");
-        if (mReplica.Success) currentHero.baseReplica = mReplica.Groups[1].Value;
+        // 2. Parse Standard Core Variables 
+        // --- NEW: Regex allows numbers & .75 suffix, Helper strips suffix ---
+        Match mReplica = Regex.Match(rawText, @"replica\.([a-zA-Z0-9]+(?:\.75)?)");
+        if (mReplica.Success) currentHero.baseReplica = CleanParsedHeroName(mReplica.Groups[1].Value);
 
-        Match mImage = Regex.Match(rawText, @"(?<=\.)img\.([a-zA-Z]+)");
-        if (mImage.Success) currentHero.imageOverride = mImage.Groups[1].Value;
+        // --- NEW: Regex allows numbers & .75 suffix, Helper strips suffix ---
+        Match mImage = Regex.Match(rawText, @"(?<=\.)img\.([a-zA-Z0-9]+(?:\.75)?)");
+        if (mImage.Success) currentHero.imageOverride = CleanParsedHeroName(mImage.Groups[1].Value);
         else currentHero.imageOverride = "None";
 
         Match mName = Regex.Match(rawText, @"(?<=\.)n\.([a-zA-Z0-9_\s]+)");
@@ -1195,7 +1430,8 @@ public class HeroModManager : MonoBehaviour
         foreach (string key in keys)
         {
             string hexColor = GetFixedColorForTag(key);
-            string pattern = $"(?<=^|\\.|\\()({key}\\.[^\\.\\)]+)";
+            // --- NEW: Modified pattern allows explicit '.75' blocks before breaking at the next dot ---
+            string pattern = $"(?<=^|\\.|\\()({key}\\.(?:[a-zA-Z0-9]+\\.75|[^\\.\\)]+))";
             result = Regex.Replace(result, pattern, $"<color=#{hexColor}>$1</color>");
         }
 
@@ -1335,27 +1571,19 @@ public class HeroModManager : MonoBehaviour
             activeHeroNameStr = currentHero.imageOverride;
         }
 
-        if (Enum.TryParse(activeHeroNameStr, true, out HeroType activeHero))
+        // Fetch the sprite using your unified helper
+        Sprite targetSprite = GetSpriteForPortrait(activeHeroNameStr);
+
+        if (targetSprite != null && heroIcon.icon != null)
         {
-            if (HeroSpriteDatabase.HeroToSpriteMap.TryGetValue(activeHero, out string spriteName))
+            heroIcon.icon.sprite = targetSprite;
+        }
+        else if (heroIcon.icon != null)
+        {
+            heroIcon.icon.sprite = null;
+            if (activeHeroNameStr != "None")
             {
-                // Lazy-load the sliced spritesheet array once
-                if (atlasSprites == null || atlasSprites.Length == 0)
-                {
-                    atlasSprites = SpriteCache.GetBaseSprites();
-                }
-
-                // Find the specific sub-sprite by name from the sliced array
-                Sprite targetSprite = Array.Find(atlasSprites, s => s.name == spriteName);
-
-                if (targetSprite != null && heroIcon.icon != null)
-                {
-                    heroIcon.icon.sprite = targetSprite;
-                }
-                else if (targetSprite == null)
-                {
-                    Debug.LogWarning($"Could not find sliced sprite '{spriteName}' inside 'base_atlas_image' spritesheet.");
-                }
+                Debug.LogWarning($"Could not find sliced sprite for portrait '{activeHeroNameStr}'.");
             }
         }
     }
@@ -1598,5 +1826,55 @@ public class HeroModManager : MonoBehaviour
 #else
         GUIUtility.systemCopyBuffer = text;
 #endif
+    }
+
+    private Sprite GetSpriteForPortrait(string targetName)
+    {
+        if (string.IsNullOrEmpty(targetName) || targetName.Equals("None", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        string spriteName = null;
+
+        if (Enum.TryParse(targetName, true, out HeroType hero))
+        {
+            HeroSpriteDatabase.HeroToSpriteMap.TryGetValue(hero, out spriteName);
+        }
+        else if (Enum.TryParse(targetName, true, out MonsterType monster))
+        {
+            HeroSpriteDatabase.MonsterToSpriteMap.TryGetValue(monster, out spriteName);
+        }
+
+        if (!string.IsNullOrEmpty(spriteName))
+        {
+            // <--- CHANGED THIS TO _allActionSprites
+            return Array.Find(_allActionSprites, s => s != null && s.name == spriteName);
+        }
+
+        return null;
+    }
+
+    // Helper: Strips the .75 suffix when parsing a raw string back into the Data Model
+    private string CleanParsedHeroName(string rawName)
+    {
+        if (string.IsNullOrEmpty(rawName)) return rawName;
+
+        if (rawName.EndsWith(".75", StringComparison.OrdinalIgnoreCase))
+        {
+            return rawName.Substring(0, rawName.Length - 3);
+        }
+        return rawName;
+    }
+
+    // Helper: Appends the .75 suffix to Generated Heroes when creating the raw string
+    private string FormatHeroNameForOutput(string heroName)
+    {
+        if (string.IsNullOrEmpty(heroName)) return heroName;
+
+        // If it's a 2-character name (Letter/Number + Digit) like G1, O3, Y2
+        if (heroName.Length == 2 && char.IsLetterOrDigit(heroName[0]) && char.IsDigit(heroName[1]))
+        {
+            return heroName + ".75";
+        }
+        return heroName;
     }
 }
