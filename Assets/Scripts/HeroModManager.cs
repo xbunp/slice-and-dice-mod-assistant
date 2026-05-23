@@ -46,6 +46,16 @@ public class HeroModManager : MonoBehaviour
     private int currentDiceTab = 0; // 0 = All, 1 = Left, 2 = Middle, etc.
     private ScrollRect diceScrollRect;
 
+    private Dictionary<int, List<string>> cleanDropdownKeywords = new Dictionary<int, List<string>>();
+
+    // Clipboard storage for per-face Copy/Paste operations
+    private int copiedEffectID;
+    private int copiedPips;
+    private string copiedFacadeID;
+    private string copiedFacadeColor;
+    private List<string> copiedKeywords;
+    private bool hasCopiedDiceData = false;
+
     void Start()
     {
         uiGenerator = GetComponent<FullScreenUIGenerator>();
@@ -94,7 +104,7 @@ public class HeroModManager : MonoBehaviour
 
     private void BuildUIAndBind()
     {
-        string[] heroNamesList = Enum.GetNames(typeof(AllHeroNames));
+        string[] heroNamesList = Enum.GetNames(typeof(HeroType));
 
         // 1. Core Stats Layout Specification
         var statsLayout = new List<GridRowSpec>
@@ -124,7 +134,7 @@ public class HeroModManager : MonoBehaviour
             new GridRowSpec(
                 GridCellSpec.CreateLabel("Color Label", "Color Class:", 0.35f),
                 GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
-                    SDColors.HeroColorOption selectedColor = (SDColors.HeroColorOption)val;
+                    HeroColorOption selectedColor = (HeroColorOption)val;
                     currentHero.colorClass = SDColors.GetCode(selectedColor);
                     heroIcon.frame.color = SDColors.GetColor(selectedColor);
                     OnUIChanged();
@@ -136,6 +146,11 @@ public class HeroModManager : MonoBehaviour
                 GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) currentHero.hp = hp; OnUIChanged(); }),
                 GridCellSpec.CreateLabel("Tier Label", "Tier:", 0.2f),
                 GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => { if (int.TryParse(val, out int t)) currentHero.tier = t; OnUIChanged(); })
+            ),
+
+            // Row 6: RESET BUTTON
+            new GridRowSpec(
+                GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
             )
         };
 
@@ -144,7 +159,7 @@ public class HeroModManager : MonoBehaviour
         var middleBaseLayout = new List<GridRowSpec>
         {
             new GridRowSpec(GridCellSpec.CreateNavigationTabs("DiceTabs", tabNames, new List<GameObject>(), 1.0f, OnDiceTabSelected)),
-            new GridRowSpec(900f, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
+            new GridRowSpec(600f, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
         };
 
         // 3. Define the column split mapping
@@ -177,10 +192,30 @@ public class HeroModManager : MonoBehaviour
         }
     }
 
+    private void ResetToDefault()
+    {
+        // Reset the data model to a brand new state
+        currentHero = new HeroData();
+
+        // Ensure lists are initialized
+        for (int i = 0; i < 6; i++)
+        {
+            if (currentHero.diceSides[i].keywords == null)
+                currentHero.diceSides[i].keywords = new List<string>();
+        }
+
+        // Rebuild entire UI, map data, and regenerate text
+        RefreshDiceUI();
+    }
+
     private void OnDiceTabSelected(int index)
     {
         currentDiceTab = index;
-        RebuildDiceScrollView();
+
+        // Guard: Prevent rebuilding/updating before the initial screen setup is finished
+        if (statsUI == null) return;
+
+        RefreshDiceUI();
     }
 
     private void RebuildDiceScrollView()
@@ -188,15 +223,137 @@ public class HeroModManager : MonoBehaviour
         if (diceScrollRect == null) return;
 
         var diceLayout = GenerateDiceLayout(currentDiceTab);
-
-        // Rebuild inside the scroll view's content panel
         diceUI = uiGenerator.RebuildGrid(diceScrollRect.content, diceLayout);
 
-        // Resize the scroll content manually based on generated row count so the scrollbar works properly
-        float totalHeight = diceLayout.Count * (uiGenerator.rowHeight + uiGenerator.rowSpacing);
-        diceScrollRect.content.sizeDelta = new Vector2(0, totalHeight);
+        // Completely relies on the precise hierarchy calculation from BuildGrid 
+        diceScrollRect.content.sizeDelta = new Vector2(0, diceUI.TotalHeight);
     }
 
+    /*
+    private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
+    {
+        var diceLayout = new List<GridRowSpec>();
+        string[] defaultKwOptions = GetDefaultKeywordOptions();
+
+        // If index is 0 ("All"), show 0-5. Otherwise, show specific face (tabIndex - 1).
+        int startIndex = (tabIndex == 0) ? 0 : tabIndex - 1;
+        int endIndex = (tabIndex == 0) ? 6 : tabIndex;
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            int index = i;
+            string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
+
+            // Row 1: ImagePanel Background for the Dice Block (Spans 6 layout blocks vertically)
+            var diceBgRow = new GridRowSpec(
+                GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f, new Color(0.15f, 0.15f, 0.15f, 1f))
+            );
+            diceBgRow.isBackground = true;
+            diceBgRow.rowSpan = 6;
+            diceLayout.Add(diceBgRow);
+
+            // Row 2: Name (Alone on its own row)
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f)
+            ));
+
+            // Row 3: Base image and Facade image side by side
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblBase_{index}", "Base:", 0.15f),
+                GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.10f, () => OpenBaseModal(index)),
+                GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { currentHero.diceSides[index].effectID = id; UpdateDiceIcon(index); OnUIChanged(); } }),
+
+                GridCellSpec.CreateLabel($"LblFac_{index}", "Facade:", 0.15f),
+                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.10f, () => OpenFacadeModal(index)),
+                GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.30f, (val) => { currentHero.diceSides[index].facadeID = val; UpdateDiceIcon(index); OnUIChanged(); })
+            ));
+
+            // Row 4: Pips (Shifted to its own row for spacing)
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblPip_{index}", "Pips:", 0.30f),
+                GridCellSpec.CreateInput($"Pips_{index}", "Pips amount", 0.70f, (val) => { if (int.TryParse(val, out int p)) { currentHero.diceSides[index].pips = p; OnUIChanged(); } })
+            ));
+
+            // Rows 5-7: HSV Sliders separated
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblHue_{index}", "Hue:", 0.30f),
+                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 0, val); }),
+                GridCellSpec.CreateInput($"FacH_{index}", "H", 0.20f, (val) => { UpdateHsvInput(index, 0, val); })
+            ));
+
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblSat_{index}", "Saturation:", 0.30f),
+                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 1, val); }),
+                GridCellSpec.CreateInput($"FacS_{index}", "S", 0.20f, (val) => { UpdateHsvInput(index, 1, val); })
+            ));
+
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblVal_{index}", "Value:", 0.30f),
+                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 2, val); }),
+                GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { UpdateHsvInput(index, 2, val); })
+            ));
+
+            // Fetch current active keywords for this face to calculate visual height requirement
+            var activeKeywords = currentHero.diceSides[index].keywords;
+
+            // Row 8: ImagePanel Background for the Keywords Block (Dropdown row + 1 row per active keyword)
+            int keywordRowCount = 1; // Base dropdown row
+            if (activeKeywords != null && activeKeywords.Count > 0)
+            {
+                keywordRowCount += activeKeywords.Count;
+            }
+
+            var kwBgRow = new GridRowSpec(
+                GridCellSpec.CreateImagePanel($"BgKw_{index}", 1.0f, new Color(0.2f, 0.2f, 0.2f, 1f))
+            );
+            kwBgRow.isBackground = true;
+            kwBgRow.rowSpan = keywordRowCount;
+            diceLayout.Add(kwBgRow);
+
+            // Row 9: Keywords Dropdown
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"LblKw_{index}", "Add Keyword:", 0.30f),
+                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.70f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
+            ));
+
+            // Row 10+: Keyword entries (1 per row)
+            if (activeKeywords != null && activeKeywords.Count > 0)
+            {
+                foreach (string kw in activeKeywords)
+                {
+                    string displayLabel = kw;
+                    if (System.Enum.TryParse(kw, true, out EffectKeyword parsedKw))
+                    {
+                        if (EffectKeywordColors.Map.TryGetValue(parsedKw, out Color colorValue))
+                        {
+                            string hex = ColorUtility.ToHtmlStringRGB(colorValue);
+                            displayLabel = $"<color=#{hex}>{kw}</color>";
+                        }
+                    }
+
+                    diceLayout.Add(new GridRowSpec(
+                        GridCellSpec.CreateLabel($"KwTag_{index}_{kw}", displayLabel, 0.80f),
+                        GridCellSpec.CreateButton($"KwDel_{index}_{kw}", "[X]", 0.20f, () => RemoveKeyword(index, kw))
+                    ));
+                }
+            }
+
+            // Row Last: Copy/Paste Buttons
+            diceLayout.Add(new GridRowSpec(
+                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => {  Add copy functionality here *}),
+                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => {  Add paste functionality here  })
+            ));
+
+            // Layout spacer if displaying ALL dice
+            if (tabIndex == 0 && i < 5)
+            {
+                diceLayout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
+            }
+        }
+        return diceLayout;
+    }
+*/
+    /*
     private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
     {
         var diceLayout = new List<GridRowSpec>();
@@ -293,8 +450,8 @@ public class HeroModManager : MonoBehaviour
 
             // Row Last: Copy/Paste Buttons
             diceLayout.Add(new GridRowSpec(
-                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => { /* Add copy functionality here */ }),
-                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => { /* Add paste functionality here */ })
+                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => { /* Add copy functionality here  }),
+                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => { /* Add paste functionality here })
             ));
 
             // Layout spacer if displaying ALL dice
@@ -304,6 +461,225 @@ public class HeroModManager : MonoBehaviour
             }
         }
         return diceLayout;
+    }
+*/
+
+    //==================================================================================================
+
+    private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
+    {
+        var diceLayout = new List<GridRowSpec>();
+        string[] defaultKwOptions = GetDefaultKeywordOptions(); // Unchanged!
+
+        int startIndex = (tabIndex == 0) ? 0 : tabIndex - 1;
+        int endIndex = (tabIndex == 0) ? 6 : tabIndex;
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            // Set the default clean mapping for this face index directly in the loop
+            cleanDropdownKeywords[i] = new List<string>(Enum.GetNames(typeof(EffectKeyword)));
+
+            // Passing 'i' as a parameter isolates the index variable for lambda closures.
+            AddFaceLayout(diceLayout, i, defaultKwOptions);
+
+            // Layout spacer if displaying ALL dice
+            if (tabIndex == 0 && i < 5)
+            {
+                diceLayout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{i}", "", 1.0f)));
+            }
+        }
+        return diceLayout;
+    }
+
+    private void AddFaceLayout(List<GridRowSpec> layout, int index, string[] defaultKwOptions)
+    {
+        string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
+
+        AddFaceBackground(layout, index);
+        AddFaceHeader(layout, index, faceName);
+        AddBaseAndFacadeControls(layout, index);
+        AddPipsControl(layout, index);
+        AddHsvSliders(layout, index);
+        AddKeywordControls(layout, index, defaultKwOptions);
+        AddCopyPasteControls(layout, index);
+    }
+
+    private void AddFaceBackground(List<GridRowSpec> layout, int index)
+    {
+        // Row 1: ImagePanel Background for the Dice Block (Spans 6 layout blocks vertically)
+        var diceBgRow = new GridRowSpec(
+            GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f, new Color(0.15f, 0.15f, 0.15f, 1f))
+        );
+        diceBgRow.isBackground = true;
+        diceBgRow.rowSpan = 6;
+        layout.Add(diceBgRow);
+    }
+
+    private void AddFaceHeader(List<GridRowSpec> layout, int index, string faceName)
+    {
+        // Row 2: Name (Alone on its own row)
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f)
+        ));
+    }
+
+    private void AddBaseAndFacadeControls(List<GridRowSpec> layout, int index)
+    {
+        // Row 3: Base image and Facade image side by side
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"LblBase_{index}", "Base:", 0.15f),
+            GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.10f, () => OpenBaseModal(index)),
+            GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) =>
+            {
+                if (int.TryParse(val, out int id))
+                {
+                    currentHero.diceSides[index].effectID = id;
+                    UpdateDiceIcon(index);
+                    OnUIChanged();
+                }
+            }),
+
+            GridCellSpec.CreateLabel($"LblFac_{index}", "Facade:", 0.15f),
+            GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.10f, () => OpenFacadeModal(index)),
+            GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.30f, (val) =>
+            {
+                currentHero.diceSides[index].facadeID = val;
+                UpdateDiceIcon(index);
+                OnUIChanged();
+            })
+        ));
+    }
+
+    private void AddPipsControl(List<GridRowSpec> layout, int index)
+    {
+        // Row 4: Pips (Shifted to its own row for spacing)
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"LblPip_{index}", "Pips:", 0.30f),
+            GridCellSpec.CreateInput($"Pips_{index}", "Pips amount", 0.70f, (val) =>
+            {
+                if (int.TryParse(val, out int p))
+                {
+                    currentHero.diceSides[index].pips = p;
+                    OnUIChanged();
+                }
+            })
+        ));
+    }
+
+    private void AddHsvSliders(List<GridRowSpec> layout, int index)
+    {
+        // Rows 5-7: HSV Sliders separated
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"LblHue_{index}", "Hue:", 0.30f),
+            GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 0, val); }),
+            GridCellSpec.CreateInput($"FacH_{index}", "H", 0.20f, (val) => { UpdateHsvInput(index, 0, val); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"LblSat_{index}", "Saturation:", 0.30f),
+            GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 1, val); }),
+            GridCellSpec.CreateInput($"FacS_{index}", "S", 0.20f, (val) => { UpdateHsvInput(index, 1, val); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"LblVal_{index}", "Value:", 0.30f),
+            GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => { UpdateHsvFromSlider(index, 2, val); }),
+            GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { UpdateHsvInput(index, 2, val); })
+        ));
+    }
+
+    private void AddKeywordControls(List<GridRowSpec> layout, int index, string[] defaultKwOptions)
+    {
+        var activeKeywords = currentHero.diceSides[index].keywords;
+
+        // Row 8: ImagePanel Background for the Keywords Block (Dropdown row + 1 row per active keyword)
+        int keywordRowCount = 1; // Base dropdown row
+        if (activeKeywords != null && activeKeywords.Count > 0)
+        {
+            keywordRowCount += activeKeywords.Count;
+        }
+
+        var kwBgRow = new GridRowSpec(
+            GridCellSpec.CreateImagePanel($"BgKw_{index}", 1.0f, new Color(0.2f, 0.2f, 0.2f, 1f))
+        );
+        kwBgRow.isBackground = true;
+        kwBgRow.rowSpan = keywordRowCount;
+        layout.Add(kwBgRow);
+
+        // Row 9: Keywords Dropdown
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"LblKw_{index}", "Add Keyword:", 0.30f),
+            GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.70f, defaultKwOptions, (val) => AddKeywordFromDropdown(index, val))
+        ));
+
+        // Row 10+: Keyword entries (1 per row)
+        if (activeKeywords != null && activeKeywords.Count > 0)
+        {
+            foreach (string kw in activeKeywords)
+            {
+                string displayLabel = kw;
+                if (System.Enum.TryParse(kw, true, out EffectKeyword parsedKw))
+                {
+                    if (EffectKeywordColors.Map.TryGetValue(parsedKw, out Color colorValue))
+                    {
+                        string hex = ColorUtility.ToHtmlStringRGB(colorValue);
+                        displayLabel = $"<color=#{hex}>{kw}</color>";
+                    }
+                }
+
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel($"KwTag_{index}_{kw}", displayLabel, 0.80f),
+                    GridCellSpec.CreateButton($"KwDel_{index}_{kw}", "[X]", 0.20f, () => RemoveKeyword(index, kw))
+                ));
+            }
+        }
+    }
+
+    private void AddCopyPasteControls(List<GridRowSpec> layout, int index)
+    {
+        // Row Last: Copy/Paste Buttons
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => CopyDiceFace(index)),
+            GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => PasteDiceFace(index))
+        ));
+    }
+
+    //===================================================================================================
+
+    private void CopyDiceFace(int sourceIndex)
+    {
+        if (sourceIndex < 0 || sourceIndex >= currentHero.diceSides.Length) return;
+
+        var source = currentHero.diceSides[sourceIndex];
+
+        copiedEffectID = source.effectID;
+        copiedPips = source.pips;
+        copiedFacadeID = source.facadeID;
+        copiedFacadeColor = source.facadeColor;
+
+        // Perform a deep copy of the keyword list
+        copiedKeywords = new List<string>(source.keywords ?? new List<string>());
+        hasCopiedDiceData = true;
+    }
+
+    private void PasteDiceFace(int targetIndex)
+    {
+        if (!hasCopiedDiceData || targetIndex < 0 || targetIndex >= currentHero.diceSides.Length) return;
+
+        var target = currentHero.diceSides[targetIndex];
+
+        target.effectID = copiedEffectID;
+        target.pips = copiedPips;
+        target.facadeID = copiedFacadeID;
+        target.facadeColor = copiedFacadeColor;
+
+        // Deep copy from the clipboard back into the target list
+        target.keywords = new List<string>(copiedKeywords ?? new List<string>());
+
+        // Rebuild and refresh the UI. 
+        // GenerateRawText() will run automatically, instantly converting the serialized 
+        // face identifiers (e.g. ".i.left" -> ".i.right") to match the target index.
+        RefreshDiceUI();
     }
 
     private void OpenBaseModal(int faceIndex)
@@ -389,9 +765,12 @@ public class HeroModManager : MonoBehaviour
         rawTextOutput.lineType = TMP_InputField.LineType.MultiLineNewline;
 
         // --- SYNTAX HIGHLIGHTING SETUP ---
-        rawTextOutput.textComponent.color = Color.clear;
+        rawTextOutput.textComponent.color = Color.clear; // Keep raw text completely invisible
         rawTextOutput.customCaretColor = true;
         rawTextOutput.caretColor = Color.white;
+
+        // CRITICAL: Disable Rich Text on the selectable input box.
+        rawTextOutput.richText = false;
 
         // Force Auto Sizing OFF on the input field text component
         rawTextOutput.textComponent.enableAutoSizing = false;
@@ -401,6 +780,12 @@ public class HeroModManager : MonoBehaviour
         GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
         highlighterObj.name = "SyntaxHighlighter";
         syntaxHighlighterText = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
+
+        // Make the colored highlighter completely click-through & non-selectable
+        var canvasGroup = highlighterObj.GetComponent<CanvasGroup>();
+        if (canvasGroup == null) canvasGroup = highlighterObj.AddComponent<CanvasGroup>();
+        canvasGroup.blocksRaycasts = false;
+        canvasGroup.interactable = false;
 
         // Strip custom scripts and layout controllers
         foreach (var script in highlighterObj.GetComponents<MonoBehaviour>())
@@ -420,20 +805,48 @@ public class HeroModManager : MonoBehaviour
         highlightRt.pivot = textCompRt.pivot;
 
         // Force Auto Sizing OFF on the highlighter and set size to 16
-        syntaxHighlighterText.enableAutoSizing = false; // <-- This disables the auto-shrink behavior
+        syntaxHighlighterText.enableAutoSizing = false;
         syntaxHighlighterText.fontSize = 16;
 
         syntaxHighlighterText.alignment = rawTextOutput.textComponent.alignment;
         syntaxHighlighterText.margin = rawTextOutput.textComponent.margin;
         syntaxHighlighterText.enableWordWrapping = rawTextOutput.textComponent.enableWordWrapping;
         syntaxHighlighterText.autoSizeTextContainer = false;
+
+        // Let ONLY the background overlay handle the color tags
         syntaxHighlighterText.richText = true;
         // ----------------------------------
 
+        // Adjust input height to end at 0.08f to make room for buttons below
         RectTransform inputRt = inputObj.GetComponent<RectTransform>();
-        FullScreenUIGenerator.SetAnchors(inputRt, 0.0f, 0.0f, 1.0f, 0.58f);
+        FullScreenUIGenerator.SetAnchors(inputRt, 0.0f, 0.08f, 1.0f, 0.58f);
 
         rawTextOutput.onValueChanged.AddListener(OnRawTextChanged);
+
+        // 6. Copy & Paste Backup Buttons (Anchored at the absolute bottom 0.0f to 0.06f)
+        GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
+        copyBtnObj.name = "BtnCopyClipboard";
+        var copyText = copyBtnObj.GetComponentInChildren<TextMeshProUGUI>();
+        if (copyText != null) copyText.text = "Copy String";
+        Button copyBtn = copyBtnObj.GetComponentInChildren<Button>();
+
+        // UPDATE: Call the platform-safe clipboard helper
+        if (copyBtn != null) copyBtn.onClick.AddListener(() => CopyStringToClipboard(rawTextOutput.text));
+
+        RectTransform copyRt = copyBtnObj.GetComponent<RectTransform>();
+        FullScreenUIGenerator.SetAnchors(copyRt, 0.0f, 0.0f, 0.48f, 0.06f);
+
+        GameObject pasteBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
+        pasteBtnObj.name = "BtnPasteClipboard";
+        var pasteText = pasteBtnObj.GetComponentInChildren<TextMeshProUGUI>();
+        if (pasteText != null) pasteText.text = "Paste String";
+        Button pasteBtn = pasteBtnObj.GetComponentInChildren<Button>();
+        if (pasteBtn != null) pasteBtn.onClick.AddListener(() => {
+            rawTextOutput.text = GUIUtility.systemCopyBuffer;
+            OnRawTextChanged(rawTextOutput.text);
+        });
+        RectTransform pasteRt = pasteBtnObj.GetComponent<RectTransform>();
+        FullScreenUIGenerator.SetAnchors(pasteRt, 0.52f, 0.0f, 1.0f, 0.06f);
     }
 
     private void OnUIChanged()
@@ -450,12 +863,22 @@ public class HeroModManager : MonoBehaviour
         // Colorize user input in real-time
         syntaxHighlighterText.text = FormatSyntaxHighlighting(rawText);
 
+        // 1. Update the Data Model from the string
         ParseRawText(rawText);
+
+        // 2. Rebuild the visual layout to accommodate new/removed keyword rows
+        RebuildDiceScrollView();
+
+        // 3. Populate the newly rebuilt layout with the parsed Data Model
+        // (We do NOT call RefreshDiceUI() because that triggers OnUIChanged() -> GenerateRawText(), 
+        // which would forcefully overwrite the text box the user is currently typing in!)
         UpdateUIFromData();
     }
 
     private void UpdateUIFromData()
     {
+        if (statsUI == null || diceUI == null) return;
+
         isSyncing = true;
 
         if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.text = currentHero.heroName;
@@ -464,19 +887,19 @@ public class HeroModManager : MonoBehaviour
 
         if (statsUI.Dropdowns.TryGetValue("Replica", out var repDrop))
         {
-            if (Enum.TryParse(currentHero.baseReplica, true, out AllHeroNames parsedName))
+            if (Enum.TryParse(currentHero.baseReplica, true, out HeroType parsedName))
                 repDrop.value = (int)parsedName;
         }
 
         if (statsUI.Dropdowns.TryGetValue("ImageOverride", out var imgDrop))
         {
-            if (Enum.TryParse(currentHero.imageOverride, true, out AllHeroNames parsedName))
+            if (Enum.TryParse(currentHero.imageOverride, true, out HeroType parsedName))
                 imgDrop.value = (int)parsedName;
         }
 
         if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
         {
-            SDColors.HeroColorOption colOpt = ReverseLookupColor(currentHero.colorClass);
+            HeroColorOption colOpt = ReverseLookupColor(currentHero.colorClass);
             colDrop.value = (int)colOpt;
             if (heroIconBackground) heroIconBackground.color = SDColors.GetColor(colOpt);
         }
@@ -542,9 +965,9 @@ public class HeroModManager : MonoBehaviour
 
         // Determine if the colorClass should be omitted because it matches the default replica color
         string colorSegment = $".col.{currentHero.colorClass}";
-        if (System.Enum.TryParse(currentHero.baseReplica, true, out AllHeroNames baseHeroEnum))
+        if (System.Enum.TryParse(currentHero.baseReplica, true, out HeroType baseHeroEnum))
         {
-            if (Colors.TryGetValue(baseHeroEnum, out HeroColorOption defaultColorOption))
+            if (HeroColorMap.TryGetValue(baseHeroEnum, out HeroColorOption defaultColorOption))
             {
                 string defaultColorCode = GetCode(defaultColorOption);
 
@@ -613,7 +1036,7 @@ public class HeroModManager : MonoBehaviour
         // 4. Image Override Condition (constructed to be appended at the end of the string)
         string imgOverrideStr = "";
         if (!string.IsNullOrEmpty(currentHero.imageOverride)
-            && currentHero.imageOverride != AllHeroNames.None.ToString()
+            && currentHero.imageOverride != HeroType.None.ToString()
             && currentHero.imageOverride != currentHero.baseReplica)
         {
             imgOverrideStr = $".img.{currentHero.imageOverride}";
@@ -631,27 +1054,40 @@ public class HeroModManager : MonoBehaviour
 
     private void ParseRawText(string rawText)
     {
+        // 1. Wipe volatile nested data so deleted items in the string actually disappear from the UI
+        for (int i = 0; i < 6; i++)
+        {
+            if (currentHero.diceSides[i].keywords == null)
+                currentHero.diceSides[i].keywords = new List<string>();
+            else
+                currentHero.diceSides[i].keywords.Clear();
+
+            currentHero.diceSides[i].facadeID = "";
+            currentHero.diceSides[i].facadeColor = "";
+        }
+
+        // 2. Parse Standard Core Variables (Using lookbehinds to prevent false matches)
         Match mReplica = Regex.Match(rawText, @"replica\.([a-zA-Z]+)");
         if (mReplica.Success) currentHero.baseReplica = mReplica.Groups[1].Value;
 
-        // Image override parser
-        Match mImage = Regex.Match(rawText, @"\.img\.([a-zA-Z]+)");
+        Match mImage = Regex.Match(rawText, @"(?<=\.)img\.([a-zA-Z]+)");
         if (mImage.Success) currentHero.imageOverride = mImage.Groups[1].Value;
-        else currentHero.imageOverride = "None"; // fallback
+        else currentHero.imageOverride = "None";
 
-        Match mName = Regex.Match(rawText, @"n\.([a-zA-Z0-9_\s]+)");
+        Match mName = Regex.Match(rawText, @"(?<=\.)n\.([a-zA-Z0-9_\s]+)");
         if (mName.Success) currentHero.heroName = mName.Groups[1].Value;
 
-        Match mCol = Regex.Match(rawText, @"col\.([a-z])");
+        Match mCol = Regex.Match(rawText, @"(?<=\.)col\.([a-z])");
         if (mCol.Success) currentHero.colorClass = mCol.Groups[1].Value;
 
-        Match mHp = Regex.Match(rawText, @"hp\.(\d+)");
-        if (mHp.Success) currentHero.hp = int.Parse(mHp.Groups[1].Value);
+        Match mHp = Regex.Match(rawText, @"(?<=\.)hp\.(\d+)");
+        if (mHp.Success && int.TryParse(mHp.Groups[1].Value, out int hp)) currentHero.hp = hp;
 
-        Match mTier = Regex.Match(rawText, @"tier\.(\d+)");
-        if (mTier.Success) currentHero.tier = int.Parse(mTier.Groups[1].Value);
+        Match mTier = Regex.Match(rawText, @"(?<=\.)tier\.(\d+)");
+        if (mTier.Success && int.TryParse(mTier.Groups[1].Value, out int tier)) currentHero.tier = tier;
 
-        Match mSd = Regex.Match(rawText, @"sd\.([0-9\-\:]+)");
+        // 3. Parse Base SD Array using safe TryParse
+        Match mSd = Regex.Match(rawText, @"(?<=\.)sd\.([0-9\-\:]+)");
         if (mSd.Success)
         {
             string[] sides = mSd.Groups[1].Value.Split(':');
@@ -667,21 +1103,86 @@ public class HeroModManager : MonoBehaviour
                     string[] parts = sides[i].Split('-');
                     if (parts.Length == 2)
                     {
-                        currentHero.diceSides[i].effectID = int.Parse(parts[0]);
-                        currentHero.diceSides[i].pips = int.Parse(parts[1]);
+                        if (int.TryParse(parts[0], out int effID))
+                            currentHero.diceSides[i].effectID = effID;
+                        if (int.TryParse(parts[1], out int pips))
+                            currentHero.diceSides[i].pips = pips;
+                    }
+                }
+            }
+        }
+
+        // 4. Parse Modifiers (.i. blocks containing keywords & facades)
+        // FIX: The modifier matcher is now non-greedy (.*?) and terminates at (.i., closing parenthesis, space, or end of string)
+        MatchCollection iMatches = Regex.Matches(rawText, @"\.i\.([a-zA-Z0-9]+)\.(.*?)(?=\.i\.|\)|\s|$)");
+        foreach (Match m in iMatches)
+        {
+            string target = m.Groups[1].Value.ToLower();
+            string mods = m.Groups[2].Value;
+
+            List<int> faces = GetFacesFromTarget(target);
+            string[] chunks = mods.Split('#');
+
+            foreach (string chunk in chunks)
+            {
+                if (chunk.StartsWith("k.", StringComparison.OrdinalIgnoreCase))
+                {
+                    string kw = chunk.Substring(2);
+                    // Strip tags if they pasted rich text directly
+                    kw = Regex.Replace(kw, "<.*?>", string.Empty).Trim();
+
+                    foreach (int f in faces)
+                    {
+                        if (!currentHero.diceSides[f].keywords.Contains(kw, StringComparer.OrdinalIgnoreCase))
+                            currentHero.diceSides[f].keywords.Add(kw);
+                    }
+                }
+                else if (chunk.StartsWith("facade.", StringComparison.OrdinalIgnoreCase))
+                {
+                    string facData = chunk.Substring(7);
+                    string[] parts = facData.Split(':');
+                    string facId = parts[0];
+                    string facColor = parts.Length > 1 ? string.Join(":", parts, 1, parts.Length - 1) : "";
+
+                    foreach (int f in faces)
+                    {
+                        currentHero.diceSides[f].facadeID = facId;
+                        currentHero.diceSides[f].facadeColor = facColor;
                     }
                 }
             }
         }
     }
 
-    private SDColors.HeroColorOption ReverseLookupColor(string code)
+    // Helper for bidirectional mapping of targets (left -> 0, mid -> 1, etc.)
+    private List<int> GetFacesFromTarget(string target)
     {
-        foreach (SDColors.HeroColorOption opt in Enum.GetValues(typeof(SDColors.HeroColorOption)))
+        List<int> faces = new List<int>();
+        switch (target)
         {
-            if (SDColors.GetCode(opt) == code) return opt;
+            case "left": faces.Add(0); break;
+            case "mid": faces.Add(1); break;
+            case "top": faces.Add(2); break;
+            case "bot": faces.Add(3); break;
+            case "right": faces.Add(4); break;
+            case "rightmost": faces.Add(5); break;
+            case "all": faces.AddRange(new int[] { 0, 1, 2, 3, 4, 5 }); break;
+            case "left2": faces.AddRange(new int[] { 0, 1 }); break;
+            case "topbot": faces.AddRange(new int[] { 2, 3 }); break;
+            case "right2": faces.AddRange(new int[] { 4, 5 }); break;
+            case "right3": faces.AddRange(new int[] { 3, 4, 5 }); break;
+                // Fallback for an unrecognized group target applies it nowhere to prevent errors
         }
-        return SDColors.HeroColorOption.Yellow;
+        return faces;
+    }
+
+    private HeroColorOption ReverseLookupColor(string code)
+    {
+        foreach (HeroColorOption opt in Enum.GetValues(typeof(HeroColorOption)))
+        {
+            if (GetCode(opt) == code) return opt;
+        }
+        return HeroColorOption.Yellow;
     }
 
     private string FormatSyntaxHighlighting(string plainText)
@@ -828,15 +1329,15 @@ public class HeroModManager : MonoBehaviour
         // Determine which hero name is active based on the override rules
         string activeHeroNameStr = currentHero.baseReplica;
         if (!string.IsNullOrEmpty(currentHero.imageOverride)
-            && currentHero.imageOverride != AllHeroNames.None.ToString()
+            && currentHero.imageOverride != HeroType.None.ToString()
             && currentHero.imageOverride != currentHero.baseReplica)
         {
             activeHeroNameStr = currentHero.imageOverride;
         }
 
-        if (Enum.TryParse(activeHeroNameStr, true, out AllHeroNames activeHero))
+        if (Enum.TryParse(activeHeroNameStr, true, out HeroType activeHero))
         {
-            if (HeroSpriteDatabase.HeroSpriteMap.TryGetValue(activeHero, out string spriteName))
+            if (HeroSpriteDatabase.HeroToSpriteMap.TryGetValue(activeHero, out string spriteName))
             {
                 // Lazy-load the sliced spritesheet array once
                 if (atlasSprites == null || atlasSprites.Length == 0)
@@ -889,7 +1390,11 @@ public class HeroModManager : MonoBehaviour
 
             // Filter original clean Enum names
             var filteredNames = Enum.GetNames(typeof(EffectKeyword))
-                .Where(k => string.IsNullOrEmpty(search) || k.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0);
+                .Where(k => string.IsNullOrEmpty(search) || k.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+
+            // Update the clean data cache for this face to match the new filtered order
+            cleanDropdownKeywords[index] = filteredNames;
 
             List<string> options = new List<string> { "[ Select Keyword to Add ]" };
             foreach (string name in filteredNames)
@@ -911,21 +1416,19 @@ public class HeroModManager : MonoBehaviour
         }
     }
 
-
     private void AddKeywordFromDropdown(int index, int dropVal)
     {
         if (isSyncing || dropVal == 0) return;
 
-        if (diceUI.Dropdowns.TryGetValue($"KwDrop_{index}", out var drop))
+        // CRITICAL lookup: Retrieve the pure keyword from our clean data cache by index,
+        // completely bypassing the UI's formatted rich-text string!
+        if (cleanDropdownKeywords.TryGetValue(index, out var cleanList))
         {
-            string selectedKw = drop.options[dropVal].text;
+            string cleanKw = cleanList[dropVal - 1]; // Offset by 1 for the placeholder option
 
-            if (!currentHero.diceSides[index].keywords.Contains(selectedKw, StringComparer.OrdinalIgnoreCase))
+            if (!currentHero.diceSides[index].keywords.Contains(cleanKw, StringComparer.OrdinalIgnoreCase))
             {
-                // Add keyword
-                currentHero.diceSides[index].keywords.Add(selectedKw);
-
-                // REBUILD THE ENTIRE DICE COLUMN
+                currentHero.diceSides[index].keywords.Add(cleanKw);
                 RefreshDiceUI();
             }
         }
@@ -935,13 +1438,11 @@ public class HeroModManager : MonoBehaviour
     {
         if (isSyncing) return;
 
+        // Since the data model is now 100% clean, we don't need any Regex string stripping here either
         var keywordsList = currentHero.diceSides[index].keywords;
         if (keywordsList.Contains(keyword))
         {
-            // Remove keyword
             keywordsList.Remove(keyword);
-
-            // REBUILD THE ENTIRE DICE COLUMN
             RefreshDiceUI();
         }
     }
@@ -1088,5 +1589,14 @@ public class HeroModManager : MonoBehaviour
 
         UpdateDiceIcon(index);
         OnUIChanged();
+    }
+
+    private void CopyStringToClipboard(string text)
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        WebGLCopyAndPaste.WebGLCopyAndPasteAPI.CopyToClipboard(text);
+#else
+        GUIUtility.systemCopyBuffer = text;
+#endif
     }
 }

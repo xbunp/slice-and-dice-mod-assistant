@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 public class NavigationTabsController : MonoBehaviour
 {
@@ -26,6 +26,14 @@ public class NavigationTabsController : MonoBehaviour
         if (tabsContainer == null)
             tabsContainer = transform;
 
+        // --- ADDED: Automatically configure parent Horizontal Layout Group settings ---
+        HorizontalLayoutGroup layoutGroup = tabsContainer.GetComponent<HorizontalLayoutGroup>();
+        if (layoutGroup != null)
+        {
+            layoutGroup.childControlWidth = true;
+            layoutGroup.childForceExpandWidth = true;
+        }
+
         GameObject activePrefab = tabButtonPrefab != null ? tabButtonPrefab : fallbackButtonPrefab;
 
         // Clear existing generated elements
@@ -45,6 +53,18 @@ public class NavigationTabsController : MonoBehaviour
         {
             int index = i;
             GameObject btnObj = Instantiate(activePrefab, tabsContainer);
+
+            // --- ADDED: Force correct scale on generation to avoid visual layout offsets ---
+            btnObj.transform.localScale = Vector3.one;
+
+            // --- ADDED: Ensure each button has a Layout Element forcing equal flexible width ---
+            LayoutElement le = btnObj.GetComponent<LayoutElement>();
+            if (le == null)
+            {
+                le = btnObj.AddComponent<LayoutElement>();
+            }
+            le.flexibleWidth = 1f;
+
             Button btn = btnObj.GetComponentInChildren<Button>();
 
             TextMeshProUGUI txt = btnObj.GetComponentInChildren<TextMeshProUGUI>();
@@ -53,6 +73,8 @@ public class NavigationTabsController : MonoBehaviour
                 txt.text = tabNames[i];
                 txt.enableAutoSizing = false;
                 txt.fontSize = 13f;
+                // --- ADDED: Disable word wrapping to stop letters from splitting onto two lines ---
+                txt.enableWordWrapping = false;
             }
 
             if (btn != null)

@@ -1125,7 +1125,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   modalPanel: {fileID: 3046855889622450406}
   gridContent: {fileID: 3941421533199629283}
-  iconButtonPrefab: {fileID: 2635577496961467931, guid: 5ba1b65049c94cd4586e142fd73fd50e, type: 3}
+  iconButtonPrefab: {fileID: 2227253136531240204, guid: 17d758faa7bef334f92b79c821bdc45b, type: 3}
   searchInputField: {fileID: 3687584775542258672}
   cancelButton: {fileID: 5728720501679001268}
   spawnBatchSize: 500

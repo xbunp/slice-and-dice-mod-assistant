@@ -8,6 +8,8 @@ public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, Scrol
 
 public class GridReferences
 {
+    public float TotalHeight;
+
     public Dictionary<string, TMP_InputField> Inputs = new Dictionary<string, TMP_InputField>();
     public Dictionary<string, TMP_Dropdown> Dropdowns = new Dictionary<string, TMP_Dropdown>();
     public Dictionary<string, Button> Buttons = new Dictionary<string, Button>();
@@ -22,6 +24,9 @@ public class GridRowSpec
 {
     public List<GridCellSpec> cells = new List<GridCellSpec>();
     public float customHeight = -1f;
+
+    public bool isBackground = false;
+    public int rowSpan = 1;
 
     public GridRowSpec(params GridCellSpec[] cells) { this.cells.AddRange(cells); }
     public GridRowSpec(float customHeight, params GridCellSpec[] cells)
