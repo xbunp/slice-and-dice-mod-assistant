@@ -615,9 +615,12 @@ public class HeroModManager : MonoBehaviour
             GridCellSpec.CreateLabel($"LblPip_{index}", "Pips:", 0.30f),
             GridCellSpec.CreateInput($"Pips_{index}", "Pips amount", 0.70f, (val) =>
             {
-                if (int.TryParse(val, out int p))
+                int p = 0;
+                // Treat empty inputs as 0, otherwise parse the integer
+                if (string.IsNullOrEmpty(val) || int.TryParse(val, out p))
                 {
                     currentHero.diceSides[index].pips = p;
+                    UpdateDiceIcon(index); // Force immediate preview visual update
                     OnUIChanged();
                 }
             })
@@ -978,7 +981,7 @@ public class HeroModManager : MonoBehaviour
         {
             // Instantiating with 'false' preserves the prefab's local transform data (anchors, pivot, sizeDelta, scale)
             GameObject portraitObj = Instantiate(uiGenerator.PortraitPanel, containerRt, false);
-            portraitPreview = portraitObj.GetComponent<PortraitPreview>();
+            portraitPreview = portraitObj.GetComponentInChildren<PortraitPreview>();
             RectTransform portraitRt = portraitObj.GetComponent<RectTransform>();
 
             // Center the prefab within the container and ensure its local scale is normal
