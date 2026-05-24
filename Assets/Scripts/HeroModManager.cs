@@ -15,18 +15,13 @@ public class HeroModManager : MonoBehaviour
     private bool isSyncing = false;
 
     [Header("Right Column Prefabs")]
-    public GameObject framedIconPrefab; // Prefab with FramedIcon script
-    public GameObject dicePreviewPrefab; // Prefab with DicePreview script
+    private PortraitPreview portraitPreview;
 
     [Header("Dynamically Generated Components")]
     // References to dynamically generated components
     private GridReferences statsUI;
     private GridReferences diceUI;
     private TMP_InputField rawTextOutput;
-    private DicePreview dicePreview;
-    private FramedIcon heroIcon;
-    [Space]
-    private Image heroIconBackground;
     private TextMeshProUGUI syntaxHighlighterText;
 
     // Internal shit. 
@@ -154,7 +149,7 @@ public class HeroModManager : MonoBehaviour
                 GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
                     HeroColorOption selectedColor = (HeroColorOption)val;
                     currentHero.colorClass = SDColors.GetCode(selectedColor);
-                    heroIcon.frame.color = SDColors.GetColor(selectedColor);
+                    portraitPreview.SetHeroColor(SDColors.GetColor(selectedColor));
                     OnUIChanged();
                 })
             ),
@@ -978,17 +973,31 @@ public class HeroModManager : MonoBehaviour
         RectTransform containerRt = previewContainer.GetComponent<RectTransform>();
         FullScreenUIGenerator.SetAnchors(containerRt, 0.05f, 0.7f, 0.95f, 0.95f);
 
-        // 2. Instantiate Hero Icon (Left: 0% to 33%)
-        GameObject iconObj = Instantiate(framedIconPrefab, containerRt);
-        heroIcon = iconObj.GetComponent<FramedIcon>();
-        RectTransform iconRt = iconObj.GetComponent<RectTransform>();
-        FullScreenUIGenerator.SetAnchors(iconRt, 0.0f, 0.0f, 0.33f, 1.0f);
+        // 2 & 3. Instantiate the Portrait Panel prefab directly from the UI Generator
+        if (uiGenerator != null && uiGenerator.PortraitPanel != null)
+        {
+            // Instantiating with 'false' preserves the prefab's local transform data (anchors, pivot, sizeDelta, scale)
+            GameObject portraitObj = Instantiate(uiGenerator.PortraitPanel, containerRt, false);
+            portraitPreview = portraitObj.GetComponent<PortraitPreview>();
+            RectTransform portraitRt = portraitObj.GetComponent<RectTransform>();
 
+            // Center the prefab within the container and ensure its local scale is normal
+            portraitRt.anchoredPosition = Vector2.zero;
+            portraitRt.localScale = Vector3.one;
+        }
+        else
+        {
+            Debug.LogError("PortraitPanel prefab reference is unassigned on the FullScreenUIGenerator component.");
+            return;
+        }
+
+        /*
         // 3. Instantiate Dice Preview (Right: 38% to 100%)
         GameObject diceObj = Instantiate(dicePreviewPrefab, containerRt);
         dicePreview = diceObj.GetComponent<DicePreview>();
         RectTransform diceRt = diceObj.GetComponent<RectTransform>();
         FullScreenUIGenerator.SetAnchors(diceRt, 0.38f, 0.0f, 1.0f, 1.0f);
+        */
 
         // 4. Label (Middle portion of the panel)
         GameObject labelObj = Instantiate(uiGenerator.labelPrefab, parent);
@@ -1145,7 +1154,18 @@ public class HeroModManager : MonoBehaviour
         {
             HeroColorOption colOpt = ReverseLookupColor(currentHero.colorClass);
             colDrop.value = (int)colOpt;
-            if (heroIconBackground) heroIconBackground.color = SDColors.GetColor(colOpt);
+
+            if (portraitPreview != null)
+            {
+                portraitPreview.SetHeroColor(SDColors.GetColor(colOpt));
+            }
+        }
+
+        if (portraitPreview != null)
+        {
+            portraitPreview.SetNameText(currentHero.heroName);
+            portraitPreview.SetHPText(currentHero.hp.ToString());
+            portraitPreview.SetTierText(currentHero.tier.ToString());
         }
 
         for (int i = 0; i < 6; i++)
@@ -1514,11 +1534,12 @@ public class HeroModManager : MonoBehaviour
 
     private void UpdateDiceIcon(int index)
     {
-        if (dicePreview == null) return;
+        if (portraitPreview == null) return;
 
         var face = currentHero.diceSides[index];
         int effectId = face.effectID;
         string facadeId = face.facadeID;
+        int pips = face.pips; // Grab pips
 
         // Parse the H:S:V string into integers, defaulting to 0
         int h = 0, s = 0, v = 0;
@@ -1527,16 +1548,18 @@ public class HeroModManager : MonoBehaviour
         if (hsv.Length > 1 && int.TryParse(hsv[1], out int parsedS)) s = parsedS;
         if (hsv.Length > 2 && int.TryParse(hsv[2], out int parsedV)) v = parsedV;
 
-        Image targetImage = index switch
+        Image targetImage = null;
+        Image pipImage = null;
+
+        switch (index)
         {
-            0 => dicePreview.Left,
-            1 => dicePreview.Middle,
-            2 => dicePreview.Top,
-            3 => dicePreview.Bottom,
-            4 => dicePreview.Right,
-            5 => dicePreview.Rightmost,
-            _ => null
-        };
+            case 0: targetImage = portraitPreview.Left; pipImage = portraitPreview.PipsLeft; break;
+            case 1: targetImage = portraitPreview.Middle; pipImage = portraitPreview.PipsMiddle; break;
+            case 2: targetImage = portraitPreview.Top; pipImage = portraitPreview.PipsTop; break;
+            case 3: targetImage = portraitPreview.Bottom; pipImage = portraitPreview.PipsBottom; break;
+            case 4: targetImage = portraitPreview.Right; pipImage = portraitPreview.PipsRight; break;
+            case 5: targetImage = portraitPreview.Rightmost; pipImage = portraitPreview.PipsRightmost; break;
+        }
 
         if (targetImage != null)
         {
@@ -1547,20 +1570,18 @@ public class HeroModManager : MonoBehaviour
 
                 if (int.TryParse(idString, out int parsedFacadeId))
                 {
-                    // Pass H, S, V down to the material
-                    dicePreview.SetDiceIcon(targetImage, prefix, parsedFacadeId, h, s, v);
+                    portraitPreview.SetDiceIcon(targetImage, pipImage, prefix, parsedFacadeId, h, s, v, pips);
                     return;
                 }
             }
 
-            // Also pass H, S, V even if falling back to base action
-            dicePreview.SetDiceIcon(targetImage, "bas", effectId, h, s, v);
+            portraitPreview.SetDiceIcon(targetImage, pipImage, "bas", effectId, h, s, v, pips);
         }
     }
 
     private void UpdateHeroIcon()
     {
-        if (heroIcon == null) return;
+        if (portraitPreview == null) return;
 
         // Determine which hero name is active based on the override rules
         string activeHeroNameStr = currentHero.baseReplica;
@@ -1574,13 +1595,13 @@ public class HeroModManager : MonoBehaviour
         // Fetch the sprite using your unified helper
         Sprite targetSprite = GetSpriteForPortrait(activeHeroNameStr);
 
-        if (targetSprite != null && heroIcon.icon != null)
+        if (targetSprite != null && portraitPreview.portrait != null)
         {
-            heroIcon.icon.sprite = targetSprite;
+            portraitPreview.portrait.sprite = targetSprite;
         }
-        else if (heroIcon.icon != null)
+        else if (portraitPreview.portrait != null)
         {
-            heroIcon.icon.sprite = null;
+            portraitPreview.portrait.sprite = null;
             if (activeHeroNameStr != "None")
             {
                 Debug.LogWarning($"Could not find sliced sprite for portrait '{activeHeroNameStr}'.");

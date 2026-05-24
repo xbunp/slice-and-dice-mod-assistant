@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI; // Added to support the Button component
 
-public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel }
+public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel }
 
 public class GridReferences
 {
@@ -17,7 +17,7 @@ public class GridReferences
     public Dictionary<string, ScrollRect> ScrollViews = new Dictionary<string, ScrollRect>();
     public Dictionary<string, NavigationTabsController> NavigationTabs = new Dictionary<string, NavigationTabsController>();
     public Dictionary<string, Image> ImagePanels = new Dictionary<string, Image>();
-
+    public Dictionary<string, PortraitPreview> PortraitPanels = new Dictionary<string, PortraitPreview>();
 }
 
 public class GridRowSpec
@@ -144,6 +144,16 @@ public class GridCellSpec
         return new GridCellSpec
         {
             type = CellType.ScrollView,
+            key = key,
+            widthRatio = ratio
+        };
+    }
+
+    public static GridCellSpec CreatePortraitPanel(string key, float ratio)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.PortraitPanel,
             key = key,
             widthRatio = ratio
         };

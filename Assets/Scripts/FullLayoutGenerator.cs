@@ -19,6 +19,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject scrollViewPrefab;
     public GameObject navigationTabs;
     public GameObject imagePanelPrefab;
+    public GameObject PortraitPanel;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -684,9 +685,26 @@ public class FullScreenUIGenerator : MonoBehaviour
                     ConfigureNavigationTabsCell(cell, cellObj, refs);
                 }
                 break;
+
+            case CellType.PortraitPanel:
+                if (PortraitPanel != null)
+                {
+                    cellObj = Instantiate(PortraitPanel, rowRt);
+                    ConfigurePortraitPanelCell(cell, cellObj, refs);
+                }
+                break;
         }
 
         return cellObj;
+    }
+
+    private void ConfigurePortraitPanelCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
+    {
+        PortraitPreview preview = cellObj.GetComponent<PortraitPreview>();
+        if (preview != null && !string.IsNullOrEmpty(cell.key))
+        {
+            refs.PortraitPanels[cell.key] = preview;
+        }
     }
 
     private void ConfigureInputCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
@@ -919,4 +937,6 @@ public class FullScreenUIGenerator : MonoBehaviour
         // Build new ones
         return BuildGrid(panel, rows);
     }
+
+
 }
