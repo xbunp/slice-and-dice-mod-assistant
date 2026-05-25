@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+
 
 public class PortraitPreview : MonoBehaviour
 {
@@ -14,6 +16,12 @@ public class PortraitPreview : MonoBehaviour
 
     public Image Left, Middle, Right, Rightmost, Top, Bottom;
     public Image PipsLeft, PipsMiddle, PipsRight, PipsRightmost, PipsTop, PipsBottom;
+
+    public Button leftButton, middleButton, rightButton, rightmostButton, topButton, bottomButton;
+
+    // Event invoked when a face button is clicked. 
+    // The integer parameter corresponds to the tab indices: Left (1), Middle (2), Top (3), Bottom (4), Right (5), Rightmost (6).
+    public event Action<int> OnFaceSelected;
 
     private Dictionary<string, List<Sprite>> _spriteGroups;
 
@@ -45,6 +53,30 @@ public class PortraitPreview : MonoBehaviour
                 _spriteGroups[prefix].Add(sprite);
             }
         }
+
+        SetupButtonListeners();
+    }
+
+    private void SetupButtonListeners()
+    {
+        // Bind buttons to invoke the event with the corresponding index from the tabNames list
+        if (leftButton != null) leftButton.onClick.AddListener(() => OnFaceSelected?.Invoke(1));
+        if (middleButton != null) middleButton.onClick.AddListener(() => OnFaceSelected?.Invoke(2));
+        if (topButton != null) topButton.onClick.AddListener(() => OnFaceSelected?.Invoke(3));
+        if (bottomButton != null) bottomButton.onClick.AddListener(() => OnFaceSelected?.Invoke(4));
+        if (rightButton != null) rightButton.onClick.AddListener(() => OnFaceSelected?.Invoke(5));
+        if (rightmostButton != null) rightmostButton.onClick.AddListener(() => OnFaceSelected?.Invoke(6));
+    }
+
+    private void OnDestroy()
+    {
+        // Clean up listeners to prevent potential memory leaks
+        if (leftButton != null) leftButton.onClick.RemoveAllListeners();
+        if (middleButton != null) middleButton.onClick.RemoveAllListeners();
+        if (topButton != null) topButton.onClick.RemoveAllListeners();
+        if (bottomButton != null) bottomButton.onClick.RemoveAllListeners();
+        if (rightButton != null) rightButton.onClick.RemoveAllListeners();
+        if (rightmostButton != null) rightmostButton.onClick.RemoveAllListeners();
     }
 
     private void CloneMaterial(Image img)
@@ -56,7 +88,7 @@ public class PortraitPreview : MonoBehaviour
     }
 
     // UPDATED SIGNATURE: Added pipImage parameter to link dice with its respective pip display
-    public void SetDiceIcon(Image uiImage, Image pipImage, string prefix, int index, int h = 0, int s = 0, int v = 0, int pips = 0)
+    public void SetIcon(Image uiImage, Image pipImage, string prefix, int index, int h = 0, int s = 0, int v = 0, int pips = 0)
     {
         if (uiImage == null) return;
 
@@ -151,6 +183,16 @@ public class PortraitPreview : MonoBehaviour
         if (tier != null)
         {
             tier.text = text;
+        }
+    }
+
+    internal void SetPortraitHSV(int h, int s, int v)
+    {
+        if (portrait.material != null)
+        {
+            portrait.material.SetFloat("_Hue", h);
+            portrait.material.SetFloat("_Saturation", s);
+            portrait.material.SetFloat("_Value", v);
         }
     }
 }

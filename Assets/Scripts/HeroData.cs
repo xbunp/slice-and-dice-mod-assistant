@@ -11,6 +11,11 @@ public class HeroData
     public string colorClass = "y";       // y, o, r, b, g, etc.
     public int hp = 7;
     public int tier = 1;
+    public int h = 0;
+    public int s = 0;
+    public int v = 0;
+    public string speech;
+    public string doc;
 
     [Header("Dice Definition (6 Sides)")]
     public DiceSideData[] diceSides = new DiceSideData[6];

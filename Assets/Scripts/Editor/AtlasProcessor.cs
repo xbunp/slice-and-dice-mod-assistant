@@ -145,7 +145,7 @@ public class AtlasProcessor : AssetPostprocessor
                 { "reg/face/dmgCantrip", 126 },
                 { "reg/face/swordRoulette", 127 },
                 { "reg/face/flurry", 128 },
-                { "reg/face/special/addKeyword/needle", 129 },
+                { "reg/face/needle", 129 },
                 { "reg/face/recharge", 130 },
                 { "reg/face/dmgWeaken", 131 },
                 { "reg/face/swordDuplicate", 132 },
@@ -317,16 +317,21 @@ public class AtlasProcessor : AssetPostprocessor
         public static int GetOrAssignId(string prefix, string normalizedPath, HashSet<int> reservedIds)
         {
             if (!Database.ContainsKey(prefix))
-            {
                 Database[prefix] = new Dictionary<string, int>();
-            }
 
             if (Database[prefix].TryGetValue(normalizedPath, out int existingId))
             {
-                return existingId;
+                // CHANGE: If an old dynamic ID is now blocked by your hardcoded list, evict it!
+                if (!reservedIds.Contains(existingId))
+                {
+                    return existingId;
+                }
+                else
+                {
+                    Database[prefix].Remove(normalizedPath);
+                }
             }
 
-            // Sequentially allocate the next ID, skipping hardcoded reservations
             int nextId = 0;
             var assignedInPrefix = new HashSet<int>(Database[prefix].Values);
             while (reservedIds.Contains(nextId) || assignedInPrefix.Contains(nextId))
@@ -561,5 +566,17 @@ public class AtlasProcessor : AssetPostprocessor
 
         dataProvider.SetSpriteRects(spriteRects.ToArray());
         dataProvider.Apply();
+    }
+
+    private static void ScreamError(string message)
+    {
+        string bar = "====================================================================";
+        string scream = $"\n<color=red><b><size=18>{bar}\n!!! CRITICAL ATLAS ERROR !!!\n{bar}</size></b></color>\n\n" +
+                        $"<color=yellow><size=16>{message}</size></color>\n\n" +
+                        $"<color=red><b><size=18>{bar}\nFIX THIS IMMEDIATELY OR SPRITES WILL BE CORRUPT!\n{bar}</size></b></color>\n";
+
+        Debug.LogError(scream);
+        //Debug.LogError(scream);
+        //Debug.LogError(scream);
     }
 }

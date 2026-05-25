@@ -4,6 +4,11 @@ using System.Linq;
 using UnityEngine;
 using static SDColors;
 
+public static class SDData
+{
+    public static readonly string[] UnusuablePortraits = { "Glitch", "Error", "Totem" };
+}
+
 public enum KeywordColor
 {
     Green,
@@ -239,7 +244,6 @@ public static class EffectKeywordColors
     };
 }
 
-
 public enum EffectKeyword
 {
     Acidic,
@@ -434,7 +438,6 @@ public enum EffectKeyword
     Wither,
     Zeroed
 }
-
 public enum HeroColorOption
 {
     Orange, Yellow, Grey, Red, Blue, Green,
@@ -1326,7 +1329,6 @@ public static class DefaultDiceData
 
 }
 
-
 [Serializable]
 public class DiceSideData
 {
@@ -1374,7 +1376,6 @@ public static class DiceTargetHelper
     }
 }
 
-
 public enum TargetType
 {
     left,       // index 0
@@ -1392,8 +1393,6 @@ public enum TargetType
     col,        // Color wide
     self        // Passive/Hero wide
 }
-
-
 public enum HeroType
 {
     None = 0,
@@ -1546,7 +1545,6 @@ public enum HeroType
     Y2,
     Y3,
 }
-
 public enum MonsterType
 {
     None = 0,
@@ -1573,7 +1571,7 @@ public enum MonsterType
     Cyclops,
     Demon,
     Dragon,
-    DragonEgg1,
+    DragonEgg,
     Egg,
     Error,
     Fanatic,
@@ -1601,7 +1599,10 @@ public enum MonsterType
     Orb,
     Quartz,
     Rat,
-    Rm,
+    Rm_t,
+    Rm_n,
+    Rm_b,
+    Rm_h,
     Rotten,
     Saber,
     Sarcophagus,
@@ -1632,5 +1633,132 @@ public enum MonsterType
     Wolf,
     Z0mbie,
     Zombie,
+}
+
+public static class NameFixes
+{
+    public static readonly Dictionary<string, string> SpecialNameOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "o1", "o1.75" },
+        { "o2", "o2.75" },
+        { "o3", "o3.75" },
+        { "n1", "n1.75" },
+        { "n2", "n2.75" },
+        { "n3", "n3.75" },
+        { "g1", "g1.75" },
+        { "g2", "g2.75" },
+        { "g3", "g3.75" },
+        { "y1", "y1.75" },
+        { "y2", "y2.75" },
+        { "y3", "y3.75" },
+        { "r1", "r1.75" },
+        { "r2", "r2.75" },
+        { "r3", "r3.75" },
+        { "b1", "b1.75" },
+        { "b2", "b2.75" },
+        { "b3", "b3.75" },
+        { "jinx", "jinx.uhh" },
+        { "orb", "orb.Slice" },
+        { "egg", "egg.Bee" },
+        { "dragonegg", "dragon egg" },
+        { "cawegg", "caw egg" },
+        { "vase", "vase.uhh" },
+        { "totemdeath", "deathSigil" },
+        { "totemdecay", "decaySigil" },
+        { "totempain", "painSigil" },
+        { "rm_n", "rmon.0" },
+        { "rm_b", "rmon.3" },
+        { "rm_t", "rmon.4" },
+        { "rm_h", "rmon.1a" },
+    };
+}
+
+
+public enum SDAbilities
+{
+    Abyss,
+    Aid,
+    Balance,
+    Bandage,
+    Bank,
+    Beam,
+    Betray,
+    Bind,
+    Blades,
+    Blaze,
+    Bolt,
+    Burn,
+    Burstic,
+    Charge,
+    Chill,
+    Circle,
+    Clink,
+    Crush,
+    Cut,
+    Devoid,
+    Draw,
+    Drop,
+    @Else,
+    Flare,
+    Flick,
+    Flip,
+    Foretell,
+    Formation,
+    Gather,
+    Gaze,
+    Glow,
+    Hack,
+    Harvest,
+    Heat,
+    Hemlock,
+    Hex,
+    Hinder,
+    Imbue,
+    Infinity,
+    Infuse,
+    Inspire,
+    Invest,
+    Invoke,
+    Leaf,
+    Leech,
+    Light,
+    Liquor,
+    Luck,
+    Mana,
+    Mark,
+    Mend,
+    Miasma,
+    Mulch,
+    Niche,
+    Oof,
+    Operate,
+    Parry,
+    Poke,
+    Poultice,
+    Pray,
+    Remedy,
+    Renew,
+    Restore,
+    Ritual,
+    Salve,
+    Save,
+    Scald,
+    Scorch,
+    Slam,
+    Slay,
+    Slice,
+    Soothe,
+    Spark,
+    Spore,
+    Sprout,
+    Strand,
+    Thrike,
+    Tick,
+    Tsrub,
+    Unite,
+    Vine,
+    Waste,
+    Wings,
+    Zap
 }
 

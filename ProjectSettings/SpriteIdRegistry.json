@@ -12996,6 +12996,16 @@
             "id": 11
         },
         {
+            "prefix": "mis",
+            "path": "combateffects/misc/bat_0",
+            "id": 12
+        },
+        {
+            "prefix": "mis",
+            "path": "combateffects/misc/bat_1",
+            "id": 13
+        },
+        {
             "prefix": "Mut",
             "path": "mutantbreadslice/axe",
             "id": 0

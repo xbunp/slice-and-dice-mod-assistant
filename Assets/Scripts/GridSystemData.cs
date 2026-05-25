@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI; // Added to support the Button component
+using UnityEngine.UI;
 
 public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel }
 
