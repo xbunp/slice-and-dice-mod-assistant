@@ -9,9 +9,17 @@ using static SDColors;
 
 public class HeroModManager : MonoBehaviour
 {
+    [Header("UI Modal References")]
     [SerializeField]private FullScreenUIGenerator uiGenerator;
+    [SerializeField] private IconPickerModal diceFaceIconPicker;
+
     private HeroData currentHero;
     private bool isSyncing = false;
+    private string _customImageString;
+
+    private bool showCustomImagePanel = false;
+    private Texture2D _customImageTexture;
+    private ImageReceiver _persistentCustomImageReceiver; // Keeps the UI alive forever
 
     [Header("Right Column Prefabs")]
     private PortraitPreview portraitPreview;
@@ -26,9 +34,6 @@ public class HeroModManager : MonoBehaviour
     // Internal shit. 
     private Sprite[] atlasSprites;
     private GeneratedScreen currentScreen = new GeneratedScreen();
-
-    [Header("UI Modal References")]
-    [SerializeField] private IconPickerModal diceFaceIconPicker;
 
     // Sprite Caches
     private Sprite[] _baseActionSprites;
@@ -71,101 +76,7 @@ public class HeroModManager : MonoBehaviour
         string[] heroNamesList = Enum.GetNames(typeof(HeroType));
 
         // 1. Core Stats Layout Specification
-        var statsLayout = new List<GridRowSpec>
-        {
-            // Row 1: Name
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Hero Name Label", "Hero Name:", 0.35f),
-                GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { currentHero.heroName = val; OnUIChanged(); })
-            ),
-            // Row 2: Base Class
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Base Class Label", "Replica Base:", 0.35f),
-                GridCellSpec.CreateDiceButton("ReplicaBtn", "P", 0.15f, () =>
-                {
-                    OpenHeroPortraitsModal((selectedHero, selectedSprite) =>
-                    {
-                        currentHero.baseReplica = selectedHero.ToString();
-                        OnUIChanged();
-                    });
-                }),
-                GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) => {
-                    currentHero.baseReplica = val;
-                    OnUIChanged();
-                })
-            ),
-            // Row 3: Image Override
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Image Override Label", "Icon Override:", 0.35f),
-                GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () =>
-                {
-                    OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
-                    {
-                        currentHero.imageOverride = isHero
-                            ? ((HeroType)enumValue).ToString()
-                            : ((MonsterType)enumValue).ToString();
-                        OnUIChanged();
-                    });
-                }),
-                GridCellSpec.CreateInput("OverrideName", "None", 0.50f, (val) => {
-                    currentHero.imageOverride = val;
-                    OnUIChanged();
-                })
-            ),
-
-            // Row 5: HP & Tier
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("HP Label", "HP:", 0.2f),
-                GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) currentHero.hp = hp; OnUIChanged(); }),
-                GridCellSpec.CreateLabel("Tier Label", "Tier:", 0.2f),
-                GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => { if (int.TryParse(val, out int t)) currentHero.tier = t; OnUIChanged(); })
-            ),
-
-            // Rows for Hero Portrait HSV Controls
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblHeroHue", "Hue:", 0.30f),
-                GridCellSpec.CreateSlider("HeroSliH", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(0, val); }),
-                GridCellSpec.CreateInput("HeroFacH", "H", 0.20f, (val) => { UpdateHeroHsvInput(0, val); })
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblHeroSat", "Saturation:", 0.30f),
-                GridCellSpec.CreateSlider("HeroSliS", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(1, val); }),
-                GridCellSpec.CreateInput("HeroFacS", "S", 0.20f, (val) => { UpdateHeroHsvInput(1, val); })
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblHeroVal", "Value:", 0.30f),
-                GridCellSpec.CreateSlider("HeroSliV", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(2, val); }),
-                GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { UpdateHeroHsvInput(2, val); })
-            ),
-
-            // Row 4: Color Class
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Color Label", "Color Class:", 0.35f),
-                GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
-                    HeroColorOption selectedColor = (HeroColorOption)val;
-                    currentHero.colorClass = SDColors.GetCode(selectedColor);
-                    portraitPreview.SetHeroColor(SDColors.GetColor(selectedColor));
-                    OnUIChanged();
-                })
-            ),
-
-            // Row 6: Name
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Speech Label", "Speech:", 0.2f),
-                GridCellSpec.CreateInput("Speech", "", 0.8f, (val) => { currentHero.speech = val; OnUIChanged(); })
-            ),
-
-            // Row 7: Name
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Doc Label", "Doc:", 0.2f),
-                GridCellSpec.CreateInput("Doc", "", 0.8f, (val) => { currentHero.doc = val; OnUIChanged(); })
-            ),
-
-            // Row 8: RESET BUTTON
-            new GridRowSpec(
-                GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
-            )
-        };
+        var statsLayout = GenerateStatsLayout();
 
         // 2. Middle Column: Tabs + ScrollView Base
         List<string> tabNames = new List<string> { "All", "Left", "Middle", "Top", "Bottom", "Right", "Rightmost" };
@@ -258,8 +169,12 @@ public class HeroModManager : MonoBehaviour
 
         baseHeroStr += $".n.{currentHero.heroName}{colorSegment}.hp.{currentHero.hp}.tier.{currentHero.tier}.sd.{sdString}{speechSegment}{docSegment}";
 
-        // 3. Build Item Modifiers (.i.) for Keywords and Facades
+        // 3. Build Item Modifiers (.i.) for Keywords and Facades (OPTIMIZED FOR LENGTH)
         string modifiersStr = "";
+
+        // Group faces by their exact modifier string to find the shortest alias combinations
+        Dictionary<string, int> groupedModifiers = new Dictionary<string, int>();
+
         for (int i = 0; i < 6; i++)
         {
             var face = currentHero.diceSides[i];
@@ -290,8 +205,25 @@ public class HeroModManager : MonoBehaviour
             if (modChunks.Count > 0)
             {
                 string joinedMods = string.Join("#", modChunks);
-                string faceTargetName = DiceTargetHelper.FaceNames[i];
-                modifiersStr += $".i.{faceTargetName}.{joinedMods}";
+
+                // Add this face's index as a bitmask to its modifier group
+                if (!groupedModifiers.ContainsKey(joinedMods))
+                    groupedModifiers[joinedMods] = 0;
+
+                groupedModifiers[joinedMods] |= (1 << i);
+            }
+        }
+
+        // Generate the shortest possible strings using aliases for each group
+        foreach (var kvp in groupedModifiers)
+        {
+            string joinedMods = kvp.Key;
+            int targetMask = kvp.Value;
+
+            List<string> bestAliases = DiceTargetHelper.GetBestAliasCombination(targetMask);
+            foreach (string alias in bestAliases)
+            {
+                modifiersStr += $".i.{alias}.{joinedMods}";
             }
         }
 
@@ -327,12 +259,19 @@ public class HeroModManager : MonoBehaviour
         }
 
         // 1. Updated Lookaheads inside existing matches
-        Match mReplica = Regex.Match(rawText, @"replica\.([a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)?)(?=\.hsv|\.n|\.col|\.hp|\.tier|\.img|\.sd|\.speech|\.doc|\.i|\)|$)");
+        Match mReplica = Regex.Match(rawText, @"replica\.(.*?)(?=\.hsv|\.n|\.col|\.hp|\.tier|\.img|\.sd|\.speech|\.doc|\.i|\)|$)");
         if (mReplica.Success) currentHero.baseReplica = CleanParsedHeroName(mReplica.Groups[1].Value);
 
-        Match mImage = Regex.Match(rawText, @"(?<=\.)img\.([a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)?)(?=\.hsv|\.n|\.col|\.hp|\.tier|\.img|\.sd|\.speech|\.doc|\.i|\)|$)");
-        if (mImage.Success) currentHero.imageOverride = CleanParsedHeroName(mImage.Groups[1].Value);
-        else currentHero.imageOverride = "None";
+        Match mImage = Regex.Match(rawText, @"(?<=\.)img\.(.*?)(?=\.hsv|\.n|\.col|\.hp|\.tier|\.img|\.sd|\.speech|\.doc|\.i|\)|$)");
+        if (mImage.Success)
+        {
+            currentHero.imageOverride = CleanParsedHeroName(mImage.Groups[1].Value);
+            if (currentHero.imageOverride.Length > 100) Debug.Log($"<color=magenta>[ParseRawText] Safely parsed massive custom image. Length: {currentHero.imageOverride.Length}</color>");
+        }
+        else
+        {
+            currentHero.imageOverride = "None";
+        }
 
         // 2. Newly Added HSV Parser block
         Match mHeroHsv = Regex.Match(rawText, @"(?<=\.)hsv\.([\-\d:]+)");
@@ -400,14 +339,15 @@ public class HeroModManager : MonoBehaviour
         if (mDoc.Success) currentHero.doc = mDoc.Groups[1].Value;
         else currentHero.doc = "";
 
-        // 4. Parse Modifiers (.i. blocks) - FIX: Added .img, .hsv, .speech, and .doc to the boundary lookahead so it safely terminates
+        // 4. Parse Modifiers (.i. blocks) - Integrated with GetIndicesForTarget to support multi-face mappings
         MatchCollection iMatches = Regex.Matches(rawText, @"\.i\.([a-zA-Z0-9]+)\.(.*?)(?=\.i\.|\.img\.|\.hsv\.|\.speech\.|\.doc\.|\)|\s|$)");
         foreach (Match m in iMatches)
         {
             string target = m.Groups[1].Value.ToLower();
             string mods = m.Groups[2].Value;
 
-            List<int> faces = GetFacesFromTarget(target);
+            // Retrieve all indices covered by the target string (e.g. "topbot" -> indices 2 and 3)
+            List<int> faces = DiceTargetHelper.GetIndicesForTarget(target);
             string[] chunks = mods.Split('#');
 
             foreach (string chunk in chunks)
@@ -441,6 +381,110 @@ public class HeroModManager : MonoBehaviour
     }
 
     //==================================================================================================
+
+    private List<GridRowSpec> GenerateStatsLayout()
+    {
+        var layout = new List<GridRowSpec>
+        {
+            // Row 8: RESET BUTTON
+            new GridRowSpec(
+                GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
+            ),
+
+            // Row 1: Name
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("Hero Name Label", "Hero Name:", 0.35f),
+                GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { currentHero.heroName = val; OnUIChanged(); })
+            ),
+            // Row 2: Base Class
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("Base Class Label", "Replica Base:", 0.35f),
+                GridCellSpec.CreateDiceButton("ReplicaBtn", "P", 0.15f, () =>
+                {
+                    OpenHeroPortraitsModal((selectedHero, selectedSprite) =>
+                    {
+                        currentHero.baseReplica = selectedHero.ToString();
+                        OnUIChanged();
+                    });
+                }),
+                GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) => {
+                    currentHero.baseReplica = val;
+                    OnUIChanged();
+                })
+            ),
+            // Row 3: Image Override + Toggle Button
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("Image Override Label", "Icon Override:", 0.30f),
+                GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () =>
+                {
+                    OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
+                    {
+                        currentHero.imageOverride = isHero
+                            ? ((HeroType)enumValue).ToString()
+                            : ((MonsterType)enumValue).ToString();
+                        OnUIChanged();
+                    });
+                }),
+                GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => {
+                    currentHero.imageOverride = val;
+                    OnUIChanged();
+                }),
+                GridCellSpec.CreateButton("ToggleCustomImgBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
+            )
+        };
+
+        // Inject Custom Image Panel Row if toggled on
+        if (showCustomImagePanel)
+        {
+            layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
+        }
+
+        // Add the rest of your original rows...
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("HP Label", "HP:", 0.2f),
+            GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) currentHero.hp = hp; OnUIChanged(); }),
+            GridCellSpec.CreateLabel("Tier Label", "Tier:", 0.2f),
+            GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => { if (int.TryParse(val, out int t)) currentHero.tier = t; OnUIChanged(); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("LblHeroHue", "Hue:", 0.30f),
+            GridCellSpec.CreateSlider("HeroSliH", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(0, val); }),
+            GridCellSpec.CreateInput("HeroFacH", "H", 0.20f, (val) => { UpdateHeroHsvInput(0, val); })
+        ));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("LblHeroSat", "Saturation:", 0.30f),
+            GridCellSpec.CreateSlider("HeroSliS", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(1, val); }),
+            GridCellSpec.CreateInput("HeroFacS", "S", 0.20f, (val) => { UpdateHeroHsvInput(1, val); })
+        ));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("LblHeroVal", "Value:", 0.30f),
+            GridCellSpec.CreateSlider("HeroSliV", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(2, val); }),
+            GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { UpdateHeroHsvInput(2, val); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Color Label", "Color Class:", 0.35f),
+            GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
+                HeroColorOption selectedColor = (HeroColorOption)val;
+                currentHero.colorClass = SDColors.GetCode(selectedColor);
+                portraitPreview.SetHeroColor(SDColors.GetColor(selectedColor));
+                OnUIChanged();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Speech Label", "Speech:", 0.2f),
+            GridCellSpec.CreateInput("Speech", "", 0.8f, (val) => { currentHero.speech = val; OnUIChanged(); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Doc Label", "Doc:", 0.2f),
+            GridCellSpec.CreateInput("Doc", "", 0.8f, (val) => { currentHero.doc = val; OnUIChanged(); })
+        ));
+
+        return layout;
+    }
 
     private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
     {
@@ -1374,9 +1418,12 @@ public class HeroModManager : MonoBehaviour
 
     private void UpdateHeroIcon()
     {
-        if (portraitPreview == null) return;
+        if (portraitPreview == null)
+        {
+            Debug.LogError("<b><color=red>[SCREAM-MANAGER] ERROR: portraitPreview is NULL!</color></b>");
+            return;
+        }
 
-        // Determine which hero name is active based on the override rules
         string activeHeroNameStr = currentHero.baseReplica;
         if (!string.IsNullOrEmpty(currentHero.imageOverride)
             && currentHero.imageOverride != HeroType.None.ToString()
@@ -1385,17 +1432,36 @@ public class HeroModManager : MonoBehaviour
             activeHeroNameStr = currentHero.imageOverride;
         }
 
-        // Fetch the sprite using your unified helper
+        Debug.Log($"<b><color=yellow>[SCREAM-MANAGER] UpdateHeroIcon() evaluating. activeHeroNameStr: {activeHeroNameStr.Substring(0, Math.Min(20, activeHeroNameStr.Length))}...</color></b>");
+
+        // DETERMINISTIC CUSTOM IMAGE EVALUATION
+        bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && activeHeroNameStr == _customImageString;
+
+        if (isUsingCustomImage && _customImageTexture != null)
+        {
+            Debug.LogWarning("<b><color=green>[SCREAM-MANAGER] CUSTOM IMAGE MATCHED DETERMINISTICALLY! Applying custom texture to portrait.</color></b>");
+            Sprite customSprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+            if (portraitPreview.portrait != null)
+            {
+                portraitPreview.portrait.sprite = customSprite;
+                portraitPreview.portrait.color = Color.white;
+                if (portraitPreview.portrait.material != null)
+                    portraitPreview.SetPortraitHSV(currentHero.h, currentHero.s, currentHero.v);
+            }
+            return;
+        }
+        else
+        {
+            Debug.Log($"<b><color=yellow>[SCREAM-MANAGER] Deterministic check skipped. isUsingCustomImage={isUsingCustomImage}, _customImageTexture={(_customImageTexture != null ? "Assigned" : "Null")}</color></b>");
+        }
+
         Sprite targetSprite = GetSpriteForPortrait(activeHeroNameStr);
 
         if (targetSprite != null && portraitPreview.portrait != null)
         {
             portraitPreview.portrait.sprite = targetSprite;
-
-            // Apply the HSV configuration to the portrait preview material
             if (portraitPreview.portrait.material != null)
             {
-                // Passes the data to the material block via your PortraitPreview component wrapper
                 portraitPreview.SetPortraitHSV(currentHero.h, currentHero.s, currentHero.v);
             }
         }
@@ -1813,6 +1879,8 @@ public class HeroModManager : MonoBehaviour
         // Reset the data model to a brand new state
         currentHero = new HeroData();
 
+        showCustomImagePanel = false;
+
         // Ensure lists are initialized
         for (int i = 0; i < 6; i++)
         {
@@ -1849,4 +1917,94 @@ public class HeroModManager : MonoBehaviour
         isSyncing = false;
     }
 
+    private void ToggleCustomImagePanel()
+    {
+        showCustomImagePanel = !showCustomImagePanel;
+        RebuildStatsUI();
+    }
+
+    private void RebuildStatsUI()
+    {
+        if (currentScreen == null)
+        {
+            Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: currentScreen is NULL!</color></b>");
+            return;
+        }
+
+        if (!currentScreen.ColumnPanels.TryGetValue("LeftStats", out var panel))
+        {
+            Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: 'LeftStats' column panel reference is missing!</color></b>");
+            return;
+        }
+
+        // 1. Detach persistent receiver to protect it from destruction
+        if (_persistentCustomImageReceiver != null)
+        {
+            _persistentCustomImageReceiver.transform.SetParent(this.transform, false);
+        }
+
+        // 2. Rebuild the Grid
+        statsUI = uiGenerator.RebuildGrid(panel, GenerateStatsLayout());
+
+        if (statsUI == null)
+        {
+            Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: RebuildGrid returned NULL statsUI!</color></b>");
+            return;
+        }
+
+        // 3. Inject our persistent receiver into the new slot
+        if (showCustomImagePanel)
+        {
+            // Log every key present in the CustomImgImporter dictionary for diagnostic checking
+            if (statsUI.CustomImgImporter.TryGetValue("CustomImgPanel", out ImageReceiver dummyGridReceiver))
+            {
+                if (_persistentCustomImageReceiver == null)
+                {
+                    _persistentCustomImageReceiver = dummyGridReceiver;
+                    BindPersistentReceiver();
+                }
+                else
+                {
+                    Transform targetPlaceholder = dummyGridReceiver.transform.parent;
+                    Destroy(dummyGridReceiver.gameObject);
+
+                    _persistentCustomImageReceiver.transform.SetParent(targetPlaceholder, false);
+                    _persistentCustomImageReceiver.gameObject.SetActive(true);
+
+                    RectTransform rt = _persistentCustomImageReceiver.GetComponent<RectTransform>();
+                    FullScreenUIGenerator.SetAnchors(rt, 0, 0, 1, 1);
+                }
+            }
+            else
+            {
+                Debug.LogError("<b><color=red>[SCREAM-MANAGER] ERROR: 'CustomImgPanel' key was NOT found in CustomImgImporter dictionary! Binding failed.</color></b>");
+            }
+        }
+        else
+        {
+            if (_persistentCustomImageReceiver != null)
+            {
+                _persistentCustomImageReceiver.gameObject.SetActive(false);
+            }
+        }
+
+        UpdateUIFromData();
+    }
+
+    private void BindPersistentReceiver()
+    {
+        if (_persistentCustomImageReceiver == null)
+        {
+            Debug.LogError("<b><color=red>[SCREAM-MANAGER] ERROR: Cannot bind OnImageGenerated because receiver is NULL!</color></b>");
+            return;
+        }
+
+        _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
+        {
+            currentHero.imageOverride = encodedStr;
+            _customImageString = encodedStr;
+            _customImageTexture = tex;
+            OnUIChanged();
+        };
+    }
 }

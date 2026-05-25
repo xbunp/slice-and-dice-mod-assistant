@@ -7,83 +7,114 @@ public class ImageReceiver : MonoBehaviour
 {
     [DllImport("__Internal")]
     private static extern void TriggerFileOpen();
+    public Action<string, Texture2D> OnImageGenerated;
 
     [Header("UI References")]
-    //public RawImage originalImagePreview;
     public RawImage reducedImagePreview;
     public TMPro.TMP_Dropdown compressionDropdown;
     public TMPro.TMP_InputField outputStringField;
+    public Button copyString, pasteString;
 
     private Texture2D _uploadedTexture;
     private Texture2D _generatedPreviewTexture;
 
+    public string EncodedString => outputStringField != null ? outputStringField.text : string.Empty;
+    public Texture2D GeneratedPreviewTexture => _generatedPreviewTexture;
+    public Texture2D UploadedTexture => _uploadedTexture;
+
+    private void Awake()
+    {
+    }
+
     private void Start()
     {
-        // 1. Auto-populate the dropdown
         if (compressionDropdown != null)
         {
             compressionDropdown.ClearOptions();
             var enumNames = new System.Collections.Generic.List<string>(Enum.GetNames(typeof(ImageColorExtractor.CompressionFactor)));
             compressionDropdown.AddOptions(enumNames);
-
-            // 2. Attach listener to refresh the image when the user changes the dropdown
             compressionDropdown.onValueChanged.AddListener(delegate { ProcessCurrentTexture(); });
         }
         else
         {
-            Debug.LogError("[Unity C#] Dropdown reference is missing!");
+            Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: Dropdown reference is MISSING in inspector!</color></b>", this);
         }
+
+        if (copyString != null)
+        {
+            copyString.onClick.AddListener(() => {
+                ClipboardHelper.CopyToClipboard(EncodedString);
+            });
+        }
+        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: copyString button is MISSING in inspector!</color></b>", this);
+
+        if (pasteString != null)
+        {
+            pasteString.onClick.AddListener(() =>
+            {
+                string pastedText = ClipboardHelper.GetFromClipboard();
+                if (!string.IsNullOrEmpty(pastedText))
+                {
+                    if (pastedText.Length > 100 && (pastedText.StartsWith("data:image") || !pastedText.Contains(".")))
+                    {
+                        OnImageLoaded(pastedText);
+                    }
+                    else if (outputStringField != null)
+                    {
+                        outputStringField.text = pastedText;
+                    }
+                }
+            });
+        }
+        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: pasteString button is MISSING in inspector!</color></b>", this);
+    }
+
+    public void RestoreState(Texture2D uploadedTex, Texture2D generatedTex, string encodedStr)
+    {
+        _uploadedTexture = uploadedTex;
+        _generatedPreviewTexture = generatedTex;
+        if (reducedImagePreview != null) reducedImagePreview.texture = _generatedPreviewTexture;
+        if (outputStringField != null) outputStringField.text = encodedStr;
     }
 
     public void OnSelectFileClicked()
     {
-        Debug.Log("[Unity C#] Requesting File Dialog...");
 #if UNITY_WEBGL && !UNITY_EDITOR
         TriggerFileOpen();
 #else
-        Debug.LogWarning("[Unity C#] File dialog is only supported in WebGL builds. Mocking a response not available here.");
 #endif
     }
 
-    // Called automatically by the ImageUploader.jslib
     public void OnImageLoaded(string base64String)
     {
-        Debug.Log($"[Unity C#] SUCCESS: OnImageLoaded reached! Base64 Length: {base64String.Length}");
-
         try
         {
             byte[] imageBytes = Convert.FromBase64String(base64String);
-
             if (_uploadedTexture != null) Destroy(_uploadedTexture);
 
             _uploadedTexture = new Texture2D(2, 2);
             if (_uploadedTexture.LoadImage(imageBytes))
             {
-                Debug.Log($"[Unity C#] Texture created successfully. Size: {_uploadedTexture.width}x{_uploadedTexture.height}");
-
-                /*
-                if (originalImagePreview != null)
-                    originalImagePreview.texture = _uploadedTexture;
-                */
-
                 ProcessCurrentTexture();
             }
             else
             {
-                Debug.LogError("[Unity C#] Failed to convert byte array into Unity Texture2D.");
+                Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: LoadImage failed on byte array!</color></b>", this);
             }
         }
         catch (Exception ex)
         {
-            Debug.LogError("[Unity C#] Fatal Error decoding base64 image: " + ex.Message);
+            Debug.LogError($"<b><color=red>[SCREAM-RECEIVER] FATAL EXCEPTION: {ex.Message}</color></b>", this);
         }
     }
 
     private void ProcessCurrentTexture()
     {
-        if (_uploadedTexture == null) return;
-
-        Debug.Log("[Unity C#] Processing texture with extractor...");
+        if (_uploadedTexture == null)
+        {
+            Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ABORT: _uploadedTexture is NULL!</color></b>", this);
+            return;
+        }
 
         if (_generatedPreviewTexture != null)
         {
@@ -99,6 +130,8 @@ public class ImageReceiver : MonoBehaviour
         if (reducedImagePreview != null) reducedImagePreview.texture = _generatedPreviewTexture;
         if (outputStringField != null) outputStringField.text = encodedString;
 
-        Debug.Log("[Unity C#] Processing complete!");
+        int listenerCount = OnImageGenerated?.GetInvocationList().Length ?? 0;
+
+        OnImageGenerated?.Invoke(encodedString, _generatedPreviewTexture);
     }
 }

@@ -20,6 +20,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject navigationTabs;
     public GameObject imagePanelPrefab;
     public GameObject PortraitPanel;
+    public GameObject customImgPanel;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -249,6 +250,15 @@ public class FullScreenUIGenerator : MonoBehaviour
                     ConfigurePortraitPanelCell(cell, cellObj, refs);
                 }
                 break;
+            case CellType.CustomImgImporter:
+                if (customImgPanel != null)
+                {
+                    cellObj = Instantiate(customImgPanel, rowRt);
+                    ConfigureCustomImgCell(cell, cellObj, refs);
+                }
+                break;
+
+
         }
 
         return cellObj;
@@ -406,6 +416,17 @@ public class FullScreenUIGenerator : MonoBehaviour
         }
     }
 
+    private void ConfigureCustomImgCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
+    {
+        ImageReceiver receiver = cellObj.GetComponentInChildren<ImageReceiver>();
+        if (receiver != null && !string.IsNullOrEmpty(cell.key))
+        {
+            refs.CustomImgImporter[cell.key] = receiver;
+        }
+    }
+
+    //==========================================================================================
+
     private void FinalizeCellLayoutAndText(GameObject cellObj, GridCellSpec cell, ref float currentX)
     {
         var textComponents = cellObj.GetComponentsInChildren<TextMeshProUGUI>(true);
@@ -463,8 +484,6 @@ public class FullScreenUIGenerator : MonoBehaviour
 
         return rowRt;
     }
-
-    //==========================================================================================
 
     private GameObject CreateUIObject(string name, Transform parent)
     {

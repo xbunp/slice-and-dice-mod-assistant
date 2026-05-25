@@ -4,11 +4,13 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
 
+public enum AbilityType { Spell, Tactic }
+
 public class AbilityDataFactory : MonoBehaviour
 {
     [Header("UI Dependencies")]
     public FullScreenUIGenerator uiGenerator;
-    public Font defaultFont; // Used for generated raw text panels
+    public Font defaultFont;
 
     // Generated References
     public GeneratedScreen currentScreen;
@@ -19,7 +21,6 @@ public class AbilityDataFactory : MonoBehaviour
 
     private bool isSyncing = false;
 
-    // The data model for our Ability Factory
     [System.Serializable]
     public class AbilityState
     {
@@ -28,12 +29,19 @@ public class AbilityDataFactory : MonoBehaviour
         public string itemName = "Custom Item";
         public int itemTier = 1;
 
+        public AbilityType abilityType = AbilityType.Spell; // Branching Type
         public string baseReplica = "Statue";
         public string abilityName = "Custom Spell";
         public string imageOverride = "None";
         public int h = 0, s = 0, v = 0;
 
-        // Sides mapping: 0:Left(Main), 1:Mid(Extra), 2:Top(Tactic 1), 3:Bot(Tactic 2), 4:Right(Mana Cost), 5:Rightmost(Tactic 3)
+        // Sides mapping: 
+        // 0: Left (Primary FX)
+        // 1: Middle (Secondary FX)
+        // 2: Top (Tactic Cost 1)
+        // 3: Bottom (Tactic Cost 2)
+        // 4: Right (Mana Cost - Must be 0-0 for Tactics)
+        // 5: Rightmost (Tactic Cost 3)
         public DiceSide[] diceSides = new DiceSide[6];
         public List<string> globalSpellKeywords = new List<string>();
 
@@ -45,7 +53,6 @@ public class AbilityDataFactory : MonoBehaviour
 
     public AbilityState currentAbility = new AbilityState();
 
-    // S&D specific hidden Spell Keywords mapped to their internal IDs
     private Dictionary<string, string> spellKeywordsMap = new Dictionary<string, string>
     {
         { "None", "" },
@@ -59,15 +66,13 @@ public class AbilityDataFactory : MonoBehaviour
 
     private void Start()
     {
-        if (uiGenerator != null)
-        {
-            BuildUIAndBind();
-        }
+        if (uiGenerator != null) BuildUIAndBind();
     }
 
     private void BuildUIAndBind()
     {
         string[] attachmentModes = { "Direct to Hero", "As Item Wrapper (i.t.)", "Item: Learn Spell (learn.s)", "Item: Learn Tactic (learn.t)" };
+        string[] abilityTypes = { "Spell", "Tactic" };
 
         // 1. Core Config Layout Specification
         var statsLayout = new List<GridRowSpec>
@@ -83,7 +88,16 @@ public class AbilityDataFactory : MonoBehaviour
                 })
             ),
             
-            // Row 2: Item Modifiers (Only impacts output if Mode > 0)
+            // Row 2: Ability Branching Selector
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("TypeLbl", "Ability Type:", 0.35f),
+                GridCellSpec.CreateDropdown("TypeDrop", "Type", 0.65f, abilityTypes, (val) => {
+                    currentAbility.abilityType = (AbilityType)val;
+                    OnUIChanged();
+                })
+            ),
+
+            // Row 3: Item Modifiers (Only impacts output if Mode > 0)
             new GridRowSpec(
                 GridCellSpec.CreateLabel("ItemNameLbl", "Item Name:", 0.25f),
                 GridCellSpec.CreateInput("ItemName", currentAbility.itemName, 0.40f, (val) => { currentAbility.itemName = val; OnUIChanged(); }),
@@ -91,13 +105,13 @@ public class AbilityDataFactory : MonoBehaviour
                 GridCellSpec.CreateInput("ItemTier", currentAbility.itemTier.ToString(), 0.20f, (val) => { if(int.TryParse(val, out int t)) currentAbility.itemTier = t; OnUIChanged(); })
             ),
 
-            // Row 3: Ability Internals
+            // Row 4: Ability Internals
             new GridRowSpec(
                 GridCellSpec.CreateLabel("AbilityNameLbl", "Ability Name:", 0.35f),
                 GridCellSpec.CreateInput("AbilityName", currentAbility.abilityName, 0.65f, (val) => { currentAbility.abilityName = val; OnUIChanged(); })
             ),
             new GridRowSpec(
-                GridCellSpec.CreateLabel("BaseReplicaLbl", "Spell Base (Hero):", 0.35f),
+                GridCellSpec.CreateLabel("BaseReplicaLbl", "Base Replica:", 0.35f),
                 GridCellSpec.CreateInput("BaseReplica", currentAbility.baseReplica, 0.65f, (val) => { currentAbility.baseReplica = val; OnUIChanged(); })
             ),
             new GridRowSpec(
@@ -105,7 +119,7 @@ public class AbilityDataFactory : MonoBehaviour
                 GridCellSpec.CreateInput("ImageOverride", currentAbility.imageOverride, 0.65f, (val) => { currentAbility.imageOverride = val; OnUIChanged(); })
             ),
 
-            // Row 4: Special Spell Modifiers
+            // Row 5: Special Spell Modifiers
             new GridRowSpec(
                 GridCellSpec.CreateLabel("SpellKwLbl", "Add Spell Keyword:", 0.35f),
                 GridCellSpec.CreateDropdown("SpellKwDrop", "Select Keyword", 0.65f, new List<string>(spellKeywordsMap.Keys).ToArray(), (val) => {
@@ -118,7 +132,7 @@ public class AbilityDataFactory : MonoBehaviour
                 })
             ),
 
-            // HSV Sliders for the spell icon
+            // HSV Sliders for the icon
             new GridRowSpec(
                 GridCellSpec.CreateLabel("LblSpellHue", "Hue:", 0.30f),
                 GridCellSpec.CreateSlider("SpellSliH", -99, 99, true, 0.50f, (val) => { currentAbility.h = (int)val; OnUIChanged(); }),
@@ -136,7 +150,7 @@ public class AbilityDataFactory : MonoBehaviour
             )
         };
 
-        // 2. Middle Column: Tabs + ScrollView Base
+        // 2. Middle Column Layout
         List<string> tabNames = new List<string> {
             "All", "Left (Primary FX)", "Middle (Extra FX)", "Top (Tactic Cost)", "Bottom (Tactic Cost)", "Right (Mana Cost)", "Rightmost (Tactic Cost)"
         };
@@ -146,78 +160,50 @@ public class AbilityDataFactory : MonoBehaviour
             new GridRowSpec(600f, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
         };
 
-        // 3. Define the column split mapping
+        // 3. Columns mapping
         var columns = new List<ColumnSpec>
         {
             new ColumnSpec("LeftStats", 0.02f, 0.35f, statsLayout),
             new ColumnSpec("MiddleDiceBase", 0.38f, 0.68f, middleBaseLayout),
-            new ColumnSpec("RightOutput", 0.71f, 0.98f) // Uses custom layout constructor natively
+            new ColumnSpec("RightOutput", 0.71f, 0.98f)
         };
 
-        // 4. GENERATE THE UI
         currentScreen = uiGenerator.SetupScreen(columns);
-
-        // Bind Left Column Cache
         statsUI = currentScreen.ColumnRefs["LeftStats"];
+        diceScrollRect = currentScreen.ColumnRefs["MiddleDiceBase"].ScrollViews["DiceScrollView"];
 
-        // Grab the ScrollView so we can inject the dice UI into it later
-        var middleRefs = currentScreen.ColumnRefs["MiddleDiceBase"];
-        diceScrollRect = middleRefs.ScrollViews["DiceScrollView"];
-
-        // Call your stub here to inject UI elements into the generated diceScrollRect.content
-        // RebuildDiceScrollView();
-
-        // 5. Create Right Column Text References manually since it's a Custom Panel
         if (currentScreen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
         {
             BuildRightPanelContent(rightPanel);
         }
 
-        GenerateRawText(); // Initial run
-    }
-
-    /// <summary>
-    /// Constructs the text output displays inside the specified Right Custom Panel
-    /// </summary>
-    private void BuildRightPanelContent(RectTransform rightPanel)
-    {
-        // Wrapper Object
-        GameObject txtWrapper = new GameObject("TextOutputWrapper", typeof(RectTransform));
-        txtWrapper.transform.SetParent(rightPanel, false);
-        FullScreenUIGenerator.SetAnchors(txtWrapper.GetComponent<RectTransform>(), 0.05f, 0.05f, 0.95f, 0.95f);
-
-        // 1. Syntax Highlighted Text
-        GameObject syntaxObj = new GameObject("SyntaxHighlighterText", typeof(RectTransform), typeof(Text));
-        syntaxObj.transform.SetParent(txtWrapper.transform, false);
-        RectTransform syntaxRt = syntaxObj.GetComponent<RectTransform>();
-        FullScreenUIGenerator.SetAnchors(syntaxRt, 0.0f, 0.0f, 1.0f, 1.0f);
-
-        syntaxHighlighterText = syntaxObj.GetComponent<Text>();
-        syntaxHighlighterText.font = defaultFont != null ? defaultFont : Resources.GetBuiltinResource<Font>("Arial.ttf");
-        syntaxHighlighterText.fontSize = 14;
-        syntaxHighlighterText.alignment = TextAnchor.UpperLeft;
-        syntaxHighlighterText.horizontalOverflow = HorizontalWrapMode.Wrap;
-        syntaxHighlighterText.verticalOverflow = VerticalWrapMode.Overflow;
-        syntaxHighlighterText.supportRichText = true;
-
-        // 2. Invisible Raw Output Text (Usually layered over for copying)
-        GameObject rawObj = new GameObject("RawTextOutput", typeof(RectTransform), typeof(Text));
-        rawObj.transform.SetParent(txtWrapper.transform, false);
-        RectTransform rawRt = rawObj.GetComponent<RectTransform>();
-        FullScreenUIGenerator.SetAnchors(rawRt, 0.0f, 0.0f, 1.0f, 1.0f);
-
-        rawTextOutput = rawObj.GetComponent<Text>();
-        rawTextOutput.font = syntaxHighlighterText.font;
-        rawTextOutput.fontSize = 14;
-        rawTextOutput.color = new Color(0, 0, 0, 0.01f); // nearly invisible, used to allow users to select/copy plain text overlaying syntax highlighting
-        rawTextOutput.alignment = TextAnchor.UpperLeft;
-        rawTextOutput.horizontalOverflow = HorizontalWrapMode.Wrap;
-        rawTextOutput.verticalOverflow = VerticalWrapMode.Overflow;
+        GenerateRawText();
     }
 
     private void GenerateRawText()
     {
         isSyncing = true;
+
+        // Apply branching rule to the Right Side (index 4)
+        if (currentAbility.abilityType == AbilityType.Tactic)
+        {
+            // Tactics require the right side to be blank
+            currentAbility.diceSides[4].effectID = 0;
+            currentAbility.diceSides[4].pips = 0;
+        }
+        else if (currentAbility.abilityType == AbilityType.Spell)
+        {
+            // Spells require a valid mana-cost setup on the right side.
+            // If the user hasn't defined a mana side here, default to basic mana (76)
+            if (currentAbility.diceSides[4].effectID == 0)
+            {
+                currentAbility.diceSides[4].effectID = 76;
+            }
+            if (currentAbility.diceSides[4].pips == 0)
+            {
+                currentAbility.diceSides[4].pips = 1; // Default to 1-cost
+            }
+        }
 
         // 1. Build Base SD Array
         string sdString = "";
@@ -228,7 +214,6 @@ public class AbilityDataFactory : MonoBehaviour
             if (i < 5) sdString += ":";
         }
 
-        // Define HSV Segment
         string heroHsvStr = "";
         if (currentAbility.h != 0 || currentAbility.s != 0 || currentAbility.v != 0)
         {
@@ -237,7 +222,7 @@ public class AbilityDataFactory : MonoBehaviour
 
         string innerHeroStr = $"{currentAbility.baseReplica}.sd.{sdString}";
 
-        // 2. Build Item Modifiers (.i.) for Keywords and Facades attached to specific faces
+        // 2. Side-specific modifiers
         string modifiersStr = "";
         for (int i = 0; i < 6; i++)
         {
@@ -268,20 +253,17 @@ public class AbilityDataFactory : MonoBehaviour
             if (modChunks.Count > 0)
             {
                 string joinedMods = string.Join("#", modChunks);
-                // Requires external implementation mapping 0-5 to face names
-                // string faceTargetName = DiceTargetHelper.FaceNames[i]; 
-                string faceTargetName = "left"; // Placeholder
+                string faceTargetName = "left"; // Placeholder mapping, replace with mapping logic if needed
                 modifiersStr += $".i.{faceTargetName}.{joinedMods}";
             }
         }
 
-        // 3. Append Global Spell Keywords
+        // 3. Global modifiers
         foreach (var kwItem in currentAbility.globalSpellKeywords)
         {
             if (!string.IsNullOrWhiteSpace(kwItem)) modifiersStr += $".i.{kwItem}";
         }
 
-        // 4. Handle Name and Image assignments
         bool hasImageOverride = !string.IsNullOrEmpty(currentAbility.imageOverride) && currentAbility.imageOverride != "None";
         string imgOverrideStr = "";
 
@@ -295,10 +277,9 @@ public class AbilityDataFactory : MonoBehaviour
         }
 
         string nameStr = !string.IsNullOrEmpty(currentAbility.abilityName) ? $".n.{currentAbility.abilityName}" : "";
-
         string innerText = $"({innerHeroStr}{modifiersStr}{imgOverrideStr}{nameStr})";
 
-        // 5. Wrap with appropriate Outer Host Structure depending on Item Mode
+        // 5. Wrap outer syntax
         string plainText = "";
         switch (currentAbility.attachmentMode)
         {
@@ -314,11 +295,139 @@ public class AbilityDataFactory : MonoBehaviour
         isSyncing = false;
     }
 
-    // Handlers
+    private void ParseRawText(string rawText)
+    {
+        currentAbility.globalSpellKeywords.Clear();
+        for (int i = 0; i < 6; i++)
+        {
+            if (currentAbility.diceSides[i].keywords == null) currentAbility.diceSides[i].keywords = new List<string>();
+            else currentAbility.diceSides[i].keywords.Clear();
+            currentAbility.diceSides[i].facadeID = "";
+            currentAbility.diceSides[i].facadeColor = "";
+        }
+
+        Match mOuter = Regex.Match(rawText, @"(?:(i\.t\.|learn\.s|learn\.t))?([a-zA-Z0-9]+)\.abilitydata\.\((.*?)\)(?:\.n\.([a-zA-Z0-9_\s]+)\.tier\.(\d+))?");
+        if (!mOuter.Success) return;
+
+        string wrapType = mOuter.Groups[1].Value;
+        currentAbility.targetHero = mOuter.Groups[2].Value;
+        string innerText = mOuter.Groups[3].Value;
+
+        if (wrapType == "i.t.") currentAbility.attachmentMode = 1;
+        else if (wrapType == "learn.s") currentAbility.attachmentMode = 2;
+        else if (wrapType == "learn.t") currentAbility.attachmentMode = 3;
+        else currentAbility.attachmentMode = 0;
+
+        if (mOuter.Groups[4].Success) currentAbility.itemName = mOuter.Groups[4].Value;
+        if (mOuter.Groups[5].Success && int.TryParse(mOuter.Groups[5].Value, out int tier)) currentAbility.itemTier = tier;
+
+        Match mBase = Regex.Match(innerText, @"^([a-zA-Z0-9]+)\.sd\.");
+        if (mBase.Success) currentAbility.baseReplica = mBase.Groups[1].Value;
+
+        Match mImage = Regex.Match(innerText, @"(?<=\.)img\.([a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)?)(?=\.hsv|\.n|\.col|\.hp|\.tier|\.img|\.sd|\.speech|\.doc|\.i|\)|$)");
+        if (mImage.Success) currentAbility.imageOverride = mImage.Groups[1].Value;
+        else currentAbility.imageOverride = "None";
+
+        Match mHeroHsv = Regex.Match(innerText, @"(?<=\.)hsv\.([\-\d:]+)");
+        if (mHeroHsv.Success)
+        {
+            string[] parts = mHeroHsv.Groups[1].Value.Split(':');
+            if (parts.Length > 0 && int.TryParse(parts[0], out int pH)) currentAbility.h = pH; else currentAbility.h = 0;
+            if (parts.Length > 1 && int.TryParse(parts[1], out int pS)) currentAbility.s = pS; else currentAbility.s = 0;
+            if (parts.Length > 2 && int.TryParse(parts[2], out int pV)) currentAbility.v = pV; else currentAbility.v = 0;
+        }
+
+        Match mName = Regex.Match(innerText, @"(?<=\.)n\.([a-zA-Z0-9_\s]+)");
+        if (mName.Success) currentAbility.abilityName = mName.Groups[1].Value;
+
+        // Parse Side Data
+        Match mSd = Regex.Match(innerText, @"(?<=\.)sd\.([0-9\-\:]+)");
+        if (mSd.Success)
+        {
+            string[] sides = mSd.Groups[1].Value.Split(':');
+            for (int i = 0; i < Mathf.Min(6, sides.Length); i++)
+            {
+                if (sides[i] == "0" || sides[i] == "0-0")
+                {
+                    currentAbility.diceSides[i].effectID = 0;
+                    currentAbility.diceSides[i].pips = 0;
+                }
+                else
+                {
+                    int hyphenIndex = sides[i].IndexOf('-');
+                    if (hyphenIndex > 0)
+                    {
+                        if (int.TryParse(sides[i].Substring(0, hyphenIndex), out int effID)) currentAbility.diceSides[i].effectID = effID;
+                        if (int.TryParse(sides[i].Substring(hyphenIndex + 1), out int pips)) currentAbility.diceSides[i].pips = pips;
+                    }
+                }
+            }
+
+            // AUTO-BRANCHING DETECTION RULE:
+            // Check the 5th side (index 4 / Right side). If it is blank (0-0), this is parsed as a Tactic. 
+            // Otherwise, it is parsed as a Spell.
+            if (currentAbility.diceSides[4].effectID == 0 && currentAbility.diceSides[4].pips == 0)
+            {
+                currentAbility.abilityType = AbilityType.Tactic;
+            }
+            else
+            {
+                currentAbility.abilityType = AbilityType.Spell;
+            }
+        }
+
+        // Parse Injections (.i.)
+        MatchCollection iMatches = Regex.Matches(innerText, @"\.i\.([a-zA-Z0-9]+)\.?(.*?)(?=\.i\.|\.img\.|\.hsv\.|\.n\.|\)|\s|$)");
+        foreach (Match m in iMatches)
+        {
+            string target = m.Groups[1].Value.ToLower();
+            string mods = m.Groups[2].Value;
+
+            if (target.StartsWith("ritemx") || target.StartsWith("unpack"))
+            {
+                string fullRitem = string.IsNullOrEmpty(mods) ? target : $"{target}.{mods}";
+                currentAbility.globalSpellKeywords.Add(fullRitem);
+                continue;
+            }
+
+            // Normal Side Parsers would flow here
+        }
+    }
+
+    private void BuildRightPanelContent(RectTransform rightPanel)
+    {
+        GameObject txtWrapper = new GameObject("TextOutputWrapper", typeof(RectTransform));
+        txtWrapper.transform.SetParent(rightPanel, false);
+        FullScreenUIGenerator.SetAnchors(txtWrapper.GetComponent<RectTransform>(), 0.05f, 0.05f, 0.95f, 0.95f);
+
+        GameObject syntaxObj = new GameObject("SyntaxHighlighterText", typeof(RectTransform), typeof(Text));
+        syntaxObj.transform.SetParent(txtWrapper.transform, false);
+        FullScreenUIGenerator.SetAnchors(syntaxObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 1.0f, 1.0f);
+
+        syntaxHighlighterText = syntaxObj.GetComponent<Text>();
+        syntaxHighlighterText.font = defaultFont != null ? defaultFont : Resources.GetBuiltinResource<Font>("Arial.ttf");
+        syntaxHighlighterText.fontSize = 14;
+        syntaxHighlighterText.alignment = TextAnchor.UpperLeft;
+        syntaxHighlighterText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        syntaxHighlighterText.verticalOverflow = VerticalWrapMode.Overflow;
+        syntaxHighlighterText.supportRichText = true;
+
+        GameObject rawObj = new GameObject("RawTextOutput", typeof(RectTransform), typeof(Text));
+        rawObj.transform.SetParent(txtWrapper.transform, false);
+        FullScreenUIGenerator.SetAnchors(rawObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 1.0f, 1.0f);
+
+        rawTextOutput = rawObj.GetComponent<Text>();
+        rawTextOutput.font = syntaxHighlighterText.font;
+        rawTextOutput.fontSize = 14;
+        rawTextOutput.color = new Color(0, 0, 0, 0.01f);
+        rawTextOutput.alignment = TextAnchor.UpperLeft;
+        rawTextOutput.horizontalOverflow = HorizontalWrapMode.Wrap;
+        rawTextOutput.verticalOverflow = VerticalWrapMode.Overflow;
+    }
+
     private void OnUIChanged() { if (!isSyncing) GenerateRawText(); }
-    private void OnDiceTabSelected(int tabIndex) { /* Switch ScrollView Content */ }
+    private void OnDiceTabSelected(int tabIndex) { }
     private string FormatSyntaxHighlighting(string str) { return str; }
 }
-
 // Dummy Class requirement for missing ref context
 public class DiceSide { public int effectID = 0, pips = 0; public List<string> keywords = new List<string>(); public string facadeID = "", facadeColor = ""; }

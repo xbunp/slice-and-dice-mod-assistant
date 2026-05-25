@@ -438,6 +438,51 @@ public enum EffectKeyword
     Wither,
     Zeroed
 }
+
+public enum AbilityEffectKeyword
+{
+    Boost,
+    Charged,
+    Cleanse,
+    Cleave,
+    Cruel,
+    Damage,
+    Descend,
+    Dispel,
+    Ego,
+    Eliminate,
+    Engage,
+    Focus,
+    Generous,
+    Heavy,
+    InflictDeath,
+    InflictExert,
+    InflictInflictDeath,
+    InflictInflictNothing,
+    InflictPain,
+    InflictSingleUse,
+    ManaGain,
+    Plague,
+    Poison,
+    Ranged,
+    Regen,
+    Repel,
+    Shield,
+    Smith,
+    Vitality,
+    Vulnerable,
+    Weaken,
+    Wither,
+    Annul,
+    Heal,
+    Hypnotise,
+    InflictBoned,
+    InflictNothing,
+    InflictSelfShield,
+    Removed,
+    Serrated
+}
+
 public enum HeroColorOption
 {
     Orange, Yellow, Grey, Red, Blue, Green,
@@ -1344,6 +1389,66 @@ public static class DiceTargetHelper
 {
     // Indices: 0:left, 1:mid, 2:top, 3:bot, 4:right, 5:rightmost
     public static readonly string[] FaceNames = { "left", "mid", "top", "bot", "right", "rightmost" };
+
+    // Bitmask mapping based on indices: Left(1), Mid(2), Top(4), Bot(8), Right(16), Rightmost(32)
+    private static readonly (string name, int mask)[] TargetAliases = new (string, int)[]
+    {
+        ("all", 63),       // 1+2+4+8+16+32 = 63
+        ("right5", 62),    // 2+4+8+16+32 = 62
+        ("right3", 50),    // 2+16+32 = 50
+        ("right2", 48),    // 16+32 = 48
+        ("row", 19),       // 1+2+16 = 19
+        ("mid2", 18),      // 2+16 = 18
+        ("col", 14),       // 2+4+8 = 14
+        ("topbot", 12),    // 4+8 = 12
+        ("left2", 3),      // 1+2 = 3
+        ("rightmost", 32), // 32
+        ("right", 16),     // 16
+        ("bot", 8),        // 8
+        ("top", 4),        // 4
+        ("mid", 2),        // 2
+        ("left", 1)        // 1
+    };
+
+    /// <summary>
+    /// Evaluates combinations of available target aliases to find the absolute shortest text representation.
+    /// </summary>
+    public static List<string> GetBestAliasCombination(int targetMask)
+    {
+        List<string> bestCombination = null;
+        int bestScore = int.MaxValue; // Score calculation: heavily penalize amount of `.i.` segments, then evaluate string length
+
+        void Search(int remainingMask, int currentIndex, List<string> currentCombination, int currentScore)
+        {
+            if (remainingMask == 0)
+            {
+                if (currentScore < bestScore)
+                {
+                    bestScore = currentScore;
+                    bestCombination = new List<string>(currentCombination);
+                }
+                return;
+            }
+
+            if (currentIndex >= TargetAliases.Length) return;
+
+            // Option 1: Skip this alias
+            Search(remainingMask, currentIndex + 1, currentCombination, currentScore);
+
+            // Option 2: Try appending this alias if it covers faces entirely safely (no overlaps)
+            var alias = TargetAliases[currentIndex];
+            if ((remainingMask & alias.mask) == alias.mask)
+            {
+                currentCombination.Add(alias.name);
+                // Score = 1000 per grouping penalty + alias name length
+                Search(remainingMask & ~alias.mask, currentIndex + 1, currentCombination, currentScore + 1000 + alias.name.Length);
+                currentCombination.RemoveAt(currentCombination.Count - 1);
+            }
+        }
+
+        Search(targetMask, 0, new List<string>(), 0);
+        return bestCombination ?? new List<string>();
+    }
 
     public static List<int> GetIndicesForTarget(string target)
     {
