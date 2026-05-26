@@ -27,25 +27,85 @@ public class FullScreenUIGenerator : MonoBehaviour
     public float rowSpacing = 8f;
 
     /// <summary>
-    /// Generates a complete Canvas containing three distinct columns from scratch.
+    /// Instantiates the UI Wrapper and returns the screen container with the RootWrapper assigned.
     /// </summary>
-    public GeneratedScreen SetupScreen(List<ColumnSpec> columns)
+    public GeneratedScreen CreateScreenWrapper(bool useMargins = true)
     {
         GeneratedScreen screen = new GeneratedScreen();
 
-        // 1. Get or Create Canvas
         if (canvas == null)
         {
             Debug.LogError("NO CANVAS");
             return null;
         }
 
-        // 2. Screen Wrapper (removes edge bleeding)
         GameObject wrapper = CreateUIObject("UI_Wrapper", canvas.transform);
         RectTransform wrapperRt = wrapper.GetComponent<RectTransform>();
-        SetAnchors(wrapperRt, 0.05f, 0.05f, 0.95f, 0.95f);
 
-        // 3. Process Columns
+        screen.RootWrapper = wrapperRt;
+
+        if (useMargins)
+            SetAnchors(wrapperRt, 0.05f, 0.05f, 0.95f, 0.95f);
+        else
+            SetAnchors(wrapperRt, 0.0f, 0.0f, 1.0f, 1.0f);
+
+        return screen;
+    }
+
+    /// <summary>
+    /// Populates the already created screen wrapper with columns.
+    /// </summary>
+    public void PopulateScreen(GeneratedScreen screen, List<ColumnSpec> columns, bool useMargins = true)
+    {
+        if (screen == null || screen.RootWrapper == null)
+        {
+            Debug.LogError("Cannot populate screen: RootWrapper is null.");
+            return;
+        }
+
+        foreach (var colSpec in columns)
+        {
+            RectTransform colPanel = CreateUIObject(colSpec.name, screen.RootWrapper.transform).GetComponent<RectTransform>();
+            SetAnchors(colPanel, colSpec.anchorMinX, 0.0f, colSpec.anchorMaxX, 1.0f);
+
+            screen.ColumnPanels[colSpec.name] = colPanel;
+
+            if (colSpec.isCustomLayout)
+            {
+                screen.CustomPanels[colSpec.name] = colPanel;
+            }
+            else
+            {
+                GridReferences refs = BuildGrid(colPanel, colSpec.rows, useMargins);
+                screen.ColumnRefs[colSpec.name] = refs;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Generates a complete Canvas containing three distinct columns from scratch.
+    /// </summary>
+    public GeneratedScreen SetupScreen(List<ColumnSpec> columns, bool useMargins = true)
+    {
+        GeneratedScreen screen = new GeneratedScreen();
+
+        if (canvas == null)
+        {
+            Debug.LogError("NO CANVAS");
+            return null;
+        }
+
+        GameObject wrapper = CreateUIObject("UI_Wrapper", canvas.transform);
+        RectTransform wrapperRt = wrapper.GetComponent<RectTransform>();
+
+        // FIX: Assign the wrapper directly here
+        screen.RootWrapper = wrapperRt;
+
+        if (useMargins)
+            SetAnchors(wrapperRt, 0.05f, 0.05f, 0.95f, 0.95f);
+        else
+            SetAnchors(wrapperRt, 0.0f, 0.0f, 1.0f, 1.0f);
+
         foreach (var colSpec in columns)
         {
             RectTransform colPanel = CreateUIObject(colSpec.name, wrapper.transform).GetComponent<RectTransform>();
@@ -55,13 +115,11 @@ public class FullScreenUIGenerator : MonoBehaviour
 
             if (colSpec.isCustomLayout)
             {
-                // Register custom layout panel targets
                 screen.CustomPanels[colSpec.name] = colPanel;
             }
             else
             {
-                // Process mathematical grids
-                GridReferences refs = BuildGrid(colPanel, colSpec.rows);
+                GridReferences refs = BuildGrid(colPanel, colSpec.rows, useMargins);
                 screen.ColumnRefs[colSpec.name] = refs;
             }
         }
@@ -71,11 +129,11 @@ public class FullScreenUIGenerator : MonoBehaviour
 
     //==========================================================================================
 
-    private GridReferences BuildGrid(RectTransform panel, List<GridRowSpec> rows)
+    private GridReferences BuildGrid(RectTransform panel, List<GridRowSpec> rows, bool useMargins = true)
     {
         GridReferences refs = new GridReferences();
         float currentY = 0;
-        float padding = 8f; // Visual padding for nested containers
+        float padding = useMargins ? 8f : 0f;
 
         RectTransform activeContainer = panel;
         float containerCurrentY = 0;
@@ -109,7 +167,7 @@ public class FullScreenUIGenerator : MonoBehaviour
                         GameObject cellObj = InstantiateCell(cell, rowRt, refs);
                         if (cellObj != null)
                         {
-                            FinalizeCellLayoutAndText(cellObj, cell, ref currentX);
+                            FinalizeCellLayoutAndText(cellObj, cell, ref currentX, useMargins);
                             RectTransform cellRt = cellObj.GetComponent<RectTransform>();
                             if (cellRt != null) activeContainer = cellRt;
                         }
@@ -145,7 +203,7 @@ public class FullScreenUIGenerator : MonoBehaviour
                     GameObject cellObj = InstantiateCell(cell, contentRowRt, refs);
                     if (cellObj != null)
                     {
-                        FinalizeCellLayoutAndText(cellObj, cell, ref currentX2);
+                        FinalizeCellLayoutAndText(cellObj, cell, ref currentX2, useMargins);
                     }
                 }
             }
@@ -427,7 +485,7 @@ public class FullScreenUIGenerator : MonoBehaviour
 
     //==========================================================================================
 
-    private void FinalizeCellLayoutAndText(GameObject cellObj, GridCellSpec cell, ref float currentX)
+    private void FinalizeCellLayoutAndText(GameObject cellObj, GridCellSpec cell, ref float currentX, bool useMargins = true)
     {
         var textComponents = cellObj.GetComponentsInChildren<TextMeshProUGUI>(true);
         foreach (var txt in textComponents)
@@ -450,7 +508,7 @@ public class FullScreenUIGenerator : MonoBehaviour
             cellRt.anchorMax = new Vector2(currentX + cell.widthRatio, 1);
             cellRt.pivot = new Vector2(0.5f, 0.5f);
 
-            if (cell.type == CellType.ImagePanel)
+            if (cell.type == CellType.ImagePanel || !useMargins)
             {
                 cellRt.offsetMin = Vector2.zero;
                 cellRt.offsetMax = Vector2.zero;
@@ -502,14 +560,9 @@ public class FullScreenUIGenerator : MonoBehaviour
         rt.localScale = Vector3.one;
     }
 
-    public GridReferences RebuildGrid(RectTransform panel, List<GridRowSpec> rows)
+    public GridReferences RebuildGrid(RectTransform panel, List<GridRowSpec> rows, bool useMargins = true)
     {
-        // Destroy old UI elements
-        foreach (Transform child in panel)
-        {
-            Destroy(child.gameObject);
-        }
-        // Build new ones
-        return BuildGrid(panel, rows);
+        foreach (Transform child in panel) Destroy(child.gameObject);
+        return BuildGrid(panel, rows, useMargins);
     }
 }

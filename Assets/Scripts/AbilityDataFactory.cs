@@ -6,14 +6,12 @@ using UnityEngine.UI;
 
 public enum AbilityType { Spell, Tactic }
 
-public class AbilityDataFactory : MonoBehaviour
+public class AbilityDataFactory : RootUI
 {
     [Header("UI Dependencies")]
-    public FullScreenUIGenerator uiGenerator;
     public Font defaultFont;
 
     // Generated References
-    public GeneratedScreen currentScreen;
     public GridReferences statsUI;
     public ScrollRect diceScrollRect;
     public Text rawTextOutput;
@@ -64,13 +62,10 @@ public class AbilityDataFactory : MonoBehaviour
         { "Future", "Unpack.ritemx.644f" }
     };
 
-    private void Start()
+    protected override void BuildUIAndBind()
     {
-        if (uiGenerator != null) BuildUIAndBind();
-    }
+        /*
 
-    private void BuildUIAndBind()
-    {
         string[] attachmentModes = { "Direct to Hero", "As Item Wrapper (i.t.)", "Item: Learn Spell (learn.s)", "Item: Learn Tactic (learn.t)" };
         string[] abilityTypes = { "Spell", "Tactic" };
 
@@ -168,16 +163,17 @@ public class AbilityDataFactory : MonoBehaviour
             new ColumnSpec("RightOutput", 0.71f, 0.98f)
         };
 
-        currentScreen = uiGenerator.SetupScreen(columns);
-        statsUI = currentScreen.ColumnRefs["LeftStats"];
-        diceScrollRect = currentScreen.ColumnRefs["MiddleDiceBase"].ScrollViews["DiceScrollView"];
+        generatedScreen = uiGenerator.SetupScreen(columns, false);
+        statsUI = generatedScreen.ColumnRefs["LeftStats"];
+        diceScrollRect = generatedScreen.ColumnRefs["MiddleDiceBase"].ScrollViews["DiceScrollView"];
 
-        if (currentScreen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
+        if (generatedScreen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
         {
             BuildRightPanelContent(rightPanel);
         }
 
         GenerateRawText();
+        */
     }
 
     private void GenerateRawText()

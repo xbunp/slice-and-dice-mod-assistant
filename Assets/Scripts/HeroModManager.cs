@@ -7,10 +7,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using static SDColors;
 
-public class HeroModManager : MonoBehaviour
+public class HeroModManager : RootUI
 {
     [Header("UI Modal References")]
-    [SerializeField]private FullScreenUIGenerator uiGenerator;
     [SerializeField] private IconPickerModal diceFaceIconPicker;
 
     private HeroData currentHero;
@@ -33,7 +32,7 @@ public class HeroModManager : MonoBehaviour
 
     // Internal shit. 
     private Sprite[] atlasSprites;
-    private GeneratedScreen currentScreen = new GeneratedScreen();
+    //private GeneratedScreen currentScreen = new GeneratedScreen();
 
     // Sprite Caches
     private Sprite[] _baseActionSprites;
@@ -55,13 +54,15 @@ public class HeroModManager : MonoBehaviour
     private List<string> copiedKeywords;
     private bool hasCopiedDiceData = false;
 
-    void Start()
+    public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
-        if (uiGenerator == null)
+        if (uiGeneratorRef == null)
         {
             Debug.Log("No UI Generator defined", this);
             return;
         }
+
+        uiGenerator = uiGeneratorRef;
         currentHero = new HeroData();
 
         LoadAllSprites();
@@ -71,7 +72,7 @@ public class HeroModManager : MonoBehaviour
         GenerateRawText();
     }
 
-    private void BuildUIAndBind()
+    protected override void BuildUIAndBind()
     {
         string[] heroNamesList = Enum.GetNames(typeof(HeroType));
 
@@ -94,18 +95,15 @@ public class HeroModManager : MonoBehaviour
             new ColumnSpec("RightOutput", 0.71f, 0.98f)
         };
 
-        GeneratedScreen screen = uiGenerator.SetupScreen(columns);
-        currentScreen = screen;
-        statsUI = currentScreen.ColumnRefs["LeftStats"];
+        generatedScreen = uiGenerator.SetupScreen(columns, false);
+        statsUI = generatedScreen.ColumnRefs["LeftStats"];
 
-        // Grab the ScrollView so we can inject the dice UI into it
-        var middleRefs = currentScreen.ColumnRefs["MiddleDiceBase"];
+        var middleRefs = generatedScreen.ColumnRefs["MiddleDiceBase"];
         diceScrollRect = middleRefs.ScrollViews["DiceScrollView"];
 
-        // Initial Build of the Dice Content
         RebuildDiceScrollView();
 
-        if (screen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
+        if (generatedScreen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
         {
             BuildRightPanelContent(rightPanel);
         }
@@ -1925,13 +1923,13 @@ public class HeroModManager : MonoBehaviour
 
     private void RebuildStatsUI()
     {
-        if (currentScreen == null)
+        if (generatedScreen == null)
         {
             Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: currentScreen is NULL!</color></b>");
             return;
         }
 
-        if (!currentScreen.ColumnPanels.TryGetValue("LeftStats", out var panel))
+        if (!generatedScreen.ColumnPanels.TryGetValue("LeftStats", out var panel))
         {
             Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: 'LeftStats' column panel reference is missing!</color></b>");
             return;

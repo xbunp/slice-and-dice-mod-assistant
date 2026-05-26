@@ -213,6 +213,7 @@ public class ColumnSpec
 
 public class GeneratedScreen
 {
+    public RectTransform RootWrapper;
     public Dictionary<string, GridReferences> ColumnRefs = new Dictionary<string, GridReferences>();
     public Dictionary<string, RectTransform> ColumnPanels = new Dictionary<string, RectTransform>();
     public Dictionary<string, RectTransform> CustomPanels = new Dictionary<string, RectTransform>();
