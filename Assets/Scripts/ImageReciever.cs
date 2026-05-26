@@ -7,6 +7,12 @@ public class ImageReceiver : MonoBehaviour
 {
     [DllImport("__Internal")]
     private static extern void TriggerFileOpen();
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    private static extern void ReadOSClipboard(string objectName, string methodName);
+#endif
+
     public Action<string, Texture2D> OnImageGenerated;
 
     [Header("UI References")]
@@ -52,26 +58,43 @@ public class ImageReceiver : MonoBehaviour
         {
             pasteString.onClick.AddListener(() =>
             {
-                string pastedText = ClipboardHelper.GetFromClipboard();
-                if (!string.IsNullOrEmpty(pastedText))
-                {
-                    if (pastedText.Length > 100 && (pastedText.StartsWith("data:image") || !pastedText.Contains(".")))
-                    {
-                        OnImageLoaded(pastedText);
-                    }
-                    else if (outputStringField != null)
-                    {
-                        outputStringField.text = pastedText;
-                    }
-                }
+                ClipboardManager.RequestPaste(null, (clipboardText) => {
+                    ProcessPastedText(clipboardText);
+                });
             });
         }
+        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: pasteString button is MISSING in inspector!</color></b>", this);
+
         if (clearString != null)
         {
             clearString.onClick.AddListener(ClearData);
         }
+    }
 
-        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: pasteString button is MISSING in inspector!</color></b>", this);
+    /// <summary>
+    /// Evaluates the clipboard text string and handles image decoding or raw text assignment.
+    /// </summary>
+    private void ProcessPastedText(string pastedText)
+    {
+        if (!string.IsNullOrEmpty(pastedText))
+        {
+            if (pastedText.Length > 100 && (pastedText.StartsWith("data:image") || !pastedText.Contains(".")))
+            {
+                OnImageLoaded(pastedText);
+            }
+            else if (outputStringField != null)
+            {
+                outputStringField.text = pastedText;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Invoked automatically by the browser with the native clipboard payload.
+    /// </summary>
+    public void OnClipboardDataReceived(string clipboardText)
+    {
+        ProcessPastedText(clipboardText);
     }
 
     public void RestoreState(Texture2D uploadedTex, Texture2D generatedTex, string encodedStr)
@@ -84,10 +107,10 @@ public class ImageReceiver : MonoBehaviour
 
     public void OnSelectFileClicked()
     {
-#if UNITY_WEBGL && !UNITY_EDITOR
+    #if UNITY_WEBGL && !UNITY_EDITOR
         TriggerFileOpen();
-#else
-#endif
+    #else
+    #endif
     }
 
     public void OnImageLoaded(string base64String)

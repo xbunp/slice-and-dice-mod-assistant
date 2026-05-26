@@ -9,6 +9,11 @@ using static SDColors;
 
 public class HeroModManager : RootUI
 {
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void ReadOSClipboard(string objectName, string methodName);
+#endif
+
     [Header("UI Modal References")]
     [SerializeField] private IconPickerModal diceFaceIconPicker;
 
@@ -71,7 +76,6 @@ public class HeroModManager : RootUI
         UpdateUIFromData();
         GenerateRawText();
     }
-
     protected override void BuildUIAndBind()
     {
         string[] heroNamesList = Enum.GetNames(typeof(HeroType));
@@ -113,7 +117,6 @@ public class HeroModManager : RootUI
             diceFaceIconPicker.transform.SetAsLastSibling();
         }
     }
-
     private void GenerateRawText()
     {
         isSyncing = true;
@@ -241,7 +244,6 @@ public class HeroModManager : RootUI
 
         isSyncing = false;
     }
-
     private void ParseRawText(string rawText)
     {
         // 1. Wipe volatile nested data
@@ -483,7 +485,6 @@ public class HeroModManager : RootUI
 
         return layout;
     }
-
     private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
     {
         var diceLayout = new List<GridRowSpec>();
@@ -508,7 +509,6 @@ public class HeroModManager : RootUI
         }
         return diceLayout;
     }
-
     private void AddFaceLayout(List<GridRowSpec> layout, int index, string[] defaultKwOptions)
     {
         string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
@@ -521,7 +521,6 @@ public class HeroModManager : RootUI
         AddKeywordControls(layout, index, defaultKwOptions);
         AddCopyPasteControls(layout, index);
     }
-
     private void AddFaceBackground(List<GridRowSpec> layout, int index)
     {
         // Row 1: ImagePanel Background for the Dice Block (Spans 6 layout blocks vertically)
@@ -532,7 +531,6 @@ public class HeroModManager : RootUI
         diceBgRow.rowSpan = 6;
         layout.Add(diceBgRow);
     }
-
     private void AddFaceHeader(List<GridRowSpec> layout, int index, string faceName)
     {
         // Row 2: Name (Alone on its own row)
@@ -540,7 +538,6 @@ public class HeroModManager : RootUI
             GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f)
         ));
     }
-
     private void AddBaseAndFacadeControls(List<GridRowSpec> layout, int index)
     {
         // Row 3: Base image and Facade image side by side
@@ -567,7 +564,6 @@ public class HeroModManager : RootUI
             })
         ));
     }
-
     private void AddPipsControl(List<GridRowSpec> layout, int index)
     {
         // Retrieve the current value to display in the input field
@@ -607,7 +603,6 @@ public class HeroModManager : RootUI
             GridCellSpec.CreateButton($"BtnPipUp_{index}", "^", 0.20f, () => adjustPips(1))
         ));
     }
-
     private void AddHsvSliders(List<GridRowSpec> layout, int index)
     {
         // Rows 5-7: HSV Sliders separated
@@ -629,7 +624,6 @@ public class HeroModManager : RootUI
             GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { UpdateHsvInput(index, 2, val); })
         ));
     }
-
     private void AddKeywordControls(List<GridRowSpec> layout, int index, string[] defaultKwOptions)
     {
         var activeKeywords = currentHero.diceSides[index].keywords;
@@ -676,7 +670,6 @@ public class HeroModManager : RootUI
             }
         }
     }
-
     private void AddCopyPasteControls(List<GridRowSpec> layout, int index)
     {
         // Row Last: Copy/Paste Buttons
@@ -703,7 +696,6 @@ public class HeroModManager : RootUI
         copiedKeywords = new List<string>(source.keywords ?? new List<string>());
         hasCopiedDiceData = true;
     }
-
     private void PasteDiceFace(int targetIndex)
     {
         if (!hasCopiedDiceData || targetIndex < 0 || targetIndex >= currentHero.diceSides.Length) return;
@@ -725,7 +717,6 @@ public class HeroModManager : RootUI
     }
 
     //===================================================================================================
-
     private void OpenBaseModal(int faceIndex)
     {
         if (diceFaceIconPicker == null) return;
@@ -1093,20 +1084,30 @@ public class HeroModManager : RootUI
         var pasteText = pasteBtnObj.GetComponentInChildren<TextMeshProUGUI>();
         if (pasteText != null) pasteText.text = "Paste String";
         Button pasteBtn = pasteBtnObj.GetComponentInChildren<Button>();
+
         if (pasteBtn != null) pasteBtn.onClick.AddListener(() => {
-            rawTextOutput.text = GUIUtility.systemCopyBuffer;
-            OnRawTextChanged(rawTextOutput.text);
+            ClipboardManager.RequestPaste(uiGenerator, (clipboardText) => {
+                if (!string.IsNullOrEmpty(clipboardText))
+                {
+                    rawTextOutput.text = clipboardText;
+                    OnRawTextChanged(clipboardText);
+                }
+            });
         });
+
         RectTransform pasteRt = pasteBtnObj.GetComponent<RectTransform>();
         FullScreenUIGenerator.SetAnchors(pasteRt, 0.52f, 0.0f, 1.0f, 0.06f);
     }
 
-    private void OnUIChanged()
+    /// Invoked automatically by the browser with the native clipboard payload.
+    /// </summary>
+    public void OnClipboardDataReceived(string clipboardText)
     {
-        if (isSyncing) return;
-        GenerateRawText();
-        UpdateHeroIcon();
-        UpdateUIFromData(); // <--- ADDED THIS LINE
+        if (!string.IsNullOrEmpty(clipboardText) && rawTextOutput != null)
+        {
+            rawTextOutput.text = clipboardText;
+            OnRawTextChanged(clipboardText);
+        }
     }
 
     private void OnRawTextChanged(string rawText)
@@ -1126,6 +1127,14 @@ public class HeroModManager : RootUI
         // (We do NOT call RefreshDiceUI() because that triggers OnUIChanged() -> GenerateRawText(), 
         // which would forcefully overwrite the text box the user is currently typing in!)
         UpdateUIFromData();
+    }
+
+    private void OnUIChanged()
+    {
+        if (isSyncing) return;
+        GenerateRawText();
+        UpdateHeroIcon();
+        UpdateUIFromData(); // <--- ADDED THIS LINE
     }
 
     private void UpdateUIFromData()
