@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+
 public class ScrollPassThrough : MonoBehaviour, IScrollHandler
 {
     [Tooltip("The ScrollRect to forward scroll events to. If left empty, it will attempt to find one in the parent hierarchy.")]

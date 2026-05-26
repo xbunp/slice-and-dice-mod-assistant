@@ -798,7 +798,7 @@ public class HeroModManager : RootUI
 
     private bool IsSpriteValid(Sprite sprite)
     {
-        if (sprite == null) return false;
+        if (sprite == null || IsForbidden(sprite.name)) return false;
 
         string spriteName = sprite.name;
         string textureName = sprite.texture != null ? sprite.texture.name : string.Empty;
@@ -826,7 +826,6 @@ public class HeroModManager : RootUI
 
         return true;
     }
-
     private string GetBaseTooltip(Sprite sprite)
     {
         if (sprite == null) return string.Empty;
@@ -870,16 +869,20 @@ public class HeroModManager : RootUI
     /// Opens the modal showing only Hero portraits. 
     /// Passes the mapped HeroType enum and selected Sprite to the callback.
     /// </summary>
+    /// <summary>
+    /// Opens the modal showing only Hero portraits. 
+    /// Passes the mapped HeroType enum and selected Sprite to the callback.
+    /// </summary>
     public void OpenHeroPortraitsModal(Action<HeroType, Sprite> onHeroSelected)
     {
         if (diceFaceIconPicker == null) return;
 
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = _allActionSprites, // <--- CHANGED THIS TO _allActionSprites
+            Sprites = _allActionSprites,
 
             IsValid = (index, sprite) =>
-                sprite != null && HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name),
+                sprite != null && !IsForbidden(sprite.name) && HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name),
 
             // Display and search by the readable Enum name (e.g., "Warrior" instead of "bas_hero_01")
             GetSearchName = (index, sprite) =>
@@ -910,10 +913,10 @@ public class HeroModManager : RootUI
 
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = _allActionSprites, // <--- CHANGED THIS TO _allActionSprites
+            Sprites = _allActionSprites,
 
             IsValid = (index, sprite) =>
-                sprite != null && (HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name) || HeroSpriteDatabase.SpriteToMonsterMap.ContainsKey(sprite.name)),
+                sprite != null && !IsForbidden(sprite.name) && (HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name) || HeroSpriteDatabase.SpriteToMonsterMap.ContainsKey(sprite.name)),
 
             GetSearchName = (index, sprite) => GetPortraitDisplayName(sprite),
             GetTooltip = (index, sprite) => GetPortraitDisplayName(sprite),
@@ -1710,14 +1713,9 @@ public class HeroModManager : RootUI
         if (string.IsNullOrEmpty(targetName) || targetName.Equals("None", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        // Check if the target name contains any of the restricted keywords
-        for (int i = 0; i < SDData.UnusuablePortraits.Length; i++)
-        {
-            if (targetName.IndexOf(SDData.UnusuablePortraits[i], StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return null;
-            }
-        }
+        // Stage 1: Check the input target name
+        if (IsForbidden(targetName))
+            return null;
 
         string spriteName = null;
 
@@ -1730,12 +1728,35 @@ public class HeroModManager : RootUI
             HeroSpriteDatabase.MonsterToSpriteMap.TryGetValue(monster, out spriteName);
         }
 
-        if (!string.IsNullOrEmpty(spriteName))
+        // Stage 2: Check the mapped sprite name string
+        if (string.IsNullOrEmpty(spriteName) || IsForbidden(spriteName))
+            return null;
+
+        // Stage 3: Find the sprite and double-check its actual asset name
+        return Array.Find(_allActionSprites, s =>
+            s != null &&
+            s.name == spriteName &&
+            !IsForbidden(s.name)
+        );
+    }
+
+    /// <summary>
+    /// Checks if a string contains any of the forbidden keywords defined in SDData.UnusuablePortraits.
+    /// </summary>
+    private bool IsForbidden(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+
+        for (int i = 0; i < SDData.UnusuablePortraits.Length; i++)
         {
-            return Array.Find(_allActionSprites, s => s != null && s.name == spriteName);
+            if (name.IndexOf(SDData.UnusuablePortraits[i], StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
         }
 
-        return null;
+        return false;
     }
 
     // Helper: Strips the .75 suffix when parsing a raw string back into the Data Model
@@ -1844,8 +1865,30 @@ public class HeroModManager : RootUI
         Sprite[] commAtlas = SpriteCache.GetCommunitySprites();
 
         List<Sprite> allSp = new List<Sprite>();
-        allSp.AddRange(baseAtlas);
-        allSp.AddRange(commAtlas);
+
+        // Clean and load the base atlas sprites
+        if (baseAtlas != null)
+        {
+            for (int i = 0; i < baseAtlas.Length; i++)
+            {
+                if (baseAtlas[i] != null && !IsForbidden(baseAtlas[i].name))
+                {
+                    allSp.Add(baseAtlas[i]);
+                }
+            }
+        }
+
+        // Clean and load the community atlas sprites
+        if (commAtlas != null)
+        {
+            for (int i = 0; i < commAtlas.Length; i++)
+            {
+                if (commAtlas[i] != null && !IsForbidden(commAtlas[i].name))
+                {
+                    allSp.Add(commAtlas[i]);
+                }
+            }
+        }
 
         List<Sprite> basSp = new List<Sprite>();
 

@@ -24,6 +24,15 @@ public class PhasesFactory : RootUI
     private TextMeshProUGUI syntaxHighlighterText;
 
     // =========================================================================
+    // Image Compression Cache
+    // =========================================================================
+    private Dictionary<string, string> imgCache = new Dictionary<string, string>();
+    private int imgCounter = 0;
+
+    // Matches 'img.' followed by any characters that aren't a dot, ending with '.'
+    private static readonly Regex ImgRegex = new Regex(@"img\.([^\.]+)\.", RegexOptions.Compiled);
+
+    // =========================================================================
     // Syntax Highlighting Engine Palette (Precompiled & Cached)
     // =========================================================================
 
@@ -43,7 +52,6 @@ public class PhasesFactory : RootUI
     private const string ColorSkip = "#FF7575";         // Soft Coral/Red (Bypass/Skip command)
     private const string ColorDefaultReward = "#FFD700"; // Goldenrod (Unspecified/Fallback)
 
-    // Precompiled highly-optimized Regex ensures zero instantiation overhead per keystroke
     private static readonly Regex SyntaxRegex = new Regex(
         @"(?<floor>e?\d+(?:\.\d+)?\.|\d+-\d+\.|\-?\d+\.)" +
         @"|(?<phase>ph\.[!0-9bcedglrstz])" +
@@ -55,16 +63,84 @@ public class PhasesFactory : RootUI
 
     private void Update()
     {
-        // This runs once per frame. If a paste caused 5 changes in the previous frame, 
-        // we only process the final state here, saving massive CPU overhead.
-        if (isPendingUpdate)
+        // 1. Intercept massive pastes before TMP_InputField can freeze the main thread
+        if (rawTextOutput != null && rawTextOutput.isFocused && !isUpdatingText)
+        {
+            bool isMac = Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.OSXPlayer;
+            bool modifier = isMac ? Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand) : Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+
+            if (modifier && Input.GetKeyDown(KeyCode.V))
+            {
+                string clipboard = GUIUtility.systemCopyBuffer;
+                if (!string.IsNullOrEmpty(clipboard) && clipboard.Length > 15000)
+                {
+                    // Lock the input instantly so TMP native OnGUI ignores the paste event
+                    rawTextOutput.readOnly = true;
+
+                    // Calculate where the text should be pasted based on user's cursor/selection
+                    int selectStart = rawTextOutput.selectionStringFocusPosition;
+                    int selectEnd = rawTextOutput.selectionStringAnchorPosition;
+                    int start = Mathf.Min(selectStart, selectEnd);
+                    int end = Mathf.Max(selectStart, selectEnd);
+
+                    string currentText = rawTextOutput.text ?? "";
+                    string newText;
+
+                    if (start != end && start >= 0 && end <= currentText.Length)
+                    {
+                        newText = currentText.Remove(start, end - start).Insert(start, clipboard);
+                    }
+                    else
+                    {
+                        int caret = Mathf.Clamp(rawTextOutput.caretPosition, 0, currentText.Length);
+                        newText = currentText.Insert(caret, clipboard);
+                    }
+
+                    // We consume this payload natively, bypassing TMP entirely
+                    StartCoroutine(ProcessHeavyTextUpdatesCoroutine(newText));
+                    return; // Skip standard checks
+                }
+            }
+        }
+
+        // 2. Standard deferred update for standard typing or smaller text inputs
+        if (isPendingUpdate && !isUpdatingText)
         {
             isPendingUpdate = false;
-
-            isUpdatingText = true;
-            ProcessHeavyTextUpdates(pendingValue);
-            isUpdatingText = false;
+            StartCoroutine(ProcessHeavyTextUpdatesCoroutine(pendingValue));
         }
+    }
+
+    private IEnumerator ProcessHeavyTextUpdatesCoroutine(string value)
+    {
+        isUpdatingText = true;
+        UIPopup popup = null;
+
+        bool isLargeText = value != null && value.Length > 15000;
+
+        if (isLargeText)
+        {
+            if (rawTextOutput != null) rawTextOutput.readOnly = true;
+
+            popup = uiGenerator.CreatePopup("Processing large text block, please wait...", false);
+            Canvas.ForceUpdateCanvases();
+
+            // Yield so the GPU physically renders the popup to the screen before the thread lock occurs
+            yield return null;
+            yield return null;
+        }
+
+        // --- ALL HEAVY LIFTING DONE SYNCHRONOUSLY BELOW ---
+        ProcessHeavyTextUpdates(value);
+
+        if (popup != null) popup.Dismiss();
+
+        if (isLargeText && rawTextOutput != null)
+        {
+            rawTextOutput.readOnly = false;
+        }
+
+        isUpdatingText = false;
     }
 
     private void ToggleIDE()
@@ -72,7 +148,6 @@ public class PhasesFactory : RootUI
         IDEFormatString = !IDEFormatString;
         UpdateToggleButtonText();
 
-        // Set pending value to the current raw input text and flag an update for the next frame
         if (rawTextOutput != null)
         {
             pendingValue = rawTextOutput.text;
@@ -88,10 +163,7 @@ public class PhasesFactory : RootUI
             if (refs.Buttons.TryGetValue("Button1", out Button btn))
             {
                 var textMesh = btn.GetComponentInChildren<TextMeshProUGUI>();
-                if (textMesh != null)
-                {
-                    textMesh.text = IDEFormatString ? "Toggle IDE Formatting OFF" : "Toggle IDE Formatting ON";
-                }
+                if (textMesh != null) textMesh.text = IDEFormatString ? "Toggle IDE Formatting OFF" : "Toggle IDE Formatting ON";
             }
         }
     }
@@ -101,11 +173,7 @@ public class PhasesFactory : RootUI
         bool useMargins = false;
         generatedScreen = uiGenerator.CreateScreenWrapper(useMargins);
 
-        if (generatedScreen == null || generatedScreen.RootWrapper == null)
-        {
-            UnityEngine.Debug.LogError("Failed to create RootWrapper.");
-            return;
-        }
+        if (generatedScreen == null || generatedScreen.RootWrapper == null) return;
 
         Canvas.ForceUpdateCanvases();
 
@@ -119,7 +187,6 @@ public class PhasesFactory : RootUI
         float rightTopSpacerHeight = spacing;
         float rightBottomSpacerHeight = rightPanelHeight + (spacing * 2f);
 
-        // Adjust the height of the left scroll view to fit the new button row
         float buttonRowHeight = uiGenerator.rowHeight;
         float leftScrollHeight = leftPanelHeight - buttonRowHeight - spacing;
 
@@ -127,10 +194,9 @@ public class PhasesFactory : RootUI
         List<GridRowSpec> leftRows = new List<GridRowSpec>
         {
             new GridRowSpec(leftSpacerHeight, GridCellSpec.CreateLabel("LeftSpacer", "", 1.0f)),
-            // New row of buttons directly above the scroll view
             new GridRowSpec(buttonRowHeight,
-                GridCellSpec.CreateButton("Button1", "Temp2", 0.5f, () => ToggleIDE()),
-                GridCellSpec.CreateButton("Button2", "Temp", 0.5f, () => UnityEngine.Debug.Log("Action 2 Clicked"))
+                GridCellSpec.CreateButton("Button1", "Toggle IDE Formatting", 0.5f, () => ToggleIDE()),
+                GridCellSpec.CreateButton("Button2", "Copy & Restore Code", 0.5f, () => CopyAndRestoreCode()) // NEW COPY BUTTON
             ),
             new GridRowSpec(leftScrollHeight, GridCellSpec.CreateScrollView("LeftInputScrollView", 1.0f)),
             new GridRowSpec(0f, GridCellSpec.CreateInput("MainLeftInput", "Enter logs or notes here...", 1.0f, OnLeftInputChanged))
@@ -153,10 +219,7 @@ public class PhasesFactory : RootUI
 
         uiGenerator.PopulateScreen(generatedScreen, columns, useMargins);
 
-        if (generatedScreen != null)
-        {
-            PostProcessLayout();
-        }
+        if (generatedScreen != null) PostProcessLayout();
     }
     private void PostProcessLayout()
     {
@@ -261,10 +324,7 @@ public class PhasesFactory : RootUI
 
                 foreach (var script in highlighterObj.GetComponents<MonoBehaviour>())
                 {
-                    if (script != null && !(script is TextMeshProUGUI))
-                    {
-                        DestroyImmediate(script);
-                    }
+                    if (script != null && !(script is TextMeshProUGUI)) DestroyImmediate(script);
                 }
 
                 RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
@@ -338,15 +398,10 @@ public class PhasesFactory : RootUI
     public void ToggleUI()
     {
         if (generatedScreen == null) return;
-
         isUiActive = !isUiActive;
-
         foreach (var keyValuePair in generatedScreen.ColumnPanels)
         {
-            if (keyValuePair.Value != null)
-            {
-                keyValuePair.Value.gameObject.SetActive(isUiActive);
-            }
+            if (keyValuePair.Value != null) keyValuePair.Value.gameObject.SetActive(isUiActive);
         }
     }
 
@@ -382,31 +437,58 @@ public class PhasesFactory : RootUI
         }
         return '\0';
     }
-    private void CopyStringToClipboard(string content)
-    {
-        GUIUtility.systemCopyBuffer = content;
-        UnityEngine.Debug.Log("Copied formatted minified string to clipboard.");
-    }
 
     // =========================================================================
-    // DEBUG
+    // Core Engine Logic
     // =========================================================================
+
+    private string CompressImages(string text, StringBuilder log = null)
+    {
+        Stopwatch sw = Stopwatch.StartNew();
+        if (string.IsNullOrEmpty(text) || !text.Contains("img.")) return text;
+
+        string compressed = ImgRegex.Replace(text, match => {
+            string innerData = match.Groups[1].Value;
+
+            // Skip compression if already compressed, or if the string is 25 characters or fewer
+            if (innerData.StartsWith("IMG_") || innerData.Length <= 25) return match.Value;
+
+            string newId = $"IMG_{++imgCounter}";
+            imgCache[newId] = innerData;
+            return $"img.{newId}.";
+        });
+
+        sw.Stop();
+        log?.AppendLine($"    [Sub-Profiler] CompressImages took: {sw.ElapsedMilliseconds} ms (Extracted {imgCounter} images)");
+        return compressed;
+    }
+
+    private string RestoreImages(string text)
+    {
+        if (string.IsNullOrEmpty(text) || !text.Contains("img.IMG_")) return text;
+
+        return Regex.Replace(text, @"img\.(IMG_\d+)\.", match => {
+            string id = match.Groups[1].Value;
+            if (imgCache.TryGetValue(id, out string data))
+            {
+                return $"img.{data}.";
+            }
+            return match.Value; // Fallback
+        });
+    }
 
     private void UpdateInputFieldHeight(string formattedText, StringBuilder log = null)
     {
         if (rawTextOutput == null) return;
-
         var inputLayoutElement = rawTextOutput.GetComponent<LayoutElement>();
         if (inputLayoutElement == null) return;
 
         Stopwatch prefValSw = Stopwatch.StartNew();
         float textHeight = rawTextOutput.textComponent.GetPreferredValues(formattedText).y;
         prefValSw.Stop();
-        long prefValMs = prefValSw.ElapsedMilliseconds;
 
         float extraPadding = 32f;
         float viewportHeight = 100f;
-        long rebuildMs = 0;
 
         if (generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences leftRefs))
         {
@@ -421,17 +503,13 @@ public class PhasesFactory : RootUI
                 if (Mathf.Abs(inputLayoutElement.preferredHeight - newHeight) > 1f)
                 {
                     inputLayoutElement.preferredHeight = newHeight;
-
-                    Stopwatch rebuildSw = Stopwatch.StartNew();
-                    LayoutRebuilder.ForceRebuildLayoutImmediate(scrollView.content);
-                    rebuildSw.Stop();
-                    rebuildMs = rebuildSw.ElapsedMilliseconds;
                 }
             }
         }
 
-        log?.AppendLine($"    [Sub-Profiler] UpdateInputFieldHeight -> GetPreferredValues: {prefValMs} ms | Rebuild: {rebuildMs} ms");
+        log?.AppendLine($"    [Sub-Profiler] UpdateInputFieldHeight -> GetPreferredValues: {prefValSw.ElapsedMilliseconds} ms | Rebuild: Deferred Native Canvas update");
     }
+
     public string MinifyModString(string raw, StringBuilder log = null)
     {
         Stopwatch sw = Stopwatch.StartNew();
@@ -466,30 +544,35 @@ public class PhasesFactory : RootUI
         log?.AppendLine($"    [Sub-Profiler] MinifyModString took: {sw.ElapsedMilliseconds} ms");
         return sb.ToString();
     }
+
     private void OnLeftInputChanged(string value)
     {
         if (isUpdatingText) return;
-
-        // Save the latest text state and flag it for processing on the next frame
         pendingValue = value;
         isPendingUpdate = true;
     }
+
     private void ProcessHeavyTextUpdates(string value)
     {
         Stopwatch totalSw = Stopwatch.StartNew();
         StringBuilder logAccumulator = new StringBuilder();
 
-        // 1. Minify & Auto Format Stage
+        // 0. Pre-process Image Compression (Drastically lowers string length before expensive operations)
         Stopwatch stageSw = Stopwatch.StartNew();
+        string compressedValue = CompressImages(value, logAccumulator);
+        stageSw.Stop();
+        long compressTime = stageSw.ElapsedMilliseconds;
 
-        string formattedValue = value;
+        // 1. Minify & Auto Format Stage
+        stageSw.Restart();
+        string formattedValue = compressedValue;
         if (IDEFormatString)
         {
-            formattedValue = AutoFormatModString(value, logAccumulator);
+            formattedValue = AutoFormatModString(compressedValue, logAccumulator);
         }
         else
         {
-            formattedValue = MinifyModString(value, logAccumulator);
+            formattedValue = MinifyModString(compressedValue, logAccumulator);
         }
         stageSw.Stop();
         long formatTime = stageSw.ElapsedMilliseconds;
@@ -499,7 +582,7 @@ public class PhasesFactory : RootUI
         if (rawTextOutput != null && rawTextOutput.text != formattedValue)
         {
             int originalCaret = rawTextOutput.caretPosition;
-            rawTextOutput.text = formattedValue;
+            rawTextOutput.SetTextWithoutNotify(formattedValue);
             rawTextOutput.caretPosition = Mathf.Min(originalCaret, formattedValue.Length);
         }
         stageSw.Stop();
@@ -528,7 +611,8 @@ public class PhasesFactory : RootUI
         if (totalTime >= PerformanceThresholdMs)
         {
             StringBuilder finalReport = new StringBuilder();
-            finalReport.AppendLine($"[Profiler Warning] Deferred update took ({totalTime} ms) | Input Length: {value?.Length ?? 0}");
+            finalReport.AppendLine($"[Profiler Warning] Deferred update took ({totalTime} ms) | Original Input Length: {value?.Length ?? 0} -> Compressed: {compressedValue?.Length ?? 0}");
+            finalReport.AppendLine($"  - Step 0: Image Compression: {compressTime} ms");
             finalReport.AppendLine($"  - Step 1: AutoFormatModString: {formatTime} ms");
             finalReport.AppendLine($"  - Step 2: UI Assignment/Caret: {uiAssignTime} ms");
             finalReport.AppendLine($"  - Step 3: Syntax Highlighting: {syntaxTime} ms");
@@ -538,10 +622,6 @@ public class PhasesFactory : RootUI
             UnityEngine.Debug.LogWarning(finalReport.ToString());
         }
     }
-
-    // =========================================================================
-    // Formatting Text
-    // =========================================================================
 
     public string AutoFormatModString(string raw, StringBuilder log = null)
     {
@@ -559,7 +639,6 @@ public class PhasesFactory : RootUI
 
             if (c == '&')
             {
-                // Instead of resetting indentLevel to 0, respect the current bracket depth
                 AppendNewlineAndIndent(sb, indentLevel * 4);
                 sb.Append(c);
             }
@@ -574,7 +653,6 @@ public class PhasesFactory : RootUI
                 AppendNewlineAndIndent(sb, (indentLevel + 1) * 4);
                 sb.Append(c);
             }
-            // Check for empty inline pairs: {} or ()
             else if ((c == '{' && i + 1 < minified.Length && minified[i + 1] == '}') ||
                      (c == '(' && i + 1 < minified.Length && minified[i + 1] == ')'))
             {
@@ -583,11 +661,9 @@ public class PhasesFactory : RootUI
             }
             else if (c == '{' || c == '(')
             {
-                // Move the bracket itself down to a new line at the current indent level
                 AppendNewlineAndIndent(sb, indentLevel * 4);
                 sb.Append(c);
 
-                // Move the following code down to a new line with increased indentation
                 indentLevel++;
                 AppendNewlineAndIndent(sb, indentLevel * 4);
             }
@@ -609,6 +685,7 @@ public class PhasesFactory : RootUI
         log?.AppendLine($"    [Sub-Profiler] AutoFormatModString (Loop) took: {formatLoopSw.ElapsedMilliseconds} ms");
         return result;
     }
+
     public string FormatSyntaxHighlighting(string input, StringBuilder log = null)
     {
         if (string.IsNullOrEmpty(input)) return string.Empty;
@@ -637,15 +714,9 @@ public class PhasesFactory : RootUI
             int idx = m.Index;
             int len = m.Length;
 
-            if (idx > lastIndex)
-            {
-                AppendEscaped(sb, input, lastIndex, idx - lastIndex);
-            }
+            if (idx > lastIndex) AppendEscaped(sb, input, lastIndex, idx - lastIndex);
 
-            if (m.Groups["floor"].Success)
-            {
-                AppendWithColor(sb, input, idx, len, ColorFloor);
-            }
+            if (m.Groups["floor"].Success) AppendWithColor(sb, input, idx, len, ColorFloor);
             else if (m.Groups["phase"].Success)
             {
                 if (len > 3)
@@ -658,10 +729,7 @@ public class PhasesFactory : RootUI
                 }
                 else AppendWithColor(sb, input, idx, len, ColorPhasePrefix);
             }
-            else if (m.Groups["delimiter"].Success)
-            {
-                AppendWithColor(sb, input, idx, len, ColorDelimiter);
-            }
+            else if (m.Groups["delimiter"].Success) AppendWithColor(sb, input, idx, len, ColorDelimiter);
             else if (m.Groups["reward"].Success)
             {
                 char tagChar = GetRewardTagChar(input, idx, len);
@@ -680,31 +748,44 @@ public class PhasesFactory : RootUI
                 };
                 AppendWithColor(sb, input, idx, len, rewardColor);
             }
-            else if (m.Groups["number"].Success)
-            {
-                AppendWithColor(sb, input, idx, len, ColorNumber);
-            }
-            else if (m.Groups["text"].Success)
-            {
-                AppendWithColor(sb, input, idx, len, ColorText);
-            }
-            else
-            {
-                AppendEscaped(sb, input, idx, len);
-            }
+            else if (m.Groups["number"].Success) AppendWithColor(sb, input, idx, len, ColorNumber);
+            else if (m.Groups["text"].Success) AppendWithColor(sb, input, idx, len, ColorText);
+            else AppendEscaped(sb, input, idx, len);
 
             lastIndex = idx + len;
         }
 
-        if (lastIndex < input.Length)
-        {
-            AppendEscaped(sb, input, lastIndex, input.Length - lastIndex);
-        }
+        if (lastIndex < input.Length) AppendEscaped(sb, input, lastIndex, input.Length - lastIndex);
 
         buildSw.Stop();
-
         log?.AppendLine($"    [Sub-Profiler] FormatSyntaxHighlighting -> Regex: {regexSw.ElapsedMilliseconds} ms ({matchCount} matches) | Reconstruction: {buildSw.ElapsedMilliseconds} ms");
 
         return sb.ToString();
+    }
+
+    private void CopyAndRestoreCode()
+    {
+        if (rawTextOutput == null) return;
+
+        string regular = MinifyModString(rawTextOutput.text);
+        string currentText = regular;
+        string restoredText = RestoreImages(currentText);
+
+        // Insert linebreaks after commas
+        string formattedText = InsertLinebreaksAfterCommas(restoredText);
+
+        GUIUtility.systemCopyBuffer = formattedText;
+        UnityEngine.Debug.Log($"Copied to clipboard. Final Length: {formattedText.Length}");
+
+        // Optional: you could spawn a quick popup here if you want visual confirmation
+        uiGenerator.CreatePopup("Copied output to clipboard!", true, null);
+    }
+
+    private string InsertLinebreaksAfterCommas(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return input;
+
+        // Replaces each comma with a comma followed by a newline character
+        return input.Replace(",", ",\n");
     }
 }

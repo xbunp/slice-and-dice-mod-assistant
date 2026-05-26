@@ -13,7 +13,7 @@ public class ImageReceiver : MonoBehaviour
     public RawImage reducedImagePreview;
     public TMPro.TMP_Dropdown compressionDropdown;
     public TMPro.TMP_InputField outputStringField;
-    public Button copyString, pasteString;
+    public Button copyString, pasteString, clearString;
 
     private Texture2D _uploadedTexture;
     private Texture2D _generatedPreviewTexture;
@@ -66,6 +66,11 @@ public class ImageReceiver : MonoBehaviour
                 }
             });
         }
+        if (clearString != null)
+        {
+            clearString.onClick.AddListener(ClearData);
+        }
+
         else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: pasteString button is MISSING in inspector!</color></b>", this);
     }
 
@@ -133,5 +138,37 @@ public class ImageReceiver : MonoBehaviour
         int listenerCount = OnImageGenerated?.GetInvocationList().Length ?? 0;
 
         OnImageGenerated?.Invoke(encodedString, _generatedPreviewTexture);
+    }
+
+    /// <summary>
+    /// Destroys cached textures, resets UI components, and updates the image override string to empty.
+    /// </summary>
+    public void ClearData()
+    {
+        if (_uploadedTexture != null)
+        {
+            Destroy(_uploadedTexture);
+            _uploadedTexture = null;
+        }
+
+
+        if (_generatedPreviewTexture != null)
+        {
+            Destroy(_generatedPreviewTexture);
+            _generatedPreviewTexture = null;
+        }
+
+        if (reducedImagePreview != null)
+        {
+            reducedImagePreview.texture = null;
+        }
+
+        if (outputStringField != null)
+        {
+            outputStringField.text = string.Empty;
+        }
+
+        // Notify HeroModManager to clear the image override reference
+        OnImageGenerated?.Invoke(string.Empty, null);
     }
 }

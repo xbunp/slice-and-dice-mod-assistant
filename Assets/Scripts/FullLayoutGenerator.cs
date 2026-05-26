@@ -21,6 +21,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject imagePanelPrefab;
     public GameObject PortraitPanel;
     public GameObject customImgPanel;
+    public GameObject popupPrefab;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -564,5 +565,69 @@ public class FullScreenUIGenerator : MonoBehaviour
     {
         foreach (Transform child in panel) Destroy(child.gameObject);
         return BuildGrid(panel, rows, useMargins);
+    }
+
+    /// <summary>
+    /// Instantiates and configures a popup.
+    /// </summary>
+    /// <param name="textContent">The text message to display.</param>
+    /// <param name="showButton">If false, the button is deactivated (useful for programmatically dismissed processing screens).</param>
+    /// <param name="onButtonClicked">Callback executed when the button is clicked.</param>
+    public UIPopup CreatePopup(string textContent, bool showButton = true, System.Action onButtonClicked = null)
+    {
+        if (canvas == null)
+        {
+            Debug.LogError("No Canvas assigned. Cannot create popup.");
+            return null;
+        }
+
+        if (popupPrefab == null)
+        {
+            Debug.LogError("Popup prefab is not assigned in the FullScreenUIGenerator.");
+            return null;
+        }
+
+        GameObject popupObj = Instantiate(popupPrefab, canvas.transform);
+        popupObj.transform.SetAsLastSibling();
+
+        RectTransform popupRt = popupObj.GetComponent<RectTransform>();
+        if (popupRt != null)
+        {
+            SetAnchors(popupRt, 0.0f, 0.0f, 1.0f, 1.0f);
+        }
+
+        UIPopup popupComponent = popupObj.GetComponent<UIPopup>();
+        if (popupComponent != null)
+        {
+            if (popupComponent.text != null)
+            {
+                popupComponent.text.text = textContent;
+            }
+
+            if (popupComponent.button != null)
+            {
+                popupComponent.button.gameObject.SetActive(showButton);
+
+                if (showButton)
+                {
+                    popupComponent.button.onClick.RemoveAllListeners();
+                    popupComponent.button.onClick.AddListener(() =>
+                    {
+                        onButtonClicked?.Invoke();
+                        popupComponent.Dismiss();
+                    });
+                }
+            }
+        }
+        else
+        {
+            Debug.LogWarning("The instantiated popup prefab does not contain a UIPopup component.");
+        }
+
+        // Force Unity to redraw the canvas immediately so the popup is visible 
+        // before any heavy main-thread processes begin execution.
+        Canvas.ForceUpdateCanvases();
+
+        return popupComponent;
     }
 }
