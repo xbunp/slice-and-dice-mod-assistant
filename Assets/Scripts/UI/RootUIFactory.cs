@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 public class RootUIFactory : MonoBehaviour
 {
-    private List<string> tabNames = new List<string> { "Heroes", "Phases", "Abilities" };
+    private List<string> tabNames = new List<string> { "Heroes", "Phases", "Monsters", "Settings" };
 
     [SerializeField] private FullScreenUIGenerator uiGenerator;
     [SerializeField] private RootUI[] uiTabs;

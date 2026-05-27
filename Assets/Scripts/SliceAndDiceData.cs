@@ -24,19 +24,6 @@ public enum KeywordColor
 
 public static class EffectKeywordColors
 {
-    /*
-    // Color definitions
-    public static readonly Color Green = new Color(0.3f, 0.8f, 0.3f);     // Readable green
-    public static readonly Color Purple = new Color(0.65f, 0.35f, 0.85f);  // Soft purple
-    public static readonly Color Grey = new Color(0.65f, 0.65f, 0.65f);    // Medium-light grey
-    public static readonly Color Yellow = new Color(0.95f, 0.75f, 0.1f);   // Warm yellow/gold
-    public static readonly Color Light = new Color(0.95f, 0.95f, 0.95f);     // Off-white/light blue-grey
-    public static readonly Color Red = new Color(0.9f, 0.3f, 0.3f);        // Soft red
-    public static readonly Color Blue = new Color(0.3f, 0.6f, 0.95f);      // Clear blue
-    public static readonly Color Orange = new Color(0.95f, 0.5f, 0.1f);    // Warm orange
-    public static readonly Color Pink = new Color(0.95f, 0.45f, 0.7f);     // Rose pink
-    */
-
     public static readonly Color Green = FromHex("3c8939");     // Readable green
     public static readonly Color Purple = FromHex("6f489c");    // Soft purple
     public static readonly Color Grey = FromHex("62757c");      // Medium-light grey
@@ -494,7 +481,111 @@ public enum HeroColorOption
 
 public static class SDColors
 {
+    private static readonly Dictionary<string, Color> DirectColorMap;
+    private static readonly Dictionary<string, string> RichTextFormatMap;
+    private static readonly Dictionary<string, string> HeroHexMap;
 
+    static SDColors()
+    {
+        HeroHexMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (HeroType heroType in Enum.GetValues(typeof(HeroType)))
+        {
+            if (HeroColorMap.TryGetValue(heroType, out HeroColorOption option))
+            {
+                string code = GetCode(option);
+                if (HeroColorHexMap.TryGetValue(code, out Color color))
+                {
+                    // Convert Color to Hex string once at startup
+                    string hex = ColorUtility.ToHtmlStringRGB(color);
+
+                    // Map both the enum name (e.g., "Ace") 
+                    HeroHexMap[heroType.ToString()] = hex;
+                }
+            }
+        }
+    }
+
+    private static ReadOnlySpan<char> ExtractHeroNameSpan(string input, int start, int len)
+    {
+        ReadOnlySpan<char> span = input.AsSpan(start, len);
+
+        // Find the last separator (., /, ~, ^)
+        int separatorIndex = -1;
+        for (int i = span.Length - 1; i >= 0; i--)
+        {
+            char c = span[i];
+            if (c == '.' || c == '/' || c == '~' || c == '^')
+            {
+                separatorIndex = i;
+                break;
+            }
+        }
+
+        if (separatorIndex != -1 && separatorIndex + 1 < span.Length)
+        {
+            span = span.Slice(separatorIndex + 1);
+        }
+
+        // Trim trailing parenthesis if present in the reward group match
+        if (span.Length > 0 && span[span.Length - 1] == ')')
+        {
+            span = span.Slice(0, span.Length - 1);
+        }
+
+        return span;
+    }
+
+    public static bool TryGetHeroHex(string key, out string hexColor)
+    {
+        return HeroHexMap.TryGetValue(key, out hexColor);
+    }
+
+    public static Color GetHeroColorFast(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return Color.white;
+
+        // Convert to Span for allocation-free slicing
+        ReadOnlySpan<char> span = input.AsSpan();
+
+        // Slice off "col." prefix without creating a new string
+        if (span.StartsWith("col.", StringComparison.OrdinalIgnoreCase))
+        {
+            span = span.Slice(4);
+        }
+
+        // Lookup using the sliced span
+        // Note: If you are on .NET 9/C# 13, you can look up directly using a span.
+        // On older versions of .NET, you convert to string once here, which is still faster than Replace + ToLower.
+        string key = span.ToString();
+
+        if (DirectColorMap.TryGetValue(key, out Color color))
+        {
+            return color;
+        }
+
+        return Color.white;
+    }
+
+    public static string GetColoredHeroName(string heroName)
+    {
+        // If the parser passes "col.Ace", clean it up
+        ReadOnlySpan<char> span = heroName.AsSpan();
+        if (span.StartsWith("col.", StringComparison.OrdinalIgnoreCase))
+        {
+            span = span.Slice(4);
+        }
+
+        string key = span.ToString();
+
+        // Instant O(1) retrieval of the fully formatted string
+        if (RichTextFormatMap.TryGetValue(key, out string coloredString))
+        {
+            return coloredString;
+        }
+
+        return heroName; // Fallback to original if not found
+    }
 
     public static string[] GetFormattedColorNames()
     {
@@ -504,6 +595,15 @@ public static class SDColors
                    .Cast<HeroColorOption>()
                    .Select(option => HeroColorNames[GetCode(option)])
                    .ToArray();
+    }
+
+    // Helper to check if a substring (without allocating a new string) matches a hero
+    public static bool TryGetHeroHexSpan(ReadOnlySpan<char> span, out string hexColor)
+    {
+        // For compatibility across older Unity/C# runtimes, we convert the span to a string here.
+        // This only allocates a string *if* we are evaluating a potential match.
+        string key = span.ToString();
+        return HeroHexMap.TryGetValue(key, out hexColor);
     }
 
     // Maps Enum to the "code" letter

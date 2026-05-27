@@ -590,11 +590,13 @@ public class FullScreenUIGenerator : MonoBehaviour
         GameObject popupObj = Instantiate(popupPrefab, canvas.transform);
         popupObj.transform.SetAsLastSibling();
 
+        /*
         RectTransform popupRt = popupObj.GetComponent<RectTransform>();
         if (popupRt != null)
         {
             SetAnchors(popupRt, 0.0f, 0.0f, 1.0f, 1.0f);
         }
+        */
 
         UIPopup popupComponent = popupObj.GetComponent<UIPopup>();
         if (popupComponent != null)

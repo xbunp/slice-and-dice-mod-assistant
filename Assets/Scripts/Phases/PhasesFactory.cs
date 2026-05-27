@@ -28,6 +28,11 @@ public class PhasesFactory : RootUI
     private bool isPendingUpdate = false;
     private string pendingValue;
 
+    // --- IDE Typing & Debounce State ---
+    private Coroutine debounceCoroutine;
+    private Coroutine backgroundHighlightCoroutine;
+    private float typingDebounceDelay = 1f; // Wait 750ms after last keystroke before highlighting
+
     // References for double-input overlay syntax highlighting
     private TMP_InputField rawTextOutput;
     private TextMeshProUGUI syntaxHighlighterText;
@@ -38,48 +43,74 @@ public class PhasesFactory : RootUI
     private Dictionary<string, string> imgCache = new Dictionary<string, string>();
     private int imgCounter = 0;
 
-    // Matches 'img.' followed by any characters that aren't a dot, ending with '.'
-    private static readonly Regex ImgRegex = new Regex(@"img\.([^\.]+)\.", RegexOptions.Compiled);
+    private static readonly Regex ImgRegex = new Regex(@"img\.(.*?)\.|\[(.*?)\]", RegexOptions.Compiled);
+    // =========================================================================
+    // Syntax Highlighting Engine Palette (Precompiled & Cached)
+    // =========================================================================
+
 
     // =========================================================================
     // Syntax Highlighting Engine Palette (Precompiled & Cached)
     // =========================================================================
 
-    private const string ColorFloor = "#569CD6";        // Blue (Keywords / Structure)
-    private const string ColorPhasePrefix = "#569CD6";  // Blue (ph. prefix)
-    private const string ColorPhaseCode = "#4EC9B0";    // Teal (Classes / Types / Core Actions)
-    private const string ColorDelimiter = "#C586C0";    // Purple (Control / Flow operators)
-    private const string ColorNumber = "#B5CEA8";       // Light Green (Constants / Value Literals)
-    private const string ColorText = "#D4D4D4";         // Light Gray (Default identifiers)
+    private const string ColorFloor = "#569CD6";        // Blue
+    private const string ColorPhasePrefix = "#569CD6";  // Blue
+    private const string ColorPhaseCode = "#4EC9B0";    // Teal
+    private const string ColorDelimiter = "#C586C0";    // Purple (Used for & @ ; Hidden)
+    private const string ColorNumber = "#B5CEA8";       // Light Green
+    private const string ColorText = "#D4D4D4";         // Light Gray
 
-    private const string ColorMod = "#CE9178";          // Light Terracotta (Modifiers / Strings)
-    private const string ColorItem = "#9CDCFE";         // Cyan (Items / Variables)
-    private const string ColorLvl = "#B5CEA8";          // Soft Green (Levelup variants)
-    private const string ColorHero = "#DCDCAA";         // Light Yellow (Hero Specs / Entities)
-    private const string ColorRand = "#D8A0DF";         // Soft Orchid/Pink (Random / Ranges)
-    private const string ColorValue = "#4FC1FF";        // Sky Blue (State Variables / Values)
-    private const string ColorSkip = "#FF7575";         // Soft Coral/Red (Bypass/Skip command)
-    private const string ColorDefaultReward = "#FFD700"; // Goldenrod (Unspecified/Fallback)
+    private const string ColorBracket = "#569cd6";      // Blueish (for brackets)
+    private const string ColorMethod = "#dcdcaa";       // Yellow (for methods like img. sd. n.)
+    private const string ColorSdRed = "#FFA961";        // Red (for sd sequences)
+    private const string ColorMossGreen = "#A4C365";    // Moss Green for k. blocks
+    private const string ColorNeonGreen = "#39FF14";    // Neon Green for tog* blocks
+
+    private const string ColorMod = "#CE9178";          // Light Terracotta
+    private const string ColorItem = "#9CDCFE";         // Cyan (Used for itempool members)
+    private const string ColorLvl = "#B5CEA8";          // Soft Green
+    private const string ColorHero = "#DCDCAA";         // Light Yellow
+    private const string ColorRand = "#D8A0DF";         // Soft Orchid/Pink
+    private const string ColorValue = "#4FC1FF";        // Sky Blue
+    private const string ColorSkip = "#FF7575";         // Soft Coral/Red
+    private const string ColorDefaultReward = "#FFD700"; // Goldenrod
 
     private static readonly Regex SyntaxRegex = new Regex(
-        // 1. Floor: Must be preceded by start of string, grouping, or delimiters to avoid matching decimals like 0.1
-        @"(?<=^|[(&@!~\[])(?<floor>e?\d+(?:\.\d+)?\.|\d+-\d+\.|\-?\d+\.)" +
-        // 2. Phase: ph. followed by single specific character
-        @"|(?<phase>ph\.[!0-9bcedglrstz])" +
-        // 3. Delimiter: & or @ followed by digits, or semicolon
-        @"|(?<delimiter>&|@\d+|;)" +
-        // 4. Reward: Must contain structural punctuation (. ~ ^ /) OR be preceded by an operator (! & @ + =) to protect plain text
-        @"|(?<reward>\(?[miglrqoveps][a-zA-Z0-9_\-~.\^\/ ]*[\.~^\/][a-zA-Z0-9_\-~.\^\/ ]*\)?|(?<=[\!&@+=])\(?[miglrqoveps][a-zA-Z0-9_\-~.\^\/ ]*\)?)" +
-        // 5. Number: standard standalone digits
-        @"|(?<number>\b\d+\b)" +
-        // 6. Text: standard identifiers
-        @"|(?<text>[a-zA-Z_][a-zA-Z0-9_]*)",
-        RegexOptions.Compiled | RegexOptions.ExplicitCapture);
+            // 1. Floor
+            @"(?<=^|[(&@!~\[])(?<floor>e?\d+(?:\.\d+)?\.|\d+-\d+\.|\-?\d+\.)" +
+            // 2. Phase: Added \.phi
+            @"|(?<phase>ph\.[!0-9bcedglrstz]|\.phi\b)" +
+            // 3. Delimiter
+            @"|(?<delimiter>&|@\d+|;|\b(?i:Hidden|skip(?: all)?|temporary|Delevel|Level Up|No Flee)\b)" +
+            // 4. Square Brackets
+            @"|(?<sq_bracket>\[[^\]]*\])" +
+            // 5. Normal Brackets
+            @"|(?<bracket>[{}()])" +
+            // 6. Itempool Block
+            @"|(?<itempool_block>itempool\.[^\.]*)" +
+            // 7. SD Block: Now ends at . OR )
+            @"|(?<sd_block>sd\.[^.)]*)" +
+            // 8. Ritemx Block: Optional i., ends at . OR )
+            @"|(?<ritemx>(?i)(?:i\.)?ritemx\.[^.)]*)" +
+            // 9. HSV Block
+            @"|(?<hsv_block>(?i)hsv\.[^\.]*)" +
+            // 10. K Block: Now ends at . OR #
+            @"|(?<k_block>k\.[^.#]*)" +
+            // 11. Tog toggles
+            @"|(?<tog>\btog[a-zA-Z0-9_]*\b)" +
+            // 12. Methods (Added all new prefixes and suffixes)
+            @"|(?<method>\b(?:img|col|n|tier|facade|sidesc|heropool|learn|hp|bal|mn|hat|abilitydata|replica|h|ch|hsv|part|difficulty|diff|splice|jinx|allitem|self|p|topbot|brittle|left|right|row|all|right5|right3|right2|mid2|left2|rightmost|bot|top|mid)\.|\.(?:modtier|add|doc|all|egg|hsv|speech|unpack)\b)" +
+            // 13. Reward
+            @"|(?<reward>\(?[miglrqovs]\.[a-zA-Z0-9_\-~\^\/ ]*\)?|(?<=[\!&@+=])\(?[miglrqovs]\b\)?|\(?[miglrqovs][a-zA-Z0-9_\-~\^\/]*[\~^\/][a-zA-Z0-9_\-~\^\/]*\)?)" +
+            // 14. Number
+            @"|(?<number>\b\d+\b)" +
+            // 15. Text
+            @"|(?<text>[a-zA-Z_][a-zA-Z0-9_]*)",
+            RegexOptions.Compiled | RegexOptions.ExplicitCapture);
+
 
     private void Update()
     {
-        // 1. Intercept massive pastes before TMP_InputField can freeze the main thread
-        // WebGL shortcuts are handled directly via browser events routed to the HandleWebGLPrePaste callback
 #if !UNITY_WEBGL || UNITY_EDITOR
         if (rawTextOutput != null && rawTextOutput.isFocused && !isUpdatingText)
         {
@@ -92,13 +123,12 @@ public class PhasesFactory : RootUI
                 if (!string.IsNullOrEmpty(clipboard) && clipboard.Length > 15000)
                 {
                     PasteTextDirectly(clipboard);
-                    return; // Skip standard checks
+                    return;
                 }
             }
         }
 #endif
 
-        // 2. Standard deferred update for standard typing or smaller text inputs
         if (isPendingUpdate && !isUpdatingText)
         {
             isPendingUpdate = false;
@@ -106,60 +136,7 @@ public class PhasesFactory : RootUI
         }
     }
 
-    private IEnumerator ProcessHeavyTextUpdatesCoroutine(string value)
-    {
-        isUpdatingText = true;
-        UIPopup popup = null;
-
-        bool isLargeText = value != null && value.Length > 15000;
-
-        if (isLargeText)
-        {
-            if (rawTextOutput != null) rawTextOutput.readOnly = true;
-
-            popup = uiGenerator.CreatePopup("Processing large text block, please wait...", false);
-            Canvas.ForceUpdateCanvases();
-
-            // Yield so the GPU physically renders the popup to the screen before the thread lock occurs
-            yield return null;
-            yield return null;
-        }
-
-        // --- ALL HEAVY LIFTING DONE SYNCHRONOUSLY BELOW ---
-        ProcessHeavyTextUpdates(value);
-
-        if (popup != null) popup.Dismiss();
-
-        if (isLargeText && rawTextOutput != null)
-        {
-            rawTextOutput.readOnly = false;
-        }
-
-        isUpdatingText = false;
-    }
-    private void ToggleIDE()
-    {
-        IDEFormatString = !IDEFormatString;
-        UpdateToggleButtonText();
-
-        if (rawTextOutput != null)
-        {
-            pendingValue = rawTextOutput.text;
-            isPendingUpdate = true;
-        }
-    }
-    private void UpdateToggleButtonText()
-    {
-        if (generatedScreen != null &&
-            generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences refs))
-        {
-            if (refs.Buttons.TryGetValue("Button1", out Button btn))
-            {
-                var textMesh = btn.GetComponentInChildren<TextMeshProUGUI>();
-                if (textMesh != null) textMesh.text = IDEFormatString ? "Toggle IDE Formatting OFF" : "Toggle IDE Formatting ON";
-            }
-        }
-    }
+    // --- UI SETUP ---
     protected override void BuildUIAndBind()
     {
         bool useMargins = false;
@@ -213,72 +190,6 @@ public class PhasesFactory : RootUI
         uiGenerator.PopulateScreen(generatedScreen, columns, useMargins);
 
         if (generatedScreen != null) PostProcessLayout();
-    }
-    private void PasteTextMod()
-    {
-        //if (isUpdatingText) return;
-
-        // Directly capture to the persistent variable
-        tempClipboardBuffer = GUIUtility.systemCopyBuffer;
-
-        if (tempClipboardBuffer != null && tempClipboardBuffer.Length > 0)
-        {
-            UnityEngine.Debug.Log($"[PasteTest] Paste successful! Length: {tempClipboardBuffer.Length}");
-
-            // Apply it directly to the UI exactly like your working button
-            //rawTextOutput.text = tempClipboardBuffer;
-            //OnRawTextChanged(tempClipboardBuffer);
-        }
-        else
-        {
-            UnityEngine.Debug.LogWarning("[PasteTest] Paste failed: systemCopyBuffer was null or empty.");
-        }
-    }
-
-    /// <summary>
-    /// Inserts the provided text into the input field at the current cursor or selection point, 
-    /// bypassing native TMP processing, and starts the processing coroutine.
-    /// </summary>
-    private void PasteTextDirectly(string clipboard)
-    {
-        UnityEngine.Debug.Log($"[PasteTextDirectly] Initiated. Text length to insert: {clipboard.Length}");
-
-        if (rawTextOutput == null)
-        {
-            UnityEngine.Debug.LogError("[PasteTextDirectly] Aborted: rawTextOutput is null.");
-            return;
-        }
-
-        // Lock the input instantly so TMP native OnGUI ignores the paste event or manual changes
-        rawTextOutput.readOnly = true;
-
-        // Calculate where the text should be pasted based on user's cursor/selection
-        int selectStart = rawTextOutput.selectionStringFocusPosition;
-        int selectEnd = rawTextOutput.selectionStringAnchorPosition;
-        int start = Mathf.Min(selectStart, selectEnd);
-        int end = Mathf.Max(selectStart, selectEnd);
-
-        string currentText = rawTextOutput.text ?? "";
-        string newText;
-
-        if (start != end && start >= 0 && end <= currentText.Length)
-        {
-            UnityEngine.Debug.Log($"[PasteTextDirectly] Replacing selection from {start} to {end}.");
-            newText = currentText.Remove(start, end - start).Insert(start, clipboard);
-        }
-        else
-        {
-            int caret = Mathf.Clamp(rawTextOutput.caretPosition, 0, currentText.Length);
-            UnityEngine.Debug.Log($"[PasteTextDirectly] Inserting at caret index: {caret}.");
-            newText = currentText.Insert(caret, clipboard);
-        }
-
-        // Assign the updated text to the input field
-        rawTextOutput.text = newText;
-
-        // We consume this payload natively, bypassing TMP entirely
-        UnityEngine.Debug.Log("[PasteTextDirectly] Starting ProcessHeavyTextUpdatesCoroutine.");
-        StartCoroutine(ProcessHeavyTextUpdatesCoroutine(newText));
     }
     private void PostProcessLayout()
     {
@@ -477,201 +388,213 @@ public class PhasesFactory : RootUI
             if (keyValuePair.Value != null) keyValuePair.Value.gameObject.SetActive(isUiActive);
         }
     }
-
-    // =========================================================================
-    // Core Engine Logic
-    // =========================================================================
-
-    private void AppendNewlineAndIndent(StringBuilder sb, int indent)
-    {
-        while (sb.Length > 0 && sb[sb.Length - 1] == ' ') sb.Length--;
-        if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.Append('\n');
-        if (indent > 0) sb.Append(' ', indent);
-    }
-    private string CompressImages(string text, StringBuilder log = null)
-    {
-        Stopwatch sw = Stopwatch.StartNew();
-        if (string.IsNullOrEmpty(text) || !text.Contains("img.")) return text;
-
-        string compressed = ImgRegex.Replace(text, match => {
-            string innerData = match.Groups[1].Value;
-
-            // Skip compression if already compressed, or if the string is 25 characters or fewer
-            if (innerData.StartsWith("IMG_") || innerData.Length <= 25) return match.Value;
-
-            string newId = $"IMG_{++imgCounter}";
-            imgCache[newId] = innerData;
-            return $"img.{newId}.";
-        });
-
-        sw.Stop();
-        log?.AppendLine($"    [Sub-Profiler] CompressImages took: {sw.ElapsedMilliseconds} ms (Extracted {imgCounter} images)");
-        return compressed;
-    }
-    private string RestoreImages(string text)
-    {
-        if (string.IsNullOrEmpty(text) || !text.Contains("img.IMG_")) return text;
-
-        return Regex.Replace(text, @"img\.(IMG_\d+)\.", match => {
-            string id = match.Groups[1].Value;
-            if (imgCache.TryGetValue(id, out string data))
-            {
-                return $"img.{data}.";
-            }
-            return match.Value; // Fallback
-        });
-    }
-    private void UpdateInputFieldHeight(string formattedText, StringBuilder log = null)
-    {
-        if (rawTextOutput == null) return;
-        var inputLayoutElement = rawTextOutput.GetComponent<LayoutElement>();
-        if (inputLayoutElement == null) return;
-
-        Stopwatch prefValSw = Stopwatch.StartNew();
-        float textHeight = rawTextOutput.textComponent.GetPreferredValues(formattedText).y;
-        prefValSw.Stop();
-
-        float extraPadding = 32f;
-        float viewportHeight = 100f;
-
-        if (generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences leftRefs))
-        {
-            if (leftRefs.ScrollViews.TryGetValue("LeftInputScrollView", out ScrollRect scrollView))
-            {
-                viewportHeight = scrollView.viewport != null
-                    ? scrollView.viewport.rect.height
-                    : scrollView.GetComponent<RectTransform>().rect.height;
-
-                float newHeight = Mathf.Max(viewportHeight, textHeight + extraPadding);
-
-                if (Mathf.Abs(inputLayoutElement.preferredHeight - newHeight) > 1f)
-                {
-                    inputLayoutElement.preferredHeight = newHeight;
-                }
-            }
-        }
-
-        log?.AppendLine($"    [Sub-Profiler] UpdateInputFieldHeight -> GetPreferredValues: {prefValSw.ElapsedMilliseconds} ms | Rebuild: Deferred Native Canvas update");
-    }
-    public string MinifyModString(string raw, StringBuilder log = null)
-    {
-        Stopwatch sw = Stopwatch.StartNew();
-        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-
-        int len = raw.Length;
-        var sb = new StringBuilder(len);
-        bool lineStart = true;
-
-        for (int i = 0; i < len; i++)
-        {
-            char c = raw[i];
-            if (c == '\r' || c == '\n')
-            {
-                while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
-                lineStart = true;
-            }
-            else
-            {
-                if (lineStart)
-                {
-                    if (char.IsWhiteSpace(c)) continue;
-                    lineStart = false;
-                }
-                sb.Append(c);
-            }
-        }
-
-        while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
-
-        sw.Stop();
-        log?.AppendLine($"    [Sub-Profiler] MinifyModString took: {sw.ElapsedMilliseconds} ms");
-        return sb.ToString();
-    }
     private void OnLeftInputChanged(string value)
     {
-        if (isUpdatingText) return;
-        pendingValue = value;
-        isPendingUpdate = true;
+        if (isUpdatingText) return; // Ignore if we are doing a forced paste/format
+
+        // Stop the timer if the user keeps typing
+        if (debounceCoroutine != null) StopCoroutine(debounceCoroutine);
+
+        // Start a new timer
+        debounceCoroutine = StartCoroutine(HandleTypingDebounce(value));
     }
-    private void ProcessHeavyTextUpdates(string value)
+
+    private IEnumerator HandleTypingDebounce(string value)
     {
-        Stopwatch totalSw = Stopwatch.StartNew();
-        StringBuilder logAccumulator = new StringBuilder();
+        // Wait for the user to stop typing for a moment
+        yield return new WaitForSeconds(typingDebounceDelay);
 
-        // 0. Pre-process Image Compression (Drastically lowers string length before expensive operations)
-        Stopwatch stageSw = Stopwatch.StartNew();
-        string compressedValue = CompressImages(value, logAccumulator);
-        stageSw.Stop();
-        long compressTime = stageSw.ElapsedMilliseconds;
+        // If a background highlight is already running from a previous pause, stop it
+        if (backgroundHighlightCoroutine != null) StopCoroutine(backgroundHighlightCoroutine);
 
-        // 1. Minify & Auto Format Stage
-        stageSw.Restart();
-        string formattedValue = compressedValue;
-        if (IDEFormatString)
+        // Start the silent background highlighter
+        backgroundHighlightCoroutine = StartCoroutine(BackgroundSyntaxHighlightOnlyAsync(value));
+    }
+
+    // --- Initiators  ---
+    public void OnClipboardDataReceived(string clipboardText)
+    {
+        if (!string.IsNullOrEmpty(clipboardText))
         {
-            formattedValue = AutoFormatModString(compressedValue, logAccumulator);
+            UnityEngine.Debug.Log($"[PasteTextMod] Async Paste successful! Length: {clipboardText.Length}");
+            PasteTextDirectly(clipboardText);
         }
         else
         {
-            formattedValue = MinifyModString(compressedValue, logAccumulator);
-        }
-        stageSw.Stop();
-        long formatTime = stageSw.ElapsedMilliseconds;
-
-        // 2. Raw Text UI Assignment Stage
-        stageSw.Restart();
-        if (rawTextOutput != null && rawTextOutput.text != formattedValue)
-        {
-            int originalCaret = rawTextOutput.caretPosition;
-            rawTextOutput.SetTextWithoutNotify(formattedValue);
-            rawTextOutput.caretPosition = Mathf.Min(originalCaret, formattedValue.Length);
-        }
-        stageSw.Stop();
-        long uiAssignTime = stageSw.ElapsedMilliseconds;
-
-        // 3. Syntax Highlighting Stage
-        stageSw.Restart();
-        string highlightedValue = string.Empty;
-        if (syntaxHighlighterText != null)
-        {
-            highlightedValue = FormatSyntaxHighlighting(formattedValue, logAccumulator);
-            syntaxHighlighterText.text = highlightedValue;
-        }
-        stageSw.Stop();
-        long syntaxTime = stageSw.ElapsedMilliseconds;
-
-        // 4. Height Adjustment Stage
-        stageSw.Restart();
-        UpdateInputFieldHeight(formattedValue, logAccumulator);
-        stageSw.Stop();
-        long heightTime = stageSw.ElapsedMilliseconds;
-
-        totalSw.Stop();
-        long totalTime = totalSw.ElapsedMilliseconds;
-
-        if (totalTime >= PerformanceThresholdMs)
-        {
-            StringBuilder finalReport = new StringBuilder();
-            finalReport.AppendLine($"[Profiler Warning] Deferred update took ({totalTime} ms) | Original Input Length: {value?.Length ?? 0} -> Compressed: {compressedValue?.Length ?? 0}");
-            finalReport.AppendLine($"  - Step 0: Image Compression: {compressTime} ms");
-            finalReport.AppendLine($"  - Step 1: AutoFormatModString: {formatTime} ms");
-            finalReport.AppendLine($"  - Step 2: UI Assignment/Caret: {uiAssignTime} ms");
-            finalReport.AppendLine($"  - Step 3: Syntax Highlighting: {syntaxTime} ms");
-            finalReport.AppendLine($"  - Step 4: Height Adjustment: {heightTime} ms");
-            finalReport.Append(logAccumulator.ToString());
-
-            UnityEngine.Debug.LogWarning(finalReport.ToString());
+            UnityEngine.Debug.LogWarning("[PasteTextMod] Async Paste failed or was blocked.");
         }
     }
-    public string AutoFormatModString(string raw, StringBuilder log = null)
+    private void PasteTextDirectly(string clipboard)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        if (rawTextOutput == null) return;
 
-        string minified = MinifyModString(raw, log);
+        // Lock UI instantly
+        rawTextOutput.readOnly = true;
 
-        Stopwatch formatLoopSw = Stopwatch.StartNew();
+        int selectStart = rawTextOutput.selectionStringFocusPosition;
+        int selectEnd = rawTextOutput.selectionStringAnchorPosition;
+        int start = Mathf.Min(selectStart, selectEnd);
+        int end = Mathf.Max(selectStart, selectEnd);
+
+        string currentText = rawTextOutput.text ?? "";
+        string newText;
+
+        if (start != end && start >= 0 && end <= currentText.Length)
+        {
+            newText = currentText.Remove(start, end - start).Insert(start, clipboard);
+        }
+        else
+        {
+            int caret = Mathf.Clamp(rawTextOutput.caretPosition, 0, currentText.Length);
+            newText = currentText.Insert(caret, clipboard);
+        }
+
+        // We bypass TMP rendering update by bypassing standard input
+        StartCoroutine(ProcessHeavyTextUpdatesCoroutine(newText));
+    }
+
+    // --- ASYNC PROCESSORS ---
+    private IEnumerator ProcessHeavyTextUpdatesCoroutine(string value)
+    {
+        isUpdatingText = true;
+
+        if (debounceCoroutine != null) StopCoroutine(debounceCoroutine);
+        if (backgroundHighlightCoroutine != null) StopCoroutine(backgroundHighlightCoroutine);
+
+        UIPopup popup = null;
+        bool isLargeText = value != null && value.Length > 15000;
+
+        if (isLargeText)
+        {
+            if (rawTextOutput != null) rawTextOutput.readOnly = true;
+            popup = uiGenerator.CreatePopup("Processing large text block, please wait...", false);
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+            yield return null; // Ensure rendering happens
+        }
+
+        Stopwatch sw = Stopwatch.StartNew();
+        string currentString = value;
+
+        // Step 1: Compress Images asynchronously
+        yield return StartCoroutine(CompressImagesAsync(currentString, result => currentString = result));
+
+        // Step 2: Auto-Format or Minify asynchronously
+        if (IDEFormatString)
+        {
+            yield return StartCoroutine(AutoFormatModStringAsync(currentString, result => currentString = result));
+        }
+        else
+        {
+            // Just call it synchronously, then yield a frame
+            currentString = MinifyModString(currentString);
+            yield return null;
+        }
+
+        // Step 3: Assign to UI (Synchronous, but we use WithoutNotify to avoid lag)
+        if (rawTextOutput != null && rawTextOutput.text != currentString)
+        {
+            int originalCaret = rawTextOutput.caretPosition;
+            rawTextOutput.SetTextWithoutNotify(currentString);
+            rawTextOutput.caretPosition = Mathf.Min(originalCaret, currentString.Length);
+        }
+        yield return null;
+
+        // Step 4: Syntax Highlighting asynchronously
+        if (syntaxHighlighterText != null)
+        {
+            string highlighted = string.Empty;
+            yield return StartCoroutine(FormatSyntaxHighlightingAsync(currentString, result => highlighted = result));
+            syntaxHighlighterText.text = highlighted;
+        }
+        yield return null;
+
+        // Step 5: Adjust Height
+        UpdateInputFieldHeight(currentString);
+
+        if (popup != null) popup.Dismiss();
+        if (rawTextOutput != null) rawTextOutput.readOnly = false;
+
+        sw.Stop();
+        UnityEngine.Debug.Log($"[Profiler] Async pipeline finished in {sw.ElapsedMilliseconds}ms real-time.");
+
+        isUpdatingText = false;
+    }
+    private IEnumerator CompressImagesAsync(string text, Action<string> onComplete)
+    {
+        // Fast exit check: updated to also look for brackets
+        if (string.IsNullOrEmpty(text) || (!text.Contains("img.") && !text.Contains("[")))
+        {
+            onComplete(text);
+            yield break;
+        }
+
+        StringBuilder sb = new StringBuilder(text.Length);
+        Match m = ImgRegex.Match(text); // Uses: @"img\.(.*?)\.|\[(.*?)\]"
+        int lastIndex = 0;
+        int operations = 0;
+
+        while (m.Success)
+        {
+            // Append the text before the match (Zero allocation substring)
+            sb.Append(text, lastIndex, m.Index - lastIndex);
+
+            // Determine if it was a bracket match by checking the first character
+            bool isBracket = m.Value.StartsWith("[");
+
+            // If it's a bracket match, the data is in Group 2. Otherwise, Group 1.
+            string innerData = isBracket ? m.Groups[2].Value : m.Groups[1].Value;
+
+            if (innerData.StartsWith("IMG_") || innerData.Length <= 25)
+            {
+                sb.Append(m.Value);
+            }
+            else
+            {
+                string newId = $"IMG_{++imgCounter}";
+                imgCache[newId] = innerData;
+
+                // Reconstruct with the appropriate formatting
+                if (isBracket)
+                {
+                    sb.Append($"[{newId}]");
+                }
+                else
+                {
+                    sb.Append($"img.{newId}.");
+                }
+            }
+
+            lastIndex = m.Index + m.Length;
+            operations++;
+
+            if (operations > SettingsManager.REGEX_MATCHES_PER_FRAME)
+            {
+                operations = 0;
+                yield return null; // Yield back to main thread
+            }
+
+            m = m.NextMatch();
+        }
+
+        if (lastIndex < text.Length) sb.Append(text, lastIndex, text.Length - lastIndex);
+
+        onComplete(sb.ToString());
+    }
+    private IEnumerator AutoFormatModStringAsync(string raw, Action<string> onComplete)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            onComplete(string.Empty);
+            yield break;
+        }
+
+        string minified = MinifyModString(raw);
+        yield return null; // Breathe for one frame
+
         StringBuilder sb = new StringBuilder(minified.Length + 500);
         int indentLevel = 0;
+        int operations = 0;
 
         for (int i = 0; i < minified.Length; i++)
         {
@@ -708,7 +631,6 @@ public class PhasesFactory : RootUI
             {
                 AppendNewlineAndIndent(sb, indentLevel * 4);
                 sb.Append(c);
-
                 indentLevel++;
                 AppendNewlineAndIndent(sb, indentLevel * 4);
             }
@@ -722,13 +644,279 @@ public class PhasesFactory : RootUI
             {
                 sb.Append(c);
             }
+
+            operations++;
+            if (operations > SettingsManager.CHARS_PER_FRAME)
+            {
+                operations = 0;
+                yield return null;
+            }
         }
 
-        string result = sb.ToString().TrimStart();
-        formatLoopSw.Stop();
+        onComplete(sb.ToString().TrimStart());
+    }
+    private IEnumerator FormatSyntaxHighlightingAsync(string input, Action<string> onComplete)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            onComplete(string.Empty);
+            yield break;
+        }
 
-        log?.AppendLine($"    [Sub-Profiler] AutoFormatModString (Loop) took: {formatLoopSw.ElapsedMilliseconds} ms");
-        return result;
+        StringBuilder sb = new StringBuilder(input.Length * 2);
+        int lastIndex = 0;
+        int operations = 0;
+
+        Match m = null;
+        try { m = SyntaxRegex.Match(input); } catch { onComplete(input); yield break; }
+
+        while (m.Success)
+        {
+            int idx = m.Index;
+            int len = m.Length;
+
+            if (idx > lastIndex) AppendEscaped(sb, input, lastIndex, idx - lastIndex);
+
+            if (m.Groups["floor"].Success) AppendWithColor(sb, input, idx, len, ColorFloor);
+            else if (m.Groups["phase"].Success)
+            {
+                // Check if it's "ph.X" (Starts with 'p') to split the color
+                if (input[idx] == 'p' && len > 3)
+                {
+                    sb.Append("<color=").Append(ColorPhasePrefix).Append(">");
+                    AppendEscaped(sb, input, idx, 3);
+                    sb.Append("</color><color=").Append(ColorPhaseCode).Append(">");
+                    AppendEscaped(sb, input, idx + 3, len - 3);
+                    sb.Append("</color>");
+                }
+                // Otherwise it's ".phi", tint the whole word
+                else AppendWithColor(sb, input, idx, len, ColorPhasePrefix);
+            }
+            else if (m.Groups["delimiter"].Success) AppendWithColor(sb, input, idx, len, ColorDelimiter);
+            else if (m.Groups["sq_bracket"].Success || m.Groups["bracket"].Success) AppendWithColor(sb, input, idx, len, ColorBracket);
+            else if (m.Groups["itempool_block"].Success)
+            {
+                sb.Append("<color=").Append(ColorMethod).Append(">");
+                AppendEscaped(sb, input, idx, 9); // "itempool."
+                sb.Append("</color><color=").Append(ColorItem).Append(">");
+                AppendEscaped(sb, input, idx + 9, len - 9);
+                sb.Append("</color>");
+            }
+            else if (m.Groups["sd_block"].Success)
+            {
+                sb.Append("<color=").Append(ColorMethod).Append(">");
+                AppendEscaped(sb, input, idx, 3); // "sd."
+                sb.Append("</color><color=").Append(ColorSdRed).Append(">"); // Using the Coral Red
+                AppendEscaped(sb, input, idx + 3, len - 3);
+                sb.Append("</color>");
+            }
+            else if (m.Groups["ritemx"].Success) AppendWithColor(sb, input, idx, len, ColorItem);
+            else if (m.Groups["hsv_block"].Success)
+            {
+                sb.Append("<color=").Append(ColorMethod).Append(">");
+                AppendEscaped(sb, input, idx, 4); // "hsv."
+                sb.Append("</color><color=").Append(ColorNumber).Append(">"); // Numbers after hsv.
+                AppendEscaped(sb, input, idx + 4, len - 4);
+                sb.Append("</color>");
+            }
+            else if (m.Groups["k_block"].Success) AppendWithColor(sb, input, idx, len, ColorMossGreen);
+            else if (m.Groups["tog"].Success) AppendWithColor(sb, input, idx, len, ColorNeonGreen);
+            else if (m.Groups["method"].Success) AppendWithColor(sb, input, idx, len, ColorMethod);
+            else if (m.Groups["reward"].Success)
+            {
+                char tagChar = GetRewardTagChar(input, idx, len);
+                string rewardColor = tagChar switch
+                {
+                    'm' => ColorMod,
+                    'i' => ColorItem,
+                    'l' => ColorLvl,
+                    'g' => ColorHero,
+                    'r' => ColorRand,
+                    'q' => ColorRand,
+                    'o' => ColorRand,
+                    'v' => ColorValue,
+                    's' => ColorSkip,
+                    _ => ColorDefaultReward
+                };
+                AppendWithColor(sb, input, idx, len, rewardColor);
+            }
+            else if (m.Groups["number"].Success) AppendWithColor(sb, input, idx, len, ColorNumber);
+            else if (m.Groups["text"].Success) AppendWithColor(sb, input, idx, len, ColorText);
+            else AppendEscaped(sb, input, idx, len);
+
+            lastIndex = idx + len;
+            operations++;
+
+            if (operations > SettingsManager.REGEX_MATCHES_PER_FRAME)
+            {
+                operations = 0;
+                yield return null;
+            }
+
+            m = m.NextMatch();
+        }
+
+        if (lastIndex < input.Length) AppendEscaped(sb, input, lastIndex, input.Length - lastIndex);
+
+        onComplete(sb.ToString());
+    }
+    private IEnumerator BackgroundSyntaxHighlightOnlyAsync(string text)
+    {
+        if (syntaxHighlighterText == null) yield break;
+
+        string highlighted = string.Empty;
+
+        // Run the async highlighter, yielding frames so typing remains smooth
+        yield return StartCoroutine(FormatSyntaxHighlightingAsync(text, result => highlighted = result));
+
+        // Apply the highlighted text to the overlay
+        if (syntaxHighlighterText != null)
+        {
+            syntaxHighlighterText.text = highlighted;
+        }
+
+        // Adjust the height in case the user added new lines
+        UpdateInputFieldHeight(text);
+
+        backgroundHighlightCoroutine = null;
+    }
+
+    private void AppendNewlineAndIndent(StringBuilder sb, int indent)
+    {
+        while (sb.Length > 0 && sb[sb.Length - 1] == ' ') sb.Length--;
+        if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.Append('\n');
+        if (indent > 0) sb.Append(' ', indent);
+    }
+    private void AppendEscaped(StringBuilder sb, string text, int start, int length)
+    {
+        int end = start + length;
+        for (int i = start; i < end; i++)
+        {
+            char c = text[i];
+            if (c == '<') sb.Append("&lt;");
+            else if (c == '>') sb.Append("&gt;");
+            else sb.Append(c);
+        }
+    }
+    private void AppendWithColor(StringBuilder sb, string text, int start, int length, string colorHex)
+    {
+        sb.Append("<color=").Append(colorHex).Append(">");
+        AppendEscaped(sb, text, start, length);
+        sb.Append("</color>");
+    }
+    private char GetRewardTagChar(string input, int start, int length)
+    {
+        int end = start + length;
+        for (int i = start; i < end; i++)
+        {
+            if (input[i] != '(') return input[i];
+        }
+        return '\0';
+    }
+
+    // =========================================================================
+    // Other Stuff
+    // =========================================================================
+    private void ToggleIDE()
+    {
+        IDEFormatString = !IDEFormatString;
+        UpdateToggleButtonText();
+
+        if (rawTextOutput != null)
+        {
+            pendingValue = rawTextOutput.text;
+            isPendingUpdate = true;
+        }
+    }
+    private void UpdateToggleButtonText()
+    {
+        if (generatedScreen != null &&
+            generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences refs))
+        {
+            if (refs.Buttons.TryGetValue("Button1", out Button btn))
+            {
+                var textMesh = btn.GetComponentInChildren<TextMeshProUGUI>();
+                if (textMesh != null) textMesh.text = IDEFormatString ? "Toggle IDE Formatting OFF" : "Toggle IDE Formatting ON";
+            }
+        }
+    }
+    private void PasteTextMod()
+    {
+        //if (isUpdatingText) return;
+
+        // Directly capture to the persistent variable
+        tempClipboardBuffer = GUIUtility.systemCopyBuffer;
+
+        if (tempClipboardBuffer != null && tempClipboardBuffer.Length > 0)
+        {
+            UnityEngine.Debug.Log($"[PasteTest] Paste successful! Length: {tempClipboardBuffer.Length}");
+
+            // Apply it directly to the UI exactly like your working button
+            //rawTextOutput.text = tempClipboardBuffer;
+            //OnRawTextChanged(tempClipboardBuffer);
+        }
+        else
+        {
+            UnityEngine.Debug.LogWarning("[PasteTest] Paste failed: systemCopyBuffer was null or empty.");
+        }
+    }
+
+    // =========================================================================
+    // Core Engine Logic
+    // =========================================================================
+
+    private string RestoreImages(string text)
+    {
+        // Fast exit check: updated to look for both compressed signatures
+        if (string.IsNullOrEmpty(text) || (!text.Contains("img.IMG_") && !text.Contains("[IMG_")))
+            return text;
+
+        // Matches either img.IMG_123. or [IMG_123]
+        return Regex.Replace(text, @"img\.(IMG_\d+)\.|\[(IMG_\d+)\]", match => {
+
+            bool isBracket = match.Value.StartsWith("[");
+            string id = isBracket ? match.Groups[2].Value : match.Groups[1].Value;
+
+            if (imgCache.TryGetValue(id, out string data))
+            {
+                // Restore with the appropriate formatting
+                return isBracket ? $"[{data}]" : $"img.{data}.";
+            }
+
+            return match.Value; // Fallback
+        });
+    }
+    private void UpdateInputFieldHeight(string formattedText, StringBuilder log = null)
+    {
+        if (rawTextOutput == null) return;
+        var inputLayoutElement = rawTextOutput.GetComponent<LayoutElement>();
+        if (inputLayoutElement == null) return;
+
+        Stopwatch prefValSw = Stopwatch.StartNew();
+        float textHeight = rawTextOutput.textComponent.GetPreferredValues(formattedText).y;
+        prefValSw.Stop();
+
+        float extraPadding = 32f;
+        float viewportHeight = 100f;
+
+        if (generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences leftRefs))
+        {
+            if (leftRefs.ScrollViews.TryGetValue("LeftInputScrollView", out ScrollRect scrollView))
+            {
+                viewportHeight = scrollView.viewport != null
+                    ? scrollView.viewport.rect.height
+                    : scrollView.GetComponent<RectTransform>().rect.height;
+
+                float newHeight = Mathf.Max(viewportHeight, textHeight + extraPadding);
+
+                if (Mathf.Abs(inputLayoutElement.preferredHeight - newHeight) > 1f)
+                {
+                    inputLayoutElement.preferredHeight = newHeight;
+                }
+            }
+        }
+
+        log?.AppendLine($"    [Sub-Profiler] UpdateInputFieldHeight -> GetPreferredValues: {prefValSw.ElapsedMilliseconds} ms | Rebuild: Deferred Native Canvas update");
     }
     private void CopyAndRestoreCode()
     {
@@ -739,16 +927,47 @@ public class PhasesFactory : RootUI
         string restoredText = RestoreImages(currentText);
         string formattedText = InsertLinebreaksAfterCommas(restoredText);
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-        ClipboardHelper.CopyToClipboard(formattedText);
-#else
-        GUIUtility.systemCopyBuffer = formattedText;
-#endif
+        #if UNITY_WEBGL && !UNITY_EDITOR
+                ClipboardHelper.CopyToClipboard(formattedText);
+        #else
+                GUIUtility.systemCopyBuffer = formattedText;
+        #endif
 
         UnityEngine.Debug.Log($"Copied to clipboard. Final Length: {formattedText.Length}");
 
         // Spawn visual confirmation
         uiGenerator.CreatePopup("Copied output to clipboard!", true, null);
+    }
+    public string MinifyModString(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+        int len = raw.Length;
+        var sb = new StringBuilder(len);
+        bool lineStart = true;
+
+        for (int i = 0; i < len; i++)
+        {
+            char c = raw[i];
+            if (c == '\r' || c == '\n')
+            {
+                while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
+                lineStart = true;
+            }
+            else
+            {
+                if (lineStart)
+                {
+                    if (char.IsWhiteSpace(c)) continue;
+                    lineStart = false;
+                }
+                sb.Append(c);
+            }
+        }
+
+        while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
+
+        return sb.ToString();
     }
     private string InsertLinebreaksAfterCommas(string input)
     {
@@ -854,6 +1073,57 @@ public class PhasesFactory : RootUI
 
         return sb.ToString();
     }
+
+    /*
+    private IEnumerator MinifyModStringAsync(string raw, Action<string> onComplete)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            onComplete(string.Empty);
+            yield break;
+        }
+
+        int len = raw.Length;
+        var sb = new StringBuilder(len);
+        bool lineStart = true;
+        int operations = 0;
+
+        for (int i = 0; i < len; i++)
+        {
+            char c = raw[i];
+            if (c == '\r' || c == '\n')
+            {
+                while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
+                lineStart = true;
+            }
+            else
+            {
+                if (lineStart)
+                {
+                    if (char.IsWhiteSpace(c)) continue;
+                    lineStart = false;
+                }
+                sb.Append(c);
+            }
+
+            operations++;
+            if (operations > SettingsManager.CHARS_PER_FRAME)
+            {
+                operations = 0;
+                yield return null;
+            }
+        }
+
+        while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
+        onComplete(sb.ToString());
+    }
+
+    private void AppendNewlineAndIndent(StringBuilder sb, int indent)
+    {
+        while (sb.Length > 0 && sb[sb.Length - 1] == ' ') sb.Length--;
+        if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.Append('\n');
+        if (indent > 0) sb.Append(' ', indent);
+    }
     private void AppendEscaped(StringBuilder sb, string text, int start, int length)
     {
         int end = start + length;
@@ -880,21 +1150,5 @@ public class PhasesFactory : RootUI
         }
         return '\0';
     }
-
-    /// <summary>
-    /// This is called automatically by the browser once it grabs the 240k string.
-    /// MUST be public so SendMessage can find it.
-    /// </summary>
-    public void OnClipboardDataReceived(string clipboardText)
-    {
-        if (!string.IsNullOrEmpty(clipboardText))
-        {
-            UnityEngine.Debug.Log($"[PasteTextMod] Async Paste successful! Length: {clipboardText.Length}");
-            PasteTextDirectly(clipboardText);
-        }
-        else
-        {
-            UnityEngine.Debug.LogWarning("[PasteTextMod] Async Paste failed or was blocked by browser permissions.");
-        }
-    }
+    */
 }
