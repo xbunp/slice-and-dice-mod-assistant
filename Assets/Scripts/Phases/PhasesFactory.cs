@@ -28,10 +28,12 @@ public class PhasesFactory : RootUI
     private bool isPendingUpdate = false;
     private string pendingValue;
 
+    private ContentSizeFitter contentFitter;
+
     // --- IDE Typing & Debounce State ---
     private Coroutine debounceCoroutine;
     private Coroutine backgroundHighlightCoroutine;
-    private float typingDebounceDelay = 1f; // Wait 750ms after last keystroke before highlighting
+    private float typingDebounceDelay = 0.75f; // Wait 750ms after last keystroke before highlighting
 
     // References for double-input overlay syntax highlighting
     private TMP_InputField rawTextOutput;
@@ -108,7 +110,7 @@ public class PhasesFactory : RootUI
             @"|(?<text>[a-zA-Z_][a-zA-Z0-9_]*)",
             RegexOptions.Compiled | RegexOptions.ExplicitCapture);
 
-
+    /*
     private void Update()
     {
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -134,6 +136,27 @@ public class PhasesFactory : RootUI
             isPendingUpdate = false;
             StartCoroutine(ProcessHeavyTextUpdatesCoroutine(pendingValue));
         }
+    }
+    */
+    private void Update()
+    {
+#if !UNITY_WEBGL || UNITY_EDITOR
+        if (rawTextOutput != null && rawTextOutput.isFocused && !isUpdatingText)
+        {
+            bool isMac = Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.OSXPlayer;
+            bool modifier = isMac ? Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand) : Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+
+            if (modifier && Input.GetKeyDown(KeyCode.V))
+            {
+                string clipboard = GUIUtility.systemCopyBuffer;
+                if (!string.IsNullOrEmpty(clipboard) && clipboard.Length > 15000)
+                {
+                    PasteTextDirectly(clipboard);
+                    return;
+                }
+            }
+        }
+#endif
     }
 
     // --- UI SETUP ---
@@ -227,7 +250,7 @@ public class PhasesFactory : RootUI
                 contentLayout.childForceExpandHeight = true;
                 contentLayout.childForceExpandWidth = true;
 
-                var contentFitter = scrollView.content.GetComponent<ContentSizeFitter>();
+                contentFitter = scrollView.content.GetComponent<ContentSizeFitter>();
                 if (contentFitter == null) contentFitter = scrollView.content.gameObject.AddComponent<ContentSizeFitter>();
                 contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
                 contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
@@ -388,9 +411,25 @@ public class PhasesFactory : RootUI
             if (keyValuePair.Value != null) keyValuePair.Value.gameObject.SetActive(isUiActive);
         }
     }
+
+    /*
     private void OnLeftInputChanged(string value)
     {
         if (isUpdatingText) return; // Ignore if we are doing a forced paste/format
+
+        // INSTANT FEEDBACK: Show raw text (white) and hide the highlighter
+        if (rawTextOutput != null && syntaxHighlighterText != null)
+        {
+            if (ColorUtility.TryParseHtmlString(ColorText, out Color myColor))
+            {
+                syntaxHighlighterText.color = myColor;
+            }
+            else
+            {
+                syntaxHighlighterText.color = Color.white;
+            }
+            syntaxHighlighterText.color = Color.clear;
+        }
 
         // Stop the timer if the user keeps typing
         if (debounceCoroutine != null) StopCoroutine(debounceCoroutine);
@@ -398,7 +437,26 @@ public class PhasesFactory : RootUI
         // Start a new timer
         debounceCoroutine = StartCoroutine(HandleTypingDebounce(value));
     }
+    */
 
+    private void OnLeftInputChanged(string value)
+    {
+        if (isUpdatingText) return;
+
+        // 1. BREAK THE CHAIN OF DOOM: Instantly prevent the expensive layout calculation.
+        if (contentFitter != null) contentFitter.enabled = false;
+
+        // 2. INSTANT FEEDBACK: Show raw text and hide the (now stale) highlighter.
+        if (rawTextOutput != null && syntaxHighlighterText != null)
+        {
+            rawTextOutput.textComponent.color = Color.white;
+            syntaxHighlighterText.color = Color.clear;
+        }
+
+        // 3. Start the debounce timer.
+        if (debounceCoroutine != null) StopCoroutine(debounceCoroutine);
+        debounceCoroutine = StartCoroutine(HandleTypingDebounce(value));
+    }
     private IEnumerator HandleTypingDebounce(string value)
     {
         // Wait for the user to stop typing for a moment
@@ -461,6 +519,9 @@ public class PhasesFactory : RootUI
         if (debounceCoroutine != null) StopCoroutine(debounceCoroutine);
         if (backgroundHighlightCoroutine != null) StopCoroutine(backgroundHighlightCoroutine);
 
+        // --- NEW: Disable layout system during heavy processing ---
+        if (contentFitter != null) contentFitter.enabled = false;
+
         UIPopup popup = null;
         bool isLargeText = value != null && value.Length > 15000;
 
@@ -509,11 +570,24 @@ public class PhasesFactory : RootUI
         }
         yield return null;
 
-        // Step 5: Adjust Height
+        if (contentFitter != null) contentFitter.enabled = true;
         UpdateInputFieldHeight(currentString);
 
         if (popup != null) popup.Dismiss();
         if (rawTextOutput != null) rawTextOutput.readOnly = false;
+
+        if (rawTextOutput != null && syntaxHighlighterText != null)
+        {
+            if (ColorUtility.TryParseHtmlString(ColorText, out Color myColor))
+            {
+                syntaxHighlighterText.color = myColor;
+            }
+            else
+            {
+                syntaxHighlighterText.color = Color.white;
+            }
+            rawTextOutput.textComponent.color = Color.clear;
+        }
 
         sw.Stop();
         UnityEngine.Debug.Log($"[Profiler] Async pipeline finished in {sw.ElapsedMilliseconds}ms real-time.");
@@ -766,17 +840,31 @@ public class PhasesFactory : RootUI
 
         string highlighted = string.Empty;
 
-        // Run the async highlighter, yielding frames so typing remains smooth
+        // Run the async highlighter
         yield return StartCoroutine(FormatSyntaxHighlightingAsync(text, result => highlighted = result));
 
-        // Apply the highlighted text to the overlay
         if (syntaxHighlighterText != null)
         {
             syntaxHighlighterText.text = highlighted;
-        }
 
-        // Adjust the height in case the user added new lines
-        UpdateInputFieldHeight(text);
+            // RE-ENABLE LAYOUT: Now that the user has stopped typing, we can safely recalculate.
+            if (contentFitter != null) contentFitter.enabled = true;
+
+            // Adjust the height (this will now trigger the calculation, but only once)
+            UpdateInputFieldHeight(text);
+
+            // SWAP VISIBILITY back to the colored text
+            if (ColorUtility.TryParseHtmlString(ColorText, out Color myColor))
+            {
+                syntaxHighlighterText.color = myColor;
+            }
+            else
+            {
+                syntaxHighlighterText.color = Color.white;
+            }
+
+            if (rawTextOutput != null) rawTextOutput.textComponent.color = Color.clear;
+        }
 
         backgroundHighlightCoroutine = null;
     }
