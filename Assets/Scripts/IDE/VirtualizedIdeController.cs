@@ -124,7 +124,11 @@ public class VirtualizedIdeController : MonoBehaviour
 
     private void Update()
     {
-        if (_isSwitchingLine || _activeEditLineIndex == -1) return;
+        if (_isSwitchingLine) return;
+
+        // PROACTIVE FIX: Do not exit early if we are actively selecting text, 
+        // even if _activeEditLineIndex is -1 (input field closed)
+        if (_activeEditLineIndex == -1 && !_isMultiSelecting) return;
 
         // Get New Input System Keyboard State
         var keyboard = Keyboard.current;
@@ -925,35 +929,6 @@ public class VirtualizedIdeController : MonoBehaviour
         return null;
     }
 
-    private void CopySelectionToClipboard()
-    {
-        int startLine = Mathf.Min(_selStartLine, _selEndLine);
-        int endLine = Mathf.Max(_selStartLine, _selEndLine);
-        int startChar = _selStartLine < _selEndLine ? _selStartChar : _selEndChar;
-        int endChar = _selStartLine < _selEndLine ? _selEndChar : _selStartChar;
-
-        if (_selStartLine == _selEndLine)
-        {
-            startChar = Mathf.Min(_selStartChar, _selEndChar);
-            endChar = Mathf.Max(_selStartChar, _selEndChar);
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = startLine; i <= endLine; i++)
-        {
-            string lineText = _rawLines[i];
-            int s = (i == startLine) ? startChar : 0;
-            int e = (i == endLine) ? endChar : lineText.Length;
-
-            s = Mathf.Clamp(s, 0, lineText.Length);
-            e = Mathf.Clamp(e, 0, lineText.Length);
-
-            sb.Append(lineText.Substring(s, e - s));
-            if (i < endLine) sb.Append("\n");
-        }
-
-        WriteToClipboard(sb.ToString());
-    }
     private void DeleteActiveSelection()
     {
         if (!_isMultiSelecting) return;
@@ -989,21 +964,7 @@ public class VirtualizedIdeController : MonoBehaviour
         UpdateSelectionCache();
         RefreshDocumentLayout();
     }
-    private void WriteToClipboard(string text)
-    {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        try
-        {
-            CopyToClipboardWebGL(text);
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"WebGL Copy failed: {ex.Message}");
-        }
-#else
-        GUIUtility.systemCopyBuffer = text;
-#endif
-    }
+
     public void OnWebGLPasteReceived(string clipboardText)
     {
         if (string.IsNullOrEmpty(clipboardText)) return;
