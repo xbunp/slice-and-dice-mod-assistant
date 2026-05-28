@@ -9,6 +9,8 @@ using UnityEngine.UI;
 
 public class VirtualizedIdeController : MonoBehaviour
 {
+    private bool _isSwitchingLine = false;
+
     [Header("UI Scroll Settings")]
     [SerializeField] private ScrollRect viewportScrollRect;
     [SerializeField] private RectTransform contentContainer;
@@ -85,6 +87,21 @@ public class VirtualizedIdeController : MonoBehaviour
     // =========================================================================
     // Initialization
     // =========================================================================
+
+    private void Start()
+    {
+        // 1. Setup listeners and input overlay
+        InitializeSharedInputField();
+        viewportScrollRect.onValueChanged.AddListener(OnScrollPositionChanged);
+
+        // 2. Build the initial pool of rows (30 is a safe starting point)
+        InitializeVirtualPool(30);
+
+        // 3. Size the container and render the viewport
+        RefreshDocumentLayout();
+    }
+
+    /*
     private void Awake()
     {
         InitializeSharedInputField();
@@ -92,35 +109,47 @@ public class VirtualizedIdeController : MonoBehaviour
         viewportScrollRect.onValueChanged.AddListener(OnScrollPositionChanged);
         RefreshDocumentLayout();
     }
+    */
 
     private void InitializeSharedInputField()
     {
         sharedInputField.gameObject.SetActive(false);
         sharedInputField.lineType = TMP_InputField.LineType.MultiLineNewline;
-
         sharedInputField.textComponent.enableAutoSizing = false;
         sharedInputField.textComponent.fontSize = 13;
+
+        // FORCE ZERO MARGINS: Stop the text from padding itself inside the input box
+        sharedInputField.textComponent.margin = new Vector4(0f, 0f, 0f, 0f);
+        if (sharedInputField.textViewport != null)
+        {
+            sharedInputField.textViewport.offsetMin = Vector2.zero;
+            sharedInputField.textViewport.offsetMax = Vector2.zero;
+        }
+
         sharedInputField.onValueChanged.AddListener(OnActiveLineTextChanged);
         sharedInputField.onEndEdit.AddListener(OnActiveLineEndEdit);
     }
 
-    private void InitializeVirtualPool()
+
+
+    private void InitializeVirtualPool(int initialSize)
     {
-        float viewportHeight = viewportScrollRect.viewport.rect.height;
-        int maxVisibleRows = Mathf.CeilToInt(viewportHeight / lineHeight) + extraBufferRows;
-
-        for (int i = 0; i < maxVisibleRows; i++)
+        for (int i = 0; i < initialSize; i++)
         {
-            GameObject rowObj = Instantiate(lineRowPrefab, contentContainer);
-
-            // FORCE: Clean local scale to prevent geometric text size discrepancies
-            rowObj.transform.localScale = Vector3.one;
-
-            IdeLineRow row = rowObj.GetComponent<IdeLineRow>();
-            row.Initialize(i, this);
-            _visibleRowsPool.Add(row);
-            rowObj.SetActive(false);
+            CreateAndAddNewRowToPool();
         }
+    }
+
+    private IdeLineRow CreateAndAddNewRowToPool()
+    {
+        GameObject rowObj = Instantiate(lineRowPrefab, contentContainer);
+        rowObj.transform.localScale = Vector3.one;
+
+        IdeLineRow row = rowObj.GetComponent<IdeLineRow>();
+        row.Initialize(_visibleRowsPool.Count, this);
+        _visibleRowsPool.Add(row);
+        rowObj.SetActive(false);
+        return row;
     }
 
     // =========================================================================
@@ -138,20 +167,27 @@ public class VirtualizedIdeController : MonoBehaviour
         float contentY = contentContainer.anchoredPosition.y;
         float viewportHeight = viewportScrollRect.viewport.rect.height;
 
-        // Determine first and last visible line indices
+        // Calculate first and last visible line indices
         int startLine = Mathf.Max(0, Mathf.FloorToInt(contentY / lineHeight) - 2);
         int visibleCount = Mathf.CeilToInt(viewportHeight / lineHeight) + extraBufferRows;
         int endLine = Mathf.Min(_rawLines.Count - 1, startLine + visibleCount);
 
         if (startLine == _startLineIndex && endLine == _endLineIndex && !forceRepaint)
         {
-            return; // No layout update needed
+            return;
         }
 
         _startLineIndex = startLine;
         _endLineIndex = endLine;
 
-        // Map visible lines to our pool
+        // AUTO-GROWTH CHECK: If the current screen needs more rows than exist in the pool, spawn them instantly
+        int requiredRowsCount = (endLine - startLine) + 1;
+        while (_visibleRowsPool.Count < requiredRowsCount)
+        {
+            CreateAndAddNewRowToPool();
+        }
+
+        // Map visible lines to our expanded pool
         for (int i = 0; i < _visibleRowsPool.Count; i++)
         {
             int lineIndex = _startLineIndex + i;
@@ -162,7 +198,6 @@ public class VirtualizedIdeController : MonoBehaviour
                 row.gameObject.SetActive(true);
                 row.SetRowPosition(lineIndex, lineHeight);
 
-                // Hide row graphics if this is the active editing row (to avoid text overlap)
                 bool isEditingThisRow = (lineIndex == _activeEditLineIndex);
                 row.UpdateRowDisplay(lineIndex, GetHighlightedText(lineIndex), isEditingThisRow);
             }
@@ -186,8 +221,10 @@ public class VirtualizedIdeController : MonoBehaviour
     // Document Editing & The Shared Input Field
     // =========================================================================
     // Added 'startCaretPos' parameter
-    public void RequestLineEdit(int lineIndex, RectTransform rowRect, int startCaretPos = -1)
+    public void RequestLineEdit(int lineIndex, int startCaretPos = -1)
     {
+        _isSwitchingLine = true;
+
         if (_activeEditLineIndex != -1 && _activeEditLineIndex != lineIndex)
         {
             CommitSharedInputToModel();
@@ -195,23 +232,33 @@ public class VirtualizedIdeController : MonoBehaviour
 
         _activeEditLineIndex = lineIndex;
 
+        EnsureLineIsVisible(lineIndex);
+        UpdateVirtualViewport(true);
+
         IdeLineRow clickedRow = GetVisualRowByLineIndex(lineIndex);
-        if (clickedRow == null) return;
+        IdeLineRow formattingSource = clickedRow != null ? clickedRow : _visibleRowsPool[0];
 
         RectTransform inputRt = sharedInputField.GetComponent<RectTransform>();
         inputRt.SetParent(contentContainer, false);
         inputRt.SetAsLastSibling();
 
-        inputRt.localScale = Vector3.one;
+        // 1. Force strictly top-stretch anchors
         inputRt.anchorMin = new Vector2(0, 1);
         inputRt.anchorMax = new Vector2(1, 1);
         inputRt.pivot = new Vector2(0, 1);
-        inputRt.offsetMin = new Vector2(0, inputRt.offsetMin.y);
-        inputRt.offsetMax = new Vector2(0, inputRt.offsetMax.y);
-        inputRt.anchoredPosition = new Vector2(0, -lineIndex * lineHeight);
-        inputRt.sizeDelta = new Vector2(inputRt.sizeDelta.x, lineHeight);
+        inputRt.localScale = Vector3.one;
+        inputRt.localRotation = Quaternion.identity;
 
-        TextMeshProUGUI sourceText = clickedRow.CodeTextComponent;
+        // 2. ABSOLUTE OFFSET MATH (Fixes the off-screen stretching bug)
+        float leftOffset = formattingSource.CodeTextComponent.rectTransform.offsetMin.x;
+        float topY = -lineIndex * lineHeight;
+        float bottomY = topY - lineHeight;
+
+        // offsetMin is (Left, Bottom). offsetMax is (Right, Top).
+        inputRt.offsetMin = new Vector2(leftOffset, bottomY);
+        inputRt.offsetMax = new Vector2(0, topY);
+
+        TextMeshProUGUI sourceText = formattingSource.CodeTextComponent;
         TMP_Text targetText = sharedInputField.textComponent;
 
         if (sourceText != null && targetText != null)
@@ -230,39 +277,39 @@ public class VirtualizedIdeController : MonoBehaviour
 
             targetText.rectTransform.localScale = Vector3.one;
             sourceText.rectTransform.localScale = Vector3.one;
-
-            RectTransform textAreaRt = sharedInputField.textViewport;
-            RectTransform sourceTextRt = sourceText.GetComponent<RectTransform>();
-            if (textAreaRt != null && sourceTextRt != null)
-            {
-                textAreaRt.localScale = Vector3.one;
-                textAreaRt.anchorMin = sourceTextRt.anchorMin;
-                textAreaRt.anchorMax = sourceTextRt.anchorMax;
-                textAreaRt.pivot = sourceTextRt.pivot;
-                textAreaRt.offsetMin = sourceTextRt.offsetMin;
-                textAreaRt.offsetMax = sourceTextRt.offsetMax;
-            }
         }
 
         sharedInputField.gameObject.SetActive(true);
-        sharedInputField.text = _rawLines[lineIndex];
-        sharedInputField.Select();
-        sharedInputField.ActivateInputField();
+        sharedInputField.SetTextWithoutNotify(_rawLines[lineIndex]);
 
-        // Set caret position to start of new line if specified
+        // Force UI update so text meshes are instantly valid
+        sharedInputField.ForceLabelUpdate();
+        if (targetText != null) targetText.ForceMeshUpdate();
+
+        // Move Caret safely
         if (startCaretPos >= 0)
         {
             sharedInputField.caretPosition = Mathf.Min(startCaretPos, sharedInputField.text.Length);
         }
+        else
+        {
+            sharedInputField.caretPosition = sharedInputField.text.Length;
+        }
+
+        // Safely reset horizontal scrolling if it drifted during a previous paste
+        sharedInputField.MoveTextStart(false);
+
+        sharedInputField.Select();
+        sharedInputField.ActivateInputField();
 
         UpdateVirtualViewport(true);
+        _isSwitchingLine = false;
     }
 
     private void OnActiveLineTextChanged(string newText)
     {
-        if (_activeEditLineIndex == -1) return;
+        if (_isSwitchingLine || _activeEditLineIndex == -1) return;
 
-        // Check if the user typed a line break or typed a tab
         if (newText.Contains("\n") || newText.Contains("\r"))
         {
             HandleLineSplit(newText);
@@ -270,12 +317,26 @@ public class VirtualizedIdeController : MonoBehaviour
         }
 
         _rawLines[_activeEditLineIndex] = newText;
-        _highlightedCache.Remove(_activeEditLineIndex); // Invalidate cache
+        _highlightedCache.Remove(_activeEditLineIndex);
+
+        // BOUNDARY CHECK: Measure preferred text width against the input field's physical width
+        RectTransform inputRt = sharedInputField.GetComponent<RectTransform>();
+        float textWidth = sharedInputField.textComponent.preferredWidth;
+
+        // 20px safety margin to split before characters visually clip the right edge
+        float maxWidth = inputRt.rect.width - 20f;
+
+        if (textWidth > maxWidth && maxWidth > 100f)
+        {
+            TriggerAutoLineSplit();
+        }
     }
 
     private void OnActiveLineEndEdit(string text)
     {
-        // When clicking outside, or hitting Enter, save changes
+        // Ignore focus loss if it was caused by us programmatically clicking a new line
+        if (_isSwitchingLine) return;
+
         CommitSharedInputToModel();
     }
 
@@ -293,16 +354,22 @@ public class VirtualizedIdeController : MonoBehaviour
 
     private void HandleLineSplit(string inputVal)
     {
+        _isSwitchingLine = true; // Lock events while splitting
+
         string cleanVal = inputVal.Replace("\r", "");
         string[] split = cleanVal.Split('\n');
 
         if (split.Length > 1)
         {
-            // Update current line to only contain text before the split
+            // 1. Clean the current line's data
             _rawLines[_activeEditLineIndex] = split[0];
             _highlightedCache.Remove(_activeEditLineIndex);
 
-            // Insert new lines below
+            // 2. Force the input field to drop the '\n' character 
+            // so it doesn't accidentally save it as a multiline string in CommitSharedInputToModel()
+            sharedInputField.SetTextWithoutNotify(split[0]);
+
+            // 3. Inject new lines into the data model below the current line
             for (int i = 1; i < split.Length; i++)
             {
                 _rawLines.Insert(_activeEditLineIndex + i, split[i]);
@@ -313,17 +380,20 @@ public class VirtualizedIdeController : MonoBehaviour
             CommitSharedInputToModel();
             RefreshDocumentLayout();
 
-            // Focus the newly split line, placing cursor at index 0
+            // 4. Focus the newly split line safely
             if (targetLine < _rawLines.Count)
             {
                 Canvas.ForceUpdateCanvases();
                 IdeLineRow targetRow = GetVisualRowByLineIndex(targetLine);
                 if (targetRow != null)
                 {
-                    RequestLineEdit(targetLine, targetRow.GetComponent<RectTransform>(), 0);
+                    // UPDATED: Now uses the correct parameters
+                    RequestLineEdit(targetLine, 0);
                 }
             }
         }
+
+        _isSwitchingLine = false; // Unlock events
     }
 
     private IdeLineRow GetVisualRowByLineIndex(int lineIndex)
@@ -386,14 +456,90 @@ public class VirtualizedIdeController : MonoBehaviour
         return highlighted;
     }
 
-    private string ApplySyntaxColorsSync(string input)
+    private char GetRewardTagChar(string input, int start, int length)
+    {
+        int end = start + length;
+        for (int i = start; i < end; i++)
+        {
+            if (input[i] != '(') return input[i];
+        }
+        return '\0';
+    }
+
+    // =========================================================================
+    // Greedy Color Accumulator State
+    // =========================================================================
+    private string _activeColor = null;
+    private StringBuilder _colorAccumulator = new StringBuilder();
+
+    private void FlushColorSegment(StringBuilder mainSb)
+    {
+        if (_colorAccumulator.Length == 0) return;
+
+        // GREEDY MESHING: If the color segment matches default text, write it directly without any tags
+        if (string.IsNullOrEmpty(_activeColor) || _activeColor == ColorText)
+        {
+            mainSb.Append(_colorAccumulator.ToString());
+        }
+        else
+        {
+            mainSb.Append("<color=").Append(_activeColor).Append(">");
+            mainSb.Append(_colorAccumulator.ToString());
+            mainSb.Append("</color>");
+        }
+
+        _colorAccumulator.Clear();
+    }
+
+    private void AccumulateText(StringBuilder mainSb, string text, int start, int length, string colorHex)
+    {
+        // If the color changes, flush the previous colored segment first
+        if (colorHex != _activeColor)
+        {
+            FlushColorSegment(mainSb);
+            _activeColor = colorHex;
+        }
+
+        AppendEscapedText(_colorAccumulator, text, start, length);
+    }
+
+    private void AppendEscapedText(StringBuilder sb, string text, int start, int length)
+    {
+        int end = start + length;
+        for (int i = start; i < end; i++)
+        {
+            char c = text[i];
+
+            // Use TMP's built-in <noparse> tags to safely escape brackets
+            if (c == '<')
+            {
+                sb.Append("<noparse><</noparse>");
+            }
+            else if (c == '>')
+            {
+                sb.Append("<noparse>></noparse>");
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+    }
+    // =========================================================================
+    // Optimized Greedy Highlighting Engine
+    // =========================================================================
+    public string ApplySyntaxColorsSync(string input)
     {
         if (string.IsNullOrEmpty(input)) return string.Empty;
 
         StringBuilder sb = new StringBuilder(input.Length * 2);
         int lastIndex = 0;
-        Match m;
 
+        // Reset the accumulator state for this line
+        _activeColor = null;
+        _colorAccumulator.Clear();
+
+        Match m;
         try { m = SyntaxRegex.Match(input); } catch { return input; }
 
         while (m.Success)
@@ -401,51 +547,44 @@ public class VirtualizedIdeController : MonoBehaviour
             int idx = m.Index;
             int len = m.Length;
 
-            if (idx > lastIndex) AppendEscapedText(sb, input, lastIndex, idx - lastIndex);
+            // Collect unmatched gap text (like spaces or punctuation) as un-tagged text
+            if (idx > lastIndex)
+            {
+                AccumulateText(sb, input, lastIndex, idx - lastIndex, null);
+            }
 
-            if (m.Groups["floor"].Success) AppendWithColor(sb, input, idx, len, ColorFloor);
+            // Accumulate matching tokens based on their syntax group
+            if (m.Groups["floor"].Success) AccumulateText(sb, input, idx, len, ColorFloor);
             else if (m.Groups["phase"].Success)
             {
                 if (input[idx] == 'p' && len > 3)
                 {
-                    sb.Append("<color=").Append(ColorPhasePrefix).Append(">");
-                    AppendEscapedText(sb, input, idx, 3);
-                    sb.Append("</color><color=").Append(ColorPhaseCode).Append(">");
-                    AppendEscapedText(sb, input, idx + 3, len - 3);
-                    sb.Append("</color>");
+                    AccumulateText(sb, input, idx, 3, ColorPhasePrefix);
+                    AccumulateText(sb, input, idx + 3, len - 3, ColorPhaseCode);
                 }
-                else AppendWithColor(sb, input, idx, len, ColorPhasePrefix);
+                else AccumulateText(sb, input, idx, len, ColorPhasePrefix);
             }
-            else if (m.Groups["delimiter"].Success) AppendWithColor(sb, input, idx, len, ColorDelimiter);
-            else if (m.Groups["sq_bracket"].Success || m.Groups["bracket"].Success) AppendWithColor(sb, input, idx, len, ColorBracket);
+            else if (m.Groups["delimiter"].Success) AccumulateText(sb, input, idx, len, ColorDelimiter);
+            else if (m.Groups["sq_bracket"].Success || m.Groups["bracket"].Success) AccumulateText(sb, input, idx, len, ColorBracket);
             else if (m.Groups["itempool_block"].Success)
             {
-                sb.Append("<color=").Append(ColorMethod).Append(">");
-                AppendEscapedText(sb, input, idx, 9); // "itempool."
-                sb.Append("</color><color=").Append(ColorItem).Append(">");
-                AppendEscapedText(sb, input, idx + 9, len - 9);
-                sb.Append("</color>");
+                AccumulateText(sb, input, idx, 9, ColorMethod); // "itempool."
+                AccumulateText(sb, input, idx + 9, len - 9, ColorItem);
             }
             else if (m.Groups["sd_block"].Success)
             {
-                sb.Append("<color=").Append(ColorMethod).Append(">");
-                AppendEscapedText(sb, input, idx, 3); // "sd."
-                sb.Append("</color><color=").Append(ColorSdRed).Append(">");
-                AppendEscapedText(sb, input, idx + 3, len - 3);
-                sb.Append("</color>");
+                AccumulateText(sb, input, idx, 3, ColorMethod); // "sd."
+                AccumulateText(sb, input, idx + 3, len - 3, ColorSdRed);
             }
-            else if (m.Groups["ritemx"].Success) AppendWithColor(sb, input, idx, len, ColorItem);
+            else if (m.Groups["ritemx"].Success) AccumulateText(sb, input, idx, len, ColorItem);
             else if (m.Groups["hsv_block"].Success)
             {
-                sb.Append("<color=").Append(ColorMethod).Append(">");
-                AppendEscapedText(sb, input, idx, 4); // "hsv."
-                sb.Append("</color><color=").Append(ColorNumber).Append(">");
-                AppendEscapedText(sb, input, idx + 4, len - 4);
-                sb.Append("</color>");
+                AccumulateText(sb, input, idx, 4, ColorMethod); // "hsv."
+                AccumulateText(sb, input, idx + 4, len - 4, ColorNumber);
             }
-            else if (m.Groups["k_block"].Success) AppendWithColor(sb, input, idx, len, ColorMossGreen);
-            else if (m.Groups["tog"].Success) AppendWithColor(sb, input, idx, len, ColorNeonGreen);
-            else if (m.Groups["method"].Success) AppendWithColor(sb, input, idx, len, ColorMethod);
+            else if (m.Groups["k_block"].Success) AccumulateText(sb, input, idx, len, ColorMossGreen);
+            else if (m.Groups["tog"].Success) AccumulateText(sb, input, idx, len, ColorNeonGreen);
+            else if (m.Groups["method"].Success) AccumulateText(sb, input, idx, len, ColorMethod);
             else if (m.Groups["reward"].Success)
             {
                 char tagChar = GetRewardTagChar(input, idx, len);
@@ -462,47 +601,123 @@ public class VirtualizedIdeController : MonoBehaviour
                     's' => ColorSkip,
                     _ => ColorDefaultReward
                 };
-                AppendWithColor(sb, input, idx, len, rewardColor);
+                AccumulateText(sb, input, idx, len, rewardColor);
             }
-            else if (m.Groups["number"].Success) AppendWithColor(sb, input, idx, len, ColorNumber);
-            else if (m.Groups["text"].Success) AppendWithColor(sb, input, idx, len, ColorText);
-            else AppendEscapedText(sb, input, idx, len);
+            else if (m.Groups["number"].Success) AccumulateText(sb, input, idx, len, ColorNumber);
+            else if (m.Groups["text"].Success) AccumulateText(sb, input, idx, len, ColorText);
+            else AccumulateText(sb, input, idx, len, null);
 
             lastIndex = idx + len;
             m = m.NextMatch();
         }
 
-        if (lastIndex < input.Length) AppendEscapedText(sb, input, lastIndex, input.Length - lastIndex);
+        if (lastIndex < input.Length)
+        {
+            AccumulateText(sb, input, lastIndex, input.Length - lastIndex, null);
+        }
+
+        // Flush any remaining text segment left in the buffer to finish the line
+        FlushColorSegment(sb);
 
         return sb.ToString();
     }
 
-    private void AppendEscapedText(StringBuilder sb, string text, int start, int length)
+    private void TriggerAutoLineSplit()
     {
-        int end = start + length;
-        for (int i = start; i < end; i++)
+        _isSwitchingLine = true;
+
+        string currentText = sharedInputField.text;
+        if (string.IsNullOrEmpty(currentText))
         {
-            char c = text[i];
-            if (c == '<') sb.Append("&lt;");
-            else if (c == '>') sb.Append("&gt;");
-            else sb.Append(c);
+            _isSwitchingLine = false;
+            return;
+        }
+
+        TMP_Text textComp = sharedInputField.textComponent;
+        RectTransform inputRt = sharedInputField.GetComponent<RectTransform>();
+
+        // Evaluate geometry
+        textComp.ForceMeshUpdate();
+        float maxWidth = inputRt.rect.width - 20f;
+
+        int splitIndex = currentText.Length - 1;
+        bool overflowFound = false;
+
+        // Find the exact character that crosses the right boundary
+        for (int i = 0; i < textComp.textInfo.characterCount; i++)
+        {
+            if (textComp.textInfo.characterInfo[i].bottomRight.x > maxWidth)
+            {
+                splitIndex = i;
+                overflowFound = true;
+                break;
+            }
+        }
+
+        if (!overflowFound)
+        {
+            _isSwitchingLine = false;
+            return;
+        }
+
+        // Try to break at the last space to keep whole words intact
+        int lastSpace = currentText.LastIndexOf(' ', splitIndex);
+        if (lastSpace > 0 && lastSpace > (splitIndex - 20))
+        {
+            splitIndex = lastSpace;
+        }
+
+        string left = currentText.Substring(0, splitIndex).TrimEnd();
+        string right = currentText.Substring(splitIndex).TrimStart();
+
+        _rawLines[_activeEditLineIndex] = left;
+        _highlightedCache.Remove(_activeEditLineIndex);
+        sharedInputField.SetTextWithoutNotify(left);
+
+        _rawLines.Insert(_activeEditLineIndex + 1, right);
+        int targetLine = _activeEditLineIndex + 1;
+
+        CommitSharedInputToModel();
+        RefreshDocumentLayout();
+        EnsureLineIsVisible(targetLine);
+        Canvas.ForceUpdateCanvases();
+        UpdateVirtualViewport(true);
+
+        if (targetLine < _rawLines.Count)
+        {
+            // Jump to the newly created line
+            RequestLineEdit(targetLine, right.Length);
+        }
+
+        _isSwitchingLine = false;
+
+        // RECURSIVE CASCADING PASTE FIX
+        // Force the input field to recalculate its bounds with the new 'right' text. 
+        // If it STILL overflows (e.g. pasted a 1000-character paragraph), recursively split it again.
+        sharedInputField.ForceLabelUpdate();
+        if (sharedInputField.textComponent.preferredWidth > maxWidth)
+        {
+            TriggerAutoLineSplit();
         }
     }
 
-    private void AppendWithColor(StringBuilder sb, string text, int start, int length, string colorHex)
+    private void EnsureLineIsVisible(int lineIndex)
     {
-        sb.Append("<color=").Append(colorHex).Append(">");
-        AppendEscapedText(sb, text, start, length);
-        sb.Append("</color>");
-    }
+        float viewportHeight = viewportScrollRect.viewport.rect.height;
+        float lineTopY = lineIndex * lineHeight;
+        float lineBottomY = lineTopY + lineHeight;
+        float currentScrollY = contentContainer.anchoredPosition.y;
 
-    private char GetRewardTagChar(string input, int start, int length)
-    {
-        int end = start + length;
-        for (int i = start; i < end; i++)
+        // Scroll down if the line is pushed below the visible viewport
+        if (lineBottomY > currentScrollY + viewportHeight)
         {
-            if (input[i] != '(') return input[i];
+            float targetScrollY = lineBottomY - viewportHeight;
+            contentContainer.anchoredPosition = new Vector2(contentContainer.anchoredPosition.x, targetScrollY);
         }
-        return '\0';
+        // Scroll up if the line is pushed above the visible viewport
+        else if (lineTopY < currentScrollY)
+        {
+            contentContainer.anchoredPosition = new Vector2(contentContainer.anchoredPosition.x, lineTopY);
+        }
     }
 }
