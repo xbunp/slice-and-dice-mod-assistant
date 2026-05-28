@@ -28,6 +28,8 @@ public class VirtualizedIdeController : MonoBehaviour
     private int _selStartChar = -1;
     private int _selEndLine = -1;
     private int _selEndChar = -1;
+    private int _lastAnchorLine = 0;
+    private int _lastAnchorChar = 0;
 
     [Header("UI Scroll Settings")]
     [SerializeField] private ScrollRect viewportScrollRect;
@@ -64,6 +66,9 @@ public class VirtualizedIdeController : MonoBehaviour
     // =========================================================================
     // Precompiled Syntax Highlighting Regex
     // =========================================================================
+
+    private IdeSyntaxConfig _syntaxConfig;
+
     private static readonly Regex SyntaxRegex = new Regex(
         @"(?<=^|[(&@!~\[])(?<floor>e?\d+(?:\.\d+)?\.|\d+-\d+\.|\-?\d+\.)" +
         @"|(?<phase>ph\.[!0-9bcedglrstz]|\.phi\b)" +
@@ -108,6 +113,9 @@ public class VirtualizedIdeController : MonoBehaviour
 
     private void Start()
     {
+        // later pass in the syntax. This is fine for now.
+        _syntaxConfig = new SDTextmodSyntaxConfig();
+
         PerformStrictInitializationSanityPass();
 
         sharedInputField.onValueChanged.AddListener(OnActiveLineTextChanged);
@@ -603,7 +611,8 @@ public class VirtualizedIdeController : MonoBehaviour
     {
         if (_colorAccumulator.Length == 0) return;
 
-        if (string.IsNullOrEmpty(_activeColor) || _activeColor == ColorText)
+        // Reads the default text color dynamically from the configuration
+        if (string.IsNullOrEmpty(_activeColor) || _activeColor == _syntaxConfig.DefaultTextColor)
         {
             mainSb.Append(_colorAccumulator.ToString());
         }
@@ -637,7 +646,7 @@ public class VirtualizedIdeController : MonoBehaviour
     }
     public string ApplySyntaxColorsSync(string input)
     {
-        if (string.IsNullOrEmpty(input)) return string.Empty;
+        if (string.IsNullOrEmpty(input) || _syntaxConfig == null) return string.Empty;
 
         StringBuilder sb = new StringBuilder(input.Length * 2);
         int lastIndex = 0;
@@ -646,7 +655,7 @@ public class VirtualizedIdeController : MonoBehaviour
         _colorAccumulator.Clear();
 
         Match m;
-        try { m = SyntaxRegex.Match(input); } catch { return input; }
+        try { m = _syntaxConfig.SyntaxRegex.Match(input); } catch { return input; }
 
         while (m.Success)
         {
@@ -655,58 +664,8 @@ public class VirtualizedIdeController : MonoBehaviour
 
             if (idx > lastIndex) AccumulateText(sb, input, lastIndex, idx - lastIndex, null);
 
-            if (m.Groups["floor"].Success) AccumulateText(sb, input, idx, len, ColorFloor);
-            else if (m.Groups["phase"].Success)
-            {
-                if (input[idx] == 'p' && len > 3)
-                {
-                    AccumulateText(sb, input, idx, 3, ColorPhasePrefix);
-                    AccumulateText(sb, input, idx + 3, len - 3, ColorPhaseCode);
-                }
-                else AccumulateText(sb, input, idx, len, ColorPhasePrefix);
-            }
-            else if (m.Groups["delimiter"].Success) AccumulateText(sb, input, idx, len, ColorDelimiter);
-            else if (m.Groups["sq_bracket"].Success || m.Groups["bracket"].Success) AccumulateText(sb, input, idx, len, ColorBracket);
-            else if (m.Groups["itempool_block"].Success)
-            {
-                AccumulateText(sb, input, idx, 9, ColorMethod);
-                AccumulateText(sb, input, idx + 9, len - 9, ColorItem);
-            }
-            else if (m.Groups["sd_block"].Success)
-            {
-                AccumulateText(sb, input, idx, 3, ColorMethod);
-                AccumulateText(sb, input, idx + 3, len - 3, ColorSdRed);
-            }
-            else if (m.Groups["ritemx"].Success) AccumulateText(sb, input, idx, len, ColorItem);
-            else if (m.Groups["hsv_block"].Success)
-            {
-                AccumulateText(sb, input, idx, 4, ColorMethod);
-                AccumulateText(sb, input, idx + 4, len - 4, ColorNumber);
-            }
-            else if (m.Groups["k_block"].Success) AccumulateText(sb, input, idx, len, ColorMossGreen);
-            else if (m.Groups["tog"].Success) AccumulateText(sb, input, idx, len, ColorNeonGreen);
-            else if (m.Groups["method"].Success) AccumulateText(sb, input, idx, len, ColorMethod);
-            else if (m.Groups["reward"].Success)
-            {
-                char tagChar = GetRewardTagChar(input, idx, len);
-                string rewardColor = tagChar switch
-                {
-                    'm' => ColorMod,
-                    'i' => ColorItem,
-                    'l' => ColorLvl,
-                    'g' => ColorHero,
-                    'r' => ColorRand,
-                    'q' => ColorRand,
-                    'o' => ColorRand,
-                    'v' => ColorValue,
-                    's' => ColorSkip,
-                    _ => ColorDefaultReward
-                };
-                AccumulateText(sb, input, idx, len, rewardColor);
-            }
-            else if (m.Groups["number"].Success) AccumulateText(sb, input, idx, len, ColorNumber);
-            else if (m.Groups["text"].Success) AccumulateText(sb, input, idx, len, ColorText);
-            else AccumulateText(sb, input, idx, len, null);
+            // Delegate group evaluation to our generic syntax configuration
+            _syntaxConfig.ProcessMatch(m, input, sb, AccumulateText);
 
             lastIndex = idx + len;
             m = m.NextMatch();
@@ -870,15 +829,49 @@ public class VirtualizedIdeController : MonoBehaviour
 
     public void OnRowPointerDown(int lineIndex, PointerEventData eventData)
     {
-        // Cancel single-line input
-        CommitSharedInputToModel();
+        var keyboard = Keyboard.current;
+        bool isShiftPressed = keyboard != null && keyboard.shiftKey.isPressed;
 
-        _isMultiSelecting = false; // Will become true if they drag
-        _selStartLine = lineIndex;
-        _selStartChar = GetCharIndexFromMousePosition(lineIndex, eventData.position);
+        if (isShiftPressed)
+        {
+            // --- SHIFT-CLICK EXPANSION ---
 
-        // Treat as a standard click request initially
-        RequestLineEdit(lineIndex, _selStartChar);
+            // 1. If we were actively typing, capture the live cursor as our starting anchor point
+            if (sharedInputField.gameObject.activeSelf && _activeEditLineIndex != -1)
+            {
+                _lastAnchorLine = _activeEditLineIndex;
+                _lastAnchorChar = sharedInputField.caretPosition;
+            }
+
+            // Close the active editing field cleanly
+            CommitSharedInputToModel();
+
+            // 2. Set multi-select state spanning from our anchor to the newly clicked index
+            _isMultiSelecting = true;
+            _selStartLine = _lastAnchorLine;
+            _selStartChar = _lastAnchorChar;
+            _selEndLine = lineIndex;
+            _selEndChar = GetCharIndexFromMousePosition(lineIndex, eventData.position);
+
+            UpdateVirtualViewport(true);
+            UpdateSelectionCache();
+        }
+        else
+        {
+            // --- STANDARD CLICK (No Shift) ---
+            CommitSharedInputToModel();
+
+            _isMultiSelecting = false;
+
+            // Record this exact coordinate as the starting anchor for future Shift-Clicks
+            _lastAnchorLine = lineIndex;
+            _lastAnchorChar = GetCharIndexFromMousePosition(lineIndex, eventData.position);
+
+            _selStartLine = _lastAnchorLine;
+            _selStartChar = _lastAnchorChar;
+
+            RequestLineEdit(lineIndex, _selStartChar);
+        }
     }
     public void OnRowDrag(PointerEventData eventData)
     {
