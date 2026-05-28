@@ -1,13 +1,14 @@
+using SliceDiceTextMod;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Runtime.InteropServices;
 
 
 public class PhasesFactory : RootUI
@@ -16,6 +17,8 @@ public class PhasesFactory : RootUI
     [DllImport("__Internal")]
     private static extern void ReadOSClipboard(string objectName, string methodName);
 #endif
+
+    private TMP_Text hierarchy;
 
     public bool IDEFormatString = true;
 
@@ -33,7 +36,7 @@ public class PhasesFactory : RootUI
     // --- IDE Typing & Debounce State ---
     private Coroutine debounceCoroutine;
     private Coroutine backgroundHighlightCoroutine;
-    private float typingDebounceDelay = 0.75f; // Wait 750ms after last keystroke before highlighting
+    private Coroutine massUpdateCoroutine;
 
     // References for double-input overlay syntax highlighting
     private TMP_InputField rawTextOutput;
@@ -44,6 +47,21 @@ public class PhasesFactory : RootUI
     // =========================================================================
     private Dictionary<string, string> imgCache = new Dictionary<string, string>();
     private int imgCounter = 0;
+
+    // --- IDE Chunking Architecture ---
+    private class CodeChunkUI
+    {
+        public GameObject Root;
+        public TMP_InputField Input;
+        public TextMeshProUGUI Highlighter;
+        public LayoutElement Layout;
+        public Coroutine DebounceRoutine;
+    }
+
+    private List<CodeChunkUI> codeChunks = new List<CodeChunkUI>();
+    private CodeChunkUI activeChunk;
+    private ScrollRect leftScrollView;
+    private float typingDebounceDelay = 0.5f;
 
     private static readonly Regex ImgRegex = new Regex(@"img\.(.*?)\.|\[(.*?)\]", RegexOptions.Compiled);
     // =========================================================================
@@ -138,6 +156,7 @@ public class PhasesFactory : RootUI
         }
     }
     */
+    /*
     private void Update()
     {
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -157,6 +176,11 @@ public class PhasesFactory : RootUI
             }
         }
 #endif
+    }
+    */
+    private void BuildHierarchy(string rawTextOutput)
+    {
+        hierarchy.text = ModAnalyzer.BuildHierarchy(rawTextOutput);
     }
 
     // --- UI SETUP ---
@@ -189,23 +213,23 @@ public class PhasesFactory : RootUI
             new GridRowSpec(buttonRowHeight,
                 GridCellSpec.CreateButton("Button1", "Toggle IDE Formatting", 0.33f, () => ToggleIDE()),
                 GridCellSpec.CreateButton("Button2", "Paste Textmod (FASTER)", 0.33f, () => {}),
-                GridCellSpec.CreateButton("Button3", "Copy & Restore Code", 0.33f, () => CopyAndRestoreCode()) // NEW COPY BUTTON
+                GridCellSpec.CreateButton("Button3", "Copy & Restore Code", 0.33f, () => CopyAndRestoreCode())
             ),
-            new GridRowSpec(leftScrollHeight, GridCellSpec.CreateScrollView("LeftInputScrollView", 1.0f)),
-            new GridRowSpec(0f, GridCellSpec.CreateInput("MainLeftInput", "Enter logs or notes here...", 1.0f, OnLeftInputChanged))
+            // The ScrollView will now hold all of our chunked inputs!
+            new GridRowSpec(leftScrollHeight, GridCellSpec.CreateScrollView("LeftInputScrollView", 1.0f))
         };
         columns.Add(new ColumnSpec("Left_Column", 0.0f, 0.5f, leftRows));
 
         List<GridRowSpec> rightTopRows = new List<GridRowSpec>
         {
-            new GridRowSpec(rightTopSpacerHeight, GridCellSpec.CreateLabel("RightTopSpacer", "", 1.0f)),
+            new GridRowSpec(rightTopSpacerHeight, GridCellSpec.CreateImagePanel("RightTopSpacer", 1.0f)),
             new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightTopScrollView", 1.0f))
         };
         columns.Add(new ColumnSpec("RightTop_Column", 0.5f, 1.0f, rightTopRows));
 
         List<GridRowSpec> rightBottomRows = new List<GridRowSpec>
         {
-            new GridRowSpec(rightBottomSpacerHeight, GridCellSpec.CreateLabel("RightBottomSpacer", "", 1.0f)),
+            new GridRowSpec(rightBottomSpacerHeight, GridCellSpec.CreateImagePanel("RightBottomSpacer", 1.0f)),
             new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightBottomScrollView", 1.0f))
         };
         columns.Add(new ColumnSpec("RightBottom_Column", 0.5f, 1.0f, rightBottomRows));
@@ -225,132 +249,33 @@ public class PhasesFactory : RootUI
                 pasteBtn.onClick.RemoveAllListeners();
                 pasteBtn.onClick.AddListener(() => {
                     ClipboardManager.RequestPaste(uiGenerator, (clipboardText) => {
-                        if (!string.IsNullOrEmpty(clipboardText))
-                        {
-                            UnityEngine.Debug.Log($"[PasteTextMod] Paste successful. Length: {clipboardText.Length}");
-                            PasteTextDirectly(clipboardText);
-                        }
+                        if (!string.IsNullOrEmpty(clipboardText)) StartCoroutine(RebuildAllChunks(clipboardText));
                     });
                 });
             }
 
-            if (leftRefs.Inputs.TryGetValue("MainLeftInput", out TMP_InputField leftInput) &&
-                leftRefs.ScrollViews.TryGetValue("LeftInputScrollView", out ScrollRect scrollView))
+            if (leftRefs.ScrollViews.TryGetValue("LeftInputScrollView", out ScrollRect scrollView))
             {
-                rawTextOutput = leftInput;
-
+                leftScrollView = scrollView;
                 scrollView.horizontal = false;
                 scrollView.vertical = true;
-                rawTextOutput.transform.SetParent(scrollView.content, false);
 
                 var contentLayout = scrollView.content.GetComponent<VerticalLayoutGroup>();
                 if (contentLayout == null) contentLayout = scrollView.content.gameObject.AddComponent<VerticalLayoutGroup>();
                 contentLayout.childControlHeight = true;
                 contentLayout.childControlWidth = true;
-                contentLayout.childForceExpandHeight = true;
+                contentLayout.childForceExpandHeight = false; // Prevents massive stretching
                 contentLayout.childForceExpandWidth = true;
+                contentLayout.spacing = 10f; // Gap between code blocks
+                contentLayout.padding = new RectOffset(5, 5, 5, 5);
 
-                contentFitter = scrollView.content.GetComponent<ContentSizeFitter>();
+                var contentFitter = scrollView.content.GetComponent<ContentSizeFitter>();
                 if (contentFitter == null) contentFitter = scrollView.content.gameObject.AddComponent<ContentSizeFitter>();
                 contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
                 contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
-                var contentLayoutElement = scrollView.content.GetComponent<LayoutElement>();
-                if (contentLayoutElement != null) Destroy(contentLayoutElement);
-
-                var inputFitter = rawTextOutput.GetComponent<ContentSizeFitter>();
-                if (inputFitter != null) Destroy(inputFitter);
-
-                var inputLayoutElement = rawTextOutput.GetComponent<LayoutElement>();
-                if (inputLayoutElement == null) inputLayoutElement = rawTextOutput.gameObject.AddComponent<LayoutElement>();
-
-                float viewportHeight = scrollView.viewport != null ? scrollView.viewport.rect.height : scrollView.GetComponent<RectTransform>().rect.height;
-                inputLayoutElement.minHeight = viewportHeight;
-
-                var scrollPassThrough = rawTextOutput.GetComponent<ScrollPassThrough>();
-                if (scrollPassThrough == null)
-                {
-                    scrollPassThrough = rawTextOutput.gameObject.AddComponent<ScrollPassThrough>();
-                }
-                scrollPassThrough.TargetScrollRect = scrollView;
-
-                if (rawTextOutput.textViewport != null)
-                {
-                    rawTextOutput.textViewport.anchorMin = Vector2.zero;
-                    rawTextOutput.textViewport.anchorMax = Vector2.one;
-                    rawTextOutput.textViewport.offsetMin = new Vector2(8, 8);
-                    rawTextOutput.textViewport.offsetMax = new Vector2(-8, -8);
-                }
-
-                if (rawTextOutput.textComponent != null)
-                {
-                    RectTransform textRt = rawTextOutput.textComponent.GetComponent<RectTransform>();
-                    if (textRt != null)
-                    {
-                        textRt.anchorMin = Vector2.zero;
-                        textRt.anchorMax = Vector2.one;
-                        textRt.offsetMin = Vector2.zero;
-                        textRt.offsetMax = Vector2.zero;
-                    }
-                }
-
-                if (rawTextOutput.placeholder != null)
-                {
-                    RectTransform placeholderRt = rawTextOutput.placeholder.GetComponent<RectTransform>();
-                    if (placeholderRt != null)
-                    {
-                        placeholderRt.anchorMin = Vector2.zero;
-                        placeholderRt.anchorMax = Vector2.one;
-                        placeholderRt.offsetMin = Vector2.zero;
-                        placeholderRt.offsetMax = Vector2.zero;
-                    }
-                }
-
-                rawTextOutput.lineType = TMP_InputField.LineType.MultiLineNewline;
-                rawTextOutput.textComponent.alignment = TextAlignmentOptions.TopLeft;
-
-                var placeholder = rawTextOutput.placeholder as TextMeshProUGUI;
-                if (placeholder != null) placeholder.alignment = TextAlignmentOptions.TopLeft;
-
-                rawTextOutput.textComponent.color = Color.clear;
-                rawTextOutput.customCaretColor = true;
-                rawTextOutput.caretColor = Color.white;
-                rawTextOutput.richText = false;
-                rawTextOutput.textComponent.enableAutoSizing = false;
-                rawTextOutput.pointSize = 12;
-                rawTextOutput.textComponent.autoSizeTextContainer = false;
-
-                GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
-                highlighterObj.name = "SyntaxHighlighter";
-                syntaxHighlighterText = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
-
-                var canvasGroup = highlighterObj.GetComponent<CanvasGroup>();
-                if (canvasGroup == null) canvasGroup = highlighterObj.AddComponent<CanvasGroup>();
-                canvasGroup.blocksRaycasts = false;
-                canvasGroup.interactable = false;
-
-                foreach (var script in highlighterObj.GetComponents<MonoBehaviour>())
-                {
-                    if (script != null && !(script is TextMeshProUGUI)) DestroyImmediate(script);
-                }
-
-                RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
-                RectTransform textCompRt = rawTextOutput.textComponent.GetComponent<RectTransform>();
-                highlightRt.anchorMin = textCompRt.anchorMin;
-                highlightRt.anchorMax = textCompRt.anchorMax;
-                highlightRt.offsetMin = textCompRt.offsetMin;
-                highlightRt.offsetMax = textCompRt.offsetMax;
-                highlightRt.pivot = textCompRt.pivot;
-
-                syntaxHighlighterText.enableAutoSizing = false;
-                syntaxHighlighterText.fontSize = 12;
-                syntaxHighlighterText.alignment = rawTextOutput.textComponent.alignment;
-                syntaxHighlighterText.margin = rawTextOutput.textComponent.margin;
-                syntaxHighlighterText.enableWordWrapping = rawTextOutput.textComponent.enableWordWrapping;
-                syntaxHighlighterText.autoSizeTextContainer = false;
-                syntaxHighlighterText.richText = true;
-
-                OnLeftInputChanged(rawTextOutput.text);
+                // Spawn an initial empty chunk to type in
+                if (codeChunks.Count == 0) codeChunks.Add(CreateChunk());
             }
         }
 
@@ -360,9 +285,77 @@ public class PhasesFactory : RootUI
         ClearSpacerText("RightTop_Column", "RightTopSpacer");
         ClearSpacerText("RightBottom_Column", "RightBottomSpacer");
 
-        PopulateDemoScrollView("RightTop_Column", "RightTopScrollView", "Right Top Button");
+        PopulateScrollViewWithLabel("RightTop_Column", "RightTopScrollView", "Right Top Panel Output Log");
         PopulateDemoScrollView("RightBottom_Column", "RightBottomScrollView", "Right Bottom Button");
     }
+
+    private CodeChunkUI CreateChunk()
+    {
+        GameObject inputObj = Instantiate(uiGenerator.inputFieldPrefab, leftScrollView.content);
+        TMP_InputField input = inputObj.GetComponent<TMP_InputField>();
+
+        LayoutElement layout = inputObj.GetComponent<LayoutElement>();
+        if (layout == null) layout = inputObj.AddComponent<LayoutElement>();
+        layout.minHeight = 60f;
+
+        var fitter = inputObj.GetComponent<ContentSizeFitter>();
+        if (fitter != null) Destroy(fitter);
+
+        // --- FIX: Add the Scroll Pass Through to the Chunk ---
+        var scrollPassThrough = inputObj.GetComponent<ScrollPassThrough>();
+        if (scrollPassThrough == null) scrollPassThrough = inputObj.AddComponent<ScrollPassThrough>();
+        scrollPassThrough.TargetScrollRect = leftScrollView;
+        // -----------------------------------------------------
+
+        input.lineType = TMP_InputField.LineType.MultiLineNewline;
+        input.textComponent.alignment = TextAlignmentOptions.TopLeft;
+        input.textComponent.color = Color.clear;
+        input.customCaretColor = true;
+        input.caretColor = Color.white;
+        input.richText = false;
+        input.textComponent.enableAutoSizing = false;
+        input.pointSize = 12;
+
+        if (input.textViewport != null)
+        {
+            input.textViewport.anchorMin = Vector2.zero;
+            input.textViewport.anchorMax = Vector2.one;
+            input.textViewport.offsetMin = new Vector2(8, 8);
+            input.textViewport.offsetMax = new Vector2(-8, -8);
+        }
+
+        GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, input.textComponent.transform.parent);
+        highlighterObj.name = "SyntaxHighlighter";
+        TextMeshProUGUI highlighter = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
+
+        var cg = highlighterObj.GetComponent<CanvasGroup>();
+        if (cg == null) cg = highlighterObj.AddComponent<CanvasGroup>();
+        cg.blocksRaycasts = false;
+        cg.interactable = false;
+
+        RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
+        RectTransform textCompRt = input.textComponent.GetComponent<RectTransform>();
+        highlightRt.anchorMin = textCompRt.anchorMin;
+        highlightRt.anchorMax = textCompRt.anchorMax;
+        highlightRt.offsetMin = textCompRt.offsetMin;
+        highlightRt.offsetMax = textCompRt.offsetMax;
+        highlightRt.pivot = textCompRt.pivot;
+
+        highlighter.enableAutoSizing = false;
+        highlighter.fontSize = 12;
+        highlighter.alignment = input.textComponent.alignment;
+        highlighter.margin = input.textComponent.margin;
+        highlighter.enableWordWrapping = input.textComponent.enableWordWrapping;
+        highlighter.richText = true;
+
+        CodeChunkUI chunk = new CodeChunkUI { Root = inputObj, Input = input, Highlighter = highlighter, Layout = layout };
+
+        input.onValueChanged.AddListener((val) => OnChunkInputChanged(chunk, val));
+        input.onSelect.AddListener((str) => activeChunk = chunk);
+
+        return chunk;
+    }
+
     private void ClearSpacerText(string columnName, string spacerKey)
     {
         if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
@@ -439,35 +432,6 @@ public class PhasesFactory : RootUI
     }
     */
 
-    private void OnLeftInputChanged(string value)
-    {
-        if (isUpdatingText) return;
-
-        // 1. BREAK THE CHAIN OF DOOM: Instantly prevent the expensive layout calculation.
-        if (contentFitter != null) contentFitter.enabled = false;
-
-        // 2. INSTANT FEEDBACK: Show raw text and hide the (now stale) highlighter.
-        if (rawTextOutput != null && syntaxHighlighterText != null)
-        {
-            rawTextOutput.textComponent.color = Color.white;
-            syntaxHighlighterText.color = Color.clear;
-        }
-
-        // 3. Start the debounce timer.
-        if (debounceCoroutine != null) StopCoroutine(debounceCoroutine);
-        debounceCoroutine = StartCoroutine(HandleTypingDebounce(value));
-    }
-    private IEnumerator HandleTypingDebounce(string value)
-    {
-        // Wait for the user to stop typing for a moment
-        yield return new WaitForSeconds(typingDebounceDelay);
-
-        // If a background highlight is already running from a previous pause, stop it
-        if (backgroundHighlightCoroutine != null) StopCoroutine(backgroundHighlightCoroutine);
-
-        // Start the silent background highlighter
-        backgroundHighlightCoroutine = StartCoroutine(BackgroundSyntaxHighlightOnlyAsync(value));
-    }
 
     // --- Initiators  ---
     public void OnClipboardDataReceived(string clipboardText)
@@ -484,17 +448,17 @@ public class PhasesFactory : RootUI
     }
     private void PasteTextDirectly(string clipboard)
     {
-        if (rawTextOutput == null) return;
+        if (activeChunk == null && codeChunks.Count > 0) activeChunk = codeChunks[0];
+        if (activeChunk == null) return;
 
-        // Lock UI instantly
-        rawTextOutput.readOnly = true;
+        activeChunk.Input.readOnly = true;
 
-        int selectStart = rawTextOutput.selectionStringFocusPosition;
-        int selectEnd = rawTextOutput.selectionStringAnchorPosition;
+        int selectStart = activeChunk.Input.selectionStringFocusPosition;
+        int selectEnd = activeChunk.Input.selectionStringAnchorPosition;
         int start = Mathf.Min(selectStart, selectEnd);
         int end = Mathf.Max(selectStart, selectEnd);
 
-        string currentText = rawTextOutput.text ?? "";
+        string currentText = activeChunk.Input.text ?? "";
         string newText;
 
         if (start != end && start >= 0 && end <= currentText.Length)
@@ -503,370 +467,250 @@ public class PhasesFactory : RootUI
         }
         else
         {
-            int caret = Mathf.Clamp(rawTextOutput.caretPosition, 0, currentText.Length);
+            int caret = Mathf.Clamp(activeChunk.Input.caretPosition, 0, currentText.Length);
             newText = currentText.Insert(caret, clipboard);
         }
 
-        // We bypass TMP rendering update by bypassing standard input
-        StartCoroutine(ProcessHeavyTextUpdatesCoroutine(newText));
-    }
-
-    // --- ASYNC PROCESSORS ---
-    private IEnumerator ProcessHeavyTextUpdatesCoroutine(string value)
-    {
-        isUpdatingText = true;
-
-        if (debounceCoroutine != null) StopCoroutine(debounceCoroutine);
-        if (backgroundHighlightCoroutine != null) StopCoroutine(backgroundHighlightCoroutine);
-
-        // --- NEW: Disable layout system during heavy processing ---
-        if (contentFitter != null) contentFitter.enabled = false;
-
-        UIPopup popup = null;
-        bool isLargeText = value != null && value.Length > 15000;
-
-        if (isLargeText)
+        // If the paste is massive, stitch the whole document and run the heavy async rebuilder
+        if (newText.Length > 15000 || newText.Contains(","))
         {
-            if (rawTextOutput != null) rawTextOutput.readOnly = true;
-            popup = uiGenerator.CreatePopup("Processing large text block, please wait...", false);
-            Canvas.ForceUpdateCanvases();
-            yield return null;
-            yield return null; // Ensure rendering happens
-        }
-
-        Stopwatch sw = Stopwatch.StartNew();
-        string currentString = value;
-
-        // Step 1: Compress Images asynchronously
-        yield return StartCoroutine(CompressImagesAsync(currentString, result => currentString = result));
-
-        // Step 2: Auto-Format or Minify asynchronously
-        if (IDEFormatString)
-        {
-            yield return StartCoroutine(AutoFormatModStringAsync(currentString, result => currentString = result));
+            StringBuilder fullCode = new StringBuilder();
+            for (int i = 0; i < codeChunks.Count; i++)
+            {
+                if (codeChunks[i] == activeChunk) fullCode.Append(newText);
+                else fullCode.Append(codeChunks[i].Input.text);
+            }
+            StartCoroutine(RebuildAllChunks(fullCode.ToString()));
         }
         else
         {
-            // Just call it synchronously, then yield a frame
-            currentString = MinifyModString(currentString);
-            yield return null;
+            // It's a small paste, handle it on just this chunk instantly
+            activeChunk.Input.text = newText;
+            if (activeChunk.DebounceRoutine != null) StopCoroutine(activeChunk.DebounceRoutine);
+            activeChunk.DebounceRoutine = StartCoroutine(HandleChunkDebounce(activeChunk, newText));
+            activeChunk.Input.readOnly = false;
         }
+    }
 
-        // Step 3: Assign to UI (Synchronous, but we use WithoutNotify to avoid lag)
-        if (rawTextOutput != null && rawTextOutput.text != currentString)
+    // --- ASYNC PROCESSORS ---
+    private IEnumerator RebuildAllChunks(string fullText)
+    {
+        isUpdatingText = true;
+        UIPopup popup = uiGenerator.CreatePopup("Processing code blocks, please wait...", false);
+        yield return null; yield return null;
+
+        foreach (var c in codeChunks) Destroy(c.Root);
+        codeChunks.Clear();
+
+        // --- FIX: Split but retain the comma at the end of the chunk! ---
+        string[] blocks = Regex.Split(fullText, "(?<=,)");
+
+        for (int i = 0; i < blocks.Length; i++)
         {
-            int originalCaret = rawTextOutput.caretPosition;
-            rawTextOutput.SetTextWithoutNotify(currentString);
-            rawTextOutput.caretPosition = Mathf.Min(originalCaret, currentString.Length);
-        }
-        yield return null;
+            if (string.IsNullOrEmpty(blocks[i])) continue;
 
-        // Step 4: Syntax Highlighting asynchronously
-        if (syntaxHighlighterText != null)
+            var chunk = CreateChunk();
+            codeChunks.Add(chunk);
+
+            string compressed = CompressImagesSync(blocks[i]);
+            string formatted = IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
+
+            chunk.Input.SetTextWithoutNotify(formatted);
+            chunk.Highlighter.text = FormatSyntaxHighlightingSync(formatted);
+            UpdateChunkHeight(chunk, formatted);
+
+            if (i % 5 == 0) yield return null;
+        }
+
+        if (codeChunks.Count == 0) codeChunks.Add(CreateChunk());
+
+        foreach (var chunk in codeChunks)
         {
-            string highlighted = string.Empty;
-            yield return StartCoroutine(FormatSyntaxHighlightingAsync(currentString, result => highlighted = result));
-            syntaxHighlighterText.text = highlighted;
-        }
-        yield return null;
-
-        if (contentFitter != null) contentFitter.enabled = true;
-        UpdateInputFieldHeight(currentString);
-
-        if (popup != null) popup.Dismiss();
-        if (rawTextOutput != null) rawTextOutput.readOnly = false;
-
-        if (rawTextOutput != null && syntaxHighlighterText != null)
-        {
-            if (ColorUtility.TryParseHtmlString(ColorText, out Color myColor))
-            {
-                syntaxHighlighterText.color = myColor;
-            }
-            else
-            {
-                syntaxHighlighterText.color = Color.white;
-            }
-            rawTextOutput.textComponent.color = Color.clear;
+            if (ColorUtility.TryParseHtmlString(ColorText, out Color myColor)) chunk.Highlighter.color = myColor;
+            else chunk.Highlighter.color = Color.white;
+            chunk.Input.textComponent.color = Color.clear;
         }
 
-        sw.Stop();
-        UnityEngine.Debug.Log($"[Profiler] Async pipeline finished in {sw.ElapsedMilliseconds}ms real-time.");
-
+        popup.Dismiss();
+        BuildHierarchy(fullText);
         isUpdatingText = false;
     }
-    private IEnumerator CompressImagesAsync(string text, Action<string> onComplete)
+    private void OnChunkInputChanged(CodeChunkUI chunk, string value)
     {
-        // Fast exit check: updated to also look for brackets
-        if (string.IsNullOrEmpty(text) || (!text.Contains("img.") && !text.Contains("[")))
+        if (isUpdatingText) return;
+
+        // INSTANT FEEDBACK
+        chunk.Input.textComponent.color = Color.white;
+        chunk.Highlighter.color = Color.clear;
+
+        if (chunk.DebounceRoutine != null) StopCoroutine(chunk.DebounceRoutine);
+        chunk.DebounceRoutine = StartCoroutine(HandleChunkDebounce(chunk, value));
+    }
+    private IEnumerator HandleChunkDebounce(CodeChunkUI chunk, string value)
+    {
+        yield return new WaitForSeconds(typingDebounceDelay);
+
+        // Process chunk synchronously (It's < 20,000 chars, it will be instant!)
+        string compressed = CompressImagesSync(value);
+        string formatted = IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
+
+        if (chunk.Input.text != formatted)
         {
-            onComplete(text);
-            yield break;
+            int caret = chunk.Input.caretPosition;
+            chunk.Input.SetTextWithoutNotify(formatted);
+            chunk.Input.caretPosition = Mathf.Min(caret, formatted.Length);
         }
 
-        StringBuilder sb = new StringBuilder(text.Length);
-        Match m = ImgRegex.Match(text); // Uses: @"img\.(.*?)\.|\[(.*?)\]"
-        int lastIndex = 0;
-        int operations = 0;
+        chunk.Highlighter.text = FormatSyntaxHighlightingSync(formatted);
+        UpdateChunkHeight(chunk, formatted);
 
+        // Restore Visibility
+        ColorUtility.TryParseHtmlString(ColorText, out Color myColor);
+        chunk.Highlighter.color = myColor;
+        chunk.Input.textComponent.color = Color.clear;
+    }
+    private void UpdateChunkHeight(CodeChunkUI chunk, string formattedText)
+    {
+        float textHeight = chunk.Input.textComponent.GetPreferredValues(formattedText).y;
+        float newHeight = Mathf.Max(60f, textHeight + 20f); // 20f padding
+
+        if (Mathf.Abs(chunk.Layout.preferredHeight - newHeight) > 1f)
+        {
+            chunk.Layout.preferredHeight = newHeight;
+            // Force scroll view to accept the new height organically
+            LayoutRebuilder.ForceRebuildLayoutImmediate(leftScrollView.content);
+        }
+    }
+    private void CopyAndRestoreCode()
+    {
+        StringBuilder fullCode = new StringBuilder();
+        for (int i = 0; i < codeChunks.Count; i++)
+        {
+            fullCode.Append(MinifyModString(codeChunks[i].Input.text));
+            // Removed the manual append(",") since the chunk already contains it!
+        }
+
+        string restoredText = RestoreImages(fullCode.ToString());
+        string formattedText = InsertLinebreaksAfterCommas(restoredText);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        ClipboardHelper.CopyToClipboard(formattedText);
+#else
+        GUIUtility.systemCopyBuffer = formattedText;
+#endif
+        uiGenerator.CreatePopup("Copied output to clipboard!", true, null);
+    }
+    private void ToggleIDE()
+    {
+        IDEFormatString = !IDEFormatString;
+        UpdateToggleButtonText();
+
+        // Cancel any ongoing massive updates to prevent overlap
+        if (massUpdateCoroutine != null) StopCoroutine(massUpdateCoroutine);
+
+        // Cancel individual typings
+        foreach (var chunk in codeChunks)
+        {
+            if (chunk.DebounceRoutine != null) StopCoroutine(chunk.DebounceRoutine);
+        }
+
+        // Start the Async Mass Update
+        massUpdateCoroutine = StartCoroutine(ReformatAllChunksAsync());
+    }
+    private IEnumerator ReformatAllChunksAsync()
+    {
+        isUpdatingText = true;
+        UIPopup popup = uiGenerator.CreatePopup("Reformatting code blocks, please wait...", false);
+        yield return null; yield return null;
+
+        for (int i = 0; i < codeChunks.Count; i++)
+        {
+            var chunk = codeChunks[i];
+
+            string compressed = CompressImagesSync(chunk.Input.text);
+            string formatted = IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
+
+            if (chunk.Input.text != formatted)
+            {
+                chunk.Input.SetTextWithoutNotify(formatted);
+            }
+
+            chunk.Highlighter.text = FormatSyntaxHighlightingSync(formatted);
+            UpdateChunkHeight(chunk, formatted);
+
+            if (ColorUtility.TryParseHtmlString(ColorText, out Color myColor)) chunk.Highlighter.color = myColor;
+            else chunk.Highlighter.color = Color.white;
+            chunk.Input.textComponent.color = Color.clear;
+
+            // Yield every 5 blocks to prevent freezing the UI
+            if (i % 5 == 0) yield return null;
+        }
+
+        if (popup != null) popup.Dismiss();
+        isUpdatingText = false;
+    }
+
+    private void Update()
+    {
+#if !UNITY_WEBGL || UNITY_EDITOR
+        bool isMac = Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.OSXPlayer;
+        bool modifier = isMac ? Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand) : Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+
+        if (modifier && Input.GetKeyDown(KeyCode.V) && !isUpdatingText)
+        {
+            string clipboard = GUIUtility.systemCopyBuffer;
+            if (!string.IsNullOrEmpty(clipboard) && (clipboard.Length > 15000 || clipboard.Contains(",")))
+            {
+                StartCoroutine(RebuildAllChunks(clipboard));
+            }
+        }
+#endif
+    }
+
+    // Synchronous tools (No yield limits needed because chunks are so small)
+    private string CompressImagesSync(string text)
+    {
+        if (string.IsNullOrEmpty(text) || (!text.Contains("img.") && !text.Contains("["))) return text;
+        StringBuilder sb = new StringBuilder(text.Length);
+        Match m = ImgRegex.Match(text);
+        int lastIndex = 0;
         while (m.Success)
         {
-            // Append the text before the match (Zero allocation substring)
             sb.Append(text, lastIndex, m.Index - lastIndex);
-
-            // Determine if it was a bracket match by checking the first character
             bool isBracket = m.Value.StartsWith("[");
-
-            // If it's a bracket match, the data is in Group 2. Otherwise, Group 1.
             string innerData = isBracket ? m.Groups[2].Value : m.Groups[1].Value;
-
-            if (innerData.StartsWith("IMG_") || innerData.Length <= 25)
-            {
-                sb.Append(m.Value);
-            }
+            if (innerData.StartsWith("IMG_") || innerData.Length <= 25) sb.Append(m.Value);
             else
             {
                 string newId = $"IMG_{++imgCounter}";
                 imgCache[newId] = innerData;
-
-                // Reconstruct with the appropriate formatting
-                if (isBracket)
-                {
-                    sb.Append($"[{newId}]");
-                }
-                else
-                {
-                    sb.Append($"img.{newId}.");
-                }
+                sb.Append(isBracket ? $"[{newId}]" : $"img.{newId}.");
             }
-
             lastIndex = m.Index + m.Length;
-            operations++;
-
-            if (operations > SettingsManager.REGEX_MATCHES_PER_FRAME)
-            {
-                operations = 0;
-                yield return null; // Yield back to main thread
-            }
-
             m = m.NextMatch();
         }
-
         if (lastIndex < text.Length) sb.Append(text, lastIndex, text.Length - lastIndex);
-
-        onComplete(sb.ToString());
+        return sb.ToString();
     }
-    private IEnumerator AutoFormatModStringAsync(string raw, Action<string> onComplete)
+
+    private string AutoFormatModStringSync(string raw)
     {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            onComplete(string.Empty);
-            yield break;
-        }
-
         string minified = MinifyModString(raw);
-        yield return null; // Breathe for one frame
-
         StringBuilder sb = new StringBuilder(minified.Length + 500);
         int indentLevel = 0;
-        int operations = 0;
-
         for (int i = 0; i < minified.Length; i++)
         {
             char c = minified[i];
-
-            if (c == ',')
-            {
-                indentLevel = 0;
-                sb.Append(c);
-            }
-            else if (c == '&')
-            {
-                AppendNewlineAndIndent(sb, indentLevel * 4);
-                sb.Append(c);
-            }
-            else if (c == '@' && i + 1 < minified.Length && char.IsDigit(minified[i + 1]))
-            {
-                AppendNewlineAndIndent(sb, (indentLevel + 1) * 4);
-                sb.Append(c);
-                sb.Append(minified[++i]);
-            }
-            else if (c == ';')
-            {
-                AppendNewlineAndIndent(sb, (indentLevel + 1) * 4);
-                sb.Append(c);
-            }
-            else if ((c == '{' && i + 1 < minified.Length && minified[i + 1] == '}') ||
-                     (c == '(' && i + 1 < minified.Length && minified[i + 1] == ')'))
-            {
-                sb.Append(c);
-                sb.Append(minified[++i]);
-            }
-            else if (c == '{' || c == '(')
-            {
-                AppendNewlineAndIndent(sb, indentLevel * 4);
-                sb.Append(c);
-                indentLevel++;
-                AppendNewlineAndIndent(sb, indentLevel * 4);
-            }
-            else if (c == '}' || c == ')')
-            {
-                indentLevel = Math.Max(0, indentLevel - 1);
-                AppendNewlineAndIndent(sb, indentLevel * 4);
-                sb.Append(c);
-            }
-            else
-            {
-                sb.Append(c);
-            }
-
-            operations++;
-            if (operations > SettingsManager.CHARS_PER_FRAME)
-            {
-                operations = 0;
-                yield return null;
-            }
+            if (c == ',') { indentLevel = 0; sb.Append(c); }
+            else if (c == '&') { AppendNewlineAndIndent(sb, indentLevel * 4); sb.Append(c); }
+            else if (c == '@' && i + 1 < minified.Length && char.IsDigit(minified[i + 1])) { AppendNewlineAndIndent(sb, (indentLevel + 1) * 4); sb.Append(c); sb.Append(minified[++i]); }
+            else if (c == ';') { AppendNewlineAndIndent(sb, (indentLevel + 1) * 4); sb.Append(c); }
+            else if ((c == '{' && i + 1 < minified.Length && minified[i + 1] == '}') || (c == '(' && i + 1 < minified.Length && minified[i + 1] == ')')) { sb.Append(c); sb.Append(minified[++i]); }
+            else if (c == '{' || c == '(') { AppendNewlineAndIndent(sb, indentLevel * 4); sb.Append(c); indentLevel++; AppendNewlineAndIndent(sb, indentLevel * 4); }
+            else if (c == '}' || c == ')') { indentLevel = Math.Max(0, indentLevel - 1); AppendNewlineAndIndent(sb, indentLevel * 4); sb.Append(c); }
+            else sb.Append(c);
         }
-
-        onComplete(sb.ToString().TrimStart());
-    }
-    private IEnumerator FormatSyntaxHighlightingAsync(string input, Action<string> onComplete)
-    {
-        if (string.IsNullOrEmpty(input))
-        {
-            onComplete(string.Empty);
-            yield break;
-        }
-
-        StringBuilder sb = new StringBuilder(input.Length * 2);
-        int lastIndex = 0;
-        int operations = 0;
-
-        Match m = null;
-        try { m = SyntaxRegex.Match(input); } catch { onComplete(input); yield break; }
-
-        while (m.Success)
-        {
-            int idx = m.Index;
-            int len = m.Length;
-
-            if (idx > lastIndex) AppendEscaped(sb, input, lastIndex, idx - lastIndex);
-
-            if (m.Groups["floor"].Success) AppendWithColor(sb, input, idx, len, ColorFloor);
-            else if (m.Groups["phase"].Success)
-            {
-                // Check if it's "ph.X" (Starts with 'p') to split the color
-                if (input[idx] == 'p' && len > 3)
-                {
-                    sb.Append("<color=").Append(ColorPhasePrefix).Append(">");
-                    AppendEscaped(sb, input, idx, 3);
-                    sb.Append("</color><color=").Append(ColorPhaseCode).Append(">");
-                    AppendEscaped(sb, input, idx + 3, len - 3);
-                    sb.Append("</color>");
-                }
-                // Otherwise it's ".phi", tint the whole word
-                else AppendWithColor(sb, input, idx, len, ColorPhasePrefix);
-            }
-            else if (m.Groups["delimiter"].Success) AppendWithColor(sb, input, idx, len, ColorDelimiter);
-            else if (m.Groups["sq_bracket"].Success || m.Groups["bracket"].Success) AppendWithColor(sb, input, idx, len, ColorBracket);
-            else if (m.Groups["itempool_block"].Success)
-            {
-                sb.Append("<color=").Append(ColorMethod).Append(">");
-                AppendEscaped(sb, input, idx, 9); // "itempool."
-                sb.Append("</color><color=").Append(ColorItem).Append(">");
-                AppendEscaped(sb, input, idx + 9, len - 9);
-                sb.Append("</color>");
-            }
-            else if (m.Groups["sd_block"].Success)
-            {
-                sb.Append("<color=").Append(ColorMethod).Append(">");
-                AppendEscaped(sb, input, idx, 3); // "sd."
-                sb.Append("</color><color=").Append(ColorSdRed).Append(">"); // Using the Coral Red
-                AppendEscaped(sb, input, idx + 3, len - 3);
-                sb.Append("</color>");
-            }
-            else if (m.Groups["ritemx"].Success) AppendWithColor(sb, input, idx, len, ColorItem);
-            else if (m.Groups["hsv_block"].Success)
-            {
-                sb.Append("<color=").Append(ColorMethod).Append(">");
-                AppendEscaped(sb, input, idx, 4); // "hsv."
-                sb.Append("</color><color=").Append(ColorNumber).Append(">"); // Numbers after hsv.
-                AppendEscaped(sb, input, idx + 4, len - 4);
-                sb.Append("</color>");
-            }
-            else if (m.Groups["k_block"].Success) AppendWithColor(sb, input, idx, len, ColorMossGreen);
-            else if (m.Groups["tog"].Success) AppendWithColor(sb, input, idx, len, ColorNeonGreen);
-            else if (m.Groups["method"].Success) AppendWithColor(sb, input, idx, len, ColorMethod);
-            else if (m.Groups["reward"].Success)
-            {
-                char tagChar = GetRewardTagChar(input, idx, len);
-                string rewardColor = tagChar switch
-                {
-                    'm' => ColorMod,
-                    'i' => ColorItem,
-                    'l' => ColorLvl,
-                    'g' => ColorHero,
-                    'r' => ColorRand,
-                    'q' => ColorRand,
-                    'o' => ColorRand,
-                    'v' => ColorValue,
-                    's' => ColorSkip,
-                    _ => ColorDefaultReward
-                };
-                AppendWithColor(sb, input, idx, len, rewardColor);
-            }
-            else if (m.Groups["number"].Success) AppendWithColor(sb, input, idx, len, ColorNumber);
-            else if (m.Groups["text"].Success) AppendWithColor(sb, input, idx, len, ColorText);
-            else AppendEscaped(sb, input, idx, len);
-
-            lastIndex = idx + len;
-            operations++;
-
-            if (operations > SettingsManager.REGEX_MATCHES_PER_FRAME)
-            {
-                operations = 0;
-                yield return null;
-            }
-
-            m = m.NextMatch();
-        }
-
-        if (lastIndex < input.Length) AppendEscaped(sb, input, lastIndex, input.Length - lastIndex);
-
-        onComplete(sb.ToString());
-    }
-    private IEnumerator BackgroundSyntaxHighlightOnlyAsync(string text)
-    {
-        if (syntaxHighlighterText == null) yield break;
-
-        string highlighted = string.Empty;
-
-        // Run the async highlighter
-        yield return StartCoroutine(FormatSyntaxHighlightingAsync(text, result => highlighted = result));
-
-        if (syntaxHighlighterText != null)
-        {
-            syntaxHighlighterText.text = highlighted;
-
-            // RE-ENABLE LAYOUT: Now that the user has stopped typing, we can safely recalculate.
-            if (contentFitter != null) contentFitter.enabled = true;
-
-            // Adjust the height (this will now trigger the calculation, but only once)
-            UpdateInputFieldHeight(text);
-
-            // SWAP VISIBILITY back to the colored text
-            if (ColorUtility.TryParseHtmlString(ColorText, out Color myColor))
-            {
-                syntaxHighlighterText.color = myColor;
-            }
-            else
-            {
-                syntaxHighlighterText.color = Color.white;
-            }
-
-            if (rawTextOutput != null) rawTextOutput.textComponent.color = Color.clear;
-        }
-
-        backgroundHighlightCoroutine = null;
+        return sb.ToString().TrimStart();
     }
 
     private void AppendNewlineAndIndent(StringBuilder sb, int indent)
@@ -905,6 +749,7 @@ public class PhasesFactory : RootUI
     // =========================================================================
     // Other Stuff
     // =========================================================================
+    /*
     private void ToggleIDE()
     {
         IDEFormatString = !IDEFormatString;
@@ -916,6 +761,7 @@ public class PhasesFactory : RootUI
             isPendingUpdate = true;
         }
     }
+    */
     private void UpdateToggleButtonText()
     {
         if (generatedScreen != null &&
@@ -926,26 +772,6 @@ public class PhasesFactory : RootUI
                 var textMesh = btn.GetComponentInChildren<TextMeshProUGUI>();
                 if (textMesh != null) textMesh.text = IDEFormatString ? "Toggle IDE Formatting OFF" : "Toggle IDE Formatting ON";
             }
-        }
-    }
-    private void PasteTextMod()
-    {
-        //if (isUpdatingText) return;
-
-        // Directly capture to the persistent variable
-        tempClipboardBuffer = GUIUtility.systemCopyBuffer;
-
-        if (tempClipboardBuffer != null && tempClipboardBuffer.Length > 0)
-        {
-            UnityEngine.Debug.Log($"[PasteTest] Paste successful! Length: {tempClipboardBuffer.Length}");
-
-            // Apply it directly to the UI exactly like your working button
-            //rawTextOutput.text = tempClipboardBuffer;
-            //OnRawTextChanged(tempClipboardBuffer);
-        }
-        else
-        {
-            UnityEngine.Debug.LogWarning("[PasteTest] Paste failed: systemCopyBuffer was null or empty.");
         }
     }
 
@@ -996,6 +822,7 @@ public class PhasesFactory : RootUI
                     : scrollView.GetComponent<RectTransform>().rect.height;
 
                 float newHeight = Mathf.Max(viewportHeight, textHeight + extraPadding);
+                scrollView.scrollSensitivity = 32;
 
                 if (Mathf.Abs(inputLayoutElement.preferredHeight - newHeight) > 1f)
                 {
@@ -1006,6 +833,7 @@ public class PhasesFactory : RootUI
 
         log?.AppendLine($"    [Sub-Profiler] UpdateInputFieldHeight -> GetPreferredValues: {prefValSw.ElapsedMilliseconds} ms | Rebuild: Deferred Native Canvas update");
     }
+    /*
     private void CopyAndRestoreCode()
     {
         if (rawTextOutput == null) return;
@@ -1026,6 +854,7 @@ public class PhasesFactory : RootUI
         // Spawn visual confirmation
         uiGenerator.CreatePopup("Copied output to clipboard!", true, null);
     }
+    */
     public string MinifyModString(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
@@ -1162,81 +991,178 @@ public class PhasesFactory : RootUI
         return sb.ToString();
     }
 
-    /*
-    private IEnumerator MinifyModStringAsync(string raw, Action<string> onComplete)
+    // =========================================================================
+    // CHANGED METHOD: PopulateScrollViewWithLabel
+    // =========================================================================
+    private void PopulateScrollViewWithLabel(string columnName, string scrollViewKey, string labelText)
     {
-        if (string.IsNullOrWhiteSpace(raw))
+        if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
         {
-            onComplete(string.Empty);
-            yield break;
-        }
-
-        int len = raw.Length;
-        var sb = new StringBuilder(len);
-        bool lineStart = true;
-        int operations = 0;
-
-        for (int i = 0; i < len; i++)
-        {
-            char c = raw[i];
-            if (c == '\r' || c == '\n')
+            if (refs.ScrollViews.TryGetValue(scrollViewKey, out ScrollRect scrollRect))
             {
-                while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
-                lineStart = true;
-            }
-            else
-            {
-                if (lineStart)
+                if (scrollRect.content != null && uiGenerator.labelPrefab != null)
                 {
-                    if (char.IsWhiteSpace(c)) continue;
-                    lineStart = false;
+                    // 1. Correct scroll behavior settings
+                    scrollRect.horizontal = false;
+                    scrollRect.vertical = true;
+
+                    // 2. Configure parent content layout engine
+                    var contentLayout = scrollRect.content.GetComponent<VerticalLayoutGroup>();
+                    if (contentLayout == null)
+                    {
+                        contentLayout = scrollRect.content.gameObject.AddComponent<VerticalLayoutGroup>();
+                    }
+                    contentLayout.padding = new RectOffset(10, 10, 10, 10);
+                    contentLayout.spacing = 4f;
+                    contentLayout.childControlHeight = true;
+                    contentLayout.childControlWidth = true;
+                    contentLayout.childForceExpandHeight = false;
+                    contentLayout.childForceExpandWidth = true;
+
+                    // 3. Ensure content adjusts size dynamically based on child preferred values
+                    var sizeFitter = scrollRect.content.GetComponent<ContentSizeFitter>();
+                    if (sizeFitter == null)
+                    {
+                        sizeFitter = scrollRect.content.gameObject.AddComponent<ContentSizeFitter>();
+                    }
+                    sizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+                    sizeFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+                    // 4. Reset child hierarchy
+                    foreach (Transform child in scrollRect.content)
+                    {
+                        Destroy(child.gameObject);
+                    }
+
+                    // 5. Setup the label
+                    GameObject labelObj = Instantiate(uiGenerator.labelPrefab, scrollRect.content);
+                    labelObj.name = "HierarchyOutputLabel";
+
+                    var layoutElement = labelObj.GetComponent<LayoutElement>();
+                    if (layoutElement == null)
+                    {
+                        layoutElement = labelObj.AddComponent<LayoutElement>();
+                    }
+
+                    var textMesh = labelObj.GetComponentInChildren<TextMeshProUGUI>();
+                    if (textMesh != null)
+                    {
+                        textMesh.text = labelText;
+                        textMesh.alignment = TextAlignmentOptions.TopLeft;
+                        textMesh.color = Color.white;
+                        textMesh.enableWordWrapping = true;
+                        textMesh.richText = true;
+                        textMesh.fontSize = 13f;
+                        textMesh.enableAutoSizing = false;
+                        textMesh.autoSizeTextContainer = false;
+                        textMesh.raycastTarget = false;
+
+                        // Force rect transform stretch settings
+                        RectTransform textRt = textMesh.GetComponent<RectTransform>();
+                        if (textRt != null)
+                        {
+                            textRt.anchorMin = Vector2.zero;
+                            textRt.anchorMax = Vector2.one;
+                            textRt.offsetMin = Vector2.zero;
+                            textRt.offsetMax = Vector2.zero;
+                        }
+
+                        hierarchy = textMesh;
+                    }
                 }
-                sb.Append(c);
             }
+        }
+    }
 
-            operations++;
-            if (operations > SettingsManager.CHARS_PER_FRAME)
+    public string FormatSyntaxHighlightingSync(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+
+        StringBuilder sb = new StringBuilder(input.Length * 2);
+        int lastIndex = 0;
+
+        // Lazy match execution
+        Match m = null;
+        try { m = SyntaxRegex.Match(input); } catch { return input; }
+
+        while (m.Success)
+        {
+            int idx = m.Index;
+            int len = m.Length;
+
+            if (idx > lastIndex) AppendEscaped(sb, input, lastIndex, idx - lastIndex);
+
+            if (m.Groups["floor"].Success) AppendWithColor(sb, input, idx, len, ColorFloor);
+            else if (m.Groups["phase"].Success)
             {
-                operations = 0;
-                yield return null;
+                if (input[idx] == 'p' && len > 3)
+                {
+                    sb.Append("<color=").Append(ColorPhasePrefix).Append(">");
+                    AppendEscaped(sb, input, idx, 3);
+                    sb.Append("</color><color=").Append(ColorPhaseCode).Append(">");
+                    AppendEscaped(sb, input, idx + 3, len - 3);
+                    sb.Append("</color>");
+                }
+                else AppendWithColor(sb, input, idx, len, ColorPhasePrefix);
             }
+            else if (m.Groups["delimiter"].Success) AppendWithColor(sb, input, idx, len, ColorDelimiter);
+            else if (m.Groups["sq_bracket"].Success || m.Groups["bracket"].Success) AppendWithColor(sb, input, idx, len, ColorBracket);
+            else if (m.Groups["itempool_block"].Success)
+            {
+                sb.Append("<color=").Append(ColorMethod).Append(">");
+                AppendEscaped(sb, input, idx, 9); // "itempool."
+                sb.Append("</color><color=").Append(ColorItem).Append(">");
+                AppendEscaped(sb, input, idx + 9, len - 9);
+                sb.Append("</color>");
+            }
+            else if (m.Groups["sd_block"].Success)
+            {
+                sb.Append("<color=").Append(ColorMethod).Append(">");
+                AppendEscaped(sb, input, idx, 3); // "sd."
+                sb.Append("</color><color=").Append(ColorSdRed).Append(">");
+                AppendEscaped(sb, input, idx + 3, len - 3);
+                sb.Append("</color>");
+            }
+            else if (m.Groups["ritemx"].Success) AppendWithColor(sb, input, idx, len, ColorItem);
+            else if (m.Groups["hsv_block"].Success)
+            {
+                sb.Append("<color=").Append(ColorMethod).Append(">");
+                AppendEscaped(sb, input, idx, 4); // "hsv."
+                sb.Append("</color><color=").Append(ColorNumber).Append(">");
+                AppendEscaped(sb, input, idx + 4, len - 4);
+                sb.Append("</color>");
+            }
+            else if (m.Groups["k_block"].Success) AppendWithColor(sb, input, idx, len, ColorMossGreen);
+            else if (m.Groups["tog"].Success) AppendWithColor(sb, input, idx, len, ColorNeonGreen);
+            else if (m.Groups["method"].Success) AppendWithColor(sb, input, idx, len, ColorMethod);
+            else if (m.Groups["reward"].Success)
+            {
+                char tagChar = GetRewardTagChar(input, idx, len);
+                string rewardColor = tagChar switch
+                {
+                    'm' => ColorMod,
+                    'i' => ColorItem,
+                    'l' => ColorLvl,
+                    'g' => ColorHero,
+                    'r' => ColorRand,
+                    'q' => ColorRand,
+                    'o' => ColorRand,
+                    'v' => ColorValue,
+                    's' => ColorSkip,
+                    _ => ColorDefaultReward
+                };
+                AppendWithColor(sb, input, idx, len, rewardColor);
+            }
+            else if (m.Groups["number"].Success) AppendWithColor(sb, input, idx, len, ColorNumber);
+            else if (m.Groups["text"].Success) AppendWithColor(sb, input, idx, len, ColorText);
+            else AppendEscaped(sb, input, idx, len);
+
+            lastIndex = idx + len;
+            m = m.NextMatch();
         }
 
-        while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
-        onComplete(sb.ToString());
-    }
+        if (lastIndex < input.Length) AppendEscaped(sb, input, lastIndex, input.Length - lastIndex);
 
-    private void AppendNewlineAndIndent(StringBuilder sb, int indent)
-    {
-        while (sb.Length > 0 && sb[sb.Length - 1] == ' ') sb.Length--;
-        if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.Append('\n');
-        if (indent > 0) sb.Append(' ', indent);
+        return sb.ToString();
     }
-    private void AppendEscaped(StringBuilder sb, string text, int start, int length)
-    {
-        int end = start + length;
-        for (int i = start; i < end; i++)
-        {
-            char c = text[i];
-            if (c == '<') sb.Append("&lt;");
-            else if (c == '>') sb.Append("&gt;");
-            else sb.Append(c);
-        }
-    }
-    private void AppendWithColor(StringBuilder sb, string text, int start, int length, string colorHex)
-    {
-        sb.Append("<color=").Append(colorHex).Append(">");
-        AppendEscaped(sb, text, start, length);
-        sb.Append("</color>");
-    }
-    private char GetRewardTagChar(string input, int start, int length)
-    {
-        int end = start + length;
-        for (int i = start; i < end; i++)
-        {
-            if (input[i] != '(') return input[i];
-        }
-        return '\0';
-    }
-    */
 }
