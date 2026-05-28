@@ -1,11 +1,13 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI; // Added for Image
 
-public class IdeLineRow : MonoBehaviour, IPointerClickHandler
+public class IdeLineRow : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
 {
     [SerializeField] private TextMeshProUGUI lineNumberText;
     [SerializeField] private TextMeshProUGUI codeContentText;
+    [SerializeField] private Image selectionHighlightBox; // Assign your semi-transparent blue image here
 
     private int _lineIndex = -1;
     private VirtualizedIdeController _controller;
@@ -22,40 +24,77 @@ public class IdeLineRow : MonoBehaviour, IPointerClickHandler
         _rectTransform.anchorMax = new Vector2(1, 1);
         _rectTransform.pivot = new Vector2(0, 1);
 
-        // FORCE CHILD ALIGNMENT: Mathematically force text meshes to match the parent's 22px height
-        ForceVerticalStretch(lineNumberText?.GetComponent<RectTransform>());
-        ForceVerticalStretch(codeContentText?.GetComponent<RectTransform>());
-    }
-
-    private void ForceVerticalStretch(RectTransform rt)
-    {
-        if (rt == null) return;
-        rt.localScale = Vector3.one;
-        rt.anchorMin = new Vector2(rt.anchorMin.x, 0f); // Stretch to bottom
-        rt.anchorMax = new Vector2(rt.anchorMax.x, 1f); // Stretch to top
-        rt.offsetMin = new Vector2(rt.offsetMin.x, 0f); // Zero out bottom offset
-        rt.offsetMax = new Vector2(rt.offsetMax.x, 0f); // Zero out top offset
+        // Ensure highlight box is anchored Left-Stretch
+        if (selectionHighlightBox != null)
+        {
+            RectTransform hlRt = selectionHighlightBox.rectTransform;
+            hlRt.anchorMin = new Vector2(0, 0);
+            hlRt.anchorMax = new Vector2(0, 1);
+            hlRt.pivot = new Vector2(0, 0.5f);
+        }
     }
 
     public void SetRowPosition(int lineIndex, float lineHeight)
     {
         _lineIndex = lineIndex;
         _rectTransform.anchoredPosition = new Vector2(0f, -lineIndex * lineHeight);
-        _rectTransform.sizeDelta = new Vector2(0f, lineHeight); // Ensure width is 100% stretch
+        _rectTransform.sizeDelta = new Vector2(0f, lineHeight);
     }
 
-    public void UpdateRowDisplay(int lineIndex, string highlightedText, bool isEditingThisRow)
+    // UPDATED to receive highlight coordinates
+    public void UpdateRowDisplay(int lineIndex, string highlightedText, bool isEditingThisRow, int highlightStartChar = -1, int highlightEndChar = -1)
     {
         lineNumberText.text = (lineIndex + 1).ToString();
         codeContentText.text = isEditingThisRow ? string.Empty : highlightedText;
+
+        // Process Virtualized Highlight
+        if (highlightStartChar == -1 || highlightEndChar == -1 || isEditingThisRow)
+        {
+            selectionHighlightBox.gameObject.SetActive(false);
+        }
+        else
+        {
+            selectionHighlightBox.gameObject.SetActive(true);
+            codeContentText.ForceMeshUpdate(); // Ensure geometry exists to measure
+
+            float startX = 0f;
+            float endX = codeContentText.rectTransform.rect.width; // Default to full width
+
+            var textInfo = codeContentText.textInfo;
+
+            // Find starting pixel X
+            if (highlightStartChar > 0 && highlightStartChar < textInfo.characterCount)
+                startX = textInfo.characterInfo[highlightStartChar].bottomLeft.x;
+
+            // Find ending pixel X
+            if (highlightEndChar < textInfo.characterCount)
+                endX = textInfo.characterInfo[highlightEndChar].bottomRight.x;
+
+            // Apply physical padding offsets
+            float leftOffset = codeContentText.rectTransform.offsetMin.x;
+            RectTransform hlRt = selectionHighlightBox.rectTransform;
+
+            hlRt.anchoredPosition = new Vector2(leftOffset + startX, 0);
+            hlRt.sizeDelta = new Vector2(Mathf.Max(5f, endX - startX), hlRt.sizeDelta.y); // At least 5px wide to show empty line selections
+        }
     }
 
-    public void OnPointerClick(PointerEventData eventData)
+    // --- NEW: Drag and Select Handlers ---
+    public void OnPointerDown(PointerEventData eventData)
     {
         if (_controller != null && _lineIndex != -1)
-        {
-            // Removed _rectTransform argument
-            _controller.RequestLineEdit(_lineIndex);
-        }
+            _controller.OnRowPointerDown(_lineIndex, eventData);
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (_controller != null)
+            _controller.OnRowDrag(eventData);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (_controller != null)
+            _controller.OnRowPointerUp(eventData);
     }
 }
