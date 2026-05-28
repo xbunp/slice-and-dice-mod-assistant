@@ -6,9 +6,21 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 public class VirtualizedIdeController : MonoBehaviour
 {
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void UpdateWebGLSelectionCache(string text);
+
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void InitializeNativeCopyListener();
+
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void ReadOSClipboard(string objectName, string methodName);
+#endif
+
     private bool _isSwitchingLine = false;
 
     private bool _isMultiSelecting = false;
@@ -102,59 +114,109 @@ public class VirtualizedIdeController : MonoBehaviour
         sharedInputField.onEndEdit.AddListener(OnActiveLineEndEdit);
         viewportScrollRect.onValueChanged.AddListener(OnScrollPositionChanged);
 
+        #if UNITY_WEBGL && !UNITY_EDITOR
+                InitializeNativeCopyListener();
+        #endif
+
         InitializeVirtualPool(30);
         RefreshDocumentLayout();
     }
+
     private void Update()
     {
-        // Only process manipulation if the user is actively typing in the field
-        if (_isSwitchingLine || _activeEditLineIndex == -1 || !sharedInputField.isFocused) return;
+        if (_isSwitchingLine || _activeEditLineIndex == -1) return;
 
-        // 1. REMOVE GAP ABOVE: Backspace at the very beginning of a line
-        if (Input.GetKeyDown(KeyCode.Backspace))
+        // Get New Input System Keyboard State
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return;
+
+        // Determine correct platform command keys
+        bool isControlPressed = keyboard.ctrlKey.isPressed;
+#if UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
+        isControlPressed |= keyboard.commandKey.isPressed;
+#endif
+
+        // --- Multi-Select Mode Shortcuts ---
+        if (_isMultiSelecting)
         {
-            if (sharedInputField.caretPosition == 0 && sharedInputField.selectionFocusPosition == sharedInputField.selectionAnchorPosition)
+            // 1. Paste Over Selection (Ctrl + V)
+            if (isControlPressed && keyboard.vKey.wasPressedThisFrame)
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                ReadOSClipboard(gameObject.name, "OnWebGLPasteReceived");
+#else
+                PasteClipboardOverSelection(GUIUtility.systemCopyBuffer);
+#endif
+                return;
+            }
+
+            // 2. Delete Selection (Backspace or Delete)
+            if (keyboard.backspaceKey.wasPressedThisFrame || keyboard.deleteKey.wasPressedThisFrame)
+            {
+                _isSwitchingLine = true;
+
+                int targetLine = Mathf.Min(_selStartLine, _selEndLine);
+                int targetChar = _selStartLine == _selEndLine
+                    ? Mathf.Min(_selStartChar, _selEndChar)
+                    : (_selStartLine < _selEndLine ? _selStartChar : _selEndChar);
+
+                DeleteActiveSelection();
+                RequestLineEdit(targetLine, targetChar);
+
+                _isSwitchingLine = false;
+                return;
+            }
+        }
+
+        // --- Standard Single-Line Input Shortcuts (When typing) ---
+        if (sharedInputField.isFocused)
+        {
+            // Backspace at start of line -> Merge up
+            if (keyboard.backspaceKey.wasPressedThisFrame)
+            {
+                if (sharedInputField.caretPosition == 0 && sharedInputField.selectionFocusPosition == sharedInputField.selectionAnchorPosition)
+                {
+                    if (_activeEditLineIndex > 0)
+                    {
+                        MergeWithPreviousLine();
+                        return;
+                    }
+                }
+            }
+
+            // Delete at end of line -> Merge down
+            if (keyboard.deleteKey.wasPressedThisFrame)
+            {
+                if (sharedInputField.caretPosition == sharedInputField.text.Length && sharedInputField.selectionFocusPosition == sharedInputField.selectionAnchorPosition)
+                {
+                    if (_activeEditLineIndex < _rawLines.Count - 1)
+                    {
+                        MergeWithNextLine();
+                        return;
+                    }
+                }
+            }
+
+            // Up Arrow
+            if (keyboard.upArrowKey.wasPressedThisFrame)
             {
                 if (_activeEditLineIndex > 0)
                 {
-                    MergeWithPreviousLine();
+                    int caret = sharedInputField.caretPosition;
+                    RequestLineEdit(_activeEditLineIndex - 1, caret);
                     return;
                 }
             }
-        }
 
-        // 2. REMOVE GAP BELOW: Delete at the very end of a line
-        if (Input.GetKeyDown(KeyCode.Delete))
-        {
-            if (sharedInputField.caretPosition == sharedInputField.text.Length && sharedInputField.selectionFocusPosition == sharedInputField.selectionAnchorPosition)
+            // Down Arrow
+            if (keyboard.downArrowKey.wasPressedThisFrame)
             {
                 if (_activeEditLineIndex < _rawLines.Count - 1)
                 {
-                    MergeWithNextLine();
+                    int caret = sharedInputField.caretPosition;
+                    RequestLineEdit(_activeEditLineIndex + 1, caret);
                     return;
                 }
-            }
-        }
-
-        // 3. NAVIGATE UP: Up arrow key
-        if (Input.GetKeyDown(KeyCode.UpArrow))
-        {
-            if (_activeEditLineIndex > 0)
-            {
-                int caret = sharedInputField.caretPosition;
-                RequestLineEdit(_activeEditLineIndex - 1, caret);
-                return;
-            }
-        }
-
-        // 4. NAVIGATE DOWN: Down arrow key
-        if (Input.GetKeyDown(KeyCode.DownArrow))
-        {
-            if (_activeEditLineIndex < _rawLines.Count - 1)
-            {
-                int caret = sharedInputField.caretPosition;
-                RequestLineEdit(_activeEditLineIndex + 1, caret);
-                return;
             }
         }
     }
@@ -818,12 +880,10 @@ public class VirtualizedIdeController : MonoBehaviour
     {
         if (!_isMultiSelecting)
         {
-            // Transition from Editing to MultiSelecting
             _isMultiSelecting = true;
-            CommitSharedInputToModel(); // Hides the Input Field
+            CommitSharedInputToModel();
         }
 
-        // Calculate global line index based on mouse Y position in the container
         RectTransformUtility.ScreenPointToLocalPointInRectangle(contentContainer, eventData.position, eventData.pressEventCamera, out Vector2 localPoint);
 
         int draggedLineIndex = Mathf.Clamp(Mathf.FloorToInt(-localPoint.y / lineHeight), 0, _rawLines.Count - 1);
@@ -832,8 +892,10 @@ public class VirtualizedIdeController : MonoBehaviour
         _selEndLine = draggedLineIndex;
         _selEndChar = draggedCharIndex;
 
-        // Force the virtualizer to redraw the highlights immediately
         UpdateVirtualViewport(true);
+
+        // Update the cached data for native browsers
+        UpdateSelectionCache();
     }
     public void OnRowPointerUp(PointerEventData eventData)
     {
@@ -854,7 +916,6 @@ public class VirtualizedIdeController : MonoBehaviour
         if (charIndex == -1) return _rawLines[lineIndex].Length; // Clicked past the end of the text
         return charIndex;
     }
-
     private IdeLineRow GetVisualRowByLineIndex(int lineIndex)
     {
         foreach (var r in _visibleRowsPool)
@@ -864,4 +925,179 @@ public class VirtualizedIdeController : MonoBehaviour
         return null;
     }
 
+    private void CopySelectionToClipboard()
+    {
+        int startLine = Mathf.Min(_selStartLine, _selEndLine);
+        int endLine = Mathf.Max(_selStartLine, _selEndLine);
+        int startChar = _selStartLine < _selEndLine ? _selStartChar : _selEndChar;
+        int endChar = _selStartLine < _selEndLine ? _selEndChar : _selStartChar;
+
+        if (_selStartLine == _selEndLine)
+        {
+            startChar = Mathf.Min(_selStartChar, _selEndChar);
+            endChar = Mathf.Max(_selStartChar, _selEndChar);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = startLine; i <= endLine; i++)
+        {
+            string lineText = _rawLines[i];
+            int s = (i == startLine) ? startChar : 0;
+            int e = (i == endLine) ? endChar : lineText.Length;
+
+            s = Mathf.Clamp(s, 0, lineText.Length);
+            e = Mathf.Clamp(e, 0, lineText.Length);
+
+            sb.Append(lineText.Substring(s, e - s));
+            if (i < endLine) sb.Append("\n");
+        }
+
+        WriteToClipboard(sb.ToString());
+    }
+    private void DeleteActiveSelection()
+    {
+        if (!_isMultiSelecting) return;
+
+        int startLine = Mathf.Min(_selStartLine, _selEndLine);
+        int endLine = Mathf.Max(_selStartLine, _selEndLine);
+        int startChar = _selStartLine < _selEndLine ? _selStartChar : _selEndChar;
+        int endChar = _selStartLine < _selEndLine ? _selEndChar : _selStartChar;
+
+        if (_selStartLine == _selEndLine)
+        {
+            startChar = Mathf.Min(_selStartChar, _selEndChar);
+            endChar = Mathf.Max(_selStartChar, _selEndChar);
+        }
+
+        string startPreserved = _rawLines[startLine].Substring(0, startChar);
+        string endPreserved = _rawLines[endLine].Substring(endChar);
+
+        // Merge preserved top-left and bottom-right edges
+        string mergedLine = startPreserved + endPreserved;
+
+        int linesToRemove = endLine - startLine;
+        for (int i = 0; i < linesToRemove; i++)
+        {
+            _rawLines.RemoveAt(startLine + 1);
+        }
+
+        _rawLines[startLine] = mergedLine;
+
+        _highlightedCache.Clear();
+        _isMultiSelecting = false;
+
+        UpdateSelectionCache();
+        RefreshDocumentLayout();
+    }
+    private void WriteToClipboard(string text)
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        try
+        {
+            CopyToClipboardWebGL(text);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"WebGL Copy failed: {ex.Message}");
+        }
+#else
+        GUIUtility.systemCopyBuffer = text;
+#endif
+    }
+    public void OnWebGLPasteReceived(string clipboardText)
+    {
+        if (string.IsNullOrEmpty(clipboardText)) return;
+        PasteClipboardOverSelection(clipboardText);
+    }
+    private void PasteClipboardOverSelection(string clipboardText)
+    {
+        if (string.IsNullOrEmpty(clipboardText)) return;
+
+        _isSwitchingLine = true;
+
+        int targetLine = Mathf.Min(_selStartLine, _selEndLine);
+        int targetChar = _selStartLine == _selEndLine
+            ? Mathf.Min(_selStartChar, _selEndChar)
+            : (_selStartLine < _selEndLine ? _selStartChar : _selEndChar);
+
+        DeleteActiveSelection();
+
+        string cleanString = clipboardText.Replace("\r", "");
+        string[] pasteLines = cleanString.Split('\n');
+
+        string originalLineText = _rawLines[targetLine];
+        string left = originalLineText.Substring(0, targetChar);
+        string right = originalLineText.Substring(targetChar);
+
+        if (pasteLines.Length == 1)
+        {
+            _rawLines[targetLine] = left + pasteLines[0] + right;
+            _highlightedCache.Clear();
+            RefreshDocumentLayout();
+            RequestLineEdit(targetLine, left.Length + pasteLines[0].Length);
+        }
+        else
+        {
+            _rawLines[targetLine] = left + pasteLines[0];
+
+            for (int i = 1; i < pasteLines.Length - 1; i++)
+            {
+                _rawLines.Insert(targetLine + i, pasteLines[i]);
+            }
+
+            int lastPasteIndex = targetLine + pasteLines.Length - 1;
+            _rawLines.Insert(lastPasteIndex, pasteLines[pasteLines.Length - 1] + right);
+
+            _highlightedCache.Clear();
+            RefreshDocumentLayout();
+            RequestLineEdit(lastPasteIndex, pasteLines[pasteLines.Length - 1].Length);
+        }
+
+        _isSwitchingLine = false;
+    }
+
+    private void UpdateSelectionCache()
+    {
+        if (!_isMultiSelecting)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            UpdateWebGLSelectionCache("");
+#endif
+            return;
+        }
+
+        // Calculate the selected text
+        int startLine = Mathf.Min(_selStartLine, _selEndLine);
+        int endLine = Mathf.Max(_selStartLine, _selEndLine);
+        int startChar = _selStartLine < _selEndLine ? _selStartChar : _selEndChar;
+        int endChar = _selStartLine < _selEndLine ? _selEndChar : _selStartChar;
+
+        if (_selStartLine == _selEndLine)
+        {
+            startChar = Mathf.Min(_selStartChar, _selEndChar);
+            endChar = Mathf.Max(_selStartChar, _selEndChar);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = startLine; i <= endLine; i++)
+        {
+            string lineText = _rawLines[i];
+            int s = (i == startLine) ? startChar : 0;
+            int e = (i == endLine) ? endChar : lineText.Length;
+
+            s = Mathf.Clamp(s, 0, lineText.Length);
+            e = Mathf.Clamp(e, 0, lineText.Length);
+
+            sb.Append(lineText.Substring(s, e - s));
+            if (i < endLine) sb.Append("\n");
+        }
+
+        string result = sb.ToString();
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        UpdateWebGLSelectionCache(result); // Push to browser cache synchronously
+#else
+        GUIUtility.systemCopyBuffer = result; // Local clipboard
+#endif
+    }
 }
