@@ -24,6 +24,13 @@ public class IdeLineRow : MonoBehaviour, IPointerDownHandler, IDragHandler, IPoi
         _rectTransform.anchorMax = new Vector2(1, 1);
         _rectTransform.pivot = new Vector2(0, 1);
 
+        // PROACTIVE FIX: Force the text component to use a Left-Center pivot 
+        // so local X coordinates are always positive.
+        if (codeContentText != null)
+        {
+            codeContentText.rectTransform.pivot = new Vector2(0f, 0.5f);
+        }
+
         // Ensure highlight box is anchored Left-Stretch
         if (selectionHighlightBox != null)
         {

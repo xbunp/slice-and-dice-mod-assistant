@@ -12,6 +12,16 @@ public class IdeTextChangeEvent : UnityEvent<string> { }
 
 public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
 {
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void CopyToClipboardWebGL(string text);
+
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void UpdateWebGLSelectionCache(string text);
+#endif
+
+    private string _lastCachedSelection = null;
+
     [Header("Core References")]
     public TMP_Text textComponent;
     public RectTransform caretRect;
@@ -28,6 +38,18 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
     public IdeTextChangeEvent onValueChanged = new IdeTextChangeEvent();
     public IdeTextChangeEvent onEndEdit = new IdeTextChangeEvent();
 
+    [Header("Key Repeat Settings")]
+    public float keyRepeatDelay = 0.5f; // Initial pause before repeating starts
+    public float keyRepeatRate = 0.05f;  // Delay between repeats (0.05s = 20 letters/sec)
+
+    private float _keyRepeatTimer = 0f;
+    private bool _isKeyRepeating = false;
+    private Key _activeRepeatKey = Key.None;
+
+    private float _lastClickTime = 0f;
+    private int _clickCount = 0;
+    private const float DOUBLE_CLICK_TIME = 0.3f; // Max delay between clicks (seconds)
+
     // API Parity with TMP_InputField
     private string _text = "";
     public string text
@@ -43,7 +65,6 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
             onValueChanged?.Invoke(_text);
         }
     }
-
     private int _caretPosition = 0;
     public int caretPosition
     {
@@ -55,7 +76,6 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
             ResetCaretBlink();
         }
     }
-
     private int _selectionAnchorPosition = 0;
     public int selectionAnchorPosition
     {
@@ -66,7 +86,6 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
             UpdateCaretVisuals();
         }
     }
-
     public bool isFocused { get; private set; } = false;
 
     // Internal state
@@ -99,7 +118,7 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
             if (caretImage != null) caretImage.enabled = _caretVisible && !HasSelection();
         }
 
-        // --- Raw Navigation & Clipboard Manipulation ---
+        // --- Clipboard Commands Intercept (Ctrl Key) ---
         bool isControlPressed = kb.ctrlKey.isPressed;
 #if UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
         isControlPressed |= kb.commandKey.isPressed;
@@ -107,20 +126,17 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
 
         if (isControlPressed)
         {
-            // Ctrl + C (Copy)
             if (kb.cKey.wasPressedThisFrame && HasSelection())
             {
                 CopySelectedToClipboard();
                 return;
             }
-            // Ctrl + X (Cut)
             if (kb.xKey.wasPressedThisFrame && HasSelection())
             {
                 CopySelectedToClipboard();
                 DeleteSelectedText();
                 return;
             }
-            // Ctrl + V (Paste)
             if (kb.vKey.wasPressedThisFrame)
             {
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -128,72 +144,55 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
 #endif
                 return;
             }
-            return; // Ignore other standard entries while holding control
+            return;
         }
 
-        bool isShiftPressed = kb.shiftKey.isPressed;
+        // --- UNIFIED KEY REPEAT STATE MACHINE (Backspace, Delete, Left, Right) ---
+        Key currentPressedKey = Key.None;
+        if (kb.backspaceKey.isPressed) currentPressedKey = Key.Backspace;
+        else if (kb.deleteKey.isPressed) currentPressedKey = Key.Delete;
+        else if (kb.leftArrowKey.isPressed) currentPressedKey = Key.LeftArrow;
+        else if (kb.rightArrowKey.isPressed) currentPressedKey = Key.RightArrow;
 
-        if (kb.leftArrowKey.wasPressedThisFrame)
+        if (currentPressedKey != Key.None)
         {
-            int targetCaret = caretPosition - 1;
-            if (isShiftPressed)
+            bool wasPressedThisFrame = false;
+            if (currentPressedKey == Key.Backspace) wasPressedThisFrame = kb.backspaceKey.wasPressedThisFrame;
+            else if (currentPressedKey == Key.Delete) wasPressedThisFrame = kb.deleteKey.wasPressedThisFrame;
+            else if (currentPressedKey == Key.LeftArrow) wasPressedThisFrame = kb.leftArrowKey.wasPressedThisFrame;
+            else if (currentPressedKey == Key.RightArrow) wasPressedThisFrame = kb.rightArrowKey.wasPressedThisFrame;
+
+            if (currentPressedKey != _activeRepeatKey || wasPressedThisFrame)
             {
-                caretPosition = targetCaret; // Drag selection edge left
+                // First click frame: trigger instantly
+                _activeRepeatKey = currentPressedKey;
+                _keyRepeatTimer = 0f;
+                _isKeyRepeating = false;
+                ExecuteKeyAction(currentPressedKey);
             }
             else
             {
-                // Collapse selection left
-                if (HasSelection()) caretPosition = Mathf.Min(caretPosition, _selectionAnchorPosition);
-                else caretPosition = targetCaret;
+                // Key is held down: track delay timers
+                _keyRepeatTimer += Time.deltaTime;
+                float currentThreshold = _isKeyRepeating ? keyRepeatRate : keyRepeatDelay;
+                if (_keyRepeatTimer >= currentThreshold)
+                {
+                    _keyRepeatTimer = 0f;
+                    _isKeyRepeating = true;
+                    ExecuteKeyAction(currentPressedKey);
+                }
+            }
+        }
+        else
+        {
+            // No keys pressed: reset state machine
+            _activeRepeatKey = Key.None;
+            _keyRepeatTimer = 0f;
+            _isKeyRepeating = false;
+        }
 
-                _selectionAnchorPosition = caretPosition;
-            }
-        }
-        else if (kb.rightArrowKey.wasPressedThisFrame)
-        {
-            int targetCaret = caretPosition + 1;
-            if (isShiftPressed)
-            {
-                caretPosition = targetCaret; // Drag selection edge right
-            }
-            else
-            {
-                // Collapse selection right
-                if (HasSelection()) caretPosition = Mathf.Max(caretPosition, _selectionAnchorPosition);
-                else caretPosition = targetCaret;
-
-                _selectionAnchorPosition = caretPosition;
-            }
-        }
-        else if (kb.backspaceKey.wasPressedThisFrame)
-        {
-            if (HasSelection())
-            {
-                DeleteSelectedText();
-            }
-            else if (caretPosition > 0)
-            {
-                _text = _text.Remove(caretPosition - 1, 1);
-                _selectionAnchorPosition = caretPosition - 1;
-                caretPosition = caretPosition - 1;
-                UpdateTextComponent();
-                onValueChanged?.Invoke(_text);
-            }
-        }
-        else if (kb.deleteKey.wasPressedThisFrame)
-        {
-            if (HasSelection())
-            {
-                DeleteSelectedText();
-            }
-            else if (caretPosition < _text.Length)
-            {
-                _text = _text.Remove(caretPosition, 1);
-                UpdateTextComponent();
-                onValueChanged?.Invoke(_text);
-            }
-        }
-        else if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
+        // --- Enter Key ---
+        if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
         {
             InsertCharacter('\n');
         }
@@ -223,6 +222,69 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
         }
     }
 
+    private void ExecuteKeyAction(Key key)
+    {
+        if (key == Key.Backspace)
+        {
+            if (HasSelection())
+            {
+                DeleteSelectedText();
+            }
+            else if (caretPosition > 0)
+            {
+                _text = _text.Remove(caretPosition - 1, 1);
+                _selectionAnchorPosition = caretPosition - 1;
+                caretPosition = caretPosition - 1;
+                UpdateTextComponent();
+                onValueChanged?.Invoke(_text);
+            }
+        }
+        else if (key == Key.Delete)
+        {
+            if (HasSelection())
+            {
+                DeleteSelectedText();
+            }
+            else if (caretPosition < _text.Length)
+            {
+                _text = _text.Remove(caretPosition, 1);
+                UpdateTextComponent();
+                onValueChanged?.Invoke(_text);
+            }
+        }
+        else if (key == Key.LeftArrow)
+        {
+            int targetCaret = caretPosition - 1;
+            bool isShiftPressed = Keyboard.current.shiftKey.isPressed;
+            if (isShiftPressed)
+            {
+                caretPosition = targetCaret; // Shift Selection
+            }
+            else
+            {
+                // COLLAPSE FIX: Update selectionAnchorPosition FIRST so that caretPosition's 
+                // property setter runs the visual update with synchronized variables.
+                selectionAnchorPosition = targetCaret;
+                caretPosition = targetCaret;
+            }
+        }
+        else if (key == Key.RightArrow)
+        {
+            int targetCaret = caretPosition + 1;
+            bool isShiftPressed = Keyboard.current.shiftKey.isPressed;
+            if (isShiftPressed)
+            {
+                caretPosition = targetCaret; // Shift Selection
+            }
+            else
+            {
+                // COLLAPSE FIX: Update selectionAnchorPosition FIRST so that caretPosition's 
+                // property setter runs the visual update with synchronized variables.
+                selectionAnchorPosition = targetCaret;
+                caretPosition = targetCaret;
+            }
+        }
+    }
     private void OnTextInput(char c)
     {
         if (!isFocused) return;
@@ -230,7 +292,6 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
 
         InsertCharacter(c);
     }
-
     private void InsertCharacter(char c)
     {
         if (HasSelection()) DeleteSelectedText();
@@ -244,42 +305,75 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
 
     // --- Drag and Selection Event System Interceptors ---
 
+    private int GetCaretIndexFromMouse(PointerEventData eventData)
+    {
+        Canvas canvas = textComponent.canvas;
+        Camera uiCamera = (canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : canvas.worldCamera;
+
+        // Find local position to evaluate left/right splitting
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(textComponent.rectTransform, eventData.position, uiCamera, out Vector2 localMousePos);
+
+        if (localMousePos.x < 0f) return 0;
+
+        textComponent.ForceMeshUpdate();
+        if (textComponent.textInfo.characterCount == 0) return 0;
+
+        // BUG FIX: Pass eventData.position (Screen Space) to TMP_TextUtilities!
+        int nearestChar = TMP_TextUtilities.FindNearestCharacter(textComponent, eventData.position, uiCamera, true);
+        if (nearestChar == -1) return _text.Length;
+
+        TMP_CharacterInfo charInfo = textComponent.textInfo.characterInfo[nearestChar];
+        float charCenter = (charInfo.bottomLeft.x + charInfo.bottomRight.x) / 2f;
+
+        return (localMousePos.x < charCenter) ? nearestChar : nearestChar + 1;
+    }
     public void OnPointerDown(PointerEventData eventData)
     {
         Select();
 
-        // Pass 'null' for camera to ensure stable Canvas Overlay coordinate evaluation
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(textComponent.rectTransform, eventData.position, null, out Vector2 localMousePos);
-
-        // Pivot is now at the left, so negative X strictly means they clicked the line numbers area
-        if (localMousePos.x < 0f)
+        // Increment or reset click sequence manually
+        float now = Time.unscaledTime;
+        if (now - _lastClickTime < DOUBLE_CLICK_TIME)
         {
-            _selectionAnchorPosition = 0;
-            caretPosition = 0;
-            return;
+            _clickCount++;
         }
+        else
+        {
+            _clickCount = 1;
+        }
+        _lastClickTime = now;
 
-        int clickedChar = TMP_TextUtilities.FindIntersectingCharacter(textComponent, localMousePos, null, true);
-        if (clickedChar == -1) clickedChar = _text.Length;
+        int targetIndex = GetCaretIndexFromMouse(eventData);
 
-        _selectionAnchorPosition = clickedChar;
-        caretPosition = clickedChar;
-        _isDragging = true;
+        if (_clickCount >= 3)
+        {
+            // Triple click: Select the entire line
+            _selectionAnchorPosition = 0;
+            caretPosition = _text.Length;
+            _isDragging = false;
+        }
+        else if (_clickCount == 2)
+        {
+            // Double click: Select the moused-over word
+            VirtualizedIdeController.GetWordBoundaries(_text, targetIndex, out int start, out int end);
+            _selectionAnchorPosition = start;
+            caretPosition = end;
+            _isDragging = false;
+        }
+        else
+        {
+            // Single click
+            _selectionAnchorPosition = targetIndex;
+            caretPosition = targetIndex;
+            _isDragging = true;
+        }
     }
-
     public void OnDrag(PointerEventData eventData)
     {
         if (!_isDragging) return;
 
-        // Pass 'null' for camera to ensure stable Canvas Overlay coordinate evaluation
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(textComponent.rectTransform, eventData.position, null, out Vector2 localMousePos);
-
-        int draggedChar = TMP_TextUtilities.FindIntersectingCharacter(textComponent, localMousePos, null, true);
-        if (draggedChar == -1) draggedChar = _text.Length;
-
-        caretPosition = draggedChar;
+        caretPosition = GetCaretIndexFromMouse(eventData);
     }
-
     public void OnPointerUp(PointerEventData eventData)
     {
         _isDragging = false;
@@ -291,7 +385,6 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
     {
         return _caretPosition != _selectionAnchorPosition;
     }
-
     private void DeleteSelectedText()
     {
         if (!HasSelection()) return;
@@ -307,16 +400,19 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
         UpdateTextComponent();
         onValueChanged?.Invoke(_text);
     }
-
     private void CopySelectedToClipboard()
     {
         if (!HasSelection()) return;
         int min = Mathf.Min(_caretPosition, _selectionAnchorPosition);
         int max = Mathf.Max(_caretPosition, _selectionAnchorPosition);
 
-        GUIUtility.systemCopyBuffer = _text.Substring(min, max - min);
-    }
+        string selectedText = _text.Substring(min, max - min);
+        GUIUtility.systemCopyBuffer = selectedText;
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+    try { CopyToClipboardWebGL(selectedText); } catch { } // <-- Added native copy call fallback
+#endif
+    }
     public void PasteText(string clipboardText)
     {
         if (string.IsNullOrEmpty(clipboardText)) return;
@@ -340,18 +436,15 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
         _caretPosition = 0;
         UpdateTextComponent();
     }
-
     public void Select()
     {
         isFocused = true;
         ResetCaretBlink();
     }
-
     public void ActivateInputField()
     {
         Select();
     }
-
     public void DeactivateInputField()
     {
         isFocused = false;
@@ -441,11 +534,54 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
                 selectionHighlightRect.sizeDelta = new Vector2(Mathf.Max(2f, endX - startX), selectionHighlightRect.sizeDelta.y);
             }
         }
+        UpdateWebGLCacheFromSelection();
     }
     private void ResetCaretBlink()
     {
         _blinkTimer = 0f;
         _caretVisible = true;
         if (caretImage != null) caretImage.enabled = !HasSelection() && _caretVisible;
+    }
+
+    private void UpdateWebGLCacheFromSelection()
+    {
+        string currentSelection = "";
+        if (HasSelection())
+        {
+            int min = Mathf.Min(_caretPosition, _selectionAnchorPosition);
+            int max = Mathf.Max(_caretPosition, _selectionAnchorPosition);
+            currentSelection = _text.Substring(min, max - min);
+        }
+
+        if (_lastCachedSelection != currentSelection)
+        {
+            _lastCachedSelection = currentSelection;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        try { UpdateWebGLSelectionCache(currentSelection); } catch { }
+#endif
+        }
+    }
+
+
+
+    // Click Tracking
+
+    public void RecordExternalClick()
+    {
+        float now = Time.unscaledTime;
+        if (now - _lastClickTime < DOUBLE_CLICK_TIME)
+        {
+            _clickCount++;
+        }
+        else
+        {
+            _clickCount = 1;
+        }
+        _lastClickTime = now;
+    }
+
+    public int GetClickCount()
+    {
+        return _clickCount;
     }
 }

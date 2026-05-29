@@ -19,6 +19,9 @@ public class VirtualizedIdeController : MonoBehaviour
 
     [System.Runtime.InteropServices.DllImport("__Internal")]
     private static extern void ReadOSClipboard(string objectName, string methodName);
+
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void CopyToClipboardWebGL(string text);
 #endif
 
     [Header("UI Scroll Settings")]
@@ -68,6 +71,14 @@ public class VirtualizedIdeController : MonoBehaviour
 
     // The active syntax provider
     private IdeSyntaxConfig _syntaxConfig;
+
+    // Up/Down Navigation Repeat State
+    private float _navRepeatTimer = 0f;
+    private bool _isNavRepeating = false;
+    private Key _activeNavRepeatKey = Key.None;
+
+    private string _activeColor = null;
+    private StringBuilder _colorAccumulator = new StringBuilder();
 
     // =========================================================================
     // Proactive Initialization Sanity Pass
@@ -184,7 +195,6 @@ public class VirtualizedIdeController : MonoBehaviour
         Canvas.ForceUpdateCanvases();
         _lockedViewportWidth = viewportRt.rect.width;
     }
-
     private void InitializeVirtualPool(int initialSize)
     {
         for (int i = 0; i < initialSize; i++)
@@ -192,7 +202,6 @@ public class VirtualizedIdeController : MonoBehaviour
             CreateAndAddNewRowToPool();
         }
     }
-
     private IdeLineRow CreateAndAddNewRowToPool()
     {
         GameObject rowObj = Instantiate(lineRowPrefab, contentContainer);
@@ -208,12 +217,14 @@ public class VirtualizedIdeController : MonoBehaviour
     // =========================================================================
     // Input System & Command Loop
     // =========================================================================
+
     private void Update()
     {
         if (_isSwitchingLine) return;
 
         if (_activeEditLineIndex == -1 && !_isMultiSelecting) return;
 
+        // Get New Input System Keyboard State
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
@@ -225,7 +236,19 @@ public class VirtualizedIdeController : MonoBehaviour
         // --- Multi-Select Mode Shortcuts ---
         if (_isMultiSelecting)
         {
-            // 1. Paste Over Selection (Ctrl + V)
+            if (isControlPressed && keyboard.cKey.wasPressedThisFrame)
+            {
+                CopySelectionToClipboard();
+                return;
+            }
+
+            if (isControlPressed && keyboard.xKey.wasPressedThisFrame)
+            {
+                CopySelectionToClipboard();
+                DeleteActiveSelection();
+                return;
+            }
+
             if (isControlPressed && keyboard.vKey.wasPressedThisFrame)
             {
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -236,7 +259,6 @@ public class VirtualizedIdeController : MonoBehaviour
                 return;
             }
 
-            // 2. Delete Selection (Backspace or Delete)
             if (keyboard.backspaceKey.wasPressedThisFrame || keyboard.deleteKey.wasPressedThisFrame)
             {
                 _isSwitchingLine = true;
@@ -252,21 +274,25 @@ public class VirtualizedIdeController : MonoBehaviour
                 _isSwitchingLine = false;
                 return;
             }
-
-            // 3. Copy is handled natively in WebGL via our cache, but for Editor:
-            if (isControlPressed && keyboard.cKey.wasPressedThisFrame)
-            {
-                CopySelectionToClipboard();
-                return;
-            }
         }
 
         // --- Standard Single-Line Input Shortcuts (When typing) ---
+        // FIXED: Removed the obsolete readOnly conditions entirely
         if (sharedInputField.isFocused)
         {
+            if (isControlPressed && keyboard.vKey.wasPressedThisFrame)
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                ReadOSClipboard(gameObject.name, "OnWebGLPasteReceived");
+#else
+                PasteClipboardOverSelection(GUIUtility.systemCopyBuffer);
+#endif
+                return;
+            }
+
+            // Backspace at start of line -> Merge up
             if (keyboard.backspaceKey.wasPressedThisFrame)
             {
-                // CHANGED: Use HasSelection() instead of comparing raw anchor positions
                 if (sharedInputField.caretPosition == 0 && !sharedInputField.HasSelection())
                 {
                     if (_activeEditLineIndex > 0)
@@ -277,9 +303,9 @@ public class VirtualizedIdeController : MonoBehaviour
                 }
             }
 
+            // Delete at end of line -> Merge down
             if (keyboard.deleteKey.wasPressedThisFrame)
             {
-                // CHANGED: Use HasSelection() instead of comparing raw anchor positions
                 if (sharedInputField.caretPosition == sharedInputField.text.Length && !sharedInputField.HasSelection())
                 {
                     if (_activeEditLineIndex < _rawLines.Count - 1)
@@ -290,24 +316,62 @@ public class VirtualizedIdeController : MonoBehaviour
                 }
             }
 
-            if (keyboard.upArrowKey.wasPressedThisFrame)
+            // --- NAVIGATION KEY REPEAT STATE MACHINE (Up / Down) ---
+            Key currentPressedNavKey = Key.None;
+            if (keyboard.upArrowKey.isPressed) currentPressedNavKey = Key.UpArrow;
+            else if (keyboard.downArrowKey.isPressed) currentPressedNavKey = Key.DownArrow;
+
+            if (currentPressedNavKey != Key.None)
             {
-                if (_activeEditLineIndex > 0)
+                bool wasPressedThisFrame = false;
+                if (currentPressedNavKey == Key.UpArrow) wasPressedThisFrame = keyboard.upArrowKey.wasPressedThisFrame;
+                else if (currentPressedNavKey == Key.DownArrow) wasPressedThisFrame = keyboard.downArrowKey.wasPressedThisFrame;
+
+                if (currentPressedNavKey != _activeNavRepeatKey || wasPressedThisFrame)
                 {
-                    int caret = sharedInputField.caretPosition;
-                    RequestLineEdit(_activeEditLineIndex - 1, caret);
-                    return;
+                    _activeNavRepeatKey = currentPressedNavKey;
+                    _navRepeatTimer = 0f;
+                    _isNavRepeating = false;
+                    ExecuteNavigationKey(currentPressedNavKey);
+                }
+                else
+                {
+                    _navRepeatTimer += Time.deltaTime;
+                    // Match same rate/delay as the input field character repeat
+                    float currentThreshold = _isNavRepeating ? 0.05f : 0.5f;
+                    if (_navRepeatTimer >= currentThreshold)
+                    {
+                        _navRepeatTimer = 0f;
+                        _isNavRepeating = true;
+                        ExecuteNavigationKey(currentPressedNavKey);
+                    }
                 }
             }
-
-            if (keyboard.downArrowKey.wasPressedThisFrame)
+            else
             {
-                if (_activeEditLineIndex < _rawLines.Count - 1)
-                {
-                    int caret = sharedInputField.caretPosition;
-                    RequestLineEdit(_activeEditLineIndex + 1, caret);
-                    return;
-                }
+                _activeNavRepeatKey = Key.None;
+                _navRepeatTimer = 0f;
+                _isNavRepeating = false;
+            }
+        }
+    }
+
+    private void ExecuteNavigationKey(Key key)
+    {
+        if (key == Key.UpArrow)
+        {
+            if (_activeEditLineIndex > 0)
+            {
+                int caret = sharedInputField.caretPosition;
+                RequestLineEdit(_activeEditLineIndex - 1, caret);
+            }
+        }
+        else if (key == Key.DownArrow)
+        {
+            if (_activeEditLineIndex < _rawLines.Count - 1)
+            {
+                int caret = sharedInputField.caretPosition;
+                RequestLineEdit(_activeEditLineIndex + 1, caret);
             }
         }
     }
@@ -315,11 +379,11 @@ public class VirtualizedIdeController : MonoBehaviour
     // =========================================================================
     // Virtualization Rendering Core
     // =========================================================================
+
     private void OnScrollPositionChanged(Vector2 scrollPosition)
     {
         UpdateVirtualViewport(false);
     }
-
     private void UpdateVirtualViewport(bool forceRepaint)
     {
         if (_isUpdatingText) return;
@@ -398,7 +462,6 @@ public class VirtualizedIdeController : MonoBehaviour
             }
         }
     }
-
     public void RefreshDocumentLayout()
     {
         float totalHeight = _rawLines.Count * lineHeight;
@@ -409,11 +472,40 @@ public class VirtualizedIdeController : MonoBehaviour
     // =========================================================================
     // Mouse Interaction & Multi-Select
     // =========================================================================
+
     public void OnRowPointerDown(int lineIndex, PointerEventData eventData)
     {
         var keyboard = Keyboard.current;
         bool isShiftPressed = keyboard != null && keyboard.shiftKey.isPressed;
 
+        // Register Click 1 on the shared tracker before committing changes or swapping objects
+        sharedInputField.RecordExternalClick();
+        int clickCount = sharedInputField.GetClickCount();
+
+        if (clickCount >= 3)
+        {
+            CommitSharedInputToModel();
+            _isMultiSelecting = false;
+
+            // Triple click: Open edit directly selecting the entire line
+            string lineText = _rawLines[lineIndex];
+            RequestLineEdit(lineIndex, lineText.Length, 0);
+            return;
+        }
+        else if (clickCount == 2)
+        {
+            CommitSharedInputToModel();
+            _isMultiSelecting = false;
+
+            // Double click: Open edit directly selecting the targeted word
+            int charIndex = GetCharIndexFromMousePosition(lineIndex, eventData.position);
+            GetWordBoundaries(_rawLines[lineIndex], charIndex, out int start, out int end);
+
+            RequestLineEdit(lineIndex, end, start);
+            return;
+        }
+
+        // Single click logic
         if (isShiftPressed)
         {
             if (sharedInputField.gameObject.activeSelf && _activeEditLineIndex != -1)
@@ -446,9 +538,9 @@ public class VirtualizedIdeController : MonoBehaviour
             _selStartChar = _lastAnchorChar;
 
             RequestLineEdit(lineIndex, _selStartChar);
+            UpdateSelectionCache();
         }
     }
-
     public void OnRowDrag(PointerEventData eventData)
     {
         if (!_isMultiSelecting)
@@ -468,32 +560,43 @@ public class VirtualizedIdeController : MonoBehaviour
         UpdateVirtualViewport(true);
         UpdateSelectionCache();
     }
-
     public void OnRowPointerUp(PointerEventData eventData)
     {
         if (!_isMultiSelecting) return;
     }
-
     private int GetCharIndexFromMousePosition(int lineIndex, Vector2 screenPos)
     {
         IdeLineRow visualRow = GetVisualRowByLineIndex(lineIndex);
         if (visualRow == null) return _rawLines[lineIndex].Length;
 
-        RectTransform textRt = visualRow.CodeTextComponent.rectTransform;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(textRt, screenPos, null, out Vector2 localMousePos);
+        TMP_Text textComp = visualRow.CodeTextComponent;
+        textComp.ForceMeshUpdate();
+
+        Canvas canvas = textComp.canvas;
+        Camera uiCamera = (canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : canvas.worldCamera;
+
+        // Find local position to evaluate left/right splitting
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(textComp.rectTransform, screenPos, uiCamera, out Vector2 localMousePos);
 
         if (localMousePos.x < 0f) return 0;
+        if (textComp.textInfo.characterCount == 0) return 0;
 
-        int charIndex = TMP_TextUtilities.FindIntersectingCharacter(visualRow.CodeTextComponent, localMousePos, null, true);
+        // BUG FIX: Pass raw screenPos to TMP_TextUtilities! It expects Screen Space, not Local Space.
+        int nearestChar = TMP_TextUtilities.FindNearestCharacter(textComp, screenPos, uiCamera, true);
+        if (nearestChar == -1) return _rawLines[lineIndex].Length;
 
-        if (charIndex == -1) return _rawLines[lineIndex].Length;
-        return charIndex;
+        TMP_CharacterInfo charInfo = textComp.textInfo.characterInfo[nearestChar];
+        float charCenter = (charInfo.bottomLeft.x + charInfo.bottomRight.x) / 2f;
+
+        return (localMousePos.x < charCenter) ? nearestChar : nearestChar + 1;
     }
 
     // =========================================================================
     // Lean Runtime Editing & Text Manipulation
     // =========================================================================
-    public void RequestLineEdit(int lineIndex, int startCaretPos = -1)
+
+    // Locate RequestLineEdit and update its signature and caret assignment block:
+    public void RequestLineEdit(int lineIndex, int startCaretPos = -1, int selectionAnchorPos = -1)
     {
         _isSwitchingLine = true;
 
@@ -512,7 +615,6 @@ public class VirtualizedIdeController : MonoBehaviour
         RectTransform inputRt = sharedInputField.GetComponent<RectTransform>();
         inputRt.SetAsLastSibling();
 
-        // Match the exact Y boundaries mathematically
         float topY = -lineIndex * lineHeight;
         float bottomY = topY - lineHeight;
         inputRt.offsetMin = new Vector2(_lockedLeftOffset, bottomY);
@@ -543,29 +645,24 @@ public class VirtualizedIdeController : MonoBehaviour
         sharedInputField.gameObject.SetActive(true);
         sharedInputField.SetTextWithoutNotify(_rawLines[lineIndex]);
 
-        if (startCaretPos >= 0)
+        // Move Caret and Anchor safely using the new optional parameter
+        int targetCaret = startCaretPos >= 0 ? Mathf.Min(startCaretPos, sharedInputField.text.Length) : sharedInputField.text.Length;
+        int targetAnchor = selectionAnchorPos >= 0 ? Mathf.Min(selectionAnchorPos, sharedInputField.text.Length) : targetCaret;
+
+        sharedInputField.caretPosition = targetCaret;
+        sharedInputField.selectionAnchorPosition = targetAnchor;
+
+        if (targetText != null)
         {
-            sharedInputField.caretPosition = Mathf.Min(startCaretPos, sharedInputField.text.Length);
-        }
-        else
-        {
-            sharedInputField.caretPosition = sharedInputField.text.Length;
+            targetText.rectTransform.anchoredPosition = Vector2.zero;
         }
 
+        sharedInputField.Select();
         sharedInputField.ActivateInputField();
 
         UpdateVirtualViewport(true);
         _isSwitchingLine = false;
     }
-
-    private void InitializeSharedInputField()
-    {
-        sharedInputField.gameObject.SetActive(false);
-        sharedInputField.onValueChanged.AddListener(OnActiveLineTextChanged);
-        sharedInputField.onEndEdit.AddListener(OnActiveLineEndEdit);
-    }
-
-
     private void OnActiveLineTextChanged(string newText)
     {
         if (_isSwitchingLine || _activeEditLineIndex == -1) return;
@@ -587,13 +684,11 @@ public class VirtualizedIdeController : MonoBehaviour
             TriggerAutoLineSplit();
         }
     }
-
     private void OnActiveLineEndEdit(string text)
     {
         if (_isSwitchingLine) return;
         CommitSharedInputToModel();
     }
-
     private void CommitSharedInputToModel()
     {
         if (_activeEditLineIndex == -1) return;
@@ -609,7 +704,6 @@ public class VirtualizedIdeController : MonoBehaviour
         sharedInputField.gameObject.SetActive(false);
         UpdateVirtualViewport(true);
     }
-
     private void HandleLineSplit(string inputVal)
     {
         _isSwitchingLine = true;
@@ -641,7 +735,6 @@ public class VirtualizedIdeController : MonoBehaviour
 
         _isSwitchingLine = false;
     }
-
     private void TriggerAutoLineSplit()
     {
         _isSwitchingLine = true;
@@ -690,7 +783,6 @@ public class VirtualizedIdeController : MonoBehaviour
             TriggerAutoLineSplit();
         }
     }
-
     private int FindOverflowSplitIndex(string text, float maxWidth, TMP_Text textComponent)
     {
         int low = 1;
@@ -715,7 +807,6 @@ public class VirtualizedIdeController : MonoBehaviour
         }
         return Mathf.Clamp(result, 1, text.Length - 1);
     }
-
     private void MergeWithPreviousLine()
     {
         _isSwitchingLine = true;
@@ -741,7 +832,6 @@ public class VirtualizedIdeController : MonoBehaviour
 
         _isSwitchingLine = false;
     }
-
     private void MergeWithNextLine()
     {
         _isSwitchingLine = true;
@@ -765,7 +855,6 @@ public class VirtualizedIdeController : MonoBehaviour
 
         _isSwitchingLine = false;
     }
-
     private void EnsureLineIsVisible(int lineIndex)
     {
         float viewportHeight = viewportScrollRect.viewport.rect.height;
@@ -787,66 +876,6 @@ public class VirtualizedIdeController : MonoBehaviour
     // =========================================================================
     // Clipboard Integration
     // =========================================================================
-    private void WriteToClipboard(string text)
-    {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        try
-        {
-            UpdateWebGLSelectionCache(text); // Native async bypass
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"WebGL Copy failed: {ex.Message}");
-        }
-#else
-        GUIUtility.systemCopyBuffer = text;
-#endif
-    }
-
-    private void UpdateSelectionCache()
-    {
-        if (!_isMultiSelecting)
-        {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            UpdateWebGLSelectionCache("");
-#endif
-            return;
-        }
-
-        int startLine = Mathf.Min(_selStartLine, _selEndLine);
-        int endLine = Mathf.Max(_selStartLine, _selEndLine);
-        int startChar = _selStartLine < _selEndLine ? _selStartChar : _selEndChar;
-        int endChar = _selStartLine < _selEndLine ? _selEndChar : _selStartChar;
-
-        if (_selStartLine == _selEndLine)
-        {
-            startChar = Mathf.Min(_selStartChar, _selEndChar);
-            endChar = Mathf.Max(_selStartChar, _selEndChar);
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = startLine; i <= endLine; i++)
-        {
-            string lineText = _rawLines[i];
-            int s = (i == startLine) ? startChar : 0;
-            int e = (i == endLine) ? endChar : lineText.Length;
-
-            s = Mathf.Clamp(s, 0, lineText.Length);
-            e = Mathf.Clamp(e, 0, lineText.Length);
-
-            sb.Append(lineText.Substring(s, e - s));
-            if (i < endLine) sb.Append("\n");
-        }
-
-        WriteToClipboard(sb.ToString());
-    }
-
-    private void CopySelectionToClipboard()
-    {
-        // For editor/standalone, UpdateSelectionCache has already populated the clipboard automatically.
-        // For WebGL, native browser listeners handle it. We call this just to ensure force sync.
-        UpdateSelectionCache();
-    }
 
     private void DeleteActiveSelection()
     {
@@ -882,25 +911,38 @@ public class VirtualizedIdeController : MonoBehaviour
         UpdateSelectionCache();
         RefreshDocumentLayout();
     }
-
     public void OnWebGLPasteReceived(string clipboardText)
     {
         if (string.IsNullOrEmpty(clipboardText)) return;
         PasteClipboardOverSelection(clipboardText);
     }
-
     private void PasteClipboardOverSelection(string clipboardText)
     {
         if (string.IsNullOrEmpty(clipboardText)) return;
 
+        int targetLine;
+        int targetChar;
+
+        // =========================================================================
+        // DYNAMIC INGESTION: Evaluate if pasting over a block or into a caret
+        // =========================================================================
+        if (_isMultiSelecting)
+        {
+            targetLine = Mathf.Min(_selStartLine, _selEndLine);
+            targetChar = _selStartLine == _selEndLine
+                ? Mathf.Min(_selStartChar, _selEndChar)
+                : (_selStartLine < _selEndLine ? _selStartChar : _selEndChar);
+
+            DeleteActiveSelection(); // Wipe selection, collapse rows
+        }
+        else
+        {
+            // We are just typing normally; use the active line and live caret position
+            targetLine = _activeEditLineIndex;
+            targetChar = sharedInputField.caretPosition;
+        }
+
         _isSwitchingLine = true;
-
-        int targetLine = Mathf.Min(_selStartLine, _selEndLine);
-        int targetChar = _selStartLine == _selEndLine
-            ? Mathf.Min(_selStartChar, _selEndChar)
-            : (_selStartLine < _selEndLine ? _selStartChar : _selEndChar);
-
-        DeleteActiveSelection();
 
         string cleanString = clipboardText.Replace("\r", "");
         string[] pasteLines = cleanString.Split('\n');
@@ -935,7 +977,6 @@ public class VirtualizedIdeController : MonoBehaviour
 
         _isSwitchingLine = false;
     }
-
     private IdeLineRow GetVisualRowByLineIndex(int lineIndex)
     {
         foreach (var r in _visibleRowsPool)
@@ -967,7 +1008,6 @@ public class VirtualizedIdeController : MonoBehaviour
         _isUpdatingText = false;
         RefreshDocumentLayout();
     }
-
     public string ExportDocument()
     {
         CommitSharedInputToModel();
@@ -979,7 +1019,6 @@ public class VirtualizedIdeController : MonoBehaviour
         }
         return sb.ToString();
     }
-
     private string GetHighlightedText(int lineIndex)
     {
         if (_highlightedCache.TryGetValue(lineIndex, out string cache)) return cache;
@@ -989,10 +1028,6 @@ public class VirtualizedIdeController : MonoBehaviour
         _highlightedCache[lineIndex] = highlighted;
         return highlighted;
     }
-
-    private string _activeColor = null;
-    private StringBuilder _colorAccumulator = new StringBuilder();
-
     private void FlushColorSegment(StringBuilder mainSb)
     {
         if (_colorAccumulator.Length == 0) return;
@@ -1009,7 +1044,6 @@ public class VirtualizedIdeController : MonoBehaviour
         }
         _colorAccumulator.Clear();
     }
-
     private void AccumulateText(StringBuilder mainSb, string text, int start, int length, string colorHex)
     {
         if (colorHex != _activeColor)
@@ -1019,7 +1053,6 @@ public class VirtualizedIdeController : MonoBehaviour
         }
         AppendEscapedText(_colorAccumulator, text, start, length);
     }
-
     private void AppendEscapedText(StringBuilder sb, string text, int start, int length)
     {
         int end = start + length;
@@ -1031,7 +1064,6 @@ public class VirtualizedIdeController : MonoBehaviour
             else sb.Append(c);
         }
     }
-
     public string ApplySyntaxColorsSync(string input)
     {
         if (string.IsNullOrEmpty(input) || _syntaxConfig == null) return string.Empty;
@@ -1062,5 +1094,113 @@ public class VirtualizedIdeController : MonoBehaviour
 
         FlushColorSegment(sb);
         return sb.ToString();
+    }
+
+    // =========================================================================
+    // Clipboard Integration
+    // =========================================================================
+
+    // HELPER: Retrieves the currently selected text block without touching any clipboards
+
+    // 1. Core platform-agnostic clipboard writer
+    private void WriteToClipboard(string text)
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+    try
+    {
+        UpdateWebGLSelectionCache(text); 
+    }
+    catch (System.Exception ex)
+    {
+        Debug.LogError($"WebGL Copy failed: {ex.Message}");
+    }
+#endif
+        GUIUtility.systemCopyBuffer = text ?? ""; // <-- Removed #else block to ensure fallback safety
+    }
+
+    private void CopySelectionToClipboard()
+    {
+        if (_isMultiSelecting)
+        {
+            string text = GetSelectedText();
+            WriteToClipboard(text);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        try { CopyToClipboardWebGL(text); } catch { } // <-- Added explicit copy call for WebGL keydown context
+#endif
+        }
+    }
+
+    // 2. Extractor helper (Pure data)
+    private string GetSelectedText()
+    {
+        if (!_isMultiSelecting) return "";
+
+        int startLine = Mathf.Min(_selStartLine, _selEndLine);
+        int endLine = Mathf.Max(_selStartLine, _selEndLine);
+        int startChar = _selStartLine < _selEndLine ? _selStartChar : _selEndChar;
+        int endChar = _selStartLine < _selEndLine ? _selEndChar : _selStartChar;
+
+        if (_selStartLine == _selEndLine)
+        {
+            startChar = Mathf.Min(_selStartChar, _selEndChar);
+            endChar = Mathf.Max(_selStartChar, _selEndChar);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = startLine; i <= endLine; i++)
+        {
+            string lineText = _rawLines[i];
+            int s = (i == startLine) ? startChar : 0;
+            int e = (i == endLine) ? endChar : lineText.Length;
+
+            s = Mathf.Clamp(s, 0, lineText.Length);
+            e = Mathf.Clamp(e, 0, lineText.Length);
+
+            sb.Append(lineText.Substring(s, e - s));
+            if (i < endLine) sb.Append("\n");
+        }
+
+        return sb.ToString();
+    }
+
+    // 3. Dynamic Cache Updater (Only runs on Drag in WebGL to satisfy browser security)
+    private void UpdateSelectionCache()
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        if (!_isMultiSelecting)
+        {
+            WriteToClipboard("");
+            return;
+        }
+        WriteToClipboard(GetSelectedText());
+#endif
+    }
+
+    public static void GetWordBoundaries(string text, int charIndex, out int start, out int end)
+    {
+        start = charIndex;
+        end = charIndex;
+        if (string.IsNullOrEmpty(text)) return;
+
+        charIndex = Mathf.Clamp(charIndex, 0, text.Length - 1);
+        char targetChar = text[charIndex];
+        bool isWordChar = char.IsLetterOrDigit(targetChar) || targetChar == '_';
+
+        while (start > 0)
+        {
+            char c = text[start - 1];
+            bool cIsWord = char.IsLetterOrDigit(c) || c == '_';
+            if (cIsWord != isWordChar) break;
+            start--;
+        }
+
+        while (end < text.Length)
+        {
+            char c = text[end];
+            bool cIsWord = char.IsLetterOrDigit(c) || c == '_';
+            if (cIsWord != isWordChar) break;
+            end++;
+        }
     }
 }
