@@ -86,8 +86,14 @@ public class VirtualizedIdeController : MonoBehaviour
 
     private void Start()
     {
+        //var config = new SDTextmodSyntaxConfig();
+        //Initialize(config);
+    }
+
+    public void Initialize(IdeSyntaxConfig ideConfig)
+    {
         // Set the active syntax configuration
-        _syntaxConfig = new SDTextmodSyntaxConfig();
+        _syntaxConfig = ideConfig;
 
         PerformStrictInitializationSanityPass();
 
