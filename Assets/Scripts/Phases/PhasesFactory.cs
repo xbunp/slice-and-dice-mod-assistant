@@ -9,11 +9,7 @@ using UnityEngine.UI;
 
 public class PhasesFactory : RootUI
 {
-    [Header("IDE Integrations")]
-    // Reference to the new, generic Virtualized IDE Controller
-    // You will assign this in the inspector, or instantiate it dynamically into the Left Panel
-    [SerializeField] private VirtualizedIdeController mainIdeController;
-
+    private VirtualizedIdeController mainIdeController;
     private SDTextmodSyntaxConfig IDEconfig = new SDTextmodSyntaxConfig();
 
     [Header("Formatting State")]
@@ -49,11 +45,11 @@ public class PhasesFactory : RootUI
         float rightBottomSpacerHeight = rightPanelHeight + (spacing * 2f);
 
         float buttonRowHeight = uiGenerator.rowHeight;
-        float leftScrollHeight = leftPanelHeight - buttonRowHeight - spacing;
+        float leftIdeHeight = leftPanelHeight - buttonRowHeight - spacing;
 
         List<ColumnSpec> columns = new List<ColumnSpec>();
 
-        // LEFT COLUMN (Buttons + Main IDE Container)
+        // LEFT COLUMN (Buttons + Main IDE Panel directly)
         List<GridRowSpec> leftRows = new List<GridRowSpec>
         {
             new GridRowSpec(leftSpacerHeight, GridCellSpec.CreateLabel("LeftSpacer", "", 1.0f)),
@@ -62,9 +58,9 @@ public class PhasesFactory : RootUI
                 GridCellSpec.CreateButton("Button2", "Paste Textmod (FASTER)", 0.33f, () => OnPasteButtonClicked()),
                 GridCellSpec.CreateButton("Button3", "Copy & Restore Code", 0.33f, () => CopyAndRestoreCode())
             ),
-            new GridRowSpec(leftScrollHeight, GridCellSpec.CreateScrollView("LeftInputScrollView", 1.0f))
+            new GridRowSpec(leftIdeHeight, GridCellSpec.CreateIDEInterface("LeftPanelIDE", 1.0f))
         };
-        columns.Add(new ColumnSpec("Left_Column", 0.0f, 0.5f, leftRows));
+        columns.Add(new ColumnSpec("Left_Column", 0.0f, 0.66f, leftRows));
 
         // RIGHT TOP COLUMN
         List<GridRowSpec> rightTopRows = new List<GridRowSpec>
@@ -72,7 +68,7 @@ public class PhasesFactory : RootUI
             new GridRowSpec(rightTopSpacerHeight, GridCellSpec.CreateImagePanel("RightTopSpacer", 1.0f)),
             new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightTopScrollView", 1.0f))
         };
-        columns.Add(new ColumnSpec("RightTop_Column", 0.5f, 1.0f, rightTopRows));
+        columns.Add(new ColumnSpec("RightTop_Column", 0.66f, 1.0f, rightTopRows));
 
         // RIGHT BOTTOM COLUMN
         List<GridRowSpec> rightBottomRows = new List<GridRowSpec>
@@ -80,7 +76,7 @@ public class PhasesFactory : RootUI
             new GridRowSpec(rightBottomSpacerHeight, GridCellSpec.CreateImagePanel("RightBottomSpacer", 1.0f)),
             new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightBottomScrollView", 1.0f))
         };
-        columns.Add(new ColumnSpec("RightBottom_Column", 0.5f, 1.0f, rightBottomRows));
+        columns.Add(new ColumnSpec("RightBottom_Column", 0.66f, 1.0f, rightBottomRows));
 
         uiGenerator.PopulateScreen(generatedScreen, columns, useMargins);
 
@@ -91,8 +87,24 @@ public class PhasesFactory : RootUI
     {
         Canvas.ForceUpdateCanvases();
 
-        // Note: The VirtualizedIdeController UI should be parented into "LeftInputScrollView"
-        // either via Inspector pre-setup or instantiated here.
+        if (generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences leftRefs))
+        {
+            // Retrieve button references...
+            if (leftRefs.Buttons.TryGetValue("Button2", out Button pasteBtn))
+            {
+                pasteBtn.onClick.RemoveAllListeners();
+                pasteBtn.onClick.AddListener(() => OnPasteButtonClicked());
+            }
+
+            if (leftRefs.IDEInterfaces.TryGetValue("LeftPanelIDE", out VirtualizedIdeController ideObj))
+            {
+                mainIdeController = ideObj;
+                mainIdeController.Initialize(IDEconfig);
+
+                // DELEGATE BINDING: Tell the generic IDE to run pasted text through our game's rules
+                mainIdeController.TextPreprocessor = PreprocessPastedText;
+            }
+        }
 
         UpdateToggleButtonText();
 
@@ -114,6 +126,12 @@ public class PhasesFactory : RootUI
                 img.raycastTarget = false;
             }
         }
+    }
+
+    private string PreprocessPastedText(string rawPaste)
+    {
+        string compressed = CompressImagesSync(rawPaste);
+        return IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
     }
 
     private void PopulateDemoScrollView(string columnName, string scrollViewKey, string buttonLabel)
@@ -164,9 +182,23 @@ public class PhasesFactory : RootUI
         ClipboardManager.RequestPaste(uiGenerator, (clipboardText) => {
             if (!string.IsNullOrEmpty(clipboardText))
             {
-                LoadDataIntoIDE(clipboardText);
+                if (mainIdeController != null)
+                {
+                    // Triggers the IDE's native paste functionality (which automatically invokes our Preprocessor)
+                    mainIdeController.SimulateExternalPaste(clipboardText);
+                }
             }
         });
+    }
+
+    public void LoadDataIntoIDE(string rawModText)
+    {
+        if (mainIdeController == null || string.IsNullOrEmpty(rawModText)) return;
+
+        // Use the unified formatting logic
+        string finalFormattedText = PreprocessPastedText(rawModText);
+
+        mainIdeController.LoadEntireDocument(finalFormattedText);
     }
 
     private void ToggleIDE()
@@ -210,18 +242,6 @@ public class PhasesFactory : RootUI
     /// <summary>
     /// Master pipeline for taking raw external text, compressing it, formatting it, and loading it into the generic IDE.
     /// </summary>
-    public void LoadDataIntoIDE(string rawModText)
-    {
-        if (mainIdeController == null || string.IsNullOrEmpty(rawModText)) return;
-
-        string compressed = CompressImagesSync(rawModText);
-        string finalFormattedText = IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
-
-        mainIdeController.LoadEntireDocument(finalFormattedText);
-
-        // Build the secondary hierarchy tree if needed based on the new data
-        // BuildHierarchy(finalFormattedText);
-    }
 
     private void UpdateToggleButtonText()
     {

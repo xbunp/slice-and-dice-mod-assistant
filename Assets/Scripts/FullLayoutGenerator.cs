@@ -22,6 +22,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject PortraitPanel;
     public GameObject customImgPanel;
     public GameObject popupPrefab;
+    public GameObject IDEInterfacePrefab;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -317,7 +318,13 @@ public class FullScreenUIGenerator : MonoBehaviour
                 }
                 break;
 
-
+            case CellType.IDEInterface:
+                if (IDEInterfacePrefab != null)
+                {
+                    cellObj = Instantiate(IDEInterfacePrefab, rowRt);
+                    ConfigureIDEInterfaceCell(cell, cellObj, refs);
+                }
+                break;
         }
 
         return cellObj;
@@ -484,6 +491,15 @@ public class FullScreenUIGenerator : MonoBehaviour
         }
     }
 
+    private void ConfigureIDEInterfaceCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
+    {
+        VirtualizedIdeController ide = cellObj.GetComponentInChildren<VirtualizedIdeController>();
+        if (ide != null && !string.IsNullOrEmpty(cell.key))
+        {
+            refs.IDEInterfaces[cell.key] = ide;
+        }
+    }
+
     //==========================================================================================
 
     private void FinalizeCellLayoutAndText(GameObject cellObj, GridCellSpec cell, ref float currentX, bool useMargins = true)
@@ -632,4 +648,6 @@ public class FullScreenUIGenerator : MonoBehaviour
 
         return popupComponent;
     }
+
+
 }

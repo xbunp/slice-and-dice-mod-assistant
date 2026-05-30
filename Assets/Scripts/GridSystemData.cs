@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter }
+public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter, IDEInterface }
 
 public class GridReferences
 {
@@ -19,7 +19,7 @@ public class GridReferences
     public Dictionary<string, Image> ImagePanels = new Dictionary<string, Image>();
     public Dictionary<string, PortraitPreview> PortraitPanels = new Dictionary<string, PortraitPreview>();
     public Dictionary<string, ImageReceiver> CustomImgImporter = new Dictionary<string, ImageReceiver>();
-
+    public Dictionary<string, VirtualizedIdeController> IDEInterfaces = new Dictionary<string, VirtualizedIdeController>();
 }
 
 public class GridRowSpec
@@ -181,6 +181,16 @@ public class GridCellSpec
             tabTargetPanels = targetPanels,
             widthRatio = ratio,
             onIntChanged = onTabChanged
+        };
+    }
+
+    public static GridCellSpec CreateIDEInterface(string key, float ratio)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.IDEInterface,
+            key = key,
+            widthRatio = ratio
         };
     }
 }

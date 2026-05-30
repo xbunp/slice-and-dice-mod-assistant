@@ -80,6 +80,8 @@ public class VirtualizedIdeController : MonoBehaviour
     private string _activeColor = null;
     private StringBuilder _colorAccumulator = new StringBuilder();
 
+    public Func<string, string> TextPreprocessor;
+
     // =========================================================================
     // Proactive Initialization Sanity Pass
     // =========================================================================
@@ -107,6 +109,10 @@ public class VirtualizedIdeController : MonoBehaviour
 
         InitializeVirtualPool(30);
         RefreshDocumentLayout();
+    }
+    public void SimulateExternalPaste(string clipboardText)
+    {
+        PasteClipboardOverSelection(clipboardText);
     }
 
     private void PerformStrictInitializationSanityPass()
@@ -926,6 +932,11 @@ public class VirtualizedIdeController : MonoBehaviour
     {
         if (string.IsNullOrEmpty(clipboardText)) return;
 
+        if (TextPreprocessor != null)
+        {
+            clipboardText = TextPreprocessor.Invoke(clipboardText);
+        }
+
         int targetLine;
         int targetChar;
 
@@ -943,9 +954,16 @@ public class VirtualizedIdeController : MonoBehaviour
         }
         else
         {
-            // We are just typing normally; use the active line and live caret position
             targetLine = _activeEditLineIndex;
             targetChar = sharedInputField.caretPosition;
+
+            // BUG FIX: If the user clicks an external paste button, the IDE loses focus 
+            // and _activeEditLineIndex becomes -1. Fallback to pasting at the end of the document.
+            if (targetLine < 0 || targetLine >= _rawLines.Count)
+            {
+                targetLine = _rawLines.Count - 1;
+                targetChar = _rawLines[targetLine].Length;
+            }
         }
 
         _isSwitchingLine = true;

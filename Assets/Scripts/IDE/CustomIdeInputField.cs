@@ -137,6 +137,7 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
                 DeleteSelectedText();
                 return;
             }
+            /*
             if (kb.vKey.wasPressedThisFrame)
             {
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -144,6 +145,7 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
 #endif
                 return;
             }
+            */
             return;
         }
 
