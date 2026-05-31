@@ -24,8 +24,9 @@ public class RootUIFactory : MonoBehaviour
     public HeroModManager HeroModManager { get; private set; }
     public PhasesFactory PhasesFactory { get; private set; }
     public MonsterFactory MonsterFactory { get; private set; }
-    public SettingsUI SettingsUI { get; private set; } // Explicit reference for the Settings Tab
-    public AbilityDataFactory AbilityDataFactory { get; private set; } // Instantiated but not in a tab
+    public ModFactory ModFactory { get; private set; } // Added ModFactory reference
+    public SettingsUI SettingsUI { get; private set; }
+    public AbilityDataFactory AbilityDataFactory { get; private set; }
 
     private RectTransform mainWrapper;
     private RectTransform topBarContainer;
@@ -90,9 +91,10 @@ public class RootUIFactory : MonoBehaviour
         HeroModManager = CreateTabInstance<HeroModManager>("HeroModManager", "Heroes");
         PhasesFactory = CreateTabInstance<PhasesFactory>("PhasesFactory", "Phases");
         MonsterFactory = CreateTabInstance<MonsterFactory>("MonsterFactory", "Monsters");
-        SettingsUI = CreateTabInstance<SettingsUI>("SettingsUI", "Settings"); // Restored settings tab
+        ModFactory = CreateTabInstance<ModFactory>("ModFactory", "Mods"); // Added ModFactory instantiation
+        SettingsUI = CreateTabInstance<SettingsUI>("SettingsUI", "Settings");
 
-        // Instantiated directly, but excluded from tab setup since it is not currently in use
+        // Instantiated directly, but excluded from tab setup
         AbilityDataFactory = CreateInstanceOnly<AbilityDataFactory>("AbilityDataFactory");
 
         uiGenerator.canvas = originalCanvas;

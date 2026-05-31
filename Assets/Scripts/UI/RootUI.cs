@@ -22,6 +22,7 @@ public class RootUI : MonoBehaviour
 
     protected virtual void BuildUIAndBind()
     {
+
     }
 
     public RectTransform GetRootWrapper()
