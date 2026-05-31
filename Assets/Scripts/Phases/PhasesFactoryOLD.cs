@@ -180,7 +180,7 @@ public class PhasesFactoryOld : RootUI
     */
     private void BuildHierarchy(string rawTextOutput)
     {
-        hierarchy.text = ModAnalyzer.BuildHierarchy(rawTextOutput);
+        //hierarchy.text = ModAnalyzer.BuildHierarchy(rawTextOutput);
     }
 
     // --- UI SETUP ---

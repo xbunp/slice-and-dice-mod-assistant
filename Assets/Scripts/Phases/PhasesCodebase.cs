@@ -145,7 +145,20 @@ namespace SliceDiceTextMod
 
     public enum EnuVariant { RandoKeywordT1Item, RandoKeywordT5Item, RandoKeywordT7Item }
 
-    public class ModifierTag : RewardTag { public string ModifierSpec; public override string ToSyntax() => WrapIfNeeded($"m{ModifierSpec}"); }
+    //public class ModifierTag : RewardTag { public string ModifierSpec; public override string ToSyntax() => WrapIfNeeded($"m{ModifierSpec}"); }
+
+    // Inside your RewardTag architecture...
+
+    public class ModifierTag : RewardTag
+    {
+        public string ModifierSpec;
+        public bool IsCombatEncounter => ModifierSpec.Contains(".fight.") || ModifierSpec.Contains(".add.");
+        public bool IsZoneChange => ModifierSpec.StartsWith("zone.");
+        public bool IsDifficultyChange => ModifierSpec.StartsWith("diff.");
+        public bool IsPartyChange => ModifierSpec.StartsWith("party.");
+        public override string ToSyntax() => WrapIfNeeded($"m{ModifierSpec}");
+    }
+
     public class ItemTag : RewardTag { public string ItemName; public override string ToSyntax() => WrapIfNeeded($"i{ItemName}"); }
     public class LevelupTag : RewardTag { public string LevelupName; public override string ToSyntax() => WrapIfNeeded($"l{LevelupName}"); }
     public class HeroTag : RewardTag { public string HeroSpec; public override string ToSyntax() => WrapIfNeeded($"g{HeroSpec}"); }

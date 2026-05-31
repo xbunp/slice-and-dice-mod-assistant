@@ -61,3 +61,58 @@ mergeInto(LibraryManager.library, {
         });
     }
 });
+
+mergeInto(LibraryManager.library, {
+    // Register a native secure browser listener once on startup to handle Ctrl+V
+    InitializeNativePasteListener: function(objectNamePtr, methodNamePtr) {
+        if (window.isPasteListenerInitialized) return;
+        window.isPasteListenerInitialized = true;
+        
+        var objectName = UTF8ToString(objectNamePtr);
+        var methodName = UTF8ToString(methodNamePtr);
+        
+        window.addEventListener('paste', function(e) {
+            var clipboardText = "";
+            
+            // Extract text from the native browser paste event
+            if (e.clipboardData && e.clipboardData.getData) {
+                clipboardText = e.clipboardData.getData('text/plain');
+            }
+            
+            // Send the pasted text back to Unity
+            if (clipboardText !== "") {
+                SendMessage(objectName, methodName, clipboardText);
+            }
+        });
+    }
+});
+
+mergeInto(LibraryManager.library, {
+    // Detects if the game is embedded in a cross-origin iframe (like itch.io)
+    IsInsideIframe: function() {
+        try {
+            return window.self !== window.top;
+        } catch (e) {
+            return true; // Safe fallback if access is restricted
+        }
+    },
+
+    // Listens for the browser's native 'paste' event (Ctrl+V)
+    InitializeNativePasteListener: function(objectNamePtr, methodNamePtr) {
+        if (window.isPasteListenerInitialized) return;
+        window.isPasteListenerInitialized = true;
+
+        var objectName = UTF8ToString(objectNamePtr);
+        var methodName = UTF8ToString(methodNamePtr);
+
+        window.addEventListener('paste', function(e) {
+            var clipboardText = "";
+            if (e.clipboardData && e.clipboardData.getData) {
+                clipboardText = e.clipboardData.getData('text/plain');
+            }
+            if (clipboardText !== "") {
+                SendMessage(objectName, methodName, clipboardText);
+            }
+        });
+    }
+});

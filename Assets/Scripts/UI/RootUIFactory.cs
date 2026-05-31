@@ -4,17 +4,34 @@ using UnityEngine.UI;
 
 public class RootUIFactory : MonoBehaviour
 {
-    private List<string> tabNames = new List<string> { "Heroes", "Phases", "Monsters", "Settings" };
+    public static RootUIFactory Instance { get; private set; }
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
 
     [SerializeField] private FullScreenUIGenerator uiGenerator;
-    [SerializeField] private RootUI[] uiTabs;
     [SerializeField] private float topBarHeight = 45f;
+
+    // Direct, strongly-typed references to each instantiated class
+    public HeroModManager HeroModManager { get; private set; }
+    public PhasesFactory PhasesFactory { get; private set; }
+    public MonsterFactory MonsterFactory { get; private set; }
+    public SettingsUI SettingsUI { get; private set; } // Explicit reference for the Settings Tab
+    public AbilityDataFactory AbilityDataFactory { get; private set; } // Instantiated but not in a tab
 
     private RectTransform mainWrapper;
     private RectTransform topBarContainer;
     private RectTransform contentContainer;
 
-    // THIS is the list of panels that MUST be passed into the NavigationTabs so the buttons actually work.
+    private List<string> tabNames = new List<string>();
     private List<GameObject> tabWrappers = new List<GameObject>();
 
     void Start()
@@ -25,28 +42,25 @@ public class RootUIFactory : MonoBehaviour
             return;
         }
 
-        // 1. First set up the overarching zero-margin boundaries.
+        // 1. Create the screen layouts
         BuildLayoutContainers();
 
-        // 2. Build the actual Pages first! This populates the tabWrappers list with actual GameObjects.
+        // 2. Instantiate and reference the classes directly
         BuildUIChildren();
 
-        // 3. FINALLY, build the Top Bar and pass those tabWrappers in!
+        // 3. Build the Top Bar using the generated tab lists
         BuildTopBar();
 
-        // Default to displaying the first tab visually
         OnTabChanged(0);
     }
 
     private void BuildLayoutContainers()
     {
-        // 1. Create Main Wrapper Flush to the screen edge
         GameObject wrapperObj = new GameObject("Root_UI_Wrapper", typeof(RectTransform));
         mainWrapper = wrapperObj.GetComponent<RectTransform>();
         mainWrapper.SetParent(uiGenerator.canvas.transform, false);
-        FullScreenUIGenerator.SetAnchors(mainWrapper, 0f, 0f, 1f, 1f); // 100% Flush
+        FullScreenUIGenerator.SetAnchors(mainWrapper, 0f, 0f, 1f, 1f);
 
-        // 2. Top Bar Area
         GameObject topBarObj = new GameObject("Top_Bar_Container", typeof(RectTransform));
         topBarContainer = topBarObj.GetComponent<RectTransform>();
         topBarContainer.SetParent(mainWrapper, false);
@@ -54,53 +68,75 @@ public class RootUIFactory : MonoBehaviour
         topBarContainer.pivot = new Vector2(0.5f, 1f);
         topBarContainer.sizeDelta = new Vector2(0f, topBarHeight);
 
-        // 3. Content Area taking up the remainder
         GameObject contentObj = new GameObject("Main_Content_Container", typeof(RectTransform));
         contentContainer = contentObj.GetComponent<RectTransform>();
         contentContainer.SetParent(mainWrapper, false);
         FullScreenUIGenerator.SetAnchors(contentContainer, 0f, 0f, 1f, 1f);
-        contentContainer.offsetMax = new Vector2(0f, -topBarHeight); // Offset by exactly the height of top bar
+        contentContainer.offsetMax = new Vector2(0f, -topBarHeight);
     }
 
     public void BuildUIChildren()
     {
         tabWrappers.Clear();
+        tabNames.Clear();
         Canvas originalCanvas = uiGenerator.canvas;
 
-        // Dynamic Canvas targeting setup
         Canvas contentCanvas = contentContainer.gameObject.AddComponent<Canvas>();
-
-        // FIX: Added GraphicRaycaster component so nested canvas buttons register click inputs
         contentContainer.gameObject.AddComponent<GraphicRaycaster>();
 
         uiGenerator.canvas = contentCanvas;
 
-        for (int i = 0; i < uiTabs.Length; i++)
-        {
-            if (uiTabs[i] == null) continue;
+        // Instantiate classes directly, assign references, and register them as tabs
+        HeroModManager = CreateTabInstance<HeroModManager>("HeroModManager", "Heroes");
+        PhasesFactory = CreateTabInstance<PhasesFactory>("PhasesFactory", "Phases");
+        MonsterFactory = CreateTabInstance<MonsterFactory>("MonsterFactory", "Monsters");
+        SettingsUI = CreateTabInstance<SettingsUI>("SettingsUI", "Settings"); // Restored settings tab
 
-            uiTabs[i].Initialize(uiGenerator);
-
-            RectTransform tabWrapper = uiTabs[i].GetRootWrapper();
-            if (tabWrapper != null)
-            {
-                FullScreenUIGenerator.SetAnchors(tabWrapper, 0f, 0f, 1f, 1f);
-                tabWrapper.offsetMin = Vector2.zero;
-                tabWrapper.offsetMax = Vector2.zero;
-
-                tabWrappers.Add(tabWrapper.gameObject);
-            }
-        }
+        // Instantiated directly, but excluded from tab setup since it is not currently in use
+        AbilityDataFactory = CreateInstanceOnly<AbilityDataFactory>("AbilityDataFactory");
 
         uiGenerator.canvas = originalCanvas;
+    }
+
+    /// <summary>
+    /// Instantiates a RootUI component, registers it as a tab, and initializes its layout.
+    /// </summary>
+    private T CreateTabInstance<T>(string gameObjectName, string displayName) where T : RootUI
+    {
+        GameObject obj = new GameObject(gameObjectName);
+        obj.transform.SetParent(contentContainer, false);
+        T component = obj.AddComponent<T>();
+
+        component.Initialize(uiGenerator);
+
+        RectTransform tabWrapper = component.GetRootWrapper();
+        if (tabWrapper != null)
+        {
+            FullScreenUIGenerator.SetAnchors(tabWrapper, 0f, 0f, 1f, 1f);
+            tabWrapper.offsetMin = Vector2.zero;
+            tabWrapper.offsetMax = Vector2.zero;
+
+            tabNames.Add(displayName);
+            tabWrappers.Add(tabWrapper.gameObject);
+        }
+
+        return component;
+    }
+
+    /// <summary>
+    /// Instantiates a MonoBehaviour class directly without assigning it to a top bar tab.
+    /// </summary>
+    private T CreateInstanceOnly<T>(string gameObjectName) where T : MonoBehaviour
+    {
+        GameObject obj = new GameObject(gameObjectName);
+        obj.transform.SetParent(contentContainer, false);
+        return obj.AddComponent<T>();
     }
 
     private void BuildTopBar()
     {
         Canvas originalCanvas = uiGenerator.canvas;
         Canvas topCanvas = topBarContainer.gameObject.AddComponent<Canvas>();
-
-        // FIX: Added GraphicRaycaster component so the Navigation tabs register click inputs
         topBarContainer.gameObject.AddComponent<GraphicRaycaster>();
 
         uiGenerator.canvas = topCanvas;
@@ -123,7 +159,6 @@ public class RootUIFactory : MonoBehaviour
 
     private void OnTabChanged(int tabIndex)
     {
-        // Redundancy lock: If the NavigationTab controller fails, this manually forces the panels.
         for (int i = 0; i < tabWrappers.Count; i++)
         {
             if (tabWrappers[i] != null)

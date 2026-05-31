@@ -61,21 +61,30 @@ public class IdeLineRow : MonoBehaviour, IPointerDownHandler, IDragHandler, IPoi
         }
         else
         {
-            selectionHighlightBox.gameObject.SetActive(true);
             codeContentText.ForceMeshUpdate(); // Ensure geometry exists to measure
-
-            float startX = 0f;
-            float endX = codeContentText.rectTransform.rect.width; // Default to full width
-
             var textInfo = codeContentText.textInfo;
 
-            // Find starting pixel X
-            if (highlightStartChar > 0 && highlightStartChar < textInfo.characterCount)
-                startX = textInfo.characterInfo[highlightStartChar].bottomLeft.x;
+            float startX = 0f;
+            float endX = 0f;
 
-            // Find ending pixel X
-            if (highlightEndChar < textInfo.characterCount)
-                endX = textInfo.characterInfo[highlightEndChar].bottomRight.x;
+            int charCount = textInfo.characterCount;
+            if (charCount > 0)
+            {
+                int s = Mathf.Clamp(highlightStartChar, 0, charCount);
+                int e = Mathf.Clamp(highlightEndChar, 0, charCount);
+
+                // If no characters on this line are within the selection range, hide the highlight
+                if (s == e)
+                {
+                    selectionHighlightBox.gameObject.SetActive(false);
+                    return;
+                }
+
+                startX = (s > 0) ? textInfo.characterInfo[s - 1].bottomRight.x : textInfo.characterInfo[0].bottomLeft.x;
+                endX = (e > 0) ? textInfo.characterInfo[e - 1].bottomRight.x : textInfo.characterInfo[0].bottomLeft.x;
+            }
+
+            selectionHighlightBox.gameObject.SetActive(true);
 
             // Apply physical padding offsets
             float leftOffset = codeContentText.rectTransform.offsetMin.x;
@@ -85,7 +94,6 @@ public class IdeLineRow : MonoBehaviour, IPointerDownHandler, IDragHandler, IPoi
             hlRt.sizeDelta = new Vector2(Mathf.Max(5f, endX - startX), hlRt.sizeDelta.y); // At least 5px wide to show empty line selections
         }
     }
-
     // --- NEW: Drag and Select Handlers ---
     public void OnPointerDown(PointerEventData eventData)
     {

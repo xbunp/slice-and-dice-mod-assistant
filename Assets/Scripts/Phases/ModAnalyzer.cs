@@ -3,516 +3,374 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using UnityEngine;
 
 namespace SliceDiceTextMod
 {
+    public class ModBlockOverview
+    {
+        public List<string> BlockTypes { get; set; } = new List<string>();
+        public string BlockName { get; set; }
+        public List<ModDetail> Details { get; set; } = new List<ModDetail>();
+    }
+
+    public class ModDetail
+    {
+        public string Title { get; set; }
+        public string Value { get; set; }
+        public string Round { get; set; }
+        public int Depth { get; set; }
+    }
+
     public static class ModAnalyzer
     {
-        // Container for structural blocks discovered during global analysis
-        private class ScannedBlock
+        public static List<ModBlockOverview> Analyze(string rawModString)
         {
-            public int StartIndex { get; set; }
-            public int EndIndex { get; set; }
-            public string RawText { get; set; }
-            public string DatabaseKey { get; set; } // References keys directly from PhaseDatabase / ChoosableDatabase
-            public FloorSelector Floor { get; set; }
-            public Phase ParsedPhase { get; set; }
-            public RewardTag ParsedTag { get; set; }
-            public List<ScannedBlock> NestedBlocks { get; set; } = new List<ScannedBlock>();
+            var overviews = new List<ModBlockOverview>();
+            if (string.IsNullOrWhiteSpace(rawModString)) return overviews;
 
-            public int SortWeight
+            string normalizedString = rawModString.Replace("\r", "").Replace("\n", "");
+            string[] rawBlocks = normalizedString.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string block in rawBlocks)
             {
-                get
-                {
-                    if (Floor == null) return -1;
-                    if (Floor.ExactFloor.HasValue) return Floor.ExactFloor.Value;
-                    if (Floor.RangeStart.HasValue) return Floor.RangeStart.Value;
-                    return 0; // Fallback for 'Every X floors' (e.g., e2)
-                }
+                string trimmedBlock = block.Trim();
+                if (string.IsNullOrEmpty(trimmedBlock)) continue;
+
+                var overview = ParseBlock(trimmedBlock);
+                if (overview != null) overviews.Add(overview);
             }
+
+            return overviews;
         }
 
-        private class ExclusionZone
+        private static ModBlockOverview ParseBlock(string blockText)
         {
-            public int Start;
-            public int End;
+            var overview = new ModBlockOverview();
+
+            // 1. Unwrap enclosing parens first to allow top-level delimiter splits
+            blockText = Unwrap(blockText);
+
+            string customName = ExtractTagValue(blockText, "mn");
+            overview.BlockName = !string.IsNullOrEmpty(customName) ? customName : "Unnamed Block";
+
+            string processingText = blockText;
+            if (processingText.StartsWith("="))
+            {
+                overview.BlockTypes.Add("Auto-Execute");
+                processingText = processingText.Substring(1).Trim();
+            }
+
+            List<string> components = SplitByActionDelimiter(processingText, '&');
+
+            foreach (string component in components)
+            {
+                ProcessComponent(component, overview, depth: 0);
+            }
+
+            if (overview.BlockName == "Unnamed Block" && overview.BlockTypes.Count > 0)
+            {
+                overview.BlockName = overview.Details.FirstOrDefault()?.Value ?? "Config Block";
+            }
+
+            return overview;
         }
 
-        /// <summary>
-        /// Scans a massive TextMod string, filters raw asset data, nested-maps elements, 
-        /// and outputs a highly polished, database-driven chronological outline.
-        /// </summary>
-        public static string BuildHierarchy(string rawModString)
+        private static void ProcessComponent(string component, ModBlockOverview overview, string inheritedRound = null, int depth = 0)
         {
-            if (string.IsNullOrWhiteSpace(rawModString))
+            string cleanComponent = component.Trim();
+
+            // Convert condition wrappers like `!m(` to standard `(` so Unwrap can evaluate it
+            if (Regex.IsMatch(cleanComponent, @"^!?m?\("))
             {
-                Debug.LogWarning("[ModAnalyzer] Passed empty or null string to analyzer.");
-                return "<i>No data provided.</i>";
+                cleanComponent = Regex.Replace(cleanComponent, @"^!?m?\(", "(");
             }
 
-            System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+            cleanComponent = Unwrap(cleanComponent);
 
-            // 1. Map out exclusion zones (image blocks and custom asset pools)
-            var exclusionZones = MapExclusionZones(rawModString);
+            string round = ExtractRoundPrefix(ref cleanComponent) ?? inheritedRound;
 
-            // 2. Scan for the positions of all phases/choosables globally
-            var matches = FindBlockStarts(rawModString);
-            var flatBlocks = new List<ScannedBlock>();
+            // Re-unwrap post round-strip in case of wrapped phases e.g., 0.(ph.s...)
+            cleanComponent = Unwrap(cleanComponent);
 
-            foreach (Match match in matches)
+            if (string.IsNullOrEmpty(cleanComponent)) return;
+
+            // ... Check Boolean / Sequence Phases (Omitted unmodified match checks for brevity here)
+            var boolMatch = Regex.Match(cleanComponent, @"^b?ph\.b([^;]+);([^;]+);(.*)", RegexOptions.IgnoreCase);
+            if (boolMatch.Success)
             {
-                // Skip if this match falls within any mapped exclusion zone
-                if (exclusionZones.Any(z => match.Index >= z.Start && match.Index <= z.End))
-                {
-                    continue;
-                }
-
-                var block = ExtractBlock(rawModString, match.Index, match.Groups["type"].Value, match.Groups["floor"].Value);
-                if (block != null)
-                {
-                    flatBlocks.Add(block);
-                }
+                if (!overview.BlockTypes.Contains("Boolean Phase")) overview.BlockTypes.Add("Boolean Phase");
+                overview.Details.Add(new ModDetail { Title = "Condition Check", Value = $"If {boolMatch.Groups[1].Value} >= {boolMatch.Groups[2].Value}", Round = round, Depth = depth });
+                var branches = SplitByStringDelimiter(boolMatch.Groups[3].Value, "@2");
+                if (branches.Count > 0) ProcessComponent(branches[0], overview, round, depth + 1);
+                if (branches.Count > 1) ProcessComponent(branches[1], overview, round, depth + 1);
+                return;
             }
 
-            // 3. Map structural nesting (ranges inside other ranges)
-            var sortedFlatBlocks = flatBlocks
-                .OrderBy(b => b.StartIndex)
-                .ThenByDescending(b => b.EndIndex - b.StartIndex)
-                .ToList();
-
-            var rootBlocks = new List<ScannedBlock>();
-
-            foreach (var block in sortedFlatBlocks)
+            var bool2Match = Regex.Match(cleanComponent, @"^b?ph\.z([^@]+)@6([^@]+)@6(.*)", RegexOptions.IgnoreCase);
+            if (bool2Match.Success)
             {
-                ScannedBlock parent = FindParentBlock(rootBlocks, block);
-                if (parent != null)
+                if (!overview.BlockTypes.Contains("Boolean Phase")) overview.BlockTypes.Add("Boolean Phase");
+                overview.Details.Add(new ModDetail { Title = "Condition Check", Value = $"If {bool2Match.Groups[1].Value} >= {bool2Match.Groups[2].Value}", Round = round, Depth = depth });
+                var branches = SplitByStringDelimiter(bool2Match.Groups[3].Value, "@7");
+                if (branches.Count > 0) ProcessComponent(branches[0], overview, round, depth + 1);
+                if (branches.Count > 1) ProcessComponent(branches[1], overview, round, depth + 1);
+                return;
+            }
+
+            var seqMatch = Regex.Match(cleanComponent, @"^b?ph\.s(.*)", RegexOptions.IgnoreCase);
+            if (seqMatch.Success)
+            {
+                if (!overview.BlockTypes.Contains("Seq Phase")) overview.BlockTypes.Add("Seq Phase");
+                var parts = SplitByStringDelimiter(seqMatch.Groups[1].Value, "@1");
+                overview.Details.Add(new ModDetail { Title = "Sequence Decision", Value = SanitizeText(parts.Count > 0 ? parts[0] : "Choice Event", 60), Round = round, Depth = depth });
+                for (int i = 1; i < parts.Count; i++)
                 {
-                    // Discard children if the parent itself is identified as a raw asset definition
-                    if (!IsRawCode(parent.RawText))
+                    var choiceParts = SplitByStringDelimiter(parts[i], "@2");
+                    overview.Details.Add(new ModDetail { Title = "Choice Option", Value = $"Button: {SanitizeText(choiceParts.Count > 0 ? choiceParts[0] : "Next", 40)}", Round = round, Depth = depth + 1 });
+                    for (int j = 1; j < choiceParts.Count; j++) ProcessComponent(choiceParts[j], overview, round, depth + 2);
+                }
+                return;
+            }
+
+            var linkedMatch = Regex.Match(cleanComponent, @"^b?ph\.l(.*)", RegexOptions.IgnoreCase);
+            if (linkedMatch.Success)
+            {
+                if (!overview.BlockTypes.Contains("Linked Phase")) overview.BlockTypes.Add("Linked Phase");
+                overview.Details.Add(new ModDetail { Title = "Sequence Link", Value = "Execute sequentially", Round = round, Depth = depth });
+                var phases = SplitByStringDelimiter(linkedMatch.Groups[1].Value, "@1");
+                foreach (var phase in phases) ProcessComponent(phase, overview, round, depth + 1);
+                return;
+            }
+
+            string exactType = IdentifyType(cleanComponent);
+            if (!overview.BlockTypes.Contains(exactType)) overview.BlockTypes.Add(exactType);
+
+            if (exactType.Contains("Pool") || exactType.Contains("Fight") || exactType.Contains("Spawn Injection") || exactType.Contains("Party"))
+            {
+                string payload = StripCommandPrefixes(cleanComponent);
+                payload = Unwrap(payload); // Ensure the list itself wasn't wrapped, permitting internal `+` splitting
+
+                List<string> subEntities = SplitByActionDelimiter(payload, '+');
+
+                foreach (var sub in subEntities)
+                {
+                    if (string.IsNullOrWhiteSpace(sub)) continue;
+
+                    string cleanSub = RemoveTrailingMetadata(sub);
+                    string entityName = ExtractEntityName(cleanSub);
+                    if (entityName.Equals("ignore me", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    overview.Details.Add(new ModDetail
                     {
-                        parent.NestedBlocks.Add(block);
-                    }
+                        Title = exactType.Replace("Pool", "Entity"),
+                        Value = SanitizeText(entityName, 60),
+                        Round = round,
+                        Depth = depth
+                    });
                 }
-                else
+            }
+            else
+            {
+                string cleanSub = RemoveTrailingMetadata(cleanComponent);
+                overview.Details.Add(new ModDetail
                 {
-                    if (!IsRawCode(block.RawText))
-                    {
-                        rootBlocks.Add(block);
-                    }
-                }
-            }
-
-            // 4. Chronologically sort root nodes
-            var sortedRoots = rootBlocks
-                .OrderBy(b => b.SortWeight)
-                .ThenBy(b => b.StartIndex)
-                .ToList();
-
-            sw.Stop();
-
-            // Print stats directly to Unity Console
-            Debug.Log($"[ModAnalyzer] Parsing Finished in {sw.ElapsedMilliseconds}ms. " +
-                      $"Found globally: {flatBlocks.Count} items | Roots: {sortedRoots.Count} | Nested: {flatBlocks.Count - sortedRoots.Count}");
-
-            // 5. Construct high-level outline string
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine("=================================================================================");
-            sb.AppendLine($"                    TEXTMOD CAMPAIGN HIGH-LEVEL OUTLINE");
-            sb.AppendLine($"        Parsed: {flatBlocks.Count} elements | Root Events: {sortedRoots.Count} | Time: {sw.ElapsedMilliseconds}ms");
-            sb.AppendLine("=================================================================================\n");
-
-            foreach (var root in sortedRoots)
-            {
-                string floorStr = root.Floor != null ? $"[Floor {root.Floor.ToSyntax()}]" : "[Global/Start]";
-                sb.AppendLine($"== {floorStr} ==");
-                BuildOutlineString(root, 1, sb);
-                sb.AppendLine();
-            }
-
-            string finalResult = sb.ToString();
-
-            // --- USER DIRECTIVE: Pipe the result straight to Debug.Log for copy-paste inspection ---
-            Debug.Log($"[ModAnalyzer Output Outline]\n{finalResult}");
-
-            return finalResult;
-        }
-
-        // =========================================================================
-        // High-Level Outline Generator (Database-First Mapping)
-        // =========================================================================
-
-        private static void BuildOutlineString(ScannedBlock block, int depth, StringBuilder sb)
-        {
-            if (block == null) return;
-
-            string indent = new string(' ', depth * 4);
-            string outlineSummary = "Unknown Element";
-            string color = "#ffffff";
-
-            // --- STRICT DATABASE LOOKUPS ---
-            if (block.DatabaseKey == "phi.")
-            {
-                color = "#55ff55";
-                string niceName = PhaseDatabase.Phases.ContainsKey(block.DatabaseKey) ? PhaseDatabase.Phases[block.DatabaseKey] : "Phase Indexed";
-                outlineSummary = $"{niceName} (Index: {block.RawText.Replace("phi.", "").Trim()})";
-            }
-            else if (block.DatabaseKey == "phmp.")
-            {
-                color = "#55ff55";
-                string niceName = PhaseDatabase.Phases.ContainsKey(block.DatabaseKey) ? PhaseDatabase.Phases[block.DatabaseKey] : "Phase Mod Pick";
-                outlineSummary = $"{niceName} (Cost Target: {block.RawText.Replace("phmp.", "").Trim()})";
-            }
-            else if (block.DatabaseKey.StartsWith("ph."))
-            {
-                color = "#55ff55";
-                if (block.ParsedPhase != null)
-                {
-                    outlineSummary = GetPhaseOutline(block.ParsedPhase);
-                }
-                else
-                {
-                    // Fallback Warning
-                    string fallbackCode = block.RawText.Substring(0, Math.Min(15, block.RawText.Length));
-                    Debug.LogWarning($"[ModAnalyzer] Phase parsing fell back to guesswork for raw block at index {block.StartIndex}: {block.RawText}");
-                    outlineSummary = $"Unrecognized Phase Code ({fallbackCode})";
-                }
-            }
-            else if (block.DatabaseKey.StartsWith("ch."))
-            {
-                color = "#55ffff";
-                if (block.ParsedTag != null)
-                {
-                    outlineSummary = GetTagOutline(block.ParsedTag);
-                }
-                else
-                {
-                    string fallbackCode = block.RawText.Substring(0, Math.Min(15, block.RawText.Length));
-                    Debug.LogWarning($"[ModAnalyzer] Choosable parsing fell back to guesswork for raw block at index {block.StartIndex}: {block.RawText}");
-                    outlineSummary = $"Unrecognized Choosable Tag ({fallbackCode})";
-                }
-            }
-
-            sb.AppendLine($"{indent}• <color={color}><b>{outlineSummary}</b></color>");
-
-            // Recursively print structural nested elements found inside
-            foreach (var nested in block.NestedBlocks)
-            {
-                BuildOutlineString(nested, depth + 1, sb);
+                    Title = exactType,
+                    Value = SanitizeText(ExtractEntityName(cleanSub), 60),
+                    Round = round,
+                    Depth = depth
+                });
             }
         }
 
-        private static string GetPhaseOutline(Phase phase)
+        private static string Unwrap(string text)
         {
-            if (phase == null) return "Null Phase";
-
-            string dbKey = $"ph.{phase.PhaseCode}";
-            string niceName = PhaseDatabase.Phases.ContainsKey(dbKey) ? PhaseDatabase.Phases[dbKey] : "Unknown Phase";
-
-            return phase switch
+            text = text.Trim();
+            while (text.StartsWith("(") && text.EndsWith(")"))
             {
-                MessagePhase msg => $"{niceName} : \"{SanitizeText(msg.Message, 45)}\"{(string.IsNullOrEmpty(msg.ButtonText) ? "" : $" [Button: {SanitizeText(msg.ButtonText, 15)}]")}",
-                HeroChangePhase hcp => $"{niceName} : Slot {hcp.HeroIndex} -> {(hcp.ChangeType == 0 ? "Random Class" : "Generated Hero")}",
-                BooleanPhase bp => $"{niceName} : If [{bp.VariableName}] >= {bp.Threshold}",
-                BooleanPhase2 bp2 => $"{niceName} : If [{bp2.VariableName}] >= {bp2.Threshold}",
-                SeqPhase seq => $"{niceName} : Dialogue tree \"{SanitizeText(seq.Message, 40)}\" ({seq.Options.Count} Choices)",
-                SimpleChoicePhase sc => $"{niceName} : \"{SanitizeText(sc.Title ?? "Select Reward", 30)}\" ({sc.Options.Count} Options)",
-                ChoicePhase cp => $"{niceName} : Select {cp.SelectionNumber} ({cp.SelectionType}) of {cp.Options.Count} Options",
-                ChallengePhase chal => $"{niceName} : Add {chal.ExtraMonsters.Count} Monsters ({string.Join(", ", chal.ExtraMonsters.Select(GetCleanName))})",
-                TradePhase tp => $"{niceName} (Cursed Chest) : Accept Curses/Blessings ({tp.Rewards.Count} Options)",
-                PositionSwapPhase psp => $"{niceName} : Swap Party Slot {psp.A} <-> Slot {psp.B}",
-                ItemCombinePhase icp => $"{niceName} : Mode {icp.Mode}",
-                PhaseGeneratorPhase pgp => $"{niceName} : Mode {pgp.Mode}",
-                LinkedPhase lp => $"{niceName} : Sequential Action Group ({lp.LinkedPhases.Count} sub-phases)",
-                LevelEndPhase lep => $"{niceName} : Screen overrides ({lep.InnerPhases.Count} sub-phases)",
-                ResetPhase _ => $"{niceName} : Reset Party Levels & Clear Inventory",
-                RunEndPhase _ => $"{niceName} : Game Over Screen",
-                RandomRevealPhase rrp => $"{niceName}",
-                PlayerRollingPhase _ => $"{niceName}",
-                TargetingPhase _ => $"{niceName}",
-                EnemyRollingPhase _ => $"{niceName}",
-                DamagePhase _ => $"{niceName}",
-                _ => $"Unsupported Phase Code '{phase.PhaseCode}'"
-            };
-        }
-
-        private static string GetTagOutline(RewardTag tag)
-        {
-            if (tag == null) return "Null Reward";
-
-            string tagLetter = GetTagLetter(tag);
-            string dbKey = $"ch.{tagLetter}";
-            string niceName = ChoosableDatabase.ByChoosable.ContainsKey(dbKey) ? ChoosableDatabase.ByChoosable[dbKey].TagType : "Unknown Reward";
-
-            return tag switch
-            {
-                ModifierTag m => $"{niceName} Reward : {GetCleanName(m.ModifierSpec)}",
-                ItemTag i => $"{niceName} Reward : {GetCleanName(i.ItemName)}",
-                LevelupTag l => $"{niceName} Reward : Level up to {GetCleanName(l.LevelupName)}",
-                HeroTag g => $"{niceName} Reward : Add Hero {GetCleanName(g.HeroSpec)}",
-                ValueTag v => $"{niceName} Reward : Adjust Counter [{v.VariableName}] = {v.Amount:+#;-#;0}",
-                ReplaceTag p => $"{niceName} Reward : Swap {GetCleanName(p.ModifierToRemove)} with {GetTagOutline(p.GrantedReward)}",
-                OrTag o => $"{niceName} Reward : Choose 1 of {o.Options.Count} Random Choices",
-                EnuTag e => $"{niceName} Reward : Grant Weapon Side ({e.Variant})",
-                RandomTag r => $"{niceName} Reward : {r.Count}x Tier {r.Tier} ({r.RewardTagChar} items)",
-                RandomRangeTag q => $"{niceName} Reward : {q.Count}x Tier {q.TierMin}-{q.TierMax} ({q.RewardTagChar} items)",
-                SkipTag _ => "Skip Reward Option",
-                RawStringTag r => $"Custom reward : {SanitizeText(r.RawData, 40)}",
-                _ => "Reward Option"
-            };
-        }
-
-        // =========================================================================
-        // Sanitization and Text Cleaning Helpers
-        // =========================================================================
-
-        private static string SanitizeText(string text, int maxCharacters)
-        {
-            if (string.IsNullOrEmpty(text)) return string.Empty;
-
-            // Strip massive base64 compressed data sheets
-            string clean = Regex.Replace(text, @"\[[A-Za-z0-9%/+=]{12,}\]", "[Sprite Asset]");
-
-            // Strip textmod markup tags
-            clean = Regex.Replace(clean, @"\[/?(sin|wiggle|pink|purple|red|orange|yellow|green|blue|lime|white|grey|ultragrey|cu|nh|com|b|i)[a-zA-Z0-9]*\]", "");
-
-            clean = clean.Replace("[comma]", ",").Replace("[dot]", ".").Replace("[pips]", "pips");
-            clean = clean.Replace("\n", " ").Replace("\r", " ").Replace("[nh]", " ").Trim();
-
-            // Escape all brackets to guarantee console color tags never bleed
-            clean = EscapeRichText(clean);
-
-            if (clean.Length > maxCharacters)
-            {
-                clean = clean.Substring(0, maxCharacters - 3) + "...";
-            }
-
-            return clean;
-        }
-
-        private static string GetCleanName(string raw)
-        {
-            if (string.IsNullOrEmpty(raw)) return "Empty";
-            if (IsRawCode(raw)) return "[Custom Definition Asset]";
-
-            var nameMatch = Regex.Match(raw, @"\.mn\.(?<name>[^.&)]+)");
-            if (nameMatch.Success)
-            {
-                return nameMatch.Groups["name"].Value.Trim();
-            }
-
-            string sanitized = SanitizeText(raw, 50);
-            int hashIdx = sanitized.IndexOf('#');
-            if (hashIdx > 0) sanitized = sanitized.Substring(0, hashIdx);
-
-            int dotIdx = sanitized.IndexOf('.');
-            if (dotIdx > 0 && dotIdx < 15) sanitized = sanitized.Substring(0, dotIdx);
-
-            return sanitized.Trim();
-        }
-
-        private static bool IsRawCode(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return false;
-            if (text.Contains("replica.") || text.Contains("heropool.") || text.Contains("itempool.") || text.Contains(".img.") || text.Contains(".sd."))
-            {
-                return true;
-            }
-            return false;
-        }
-
-        private static string EscapeRichText(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return "";
-            return text.Replace("<", "&lt;").Replace(">", "&gt;");
-        }
-
-        // =========================================================================
-        // Exclusion Zone Mapper (Prevents parsing false positives inside assets)
-        // =========================================================================
-
-        private static List<ExclusionZone> MapExclusionZones(string src)
-        {
-            var zones = new List<ExclusionZone>();
-
-            // 1. Map all square bracket [...] zones
-            int bracketStart = -1;
-            for (int i = 0; i < src.Length; i++)
-            {
-                if (src[i] == '[')
-                {
-                    bracketStart = i;
-                }
-                else if (src[i] == ']' && bracketStart != -1)
-                {
-                    zones.Add(new ExclusionZone { Start = bracketStart, End = i });
-                    bracketStart = -1;
-                }
-            }
-
-            // 2. Map all custom asset pools
-            var regex = new Regex(@"(heropool\.|itempool\.|replica\.)", RegexOptions.Compiled);
-            foreach (Match m in regex.Matches(src))
-            {
-                int startIdx = m.Index;
                 int depth = 0;
-                int endIdx = -1;
-
-                for (int i = startIdx; i < src.Length; i++)
+                bool matching = true;
+                for (int i = 0; i < text.Length - 1; i++) // Check depth ignoring the very last ')'
                 {
-                    if (src[i] == '(') depth++;
-                    else if (src[i] == ')')
+                    if (text[i] == '(') depth++;
+                    else if (text[i] == ')') depth--;
+
+                    if (depth == 0) // We hit matching baseline prematurely. Don't remove wrapper.
                     {
-                        depth--;
-                        if (depth == 0)
-                        {
-                            endIdx = i;
-                            break;
-                        }
-                    }
-                }
-
-                if (endIdx != -1)
-                {
-                    zones.Add(new ExclusionZone { Start = startIdx, End = endIdx });
-                }
-            }
-
-            return zones;
-        }
-
-        // =========================================================================
-        // Helper Scanner Methods
-        // =========================================================================
-
-        private static MatchCollection FindBlockStarts(string src)
-        {
-            string pattern = @"(?:(?<floor>e\d+(?:\.\d+)?|\d+(?:-\d+)?)\.)?(?<type>ph\.[a-zA-Z0-9!]|phi\.|phmp\.|ch\.[a-z])";
-            return Regex.Matches(src, pattern);
-        }
-
-        private static ScannedBlock ExtractBlock(string src, int matchIndex, string typeToken, string floorToken)
-        {
-            int start = matchIndex;
-
-            if (!string.IsNullOrEmpty(floorToken))
-            {
-                start = src.LastIndexOf(floorToken + ".", matchIndex);
-                if (start == -1) start = matchIndex;
-            }
-
-            int depth = 0;
-            int end = start;
-
-            for (int i = matchIndex; i < src.Length; i++)
-            {
-                char c = src[i];
-
-                if (c == '(' || c == '{' || c == '[') depth++;
-                else if (c == ')' || c == '}' || c == ']')
-                {
-                    depth--;
-                    if (depth < 0)
-                    {
-                        end = i;
+                        matching = false;
                         break;
                     }
                 }
-                // --- BLOCK TERMINATION VIA STRONGLY TYPED DELIMITERS ---
-                else if (depth == 0 && (c == char.Parse(Delimiters.TopLevel) || c == ',' ||
-                        (i <= src.Length - 2 && (src.Substring(i, 2) == Delimiters.AtThree ||
-                                                 src.Substring(i, 2) == Delimiters.AtOne ||
-                                                 src.Substring(i, 2) == Delimiters.AtTwo ||
-                                                 src.Substring(i, 2) == Delimiters.AtSix ||
-                                                 src.Substring(i, 2) == Delimiters.AtSeven))))
-                {
-                    end = i;
-                    break;
-                }
-
-                end = i + 1;
+                if (matching && depth == 1) text = text.Substring(1, text.Length - 2).Trim();
+                else break;
             }
-
-            if (start < 0 || end <= start || end > src.Length)
-            {
-                return null;
-            }
-
-            string rawBlockText = src.Substring(start, end - start).Trim();
-            if (string.IsNullOrEmpty(rawBlockText)) return null;
-
-            string remainder = ParserHelpers.StripFloorSelector(rawBlockText, out FloorSelector fs);
-
-            var block = new ScannedBlock
-            {
-                StartIndex = start,
-                EndIndex = end,
-                RawText = rawBlockText,
-                Floor = fs
-            };
-
-            try
-            {
-                if (typeToken.StartsWith("phi."))
-                {
-                    block.DatabaseKey = "phi.";
-                }
-                else if (typeToken.StartsWith("phmp."))
-                {
-                    block.DatabaseKey = "phmp.";
-                }
-                else if (typeToken.StartsWith("ph."))
-                {
-                    block.DatabaseKey = typeToken;
-                    block.ParsedPhase = Phase.Parse(rawBlockText);
-                }
-                else if (typeToken.StartsWith("ch."))
-                {
-                    block.DatabaseKey = typeToken;
-                    string payload = remainder.Substring(3);
-                    block.ParsedTag = RewardTag.Parse(payload);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[ModAnalyzer] Parsing guesswork skipped exception: {ex.Message} on string '{rawBlockText}'");
-                return null;
-            }
-
-            return block;
+            return text;
         }
 
-        private static ScannedBlock FindParentBlock(List<ScannedBlock> activeRoots, ScannedBlock target)
+        private static string ExtractRoundPrefix(ref string text)
         {
-            for (int i = activeRoots.Count - 1; i >= 0; i--)
+            var match = Regex.Match(text, @"^(\d+)\.");
+            if (match.Success)
             {
-                var root = activeRoots[i];
-                if (root.StartIndex <= target.StartIndex && root.EndIndex >= target.EndIndex)
-                {
-                    var nestedParent = FindParentBlock(root.NestedBlocks, target);
-                    return nestedParent ?? root;
-                }
+                text = text.Substring(match.Length).Trim();
+                return match.Groups[1].Value;
             }
             return null;
         }
 
-        private static string GetTagLetter(RewardTag tag)
+        private static List<string> SplitByStringDelimiter(string input, string delimiter)
         {
-            return tag switch
+            List<string> result = new List<string>();
+            int depth = 0;
+            int startIndex = 0;
+
+            for (int i = 0; i < input.Length; i++)
             {
-                ModifierTag _ => "m",
-                ItemTag _ => "i",
-                LevelupTag _ => "l",
-                HeroTag _ => "g",
-                RandomTag _ => "r",
-                RandomRangeTag _ => "q",
-                OrTag _ => "o",
-                EnuTag _ => "e",
-                ValueTag _ => "v",
-                ReplaceTag _ => "p",
-                SkipTag _ => "s",
-                _ => "?"
-            };
+                if (input[i] == '(') depth++;
+                else if (input[i] == ')') { if (depth > 0) depth--; }
+                else if (depth == 0 && i <= input.Length - delimiter.Length && input.Substring(i, delimiter.Length) == delimiter)
+                {
+                    result.Add(input.Substring(startIndex, i - startIndex));
+                    i += delimiter.Length - 1;
+                    startIndex = i + 1;
+                }
+            }
+
+            if (startIndex < input.Length) result.Add(input.Substring(startIndex));
+            return result;
+        }
+
+        private static string IdentifyType(string componentText)
+        {
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])itempool\.", RegexOptions.IgnoreCase)) return "Item Pool";
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])heropool\.", RegexOptions.IgnoreCase)) return "Hero Pool";
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])(?:e?\d+(?:-\d+)?\.)?monsterpool\.", RegexOptions.IgnoreCase)) return "Monster Pool";
+
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])(?:ch\.om)?(?:e?\d+(?:-\d+)?\.)?fight\.", RegexOptions.IgnoreCase)) return "Forced Fight";
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])(?:ch\.om)?(?:e?\d+(?:-\d+)?\.)?add\.", RegexOptions.IgnoreCase)) return "Spawn Injection";
+
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])party\.", RegexOptions.IgnoreCase)) return "Starting Party Config";
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])diff\.", RegexOptions.IgnoreCase)) return "Difficulty Config";
+            if (Regex.IsMatch(componentText, @"(?:^|[&+(])zone\.", RegexOptions.IgnoreCase)) return "Zone Config";
+
+            // (Assuming generic phase logic fallback or PhaseDatabase matches)
+            var phaseMatch = Regex.Match(componentText, @"(?:^|[&+(])(?:ch\.om)?(?:e?\d+(?:-\d+)?\.)?(ph\.[a-zA-Z0-9!]|phi\.|phmp\.)", RegexOptions.IgnoreCase);
+            if (phaseMatch.Success) return "Phase Event";
+
+            var chMatch = Regex.Match(componentText, @"(?:^|[&+(])(?:ch\.om)?(?:e?\d+(?:-\d+)?\.)?(ch\.[a-z])", RegexOptions.IgnoreCase);
+            if (chMatch.Success) return "Reward Option";
+
+            return $"Mod: {SanitizeText(ExtractEntityName(componentText), 25)}";
+        }
+
+        private static string StripCommandPrefixes(string text)
+        {
+            return Regex.Replace(text, @"^(?:ch\.om)?(?:e?\d+(?:-\d+)?\.)?(?:itempool|heropool|monsterpool|fight|add|party)\.", "", RegexOptions.IgnoreCase);
+        }
+
+        private static string ExtractEntityName(string data)
+        {
+            string explicitName = ExtractTagValue(data, "n");
+            if (!string.IsNullOrEmpty(explicitName)) return explicitName;
+
+            var repMatch = Regex.Match(data, @"(?:replica\.)?([A-Za-z0-9_]+)");
+            if (repMatch.Success && !repMatch.Groups[1].Value.Equals("self", StringComparison.OrdinalIgnoreCase))
+                return repMatch.Groups[1].Value;
+
+            if (data.Contains("rmon.") || data.Contains("rditem.") || data.Contains("rdhero.")) return "Procedural Entity";
+
+            return data;
+        }
+
+        private static string ExtractTagValue(string text, string tag)
+        {
+            var matches = Regex.Matches(text, $@"\.{tag}\.((?:\[.*?\]|[a-zA-Z0-9 _\-!?^/]+)+)");
+            if (matches.Count == 0) return null;
+
+            int minDepth = int.MaxValue;
+            string bestMatch = null;
+
+            foreach (Match match in matches)
+            {
+                int depth = 0;
+                for (int i = 0; i < match.Index; i++)
+                {
+                    if (text[i] == '(') depth++;
+                    else if (text[i] == ')') depth--;
+                }
+
+                // If multiple nested tags, we want the most exposed tier 0 item to overwrite inner tiers
+                if (depth <= minDepth)
+                {
+                    minDepth = depth;
+                    bestMatch = match.Groups[1].Value.Trim();
+                }
+            }
+
+            return bestMatch;
+        }
+
+        private static string RemoveTrailingMetadata(string text)
+        {
+            // Now replaces specific keys/payloads with an empty string rather than `.doc.*$` to the end of line
+            string pattern = @"\.(mn|doc|modtier|bal|speech|img)\.(?:\[.*?\]|[a-zA-Z0-9 _\-!?^/]+)+";
+            return Regex.Replace(text, pattern, "", RegexOptions.IgnoreCase);
+        }
+
+        private static string SanitizeText(string text, int maxLength = 100)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+
+            string clean = Regex.Replace(text, @"\[[A-Za-z0-9%/+=]{12,}\]", "[Sprite]");
+            clean = Regex.Replace(clean, @"\[/?(sin|wiggle|pink|purple|red|orange|yellow|green|blue|lime|white|grey|ultragrey|cu|nh|com|b|i|dot|nbp|p|eye of horus|pips|hp-plus|fullHeart|bas15|dee12|dee27|bas103)[a-zA-Z0-9 \-]*\]", " ");
+            clean = clean.Replace("[comma]", ",").Replace("[n]", " ");
+            clean = Regex.Replace(clean, @"\s+", " ").Trim();
+
+            if (clean.Length > maxLength) clean = clean.Substring(0, maxLength - 3) + "...";
+            return clean;
+        }
+
+        private static List<string> SplitByActionDelimiter(string input)
+        {
+            List<string> result = new List<string>();
+            int depth = 0;
+            int startIndex = 0;
+
+            for (int i = 0; i < input.Length; i++)
+            {
+                char c = input[i];
+                if (c == '(') depth++;
+                else if (c == ')') { if (depth > 0) depth--; }
+                else if ((c == '&' || c == ';') && depth == 0)
+                {
+                    result.Add(input.Substring(startIndex, i - startIndex));
+                    startIndex = i + 1;
+                }
+            }
+
+            if (startIndex < input.Length) result.Add(input.Substring(startIndex));
+            return result;
+        }
+
+        private static List<string> SplitByActionDelimiter(string input, char delimiter)
+        {
+            List<string> result = new List<string>();
+            int depth = 0;
+            int startIndex = 0;
+
+            for (int i = 0; i < input.Length; i++)
+            {
+                char c = input[i];
+                if (c == '(') depth++;
+                else if (c == ')') { if (depth > 0) depth--; }
+                else if (c == delimiter && depth == 0)
+                {
+                    result.Add(input.Substring(startIndex, i - startIndex));
+                    startIndex = i + 1;
+                }
+            }
+
+            if (startIndex < input.Length) result.Add(input.Substring(startIndex));
+            return result;
         }
     }
 }

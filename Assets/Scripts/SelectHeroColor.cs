@@ -25,7 +25,7 @@ public class SelectHeroColor : MonoBehaviour
     {
         HeroColorOption selected = (HeroColorOption)index;
         Debug.Log("Selected: " + selected.ToString());
-        Debug.Log("Color Code: " + SDColors.GetCode(selected));
+        Debug.Log("Color Code: " + SDColors.GetColorCode(selected));
 
         // If you have a sprite to change:
         // mySpriteRenderer.color = ColorSystem.GetColor(selected);

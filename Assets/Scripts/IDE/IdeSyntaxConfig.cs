@@ -7,6 +7,9 @@ public abstract class IdeSyntaxConfig
     public abstract Regex SyntaxRegex { get; }
     public abstract string DefaultTextColor { get; }
 
+    public bool scrollHorizontal;
+    public bool watchPaste;
+
     // Intercepts and processes matched groups with custom coloring segments
     public abstract void ProcessMatch(
         Match match,

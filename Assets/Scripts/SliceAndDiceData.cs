@@ -9,6 +9,14 @@ public static class SDData
     public static readonly string[] UnusuablePortraits = { "Glitch", "Error", "Totem" };
 }
 
+public enum PoolState
+{
+    None,
+    ItemPool,
+    MonsterPool,
+    HeroPool
+}
+
 public enum KeywordColor
 {
     Green,
@@ -472,11 +480,31 @@ public enum AbilityEffectKeyword
 
 public enum HeroColorOption
 {
-    Orange, Yellow, Grey, Red, Blue, Green,
-    Purple, Cyan, DarkBlue, Black, White, Magenta,
-    Pink, Violet, Brown, DarkBrown, Lime, DarkGreen,
-    StrongOrange, StrongYellow, LightGrey, StrongRed, StrongGreen,
-    WeakGreen, WeakBlue
+    Orange,
+    Yellow,
+    Grey,
+    Red,
+    Blue,
+    Green,
+    Purple,
+    Cyan,
+    Sea,          // Changed from DarkBlue
+    Euish,        // Changed from Black (uses code "e", hex "000000")
+    White,
+    Kuish,        // Changed from Magenta
+    Uuish,        // Changed from Pink
+    Violet,
+    Huish,        // Changed from Brown
+    Mahogany,     // Changed from DarkBrown
+    Lime,
+    Tuish,        // Changed from DarkGreen
+    Zuish,        // Changed from StrongOrange
+    Amber,        // Changed from StrongYellow
+    Iuish,        // Changed from LightGrey
+    Quish,        // Changed from StrongRed
+    Xuish,        // Changed from StrongGreen
+    Fuish,        // Changed from WeakGreen
+    Juish         // Changed from WeakBlue
 }
 
 public static class SDColors
@@ -484,6 +512,35 @@ public static class SDColors
     private static readonly Dictionary<string, Color> DirectColorMap;
     private static readonly Dictionary<string, string> RichTextFormatMap;
     private static readonly Dictionary<string, string> HeroHexMap;
+
+    /*
+    orange(Colours.orange),
+    yellow(Colours.yellow),
+    grey(Colours.grey),
+    red(Colours.red),
+    blue(Colours.blue),
+    green(Colours.green),
+    purple(Colours.purple),
+    violet(Colours.pink),
+    dark(Colours.dark),
+    white(Colours.light),
+    lime(Colours.fromHex("08d008")),
+    cyan(Colours.fromHex("4ed6ec")),
+    sea(Colours.fromHex("14397d")),
+    amber(Colours.fromHex("ffbf00")),
+    mahogany(Colours.fromHex("5e1602")),
+    quish("ff4343"),
+    zuish("f55c0b"),
+    xuish("e8f123"),
+    huish("a67060"),
+    fuish("c8eca1"),
+    tuish("233f23"),
+    juish("def8ff"),
+    kuish("9e78cf"),
+    uuish("ffc4fc"),
+    euish("000000"),
+    iuish("a8a8a8");
+    */
 
     static SDColors()
     {
@@ -493,7 +550,7 @@ public static class SDColors
         {
             if (HeroColorMap.TryGetValue(heroType, out HeroColorOption option))
             {
-                string code = GetCode(option);
+                string code = GetColorCode(option);
                 if (HeroColorHexMap.TryGetValue(code, out Color color))
                 {
                     // Convert Color to Hex string once at startup
@@ -593,7 +650,7 @@ public static class SDColors
         // matches the order defined in ColorOption
         return Enum.GetValues(typeof(HeroColorOption))
                    .Cast<HeroColorOption>()
-                   .Select(option => HeroColorNames[GetCode(option)])
+                   .Select(option => HeroColorNames[GetColorCode(option)])
                    .ToArray();
     }
 
@@ -607,7 +664,7 @@ public static class SDColors
     }
 
     // Maps Enum to the "code" letter
-    public static string GetCode(HeroColorOption option)
+    public static string GetColorCode(HeroColorOption option)
     {
         return option switch
         {
@@ -619,23 +676,23 @@ public static class SDColors
             HeroColorOption.Green => "n",
             HeroColorOption.Purple => "p",
             HeroColorOption.Cyan => "c",
-            HeroColorOption.DarkBlue => "s",
-            HeroColorOption.Black => "d",
+            HeroColorOption.Sea => "s",
+            HeroColorOption.Euish => "e",
             HeroColorOption.White => "w",
-            HeroColorOption.Magenta => "k",
-            HeroColorOption.Pink => "u",
+            HeroColorOption.Kuish => "k",
+            HeroColorOption.Uuish => "u",
             HeroColorOption.Violet => "v",
-            HeroColorOption.Brown => "h",
-            HeroColorOption.DarkBrown => "m",
+            HeroColorOption.Huish => "h",
+            HeroColorOption.Mahogany => "m",
             HeroColorOption.Lime => "l",
-            HeroColorOption.DarkGreen => "t",
-            HeroColorOption.StrongOrange => "z",
-            HeroColorOption.StrongYellow => "a",
-            HeroColorOption.LightGrey => "i",
-            HeroColorOption.StrongRed => "q",
-            HeroColorOption.StrongGreen => "x",
-            HeroColorOption.WeakGreen => "f",
-            HeroColorOption.WeakBlue => "j",
+            HeroColorOption.Tuish => "t",
+            HeroColorOption.Zuish => "z",
+            HeroColorOption.Amber => "a",
+            HeroColorOption.Iuish => "i",
+            HeroColorOption.Quish => "q",
+            HeroColorOption.Xuish => "x",
+            HeroColorOption.Fuish => "f",
+            HeroColorOption.Juish => "j",
             _ => "w"
         };
     }
@@ -643,7 +700,7 @@ public static class SDColors
     // Maps Enum to the actual Unity Color
     public static Color GetColor(HeroColorOption option)
     {
-        string code = GetCode(option);
+        string code = GetColorCode(option);
         // Reuse the dictionary logic from the previous step
         return GetHeroColor(code);
     }
@@ -659,23 +716,23 @@ public static class SDColors
         { "n", "N: Green" },
         { "p", "P: Purple" },
         { "c", "C: Cyan" },
-        { "s", "S: Dark Blue" },
-        { "d", "D: Black" },
+        { "s", "S: Sea" },
+        { "e", "E: Euish" },
         { "w", "W: White" },
-        { "k", "K: Magenta" },
-        { "u", "U: Pink" },
+        { "k", "K: Kuish" },
+        { "u", "U: Uuish" },
         { "v", "V: Violet" },
-        { "h", "H: Brown" },
-        { "m", "M: Dark Brown" },
+        { "h", "H: Huish" },
+        { "m", "M: Mahogany" },
         { "l", "L: Lime" },
-        { "t", "T: Dark Green" },
-        { "z", "Z: Strong Orange" },
-        { "a", "A: Strong Yellow" },
-        { "i", "I: Light Grey" },
-        { "q", "Q: Strong Red" },
-        { "x", "X: Strong Green" },
-        { "f", "F: Weak Green" },
-        { "j", "J: Weak Blue" }
+        { "t", "T: Tuish" },
+        { "z", "Z: Zuish" },
+        { "a", "A: Amber" },
+        { "i", "I: Iuish" },
+        { "q", "Q: Quish" },
+        { "x", "X: Xuish" },
+        { "f", "F: Fuish" },
+        { "j", "J: Juish" }
     };
 
     private static readonly Dictionary<string, Color> HeroColorHexMap = new Dictionary<string, Color>
@@ -889,6 +946,57 @@ public static class SDColors
             return color;
         }
         return Color.white;
+    }
+
+    private static HashSet<string> monsterNames;
+    private static HashSet<string> heroNames;
+
+    public static HashSet<string> GetMonsterNames()
+    {
+        if (monsterNames == null)
+        {
+            InitializePoolNames();
+        }
+        return monsterNames;
+    }
+
+    public static HashSet<string> GetHeroNames()
+    {
+        if (heroNames == null)
+        {
+            InitializePoolNames();
+        }
+        return heroNames;
+    }
+
+    public static void InitializePoolNames()
+    {
+        if (monsterNames == null)
+        {
+            monsterNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in System.Enum.GetNames(typeof(MonsterType)))
+            {
+                monsterNames.Add(name);
+            }
+        }
+        if (heroNames == null)
+        {
+            heroNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in System.Enum.GetNames(typeof(HeroType)))
+            {
+                heroNames.Add(name);
+            }
+        }
+    }
+
+    public static string GetNextWord(string text, int startIndex)
+    {
+        int length = 0;
+        while (startIndex + length < text.Length && (char.IsLetterOrDigit(text[startIndex + length]) || text[startIndex + length] == '_'))
+        {
+            length++;
+        }
+        return length > 0 ? text.Substring(startIndex, length) : null;
     }
 }
 

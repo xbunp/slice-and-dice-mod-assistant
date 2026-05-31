@@ -135,7 +135,7 @@ public class HeroModManager : RootUI
         {
             if (HeroColorMap.TryGetValue(baseHeroEnum, out HeroColorOption defaultColorOption))
             {
-                string defaultColorCode = GetCode(defaultColorOption);
+                string defaultColorCode = GetColorCode(defaultColorOption);
                 if (currentHero.colorClass == defaultColorCode)
                 {
                     colorSegment = "";
@@ -467,7 +467,7 @@ public class HeroModManager : RootUI
             GridCellSpec.CreateLabel("Color Label", "Color Class:", 0.35f),
             GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
                 HeroColorOption selectedColor = (HeroColorOption)val;
-                currentHero.colorClass = SDColors.GetCode(selectedColor);
+                currentHero.colorClass = SDColors.GetColorCode(selectedColor);
                 portraitPreview.SetHeroColor(SDColors.GetColor(selectedColor));
                 OnUIChanged();
             })
@@ -1278,7 +1278,7 @@ public class HeroModManager : RootUI
     {
         foreach (HeroColorOption opt in Enum.GetValues(typeof(HeroColorOption)))
         {
-            if (GetCode(opt) == code) return opt;
+            if (GetColorCode(opt) == code) return opt;
         }
         return HeroColorOption.Yellow;
     }

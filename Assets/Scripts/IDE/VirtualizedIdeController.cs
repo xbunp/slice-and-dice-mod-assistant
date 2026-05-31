@@ -1,12 +1,13 @@
+using SliceDiceTextMod;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
-using System.Text.RegularExpressions;
+using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 public class VirtualizedIdeController : MonoBehaviour
 {
@@ -24,11 +25,15 @@ public class VirtualizedIdeController : MonoBehaviour
     private static extern void CopyToClipboardWebGL(string text);
 #endif
 
+    private static VirtualizedIdeController _focusedInstance;
+
     [Header("UI Scroll Settings")]
+    [SerializeField] private bool enableHorizontalScrolling = false; // <-- ADD THIS
     [SerializeField] private ScrollRect viewportScrollRect;
     [SerializeField] private RectTransform contentContainer;
     [SerializeField] private float lineHeight = 22f;
     [SerializeField] private int extraBufferRows = 5;
+    private float _maxContentWidth;
 
     [Header("Prefabs & Resources")]
     [SerializeField] private GameObject lineRowPrefab; // A prefab with IdeLineRow components
@@ -53,6 +58,8 @@ public class VirtualizedIdeController : MonoBehaviour
     private int _activeEditLineIndex = -1;
     private bool _isUpdatingText = false;
     private bool _isSwitchingLine = false;
+
+    private bool isWatchPaste = true;
 
     // Selection State Machine
     private bool _isMultiSelecting = false;
@@ -96,29 +103,41 @@ public class VirtualizedIdeController : MonoBehaviour
     {
         // Set the active syntax configuration
         _syntaxConfig = ideConfig;
+        enableHorizontalScrolling = ideConfig.scrollHorizontal;
+        isWatchPaste = ideConfig.watchPaste;
 
         PerformStrictInitializationSanityPass();
 
         sharedInputField.onValueChanged.AddListener(OnActiveLineTextChanged);
         sharedInputField.onEndEdit.AddListener(OnActiveLineEndEdit);
+        sharedInputField.onCaretMoved.AddListener(() => {
+            if (_activeEditLineIndex != -1) EnsureLineIsVisible(_activeEditLineIndex);
+        });
+
         viewportScrollRect.onValueChanged.AddListener(OnScrollPositionChanged);
 
-#if UNITY_WEBGL && !UNITY_EDITOR
+        #if UNITY_WEBGL && !UNITY_EDITOR
         InitializeNativeCopyListener();
-#endif
+        #endif
 
         InitializeVirtualPool(30);
         RefreshDocumentLayout();
     }
     public void SimulateExternalPaste(string clipboardText)
     {
+        //        if (!isWatchPaste) return;
         PasteClipboardOverSelection(clipboardText);
+    }
+
+    public void ReplaceIDEContent(string clipboardText, bool preProccessText)
+    {
+        PasteClipboardOverSelection(clipboardText, true, preProccessText);
     }
 
     private void PerformStrictInitializationSanityPass()
     {
         // 1. Lock down ScrollRect physics
-        viewportScrollRect.horizontal = false;
+        viewportScrollRect.horizontal = enableHorizontalScrolling;
         viewportScrollRect.vertical = true;
 
         // 2. Lock down the Viewport bounds
@@ -129,11 +148,22 @@ public class VirtualizedIdeController : MonoBehaviour
         viewportRt.offsetMax = Vector2.zero;
 
         // 3. Lock down Content container anchors (Top-Stretch)
-        contentContainer.anchorMin = new Vector2(0, 1);
-        contentContainer.anchorMax = new Vector2(1, 1);
-        contentContainer.pivot = new Vector2(0, 1);
-        contentContainer.offsetMin = new Vector2(0, contentContainer.offsetMin.y);
-        contentContainer.offsetMax = new Vector2(0, contentContainer.offsetMax.y);
+        if (enableHorizontalScrolling)
+        {
+            // Top-Left anchors allow the container to expand infinitely to the right
+            contentContainer.anchorMin = new Vector2(0, 1);
+            contentContainer.anchorMax = new Vector2(0, 1);
+            contentContainer.pivot = new Vector2(0, 1);
+        }
+        else
+        {
+            // Top-Stretch forces it to clamp to viewport width
+            contentContainer.anchorMin = new Vector2(0, 1);
+            contentContainer.anchorMax = new Vector2(1, 1);
+            contentContainer.pivot = new Vector2(0, 1);
+            contentContainer.offsetMin = new Vector2(0, contentContainer.offsetMin.y);
+            contentContainer.offsetMax = new Vector2(0, contentContainer.offsetMax.y);
+        }
 
         // 4. Calculate absolute left boundary, accounting for both RectTransform offset AND TMP margins
         IdeLineRow rowComponent = lineRowPrefab.GetComponent<IdeLineRow>();
@@ -206,6 +236,12 @@ public class VirtualizedIdeController : MonoBehaviour
         // Force layout calculations to get exact, non-collapsed viewport dimensions
         Canvas.ForceUpdateCanvases();
         _lockedViewportWidth = viewportRt.rect.width;
+
+        _maxContentWidth = _lockedViewportWidth;
+        if (enableHorizontalScrolling)
+        {
+            contentContainer.sizeDelta = new Vector2(_maxContentWidth, contentContainer.sizeDelta.y);
+        }
     }
     private void InitializeVirtualPool(int initialSize)
     {
@@ -233,8 +269,8 @@ public class VirtualizedIdeController : MonoBehaviour
     private void Update()
     {
         if (_isSwitchingLine) return;
-
         if (_activeEditLineIndex == -1 && !_isMultiSelecting) return;
+        if (_focusedInstance != this) return;
 
         // Get New Input System Keyboard State
         var keyboard = Keyboard.current;
@@ -261,7 +297,7 @@ public class VirtualizedIdeController : MonoBehaviour
                 return;
             }
 
-            if (isControlPressed && keyboard.vKey.wasPressedThisFrame)
+            if (isControlPressed && keyboard.vKey.wasPressedThisFrame && isWatchPaste)
             {
 #if UNITY_WEBGL && !UNITY_EDITOR
                 ReadOSClipboard(gameObject.name, "OnWebGLPasteReceived");
@@ -294,11 +330,14 @@ public class VirtualizedIdeController : MonoBehaviour
         {
             if (isControlPressed && keyboard.vKey.wasPressedThisFrame)
             {
+                if (isWatchPaste)
+                {
 #if UNITY_WEBGL && !UNITY_EDITOR
-                ReadOSClipboard(gameObject.name, "OnWebGLPasteReceived");
+                    ReadOSClipboard(gameObject.name, "OnWebGLPasteReceived");
 #else
-                PasteClipboardOverSelection(GUIUtility.systemCopyBuffer);
+                    PasteClipboardOverSelection(GUIUtility.systemCopyBuffer);
 #endif
+                }
                 return;
             }
 
@@ -467,6 +506,11 @@ public class VirtualizedIdeController : MonoBehaviour
                 }
 
                 row.UpdateRowDisplay(lineIndex, GetHighlightedText(lineIndex), isEditingThisRow, hlStart, hlEnd);
+                if (enableHorizontalScrolling && !isEditingThisRow)
+                {
+                    float preferredWidth = row.CodeTextComponent.GetPreferredValues(row.CodeTextComponent.text).x;
+                    EvaluateContentWidth(preferredWidth);
+                }
             }
             else
             {
@@ -477,7 +521,15 @@ public class VirtualizedIdeController : MonoBehaviour
     public void RefreshDocumentLayout()
     {
         float totalHeight = _rawLines.Count * lineHeight;
-        contentContainer.sizeDelta = new Vector2(contentContainer.sizeDelta.x, totalHeight);
+
+        if (enableHorizontalScrolling)
+        {
+            contentContainer.sizeDelta = new Vector2(_maxContentWidth, totalHeight);
+        }
+        else
+        {
+            contentContainer.sizeDelta = new Vector2(contentContainer.sizeDelta.x, totalHeight);
+        }
         UpdateVirtualViewport(true);
     }
 
@@ -487,6 +539,7 @@ public class VirtualizedIdeController : MonoBehaviour
 
     public void OnRowPointerDown(int lineIndex, PointerEventData eventData)
     {
+        _focusedInstance = this;
         var keyboard = Keyboard.current;
         bool isShiftPressed = keyboard != null && keyboard.shiftKey.isPressed;
 
@@ -555,6 +608,7 @@ public class VirtualizedIdeController : MonoBehaviour
     }
     public void OnRowDrag(PointerEventData eventData)
     {
+        _focusedInstance = this;
         if (!_isMultiSelecting)
         {
             _isMultiSelecting = true;
@@ -574,6 +628,7 @@ public class VirtualizedIdeController : MonoBehaviour
     }
     public void OnRowPointerUp(PointerEventData eventData)
     {
+        _focusedInstance = this;
         if (!_isMultiSelecting) return;
     }
     private int GetCharIndexFromMousePosition(int lineIndex, Vector2 screenPos)
@@ -610,6 +665,7 @@ public class VirtualizedIdeController : MonoBehaviour
     // Locate RequestLineEdit and update its signature and caret assignment block:
     public void RequestLineEdit(int lineIndex, int startCaretPos = -1, int selectionAnchorPos = -1)
     {
+        _focusedInstance = this;
         _isSwitchingLine = true;
 
         if (_activeEditLineIndex != -1 && _activeEditLineIndex != lineIndex)
@@ -691,9 +747,16 @@ public class VirtualizedIdeController : MonoBehaviour
         float textWidth = sharedInputField.textComponent.preferredWidth;
         float absoluteMaxWidth = _lockedViewportWidth - _lockedLeftOffset - 20f;
 
-        if (textWidth > absoluteMaxWidth && absoluteMaxWidth > 100f)
+        if (!enableHorizontalScrolling)
         {
-            TriggerAutoLineSplit();
+            if (textWidth > absoluteMaxWidth && absoluteMaxWidth > 100f)
+            {
+                TriggerAutoLineSplit();
+            }
+        }
+        else
+        {
+            EvaluateContentWidth(textWidth);
         }
     }
     private void OnActiveLineEndEdit(string text)
@@ -883,6 +946,40 @@ public class VirtualizedIdeController : MonoBehaviour
         {
             contentContainer.anchoredPosition = new Vector2(contentContainer.anchoredPosition.x, lineTopY);
         }
+        if (enableHorizontalScrolling && sharedInputField.gameObject.activeSelf && sharedInputField.caretRect != null)
+        {
+            float viewportWidth = viewportScrollRect.viewport.rect.width;
+            float caretX = sharedInputField.caretRect.anchoredPosition.x + _lockedLeftOffset;
+            float currentScrollX = -contentContainer.anchoredPosition.x;
+
+            float rightPadding = 40f;
+            float leftPadding = _lockedLeftOffset + 10f; // Keeps line numbers visible
+
+            if (caretX > currentScrollX + viewportWidth - rightPadding)
+            {
+                // Pan Right
+                float targetScrollX = -(caretX - viewportWidth + rightPadding);
+                contentContainer.anchoredPosition = new Vector2(targetScrollX, contentContainer.anchoredPosition.y);
+            }
+            else if (caretX < currentScrollX + leftPadding)
+            {
+                // Pan Left
+                float targetScrollX = -(caretX - leftPadding);
+                if (targetScrollX > 0) targetScrollX = 0; // Clamp left edge
+                contentContainer.anchoredPosition = new Vector2(targetScrollX, contentContainer.anchoredPosition.y);
+            }
+        }
+    }
+    private void EvaluateContentWidth(float textWidth)
+    {
+        if (!enableHorizontalScrolling) return;
+
+        float requiredWidth = textWidth + _lockedLeftOffset + 50f; // 50px buffer
+        if (requiredWidth > _maxContentWidth)
+        {
+            _maxContentWidth = requiredWidth;
+            contentContainer.sizeDelta = new Vector2(_maxContentWidth, contentContainer.sizeDelta.y);
+        }
     }
 
     // =========================================================================
@@ -923,27 +1020,58 @@ public class VirtualizedIdeController : MonoBehaviour
         UpdateSelectionCache();
         RefreshDocumentLayout();
     }
+    private void DeleteAll()
+    {
+        // Clear all text and ensure there is at least one empty line
+        _rawLines.Clear();
+        _rawLines.Add("");
+
+        // Reset selection and caret states
+        _isMultiSelecting = false;
+        _selStartLine = 0;
+        _selEndLine = 0;
+        _selStartChar = 0;
+        _selEndChar = 0;
+        _activeEditLineIndex = 0;
+
+        if (sharedInputField != null)
+        {
+            sharedInputField.text = "";
+            sharedInputField.caretPosition = 0;
+        }
+
+        // Clear caches and update UI
+        _highlightedCache.Clear();
+        UpdateSelectionCache();
+        RefreshDocumentLayout();
+    }
     public void OnWebGLPasteReceived(string clipboardText)
     {
         if (string.IsNullOrEmpty(clipboardText)) return;
         PasteClipboardOverSelection(clipboardText);
     }
-    private void PasteClipboardOverSelection(string clipboardText)
+    private void PasteClipboardOverSelection(string clipboardText, bool clearAllFirst = false, bool invokeTextPreprocessor = true)
     {
         if (string.IsNullOrEmpty(clipboardText)) return;
-
-        if (TextPreprocessor != null)
-        {
-            clipboardText = TextPreprocessor.Invoke(clipboardText);
-        }
 
         int targetLine;
         int targetChar;
 
+        if (TextPreprocessor != null && invokeTextPreprocessor)
+        {
+            clipboardText = TextPreprocessor.Invoke(clipboardText);
+        }
+
         // =========================================================================
-        // DYNAMIC INGESTION: Evaluate if pasting over a block or into a caret
+        // DYNAMIC INGESTION: Evaluate if pasting over a block or into a caret or fresh
         // =========================================================================
-        if (_isMultiSelecting)
+        if (clearAllFirst)
+        {
+            DeleteAll();
+            targetLine = 0;
+            targetChar = 0;
+        }
+        else if (_isMultiSelecting)
         {
             targetLine = Mathf.Min(_selStartLine, _selEndLine);
             targetChar = _selStartLine == _selEndLine
@@ -957,8 +1085,6 @@ public class VirtualizedIdeController : MonoBehaviour
             targetLine = _activeEditLineIndex;
             targetChar = sharedInputField.caretPosition;
 
-            // BUG FIX: If the user clicks an external paste button, the IDE loses focus 
-            // and _activeEditLineIndex becomes -1. Fallback to pasting at the end of the document.
             if (targetLine < 0 || targetLine >= _rawLines.Count)
             {
                 targetLine = _rawLines.Count - 1;
@@ -1030,6 +1156,8 @@ public class VirtualizedIdeController : MonoBehaviour
         if (_rawLines.Count == 0) _rawLines.Add("");
 
         _isUpdatingText = false;
+
+        _maxContentWidth = _lockedViewportWidth;
         RefreshDocumentLayout();
     }
     public string ExportDocument()

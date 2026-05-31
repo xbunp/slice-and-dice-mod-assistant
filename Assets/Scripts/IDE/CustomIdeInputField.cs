@@ -37,6 +37,7 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
     [Header("Events")]
     public IdeTextChangeEvent onValueChanged = new IdeTextChangeEvent();
     public IdeTextChangeEvent onEndEdit = new IdeTextChangeEvent();
+    public UnityEvent onCaretMoved = new UnityEvent();
 
     [Header("Key Repeat Settings")]
     public float keyRepeatDelay = 0.5f; // Initial pause before repeating starts
@@ -74,6 +75,7 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
             _caretPosition = Mathf.Clamp(value, 0, _text.Length);
             UpdateCaretVisuals();
             ResetCaretBlink();
+            onCaretMoved?.Invoke();
         }
     }
     private int _selectionAnchorPosition = 0;

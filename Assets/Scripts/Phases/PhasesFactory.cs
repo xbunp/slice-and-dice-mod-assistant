@@ -1,6 +1,7 @@
 using SliceDiceTextMod;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using TMPro;
@@ -10,6 +11,7 @@ using UnityEngine.UI;
 public class PhasesFactory : RootUI
 {
     private VirtualizedIdeController mainIdeController;
+    private VirtualizedIdeController phasesIdeController;
     private SDTextmodSyntaxConfig IDEconfig = new SDTextmodSyntaxConfig();
 
     [Header("Formatting State")]
@@ -18,13 +20,19 @@ public class PhasesFactory : RootUI
     // =========================================================================
     // Image Compression Cache
     // =========================================================================
+
     private Dictionary<string, string> imgCache = new Dictionary<string, string>();
     private int imgCounter = 0;
     private static readonly Regex ImgRegex = new Regex(@"img\.(.*?)\.|\[(.*?)\]", RegexOptions.Compiled);
 
+    [Header("Overview State")]
+    private bool showOverviewDetails = true;
+    private List<ModBlockOverview> lastAnalyzedOverview;
+
     // =========================================================================
     // UI Layout Generation
     // =========================================================================
+
     protected override void BuildUIAndBind()
     {
         bool useMargins = false;
@@ -47,42 +55,44 @@ public class PhasesFactory : RootUI
         float buttonRowHeight = uiGenerator.rowHeight;
         float leftIdeHeight = leftPanelHeight - buttonRowHeight - spacing;
 
+        // Adjust the Right Top IDE height to compensate for the toggle button height
+        float rightTopIdeHeight = rightPanelHeight + spacing - buttonRowHeight;
+
         List<ColumnSpec> columns = new List<ColumnSpec>();
 
         // LEFT COLUMN (Buttons + Main IDE Panel directly)
         List<GridRowSpec> leftRows = new List<GridRowSpec>
-        {
-            new GridRowSpec(leftSpacerHeight, GridCellSpec.CreateLabel("LeftSpacer", "", 1.0f)),
-            new GridRowSpec(buttonRowHeight,
-                GridCellSpec.CreateButton("Button1", "Toggle IDE Formatting", 0.33f, () => ToggleIDE()),
-                GridCellSpec.CreateButton("Button2", "Paste Textmod (FASTER)", 0.33f, () => OnPasteButtonClicked()),
-                GridCellSpec.CreateButton("Button3", "Copy & Restore Code", 0.33f, () => CopyAndRestoreCode())
-            ),
-            new GridRowSpec(leftIdeHeight, GridCellSpec.CreateIDEInterface("LeftPanelIDE", 1.0f))
-        };
+    {
+        new GridRowSpec(leftSpacerHeight, GridCellSpec.CreateLabel("LeftSpacer", "", 1.0f)),
+        new GridRowSpec(buttonRowHeight,
+            GridCellSpec.CreateButton("Button1", "Toggle IDE Formatting", 0.33f, () => ToggleIDE()),
+            GridCellSpec.CreateButton("Button2", "Paste Textmod (FASTER)", 0.33f, () => OnPasteButtonClicked()),
+            GridCellSpec.CreateButton("Button3", "Copy & Restore Code", 0.33f, () => CopyAndRestoreCode())
+        ),
+        new GridRowSpec(leftIdeHeight, GridCellSpec.CreateIDEInterface("LeftPanelIDE", 1.0f))
+    };
         columns.Add(new ColumnSpec("Left_Column", 0.0f, 0.66f, leftRows));
 
-        // RIGHT TOP COLUMN
+        // RIGHT TOP COLUMN (Now using the adjusted height)
         List<GridRowSpec> rightTopRows = new List<GridRowSpec>
-        {
-            new GridRowSpec(rightTopSpacerHeight, GridCellSpec.CreateImagePanel("RightTopSpacer", 1.0f)),
-            new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightTopScrollView", 1.0f))
-        };
+    {
+        new GridRowSpec(buttonRowHeight, GridCellSpec.CreateButton("ToggleDetailsBtn", "Collapse Details", 1.0f, () => ToggleOverviewDetails())),
+        new GridRowSpec(rightTopIdeHeight, GridCellSpec.CreateIDEInterface("RightTopIDE", 1.0f))
+    };
         columns.Add(new ColumnSpec("RightTop_Column", 0.66f, 1.0f, rightTopRows));
 
         // RIGHT BOTTOM COLUMN
         List<GridRowSpec> rightBottomRows = new List<GridRowSpec>
-        {
-            new GridRowSpec(rightBottomSpacerHeight, GridCellSpec.CreateImagePanel("RightBottomSpacer", 1.0f)),
-            new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightBottomScrollView", 1.0f))
-        };
+    {
+        new GridRowSpec(rightBottomSpacerHeight, GridCellSpec.CreateImagePanel("RightBottomSpacer", 1.0f)),
+        new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightBottomScrollView", 1.0f))
+    };
         columns.Add(new ColumnSpec("RightBottom_Column", 0.66f, 1.0f, rightBottomRows));
 
         uiGenerator.PopulateScreen(generatedScreen, columns, useMargins);
 
         if (generatedScreen != null) PostProcessLayout();
     }
-
     private void PostProcessLayout()
     {
         Canvas.ForceUpdateCanvases();
@@ -99,10 +109,28 @@ public class PhasesFactory : RootUI
             if (leftRefs.IDEInterfaces.TryGetValue("LeftPanelIDE", out VirtualizedIdeController ideObj))
             {
                 mainIdeController = ideObj;
+                IDEconfig = new SDTextmodSyntaxConfig();
+                IDEconfig.watchPaste = true;
                 mainIdeController.Initialize(IDEconfig);
-
-                // DELEGATE BINDING: Tell the generic IDE to run pasted text through our game's rules
                 mainIdeController.TextPreprocessor = PreprocessPastedText;
+            }
+        }
+
+        if (generatedScreen.ColumnRefs.TryGetValue("RightTop_Column", out GridReferences rightRefs))
+        {
+            if (rightRefs.Buttons.TryGetValue("ToggleDetailsBtn", out Button toggleBtn))
+            {
+                toggleBtn.onClick.RemoveAllListeners();
+                toggleBtn.onClick.AddListener(() => ToggleOverviewDetails());
+            }
+
+            if (rightRefs.IDEInterfaces.TryGetValue("RightTopIDE", out VirtualizedIdeController ideObj2))
+            {
+                phasesIdeController = ideObj2;
+                IDEconfig = new SDTextmodSyntaxConfig();
+                IDEconfig.watchPaste = false;
+                phasesIdeController.Initialize(IDEconfig);
+                phasesIdeController.TextPreprocessor = PreprocessPastedText;
             }
         }
 
@@ -115,7 +143,6 @@ public class PhasesFactory : RootUI
         // Example placeholders for the right side panels
         PopulateDemoScrollView("RightBottom_Column", "RightBottomScrollView", "Right Bottom Demo Button");
     }
-
     private void ClearSpacerText(string columnName, string spacerKey)
     {
         if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
@@ -127,13 +154,6 @@ public class PhasesFactory : RootUI
             }
         }
     }
-
-    private string PreprocessPastedText(string rawPaste)
-    {
-        string compressed = CompressImagesSync(rawPaste);
-        return IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
-    }
-
     private void PopulateDemoScrollView(string columnName, string scrollViewKey, string buttonLabel)
     {
         if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
@@ -161,7 +181,6 @@ public class PhasesFactory : RootUI
             }
         }
     }
-
     public void ToggleUI()
     {
         if (generatedScreen == null) return;
@@ -190,7 +209,6 @@ public class PhasesFactory : RootUI
             }
         });
     }
-
     public void LoadDataIntoIDE(string rawModText)
     {
         if (mainIdeController == null || string.IsNullOrEmpty(rawModText)) return;
@@ -200,7 +218,6 @@ public class PhasesFactory : RootUI
 
         mainIdeController.LoadEntireDocument(finalFormattedText);
     }
-
     private void ToggleIDE()
     {
         if (mainIdeController == null) return;
@@ -212,7 +229,6 @@ public class PhasesFactory : RootUI
         string currentRawData = mainIdeController.ExportDocument();
         LoadDataIntoIDE(currentRawData);
     }
-
     private void CopyAndRestoreCode()
     {
         if (mainIdeController == null) return;
@@ -291,7 +307,6 @@ public class PhasesFactory : RootUI
         if (lastIndex < text.Length) sb.Append(text, lastIndex, text.Length - lastIndex);
         return sb.ToString();
     }
-
     private string RestoreImages(string text)
     {
         if (string.IsNullOrEmpty(text) || (!text.Contains("img.IMG_") && !text.Contains("[IMG_")))
@@ -309,18 +324,50 @@ public class PhasesFactory : RootUI
             return match.Value;
         });
     }
-
     private string AutoFormatModStringSync(string raw)
     {
         string minified = MinifyModString(raw);
         StringBuilder sb = new StringBuilder(minified.Length + 500);
         int indentLevel = 0;
+        bool isInPool = false;
 
         for (int i = 0; i < minified.Length; i++)
         {
             char c = minified[i];
-            if (c == ',') { indentLevel = 0; sb.Append(c); }
-            else if (c == '&') { AppendNewlineAndIndent(sb, indentLevel * 4); sb.Append(c); }
+
+            // 1. Detect entering any of the target pool states
+            if (i + 9 <= minified.Length && minified.Substring(i, 9).Equals("itempool.", StringComparison.OrdinalIgnoreCase))
+            {
+                isInPool = true;
+            }
+            else if (i + 12 <= minified.Length && minified.Substring(i, 12).Equals("monsterpool.", StringComparison.OrdinalIgnoreCase))
+            {
+                isInPool = true;
+            }
+            else if (i + 9 <= minified.Length && minified.Substring(i, 9).Equals("heropool.", StringComparison.OrdinalIgnoreCase))
+            {
+                isInPool = true;
+            }
+
+            // 2. Reset the pool state when encountering a comma (delimiter)
+            if (c == ',')
+            {
+                isInPool = false;
+                indentLevel = 0;
+                sb.Append(c);
+                continue;
+            }
+
+            // 3. Linebreak after '+' symbol within any active pool
+            if (c == '+' && isInPool)
+            {
+                sb.Append('+');
+                AppendNewlineAndIndent(sb, indentLevel * 4);
+                continue;
+            }
+
+            // 4. Default structural formatting rules
+            if (c == '&') { AppendNewlineAndIndent(sb, indentLevel * 4); sb.Append(c); }
             else if (c == '@' && i + 1 < minified.Length && char.IsDigit(minified[i + 1])) { AppendNewlineAndIndent(sb, (indentLevel + 1) * 4); sb.Append(c); sb.Append(minified[++i]); }
             else if (c == ';') { AppendNewlineAndIndent(sb, (indentLevel + 1) * 4); sb.Append(c); }
             else if ((c == '{' && i + 1 < minified.Length && minified[i + 1] == '}') || (c == '(' && i + 1 < minified.Length && minified[i + 1] == ')')) { sb.Append(c); sb.Append(minified[++i]); }
@@ -330,7 +377,6 @@ public class PhasesFactory : RootUI
         }
         return sb.ToString().TrimStart();
     }
-
     public string MinifyModString(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
@@ -361,17 +407,129 @@ public class PhasesFactory : RootUI
         while (sb.Length > 0 && char.IsWhiteSpace(sb[sb.Length - 1])) sb.Length--;
         return sb.ToString();
     }
-
     private void AppendNewlineAndIndent(StringBuilder sb, int indent)
     {
         while (sb.Length > 0 && sb[sb.Length - 1] == ' ') sb.Length--;
         if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.Append('\n');
         if (indent > 0) sb.Append(' ', indent);
     }
-
     private string InsertLinebreaksAfterCommas(string input)
     {
         if (string.IsNullOrEmpty(input)) return input;
         return input.Replace(",", ",\n");
+    }
+
+    private void ToggleOverviewDetails()
+    {
+        showOverviewDetails = !showOverviewDetails;
+        UpdateDetailsToggleButtonText();
+
+        if (lastAnalyzedOverview != null)
+        {
+            DisplayModOverview(lastAnalyzedOverview);
+        }
+    }
+    private void UpdateDetailsToggleButtonText()
+    {
+        if (generatedScreen != null && generatedScreen.ColumnRefs.TryGetValue("RightTop_Column", out GridReferences refs))
+        {
+            if (refs.Buttons.TryGetValue("ToggleDetailsBtn", out Button btn))
+            {
+                var textMesh = btn.GetComponentInChildren<TextMeshProUGUI>();
+                if (textMesh != null)
+                {
+                    textMesh.text = showOverviewDetails ? "Collapse Details" : "Expand Details";
+                }
+            }
+        }
+    }
+
+    private string PreprocessPastedText(string rawPaste)
+    {
+        lastAnalyzedOverview = ModAnalyzer.Analyze(rawPaste);
+        DisplayModOverview(lastAnalyzedOverview);
+
+        string compressed = CompressImagesSync(rawPaste);
+        return IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
+    }
+    private void DisplayModOverview(List<ModBlockOverview> content)
+    {
+        string niceNames = BuildModOverview(content, showOverviewDetails);
+        phasesIdeController.ReplaceIDEContent(niceNames, false);
+    }
+    public static string BuildModOverview(List<ModBlockOverview> content, bool showDetails = true)
+    {
+        if (content == null || content.Count == 0)
+        {
+            return "No active directives found in this mod.";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("==================================================");
+        sb.AppendLine("            MOD DIRECTIVES OVERVIEW");
+        sb.AppendLine("==================================================");
+        sb.AppendLine($"Total Directives Found: {content.Count}\n");
+
+        for (int i = 0; i < content.Count; i++)
+        {
+            var directive = content[i];
+
+            // --- 1. MODIFIER TRUNCATION ---
+            var primaryTypes = directive.BlockTypes.Where(t => !t.StartsWith("Mod:", StringComparison.OrdinalIgnoreCase)).ToList();
+            var modTypes = directive.BlockTypes.Where(t => t.StartsWith("Mod:", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            string typeLabel;
+            if (modTypes.Count > 3)
+            {
+                var truncatedMods = modTypes.Take(3).Concat(new[] { $"+{modTypes.Count - 3} modifiers" });
+                typeLabel = string.Join(" / ", primaryTypes.Concat(truncatedMods));
+            }
+            else
+            {
+                typeLabel = string.Join(" / ", directive.BlockTypes);
+            }
+
+            // --- 2. PARENT TIMING EXTRACTION ---
+            string minRoundStr = null;
+            if (directive.Details != null && directive.Details.Any())
+            {
+                var parsedRounds = directive.Details
+                    .Where(d => !string.IsNullOrEmpty(d.Round) && int.TryParse(d.Round, out _))
+                    .Select(d => int.Parse(d.Round))
+                    .ToList();
+
+                if (parsedRounds.Any())
+                {
+                    minRoundStr = parsedRounds.Min().ToString();
+                }
+            }
+
+            string blockTiming = !string.IsNullOrEmpty(minRoundStr)
+                ? $"{minRoundStr.PadLeft(2)}."
+                : "   ";
+
+            sb.AppendLine($"  {blockTiming} [X] {typeLabel} - {directive.BlockName}");
+
+            // --- 3. CONDITIONAL DETAILS RENDERING ---
+            if (showDetails && directive.Details != null)
+            {
+                foreach (var detail in directive.Details)
+                {
+                    string timingPrefix = !string.IsNullOrEmpty(detail.Round)
+                        ? $"{detail.Round.PadLeft(2)}."
+                        : "   ";
+
+                    string indent = new string(' ', detail.Depth * 4);
+
+                    sb.AppendLine($"  {timingPrefix}  {indent}{detail.Title}: {detail.Value}");
+                }
+            }
+            if (showDetails)
+            {
+                sb.AppendLine();
+            }
+        }
+
+        return sb.ToString();
     }
 }
