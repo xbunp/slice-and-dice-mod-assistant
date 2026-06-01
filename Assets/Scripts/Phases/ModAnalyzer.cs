@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
+
 namespace SliceDiceTextMod
 {
     public class ModBlockOverview
@@ -56,7 +57,7 @@ namespace SliceDiceTextMod
             // 1. Unwrap enclosing parens first to allow top-level delimiter splits
             blockText = Unwrap(blockText);
 
-            string customName = ExtractTagValue(blockText, "mn");
+            string customName = ExtractTagValue(blockText, "mn") ?? ExtractTagValue(blockText, "n");
             overview.BlockName = !string.IsNullOrEmpty(customName) ? customName : "Unnamed Block";
 
             string processingText = blockText;
@@ -75,9 +76,17 @@ namespace SliceDiceTextMod
 
             if (overview.BlockName == "Unnamed Block" && overview.BlockTypes.Count > 0)
             {
-                overview.BlockName = overview.Details.FirstOrDefault()?.Value ?? "Config Block";
+                var firstDetail = overview.Details.FirstOrDefault();
+                if (firstDetail != null)
+                {
+                    string prefix = !string.IsNullOrEmpty(firstDetail.Round) ? firstDetail.Round + ". " : "";
+                    overview.BlockName = prefix + firstDetail.Value;
+                }
+                else
+                {
+                    overview.BlockName = "Config Block";
+                }
             }
-
             return overview;
         }
 
@@ -93,14 +102,73 @@ namespace SliceDiceTextMod
 
             cleanComponent = Unwrap(cleanComponent);
 
-            string round = ExtractRoundPrefix(ref cleanComponent) ?? inheritedRound;
+            // Use the comprehensive FloorSelector instead of simple regex extraction
+            string remainder = ParserHelpers.StripFloorSelector(cleanComponent, out FloorSelector fs);
+            string round = inheritedRound;
+            if (fs != null)
+            {
+                cleanComponent = remainder.Trim();
+                round = FormatFloorSelector(fs) ?? inheritedRound;
+            }
 
             // Re-unwrap post round-strip in case of wrapped phases e.g., 0.(ph.s...)
             cleanComponent = Unwrap(cleanComponent);
 
             if (string.IsNullOrEmpty(cleanComponent)) return;
 
-            // ... Check Boolean / Sequence Phases (Omitted unmodified match checks for brevity here)
+            // =========================================================
+            // INTEGRATION: Attempt Object-Oriented Phase Parsing First
+            // =========================================================
+            if (Regex.IsMatch(cleanComponent, @"^(?:b?ph\.|phi\.|phmp\.)|^\!", RegexOptions.IgnoreCase))
+            {
+                string pStr = cleanComponent;
+                if (pStr.StartsWith("bph.", StringComparison.OrdinalIgnoreCase)) pStr = pStr.Substring(1);
+
+                try
+                {
+                    Phase phase = Phase.Parse(pStr, isNested: false) ?? Phase.Parse(pStr, isNested: true);
+                    if (phase != null)
+                    {
+                        ProcessParsedPhase(phase, overview, round, depth);
+                        return; // Fully handled by domain classes
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[ModAnalyzer] Phase parsing failed for component: '{pStr}'. Error: {ex.Message}");
+                    throw new FormatException($"Phase parsing failed for component: '{pStr}'", ex);
+                }
+            }
+
+            // INTEGRATION: Attempt Choosable Tags
+            var chMatch = Regex.Match(cleanComponent, @"^ch\.([a-z])(.*)", RegexOptions.IgnoreCase);
+            if (chMatch.Success)
+            {
+                if (!overview.BlockTypes.Contains("Reward Option")) overview.BlockTypes.Add("Reward Option");
+                string tagPayload = chMatch.Groups[1].Value + chMatch.Groups[2].Value;
+                try
+                {
+                    RewardTag tag = RewardTag.Parse(tagPayload);
+                    overview.Details.Add(new ModDetail
+                    {
+                        Title = "Direct Reward (Choosable)",
+                        Value = DescribeRewardTag(tag),
+                        Round = round,
+                        Depth = depth
+                    });
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[ModAnalyzer] Choosable Tag parsing failed for payload: '{tagPayload}'. Error: {ex.Message}");
+                    throw new FormatException($"Choosable Tag parsing failed for payload: '{tagPayload}'", ex);
+                }
+            }
+
+            // =========================================================
+            // FALLBACK: Existing Regex Parsing (Guarantees no breakages)
+            // =========================================================
+
             var boolMatch = Regex.Match(cleanComponent, @"^b?ph\.b([^;]+);([^;]+);(.*)", RegexOptions.IgnoreCase);
             if (boolMatch.Success)
             {
@@ -116,7 +184,7 @@ namespace SliceDiceTextMod
             if (bool2Match.Success)
             {
                 if (!overview.BlockTypes.Contains("Boolean Phase")) overview.BlockTypes.Add("Boolean Phase");
-                overview.Details.Add(new ModDetail { Title = "Condition Check", Value = $"If {bool2Match.Groups[1].Value} >= {bool2Match.Groups[2].Value}", Round = round, Depth = depth });
+                overview.Details.Add(new ModDetail { Title = "Condition Check (Alt)", Value = $"If {bool2Match.Groups[1].Value} >= {bool2Match.Groups[2].Value}", Round = round, Depth = depth });
                 var branches = SplitByStringDelimiter(bool2Match.Groups[3].Value, "@7");
                 if (branches.Count > 0) ProcessComponent(branches[0], overview, round, depth + 1);
                 if (branches.Count > 1) ProcessComponent(branches[1], overview, round, depth + 1);
@@ -188,6 +256,165 @@ namespace SliceDiceTextMod
             }
         }
 
+        // =====================================================================
+        // NEW DELEGATION LOGIC (Ties into the Phase Architecture)
+        // =====================================================================
+        private static void ProcessParsedPhase(Phase phase, ModBlockOverview overview, string round, int depth)
+        {
+            if (!overview.BlockTypes.Contains("Phase Event")) overview.BlockTypes.Add("Phase Event");
+
+            string key = "";
+            if (phase is PhaseIndexedPhase) key = "phi.";
+            else if (phase is PhaseModPickPhase) key = "phmp.";
+            else key = "ph." + phase.PhaseCode;
+
+            string phaseName = PhaseDatabase.Phases.ContainsKey(key)
+                ? PhaseDatabase.Phases[key]
+                : phase.GetType().Name.Replace("Phase", " Phase").Trim();
+
+            if (phase is SimpleChoicePhase scp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = string.IsNullOrEmpty(scp.Title) ? "Reward Screen" : SanitizeText(scp.Title), Round = round, Depth = depth });
+                foreach (var opt in scp.Options)
+                    overview.Details.Add(new ModDetail { Title = "Option", Value = DescribeRewardTag(opt), Round = round, Depth = depth + 1 });
+            }
+            else if (phase is SeqPhase sqp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = SanitizeText(sqp.Message), Round = round, Depth = depth });
+                foreach (var opt in sqp.Options)
+                {
+                    overview.Details.Add(new ModDetail { Title = "Button Option", Value = SanitizeText(opt.ButtonText), Round = round, Depth = depth + 1 });
+                    foreach (var inner in opt.PhaseSequence) ProcessParsedPhase(inner, overview, round, depth + 2);
+                }
+            }
+            else if (phase is LinkedPhase lp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = "Sequential Steps", Round = round, Depth = depth });
+                foreach (var inner in lp.LinkedPhases) ProcessParsedPhase(inner, overview, round, depth + 1);
+            }
+            else if (phase is BooleanPhase bp)
+            {
+                overview.Details.Add(new ModDetail { Title = "Condition Check", Value = $"If {bp.VariableName} >= {bp.Threshold}", Round = round, Depth = depth });
+                if (bp.PhaseIfTrue != null) ProcessParsedPhase(bp.PhaseIfTrue, overview, round, depth + 1);
+                if (bp.PhaseIfFalse != null) ProcessParsedPhase(bp.PhaseIfFalse, overview, round, depth + 1);
+            }
+            else if (phase is BooleanPhase2 bp2)
+            {
+                overview.Details.Add(new ModDetail { Title = "Condition Check (Alt)", Value = $"If {bp2.VariableName} >= {bp2.Threshold}", Round = round, Depth = depth });
+                if (bp2.PhaseIfTrue != null) ProcessParsedPhase(bp2.PhaseIfTrue, overview, round, depth + 1);
+                if (bp2.PhaseIfFalse != null) ProcessParsedPhase(bp2.PhaseIfFalse, overview, round, depth + 1);
+            }
+            else if (phase is MessagePhase mp)
+            {
+                string val = SanitizeText(mp.Message);
+                if (!string.IsNullOrEmpty(mp.ButtonText)) val += $" [Btn: {SanitizeText(mp.ButtonText)}]";
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = val, Round = round, Depth = depth });
+            }
+            else if (phase is ChoicePhase cp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = $"{cp.SelectionType} (Qty: {cp.SelectionNumber})", Round = round, Depth = depth });
+                foreach (var opt in cp.Options)
+                    overview.Details.Add(new ModDetail { Title = "Option", Value = DescribeRewardTag(opt), Round = round, Depth = depth + 1 });
+            }
+            else if (phase is ChallengePhase chp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = $"Extra Enemies: {string.Join(", ", chp.ExtraMonsters)}", Round = round, Depth = depth });
+                foreach (var rew in chp.Rewards)
+                    overview.Details.Add(new ModDetail { Title = "Challenge Reward", Value = DescribeRewardTag(rew), Round = round, Depth = depth + 1 });
+            }
+            else if (phase is LevelEndPhase lep)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = "End of Level Actions", Round = round, Depth = depth });
+                foreach (var inner in lep.InnerPhases) ProcessParsedPhase(inner, overview, round, depth + 1);
+            }
+            else if (phase is TradePhase tp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = "Cursed Chest Trade", Round = round, Depth = depth });
+                foreach (var rew in tp.Rewards)
+                    overview.Details.Add(new ModDetail { Title = "Trade Included", Value = DescribeRewardTag(rew), Round = round, Depth = depth + 1 });
+            }
+            else if (phase is RandomRevealPhase rrp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = $"Reveal: {DescribeRewardTag(rrp.Reward)}", Round = round, Depth = depth });
+            }
+            else if (phase is HeroChangePhase hcp)
+            {
+                string action = hcp.ChangeType == 0 ? "Random Class" : "Generated Hero";
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = $"Reroll Slot {hcp.HeroIndex} -> {action}", Round = round, Depth = depth });
+            }
+            else if (phase is ItemCombinePhase icp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = $"Mode: {icp.Mode}", Round = round, Depth = depth });
+            }
+            else if (phase is PositionSwapPhase psp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = $"Swap Hero Slot {psp.A} and {psp.B}", Round = round, Depth = depth });
+            }
+            else if (phase is PhaseGeneratorPhase pgp)
+            {
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = $"Generate: {pgp.Mode} Screen", Round = round, Depth = depth });
+            }
+            else if (phase is PhaseIndexedPhase pip)
+            {
+                overview.Details.Add(new ModDetail { Title = "Phase Indexed", Value = $"Type Index: {pip.Index}", Round = round, Depth = depth });
+            }
+            else if (phase is PhaseModPickPhase pmpp)
+            {
+                overview.Details.Add(new ModDetail { Title = "Phase Mod Pick", Value = $"Target Total: {pmpp.TargetTotal}", Round = round, Depth = depth });
+            }
+            else
+            {
+                // Fallback for simple single-action phases (RunEndPhase, ResetPhase, etc)
+                overview.Details.Add(new ModDetail { Title = phaseName, Value = "Execute Action", Round = round, Depth = depth });
+            }
+        }
+
+        private static string DescribeRewardTag(RewardTag tag)
+        {
+            if (tag is ModifierTag mt)
+            {
+                string type = "Modifier";
+                if (mt.IsCombatEncounter) type = "Combat Encounter";
+                else if (mt.IsZoneChange) type = "Zone Change";
+                else if (mt.IsDifficultyChange) type = "Difficulty Change";
+                else if (mt.IsPartyChange) type = "Party Change";
+                return $"{type}: {SanitizeText(ExtractEntityName(mt.ModifierSpec), 40)}";
+            }
+            if (tag is ItemTag it) return $"Item: {SanitizeText(ExtractEntityName(it.ItemName), 40)}";
+            if (tag is LevelupTag lt) return $"Levelup: {SanitizeText(ExtractEntityName(lt.LevelupName), 40)}";
+            if (tag is HeroTag ht) return $"Hero Add: {SanitizeText(ExtractEntityName(ht.HeroSpec), 40)}";
+            if (tag is RandomTag rt) return $"{rt.Count}x Tier {rt.Tier} Random {DescribeTagChar(rt.RewardTagChar)}";
+            if (tag is RandomRangeTag rrt) return $"{rrt.Count}x Tier {rrt.TierMin}-{rrt.TierMax} Random {DescribeTagChar(rrt.RewardTagChar)}";
+            if (tag is EnuTag et) return $"Enu Item: {et.Variant}";
+            if (tag is ValueTag vt) return $"Add {vt.Amount} to Value '{vt.VariableName}'";
+            if (tag is ReplaceTag pt) return $"Replace '{SanitizeText(ExtractEntityName(pt.ModifierToRemove), 20)}' => [{DescribeRewardTag(pt.GrantedReward)}]";
+            if (tag is SkipTag) return "Skip / None";
+            if (tag is OrTag ot) return $"Randomly Choose: {string.Join(" OR ", ot.Options.Select(DescribeRewardTag))}";
+            if (tag is RawStringTag rst) return $"Raw Data: {SanitizeText(rst.RawData, 40)}";
+            return "Unknown Reward";
+        }
+
+        private static string DescribeTagChar(char c) => c switch { 'm' => "Modifier", 'i' => "Item", 'l' => "Levelup", 'g' => "Hero", _ => "Reward" };
+
+        private static string FormatFloorSelector(FloorSelector fs)
+        {
+            return fs?.ToSyntax();
+        }
+
+        /*
+        private static string FormatFloorSelector(FloorSelector fs)
+        {
+            if (fs == null) return null;
+            if (fs.IsEvery) return fs.EveryOffset.HasValue ? $"Every {fs.EveryN} Flrs (Offset {fs.EveryOffset})" : $"Every {fs.EveryN} Flrs";
+            if (fs.RangeStart.HasValue && fs.RangeEnd.HasValue) return $"Flrs {fs.RangeStart}-{fs.RangeEnd}";
+            if (fs.ExactFloor.HasValue) return $"Flr {fs.ExactFloor}";
+            return null;
+        }
+        */
+
+        // =====================================================================
+        // CORE UTILITIES (Mostly untouched to preserve exact legacy functionality)
+        // =====================================================================
         private static string Unwrap(string text)
         {
             text = text.Trim();
@@ -195,12 +422,12 @@ namespace SliceDiceTextMod
             {
                 int depth = 0;
                 bool matching = true;
-                for (int i = 0; i < text.Length - 1; i++) // Check depth ignoring the very last ')'
+                for (int i = 0; i < text.Length - 1; i++)
                 {
                     if (text[i] == '(') depth++;
                     else if (text[i] == ')') depth--;
 
-                    if (depth == 0) // We hit matching baseline prematurely. Don't remove wrapper.
+                    if (depth == 0)
                     {
                         matching = false;
                         break;
@@ -212,22 +439,10 @@ namespace SliceDiceTextMod
             return text;
         }
 
-        private static string ExtractRoundPrefix(ref string text)
-        {
-            var match = Regex.Match(text, @"^(\d+)\.");
-            if (match.Success)
-            {
-                text = text.Substring(match.Length).Trim();
-                return match.Groups[1].Value;
-            }
-            return null;
-        }
-
         private static List<string> SplitByStringDelimiter(string input, string delimiter)
         {
             List<string> result = new List<string>();
-            int depth = 0;
-            int startIndex = 0;
+            int depth = 0, startIndex = 0;
 
             for (int i = 0; i < input.Length; i++)
             {
@@ -258,7 +473,6 @@ namespace SliceDiceTextMod
             if (Regex.IsMatch(componentText, @"(?:^|[&+(])diff\.", RegexOptions.IgnoreCase)) return "Difficulty Config";
             if (Regex.IsMatch(componentText, @"(?:^|[&+(])zone\.", RegexOptions.IgnoreCase)) return "Zone Config";
 
-            // (Assuming generic phase logic fallback or PhaseDatabase matches)
             var phaseMatch = Regex.Match(componentText, @"(?:^|[&+(])(?:ch\.om)?(?:e?\d+(?:-\d+)?\.)?(ph\.[a-zA-Z0-9!]|phi\.|phmp\.)", RegexOptions.IgnoreCase);
             if (phaseMatch.Success) return "Phase Event";
 
@@ -278,7 +492,12 @@ namespace SliceDiceTextMod
             string explicitName = ExtractTagValue(data, "n");
             if (!string.IsNullOrEmpty(explicitName)) return explicitName;
 
-            var repMatch = Regex.Match(data, @"(?:replica\.)?([A-Za-z0-9_]+)");
+            string mnName = ExtractTagValue(data, "mn");
+            if (!string.IsNullOrEmpty(mnName)) return mnName;
+
+            // Strip the functional command logic upfront before looking for a replica name to avoid accidentally ripping out floor numbers like `4` from `4.fight.`
+            string stripped = StripCommandPrefixes(data);
+            var repMatch = Regex.Match(stripped, @"(?:replica\.)?([A-Za-z0-9_]+)");
             if (repMatch.Success && !repMatch.Groups[1].Value.Equals("self", StringComparison.OrdinalIgnoreCase))
                 return repMatch.Groups[1].Value;
 
@@ -304,7 +523,6 @@ namespace SliceDiceTextMod
                     else if (text[i] == ')') depth--;
                 }
 
-                // If multiple nested tags, we want the most exposed tier 0 item to overwrite inner tiers
                 if (depth <= minDepth)
                 {
                     minDepth = depth;
@@ -317,7 +535,6 @@ namespace SliceDiceTextMod
 
         private static string RemoveTrailingMetadata(string text)
         {
-            // Now replaces specific keys/payloads with an empty string rather than `.doc.*$` to the end of line
             string pattern = @"\.(mn|doc|modtier|bal|speech|img)\.(?:\[.*?\]|[a-zA-Z0-9 _\-!?^/]+)+";
             return Regex.Replace(text, pattern, "", RegexOptions.IgnoreCase);
         }
@@ -335,33 +552,10 @@ namespace SliceDiceTextMod
             return clean;
         }
 
-        private static List<string> SplitByActionDelimiter(string input)
+        private static List<string> SplitByActionDelimiter(string input, char delimiter = '&')
         {
             List<string> result = new List<string>();
-            int depth = 0;
-            int startIndex = 0;
-
-            for (int i = 0; i < input.Length; i++)
-            {
-                char c = input[i];
-                if (c == '(') depth++;
-                else if (c == ')') { if (depth > 0) depth--; }
-                else if ((c == '&' || c == ';') && depth == 0)
-                {
-                    result.Add(input.Substring(startIndex, i - startIndex));
-                    startIndex = i + 1;
-                }
-            }
-
-            if (startIndex < input.Length) result.Add(input.Substring(startIndex));
-            return result;
-        }
-
-        private static List<string> SplitByActionDelimiter(string input, char delimiter)
-        {
-            List<string> result = new List<string>();
-            int depth = 0;
-            int startIndex = 0;
+            int depth = 0, startIndex = 0;
 
             for (int i = 0; i < input.Length; i++)
             {

@@ -10,16 +10,18 @@ public abstract class DirectiveUI
 {
     public string Id { get; private set; }
     public string TypeName { get; private set; }
-    protected bool isExpanded = true;
-    protected bool isHidden = false;
 
+    public SliceDiceTextMod.ModDirectiveData DataModel { get; protected set; } // THE BINDING
+
+    protected bool isExpanded = true;
     protected FullScreenUIGenerator uiGenerator;
     protected System.Action onRebuildNeeded;
     protected System.Action onRemoveRequested;
 
-    protected DirectiveUI(string typeName, FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
+    protected DirectiveUI(SliceDiceTextMod.ModDirectiveData dataModel, string typeName, FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
     {
         Id = System.Guid.NewGuid().ToString();
+        DataModel = dataModel;
         TypeName = typeName;
         uiGenerator = generator;
         onRebuildNeeded = onRebuild;
@@ -44,7 +46,7 @@ public abstract class DirectiveUI
         innerRows.Add(new GridRowSpec(headerHeight,
             GridCellSpec.CreateButton($"Foldout_{Id}", foldoutSymbol, 0.1f, ToggleCollapse),
             GridCellSpec.CreateLabel($"Title_{Id}", TypeName, 0.65f),
-            GridCellSpec.CreateToggle($"Hidden_{Id}", "Hidden", 0.15f, (val) => isHidden = val), // 4 arguments
+            GridCellSpec.CreateToggle($"Hidden_{Id}", "Hidden", 0.15f, (val) => DataModel.IsHidden = val),
             GridCellSpec.CreateButton($"RemoveBtn_{Id}", "X", 0.1f, () => onRemoveRequested?.Invoke())
         ));
 
@@ -82,13 +84,6 @@ public abstract class DirectiveUI
         // 4. Add the built rows on top of the background
         rows.AddRange(innerRows);
 
-        /*
-        // 5. Add spacing outside the group card
-        rows.Add(new GridRowSpec(1,
-            GridCellSpec.CreateLabel($"Spacer_{Id}", "", 1.0f)
-        ));
-        */
-
         return rows;
     }
 
@@ -107,23 +102,24 @@ public abstract class DirectiveUI
 /// </summary>
 public abstract class DirectivePool : DirectiveUI
 {
-    protected List<string> items = new List<string>();
     protected const float CompactItemHeight = 22f; // Slim row height for elements
 
-    protected DirectivePool(string typeName, FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
-        : base(typeName, generator, onRebuild, onRemove) { }
+    protected DirectivePool(SliceDiceTextMod.PoolDirectiveData dataModel, string typeName, FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
+        : base(dataModel, typeName, generator, onRebuild, onRemove) { }
+
+    protected SliceDiceTextMod.PoolDirectiveData PoolData => (SliceDiceTextMod.PoolDirectiveData)DataModel;
 
     protected override List<GridRowSpec> GetContentRowSpecs()
     {
         List<GridRowSpec> rows = new List<GridRowSpec>();
 
         // Content rows
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i < PoolData.Elements.Count; i++)
         {
             int index = i;
             rows.Add(new GridRowSpec(CompactItemHeight,
                 GridCellSpec.CreateLabel($"IndexLabel_{Id}_{index}", $"Element {index}", 0.15f),
-                GridCellSpec.CreateInput($"Input_{Id}_{index}", "", 0.75f, (val) => items[index] = val, InputAlignment.Center),
+                GridCellSpec.CreateInput($"Input_{Id}_{index}", PoolData.Elements[index], 0.75f, (val) => PoolData.Elements[index] = val, InputAlignment.Center),
                 GridCellSpec.CreateButton($"RemoveElem_{Id}_{index}", "-", 0.1f, () => RemoveElementAt(index))
             ));
         }
@@ -141,53 +137,50 @@ public abstract class DirectivePool : DirectiveUI
         // Restore the "hidden" toggle state
         if (refs.Toggles != null && refs.Toggles.TryGetValue($"Hidden_{Id}", out var toggle))
         {
-            toggle.isOn = isHidden;
+            toggle.isOn = DataModel.IsHidden;
         }
 
         if (!isExpanded) return;
 
         // Restore input states
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i < PoolData.Elements.Count; i++)
         {
             if (refs.Inputs.TryGetValue($"Input_{Id}_{i}", out var inputField))
             {
-                inputField.text = items[i];
+                inputField.text = PoolData.Elements[i];
             }
         }
     }
 
     private void AddElement()
     {
-        items.Add(string.Empty);
+        PoolData.Elements.Add(string.Empty);
         onRebuildNeeded?.Invoke();
     }
 
     private void RemoveElementAt(int index)
     {
-        if (index >= 0 && index < items.Count)
+        if (index >= 0 && index < PoolData.Elements.Count)
         {
-            items.RemoveAt(index);
+            PoolData.Elements.RemoveAt(index);
             onRebuildNeeded?.Invoke();
         }
     }
-
-
 }
 
 public class HeroPool : DirectivePool
 {
-    private bool removeBaseHeroes = false; // Track state of the custom toggle
-
-    public HeroPool(FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
-        : base("HeroPool", generator, onRebuild, onRemove) { }
+    public HeroPool(SliceDiceTextMod.HeroPoolData dataModel, FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
+        : base(dataModel, "HeroPool", generator, onRebuild, onRemove) { }
 
     protected override List<GridRowSpec> GetContentRowSpecs()
     {
+        var heroData = (SliceDiceTextMod.HeroPoolData)DataModel;
         List<GridRowSpec> rows = new List<GridRowSpec>();
 
-        // Prepend the left-aligned toggle row (0.3 width toggle, 0.7 blank spacer label)
+        // Prepend the left-aligned toggle row
         rows.Add(new GridRowSpec(CompactItemHeight,
-            GridCellSpec.CreateToggle($"HeroToggle_{Id}", "Remove Base Heroes", 0.3f, (val) => removeBaseHeroes = val),
+            GridCellSpec.CreateToggle($"HeroToggle_{Id}", "Replace Base Heroes", 0.3f, (val) => heroData.ReplaceBaseHeroes = val),
             GridCellSpec.CreateLabel($"HeroToggleSpacer_{Id}", "", 0.7f)
         ));
 
@@ -207,19 +200,20 @@ public class HeroPool : DirectivePool
         // Restore custom toggle state
         if (refs.Toggles != null && refs.Toggles.TryGetValue($"HeroToggle_{Id}", out var toggle))
         {
-            toggle.isOn = removeBaseHeroes;
+            var heroData = (SliceDiceTextMod.HeroPoolData)DataModel;
+            toggle.isOn = heroData.ReplaceBaseHeroes;
         }
     }
 }
 
 public class MonsterPool : DirectivePool
 {
-    public MonsterPool(FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
-        : base("MonsterPool", generator, onRebuild, onRemove) { }
+    public MonsterPool(SliceDiceTextMod.MonsterPoolData dataModel, FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
+        : base(dataModel, "MonsterPool", generator, onRebuild, onRemove) { }
 }
 
 public class ItemPool : DirectivePool
 {
-    public ItemPool(FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
-        : base("ItemPool", generator, onRebuild, onRemove) { }
+    public ItemPool(SliceDiceTextMod.ItemPoolData dataModel, FullScreenUIGenerator generator, System.Action onRebuild, System.Action onRemove)
+        : base(dataModel, "ItemPool", generator, onRebuild, onRemove) { }
 }

@@ -116,9 +116,14 @@ public class PhasesFactory : RootUI
             {
                 phasesIdeController = ideObj2;
 
-                // CHANGE: Pass null to disable syntax-highlighting on the overview (preserving HTML tags),
-                // and assign the click listener delegate.
-                phasesIdeController.Initialize(null);
+                var preserveConfig = new PreserveHtmlSyntaxConfig
+                {
+                    watchPaste = false,
+                    scrollHorizontal = true
+                };
+
+                phasesIdeController.Initialize(preserveConfig);
+
                 phasesIdeController.TextPreprocessor = PreprocessPastedText;
                 phasesIdeController.OnLinkActivated = HandleOverviewLinkClicked;
             }

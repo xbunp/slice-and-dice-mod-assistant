@@ -18,9 +18,9 @@ public class ModPackage : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
     }
-    public void LoadMod(string fullMod)
+    public void LoadModFromText(string fullMod)
     {
         isModLoaded = true;
-        loadedMod.LoadMod(fullMod);
+        loadedMod.LoadFromText(fullMod);
     }
 }
