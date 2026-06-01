@@ -45,25 +45,19 @@ public class PhasesFactory : RootUI
         float totalHeight = generatedScreen.RootWrapper.rect.height;
         float spacing = uiGenerator.rowSpacing;
 
+        // Distribute height cleanly without manual spacer calculations
         float rightPanelHeight = (totalHeight - (spacing * 3f)) / 2f;
         float leftPanelHeight = totalHeight - (spacing * 2f);
 
-        float leftSpacerHeight = spacing;
-        float rightTopSpacerHeight = spacing;
-        float rightBottomSpacerHeight = rightPanelHeight + (spacing * 2f);
-
         float buttonRowHeight = uiGenerator.rowHeight;
         float leftIdeHeight = leftPanelHeight - buttonRowHeight - spacing;
-
-        // Adjust the Right Top IDE height to compensate for the toggle button height
         float rightTopIdeHeight = rightPanelHeight + spacing - buttonRowHeight;
 
         List<ColumnSpec> columns = new List<ColumnSpec>();
 
-        // LEFT COLUMN (Buttons + Main IDE Panel directly)
+        // LEFT COLUMN (No manual top spacer needed; layout group handles outer margins if enabled)
         List<GridRowSpec> leftRows = new List<GridRowSpec>
     {
-        new GridRowSpec(leftSpacerHeight, GridCellSpec.CreateLabel("LeftSpacer", "", 1.0f)),
         new GridRowSpec(buttonRowHeight,
             GridCellSpec.CreateButton("Button1", "Toggle IDE Formatting", 0.33f, () => ToggleIDE()),
             GridCellSpec.CreateButton("Button2", "Paste Textmod (FASTER)", 0.33f, () => OnPasteButtonClicked()),
@@ -73,33 +67,27 @@ public class PhasesFactory : RootUI
     };
         columns.Add(new ColumnSpec("Left_Column", 0.0f, 0.66f, leftRows));
 
-        // RIGHT TOP COLUMN (Now using the adjusted height)
-        List<GridRowSpec> rightTopRows = new List<GridRowSpec>
+        // CONSOLIDATED RIGHT COLUMN (No overlapping columns, no fake image spacers)
+        List<GridRowSpec> rightRows = new List<GridRowSpec>
     {
         new GridRowSpec(buttonRowHeight, GridCellSpec.CreateButton("ToggleDetailsBtn", "Collapse Details", 1.0f, () => ToggleOverviewDetails())),
-        new GridRowSpec(rightTopIdeHeight, GridCellSpec.CreateIDEInterface("RightTopIDE", 1.0f))
-    };
-        columns.Add(new ColumnSpec("RightTop_Column", 0.66f, 1.0f, rightTopRows));
-
-        // RIGHT BOTTOM COLUMN
-        List<GridRowSpec> rightBottomRows = new List<GridRowSpec>
-    {
-        new GridRowSpec(rightBottomSpacerHeight, GridCellSpec.CreateImagePanel("RightBottomSpacer", 1.0f)),
+        new GridRowSpec(rightTopIdeHeight, GridCellSpec.CreateIDEInterface("RightTopIDE", 1.0f)),
         new GridRowSpec(rightPanelHeight, GridCellSpec.CreateScrollView("RightBottomScrollView", 1.0f))
     };
-        columns.Add(new ColumnSpec("RightBottom_Column", 0.66f, 1.0f, rightBottomRows));
+        columns.Add(new ColumnSpec("Right_Column", 0.66f, 1.0f, rightRows));
 
         uiGenerator.PopulateScreen(generatedScreen, columns, useMargins);
 
         if (generatedScreen != null) PostProcessLayout();
     }
+
     private void PostProcessLayout()
     {
         Canvas.ForceUpdateCanvases();
 
+        // Bind Left Column
         if (generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences leftRefs))
         {
-            // Retrieve button references...
             if (leftRefs.Buttons.TryGetValue("Button2", out Button pasteBtn))
             {
                 pasteBtn.onClick.RemoveAllListeners();
@@ -109,14 +97,14 @@ public class PhasesFactory : RootUI
             if (leftRefs.IDEInterfaces.TryGetValue("LeftPanelIDE", out VirtualizedIdeController ideObj))
             {
                 mainIdeController = ideObj;
-                IDEconfig = new SDTextmodSyntaxConfig();
-                IDEconfig.watchPaste = true;
+                IDEconfig = new SDTextmodSyntaxConfig { watchPaste = true };
                 mainIdeController.Initialize(IDEconfig);
                 mainIdeController.TextPreprocessor = PreprocessPastedText;
             }
         }
 
-        if (generatedScreen.ColumnRefs.TryGetValue("RightTop_Column", out GridReferences rightRefs))
+        // Bind Right Column (Safe lookups with renamed Column Key)
+        if (generatedScreen.ColumnRefs.TryGetValue("Right_Column", out GridReferences rightRefs))
         {
             if (rightRefs.Buttons.TryGetValue("ToggleDetailsBtn", out Button toggleBtn))
             {
@@ -127,35 +115,35 @@ public class PhasesFactory : RootUI
             if (rightRefs.IDEInterfaces.TryGetValue("RightTopIDE", out VirtualizedIdeController ideObj2))
             {
                 phasesIdeController = ideObj2;
-                IDEconfig = new SDTextmodSyntaxConfig();
-                IDEconfig.watchPaste = false;
-                phasesIdeController.Initialize(IDEconfig);
+
+                // CHANGE: Pass null to disable syntax-highlighting on the overview (preserving HTML tags),
+                // and assign the click listener delegate.
+                phasesIdeController.Initialize(null);
                 phasesIdeController.TextPreprocessor = PreprocessPastedText;
+                phasesIdeController.OnLinkActivated = HandleOverviewLinkClicked;
             }
         }
 
         UpdateToggleButtonText();
 
-        ClearSpacerText("Left_Column", "LeftSpacer");
-        ClearSpacerText("RightTop_Column", "RightTopSpacer");
-        ClearSpacerText("RightBottom_Column", "RightBottomSpacer");
-
-        // Example placeholders for the right side panels
-        PopulateDemoScrollView("RightBottom_Column", "RightBottomScrollView", "Right Bottom Demo Button");
+        // Populate demo controls on the consolidated Right Column
+        PopulateDemoScrollView("Right_Column", "RightBottomScrollView", "Right Bottom Demo Button");
     }
-    private void ClearSpacerText(string columnName, string spacerKey)
+
+    private void HandleOverviewLinkClicked(string linkId)
     {
-        if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
+        if (mainIdeController == null || lastAnalyzedOverview == null) return;
+
+        if (linkId.StartsWith("block_"))
         {
-            /*
-            if (refs.ImagePanels.TryGetValue(spacerKey, out Image img))
+            if (int.TryParse(linkId.Substring(6), out int index) && index < lastAnalyzedOverview.Count)
             {
-                img.color = Color.clear;
-                img.raycastTarget = false;
+                string snippet = lastAnalyzedOverview[index].SearchSnippet;
+                mainIdeController.ScrollToSnippet(snippet);
             }
-            */
         }
     }
+
     private void PopulateDemoScrollView(string columnName, string scrollViewKey, string buttonLabel)
     {
         if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
@@ -433,7 +421,8 @@ public class PhasesFactory : RootUI
     }
     private void UpdateDetailsToggleButtonText()
     {
-        if (generatedScreen != null && generatedScreen.ColumnRefs.TryGetValue("RightTop_Column", out GridReferences refs))
+        // Changed "RightTop_Column" to "Right_Column"
+        if (generatedScreen != null && generatedScreen.ColumnRefs.TryGetValue("Right_Column", out GridReferences refs))
         {
             if (refs.Buttons.TryGetValue("ToggleDetailsBtn", out Button btn))
             {
@@ -448,10 +437,11 @@ public class PhasesFactory : RootUI
 
     private string PreprocessPastedText(string rawPaste)
     {
-        lastAnalyzedOverview = ModAnalyzer.Analyze(rawPaste);
+        string compressed = CompressImagesSync(rawPaste);
+
+        lastAnalyzedOverview = ModAnalyzer.Analyze(compressed);
         DisplayModOverview(lastAnalyzedOverview);
 
-        string compressed = CompressImagesSync(rawPaste);
         return IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
     }
     private void DisplayModOverview(List<ModBlockOverview> content)
@@ -507,10 +497,12 @@ public class PhasesFactory : RootUI
             }
 
             string blockTiming = !string.IsNullOrEmpty(minRoundStr)
-                ? $"{minRoundStr.PadLeft(2)}."
-                : "   ";
+                            ? $"{minRoundStr.PadLeft(2)}."
+                            : "   ";
 
-            sb.AppendLine($"  {blockTiming} [X] {typeLabel} - {directive.BlockName}");
+            // CHANGE: Replace the plain [X] append with the formatted link tag
+            string linkTag = $"<color=#00FFFF><u><link=\"block_{i}\">[X]</link></u></color>";
+            sb.AppendLine($"  {blockTiming} {linkTag} {typeLabel} - {directive.BlockName}");
 
             // --- 3. CONDITIONAL DETAILS RENDERING ---
             if (showDetails && directive.Details != null)

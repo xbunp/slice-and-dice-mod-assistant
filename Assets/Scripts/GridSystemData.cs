@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter, IDEInterface }
+public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter, IDEInterface, Toggle }
 
 public class GridReferences
 {
@@ -19,6 +19,7 @@ public class GridReferences
     public Dictionary<string, PortraitPreview> PortraitPanels = new Dictionary<string, PortraitPreview>();
     public Dictionary<string, ImageReceiver> CustomImgImporter = new Dictionary<string, ImageReceiver>();
     public Dictionary<string, VirtualizedIdeController> IDEInterfaces = new Dictionary<string, VirtualizedIdeController>();
+    public Dictionary<string, Toggle> Toggles = new Dictionary<string, Toggle>();
 }
 
 public class GridRowSpec
@@ -47,10 +48,9 @@ public class GridCellSpec
     public Action<string> onStringChanged;
     public Action<int> onIntChanged;
     public Action onClicked;
-
     public Sprite buttonSprite;
     public InputAlignment inputAlignment = InputAlignment.Top;
-
+    public Action<bool> onBoolChanged;
     public float sliderMin;
     public float sliderMax;
     public bool sliderWholeNumbers;
@@ -62,6 +62,18 @@ public class GridCellSpec
     public static GridCellSpec CreateInput(string key, string label, float ratio, Action<string> onChanged, InputAlignment inputAlignment = InputAlignment.Top)
     {
         return new GridCellSpec { type = CellType.Input, key = key, labelText = label, widthRatio = ratio, onStringChanged = onChanged, inputAlignment = inputAlignment };
+    }
+
+    public static GridCellSpec CreateToggle(string key, string label, float ratio, Action<bool> onChanged)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.Toggle,
+            key = key,
+            labelText = label,
+            widthRatio = ratio,
+            onBoolChanged = onChanged
+        };
     }
 
     public static GridCellSpec CreateLabel(string label, float ratio)

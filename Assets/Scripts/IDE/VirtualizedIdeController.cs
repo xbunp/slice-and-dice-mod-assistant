@@ -88,6 +88,7 @@ public class VirtualizedIdeController : MonoBehaviour
     private StringBuilder _colorAccumulator = new StringBuilder();
 
     public Func<string, string> TextPreprocessor;
+    public Action<string> OnLinkActivated;
 
     // =========================================================================
     // Proactive Initialization Sanity Pass
@@ -103,8 +104,18 @@ public class VirtualizedIdeController : MonoBehaviour
     {
         // Set the active syntax configuration
         _syntaxConfig = ideConfig;
-        enableHorizontalScrolling = ideConfig.scrollHorizontal;
-        isWatchPaste = ideConfig.watchPaste;
+
+        // FIXED: Safely handle null configs (used for plain-text panels like the overview)
+        if (ideConfig != null)
+        {
+            enableHorizontalScrolling = ideConfig.scrollHorizontal;
+            isWatchPaste = ideConfig.watchPaste;
+        }
+        else
+        {
+            enableHorizontalScrolling = false;
+            isWatchPaste = false;
+        }
 
         PerformStrictInitializationSanityPass();
 
@@ -116,9 +127,9 @@ public class VirtualizedIdeController : MonoBehaviour
 
         viewportScrollRect.onValueChanged.AddListener(OnScrollPositionChanged);
 
-        #if UNITY_WEBGL && !UNITY_EDITOR
-        InitializeNativeCopyListener();
-        #endif
+#if UNITY_WEBGL && !UNITY_EDITOR
+    InitializeNativeCopyListener();
+#endif
 
         InitializeVirtualPool(30);
         RefreshDocumentLayout();
@@ -540,6 +551,21 @@ public class VirtualizedIdeController : MonoBehaviour
     public void OnRowPointerDown(int lineIndex, PointerEventData eventData)
     {
         _focusedInstance = this;
+
+        IdeLineRow clickedRow = GetVisualRowByLineIndex(lineIndex);
+        if (clickedRow != null && clickedRow.CodeTextComponent != null)
+        {
+            clickedRow.CodeTextComponent.ForceMeshUpdate();
+            int linkIndex = TMP_TextUtilities.FindIntersectingLink(clickedRow.CodeTextComponent, eventData.position, eventData.pressEventCamera);
+            if (linkIndex != -1)
+            {
+                CommitSharedInputToModel(); // Save any other active edits
+                string linkId = clickedRow.CodeTextComponent.textInfo.linkInfo[linkIndex].GetLinkID();
+                OnLinkActivated?.Invoke(linkId);
+                return; // Exit early, preventing RequestLineEdit from being called
+            }
+        }
+
         var keyboard = Keyboard.current;
         bool isShiftPressed = keyboard != null && keyboard.shiftKey.isPressed;
 
@@ -656,6 +682,52 @@ public class VirtualizedIdeController : MonoBehaviour
         float charCenter = (charInfo.bottomLeft.x + charInfo.bottomRight.x) / 2f;
 
         return (localMousePos.x < charCenter) ? nearestChar : nearestChar + 1;
+    }
+
+    public void ScrollToSnippet(string rawSnippet)
+    {
+        if (string.IsNullOrEmpty(rawSnippet) || _rawLines == null || _rawLines.Count == 0) return;
+
+        StringBuilder docStripped = new StringBuilder();
+        List<int> charToLineMap = new List<int>();
+
+        // Build the non-whitespace character map to find the correct line index
+        for (int i = 0; i < _rawLines.Count; i++)
+        {
+            string line = _rawLines[i];
+            for (int j = 0; j < line.Length; j++)
+            {
+                if (!char.IsWhiteSpace(line[j]))
+                {
+                    docStripped.Append(line[j]);
+                    charToLineMap.Add(i);
+                }
+            }
+        }
+
+        // Search for the snippet signature
+        int matchIndex = docStripped.ToString().IndexOf(rawSnippet, StringComparison.OrdinalIgnoreCase);
+        if (matchIndex != -1 && matchIndex < charToLineMap.Count)
+        {
+            int targetLine = charToLineMap[matchIndex];
+
+            // Ensure canvas layouts are up to date to get exact viewport dimensions
+            Canvas.ForceUpdateCanvases();
+
+            float viewportHeight = viewportScrollRect.viewport.rect.height;
+            float targetScrollY = targetLine * lineHeight;
+
+            // Clamp the scroll value so it cannot scroll past the bottom boundary of the document
+            float totalContentHeight = _rawLines.Count * lineHeight;
+            float maxScrollY = Mathf.Max(0f, totalContentHeight - viewportHeight);
+            targetScrollY = Mathf.Clamp(targetScrollY, 0f, maxScrollY);
+
+            // Instantly snap the scroll container to align the targeted line at the top
+            contentContainer.anchoredPosition = new Vector2(contentContainer.anchoredPosition.x, targetScrollY);
+
+            // Force the virtual viewport system to immediately render the newly scrolled-to lines
+            UpdateVirtualViewport(true);
+        }
     }
 
     // =========================================================================
@@ -1218,7 +1290,10 @@ public class VirtualizedIdeController : MonoBehaviour
     }
     public string ApplySyntaxColorsSync(string input)
     {
-        if (string.IsNullOrEmpty(input) || _syntaxConfig == null) return string.Empty;
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+
+        // FIXED: Return raw unmodified text if no syntax configuration is assigned
+        if (_syntaxConfig == null) return input;
 
         StringBuilder sb = new StringBuilder(input.Length * 2);
         int lastIndex = 0;

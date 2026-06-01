@@ -1,7 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 public class ModFactory : RootUI
 {
@@ -11,11 +12,11 @@ public class ModFactory : RootUI
     private Button copyModButton;
 
     // List of dynamically loaded directives in dropdown
-    private readonly List<string> knownDirectives = new List<string>
+    private readonly Dictionary<string, string> directiveMapping = new Dictionary<string, string>
     {
-        "HeroPool",
-        "MonsterPool",
-        "ItemPool"
+        { "HeroPool", "Hero Pool" },
+        { "MonsterPool", "Monster Pool" },
+        { "ItemPool", "Item Pool" }
     };
 
     private List<DirectiveUI> directiveUIs = new List<DirectiveUI>();
@@ -36,7 +37,7 @@ public class ModFactory : RootUI
         float rightScrollViewHeight = totalHeight - buttonRowHeight - spacing;
 
         List<string> dropdownOptions = new List<string> { "Add Directive..." };
-        dropdownOptions.AddRange(knownDirectives);
+        dropdownOptions.AddRange(directiveMapping.Values);
 
         List<ColumnSpec> columns = new List<ColumnSpec>();
 
@@ -92,13 +93,14 @@ public class ModFactory : RootUI
             rightRefs.Buttons.TryGetValue("CopyModBtn", out copyModButton);
         }
     }
-
     private void OnDirectiveDropdownChanged(int selectedIndex)
     {
         if (selectedIndex <= 0 || directiveDropdown == null) return;
 
         string selectedOption = directiveDropdown.options[selectedIndex].text;
         directiveDropdown.value = 0;
+
+        string originalDirective = directiveMapping.FirstOrDefault(x => x.Value == selectedOption).Key;
 
         DirectiveUI newDirective = null;
         System.Action removeAction = () =>
@@ -107,8 +109,8 @@ public class ModFactory : RootUI
             RebuildDirectivesList();
         };
 
-        // Pass uiGenerator to constructors
-        switch (selectedOption)
+        // Switch on the 'originalDirective' variable instead of 'selectedOption'
+        switch (originalDirective)
         {
             case "HeroPool":
                 newDirective = new HeroPool(uiGenerator, RebuildDirectivesList, removeAction);

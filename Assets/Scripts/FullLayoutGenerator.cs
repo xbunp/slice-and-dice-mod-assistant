@@ -23,6 +23,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject customImgPanel;
     public GameObject popupPrefab;
     public GameObject IDEInterfacePrefab;
+    public GameObject togglePrefab;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -324,6 +325,13 @@ public class FullScreenUIGenerator : MonoBehaviour
                     ConfigureIDEInterfaceCell(cell, cellObj, refs);
                 }
                 break;
+            case CellType.Toggle:
+                if (togglePrefab != null)
+                {
+                    cellObj = Instantiate(togglePrefab, rowRt);
+                    ConfigureToggleCell(cell, cellObj, refs);
+                }
+                break;
         }
 
         return cellObj;
@@ -510,6 +518,33 @@ public class FullScreenUIGenerator : MonoBehaviour
         }
     }
 
+    private void ConfigureToggleCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
+    {
+        Toggle toggle = cellObj.GetComponentInChildren<Toggle>();
+        if (toggle != null)
+        {
+            if (!string.IsNullOrEmpty(cell.key)) refs.Toggles[cell.key] = toggle;
+            if (cell.onBoolChanged != null)
+            {
+                toggle.onValueChanged.AddListener((val) => cell.onBoolChanged(val));
+            }
+
+            var tmpLabel = cellObj.GetComponentInChildren<TMPro.TMP_Text>(true);
+            if (tmpLabel != null)
+            {
+                tmpLabel.text = cell.labelText;
+            }
+            else
+            {
+                var legacyLabel = cellObj.GetComponentInChildren<UnityEngine.UI.Text>(true);
+                if (legacyLabel != null)
+                {
+                    legacyLabel.text = cell.labelText;
+                }
+            }
+        }
+    }
+
     //==========================================================================================
 
     private void FinalizeCellLayoutAndText(GameObject cellObj, GridCellSpec cell, ref float currentX, bool useMargins = true)
@@ -521,10 +556,20 @@ public class FullScreenUIGenerator : MonoBehaviour
             txt.fontSize = 13f;
         }
 
-        var mainLabel = cellObj.GetComponentInChildren<TextMeshProUGUI>();
+        // Try to find TextMeshPro first (including inactive)
+        var mainLabel = cellObj.GetComponentInChildren<TextMeshProUGUI>(true);
         if (mainLabel != null && !string.IsNullOrEmpty(cell.labelText))
         {
             mainLabel.text = cell.labelText;
+        }
+        else
+        {
+            // Fallback to legacy Text component (including inactive)
+            var legacyLabel = cellObj.GetComponentInChildren<UnityEngine.UI.Text>(true);
+            if (legacyLabel != null && !string.IsNullOrEmpty(cell.labelText))
+            {
+                legacyLabel.text = cell.labelText;
+            }
         }
 
         RectTransform cellRt = cellObj.GetComponent<RectTransform>();

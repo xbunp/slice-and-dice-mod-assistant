@@ -11,6 +11,8 @@ namespace SliceDiceTextMod
         public List<string> BlockTypes { get; set; } = new List<string>();
         public string BlockName { get; set; }
         public List<ModDetail> Details { get; set; } = new List<ModDetail>();
+        public string SearchSnippet { get; set; }
+
     }
 
     public class ModDetail
@@ -46,6 +48,10 @@ namespace SliceDiceTextMod
         private static ModBlockOverview ParseBlock(string blockText)
         {
             var overview = new ModBlockOverview();
+
+            // 40 characters is plenty to guarantee a unique match.
+            string stripped = Regex.Replace(blockText, @"\s+", "");
+            overview.SearchSnippet = stripped.Substring(0, Math.Min(40, stripped.Length));
 
             // 1. Unwrap enclosing parens first to allow top-level delimiter splits
             blockText = Unwrap(blockText);

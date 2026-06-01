@@ -9,6 +9,43 @@ public static class SDData
     public static readonly string[] UnusuablePortraits = { "Glitch", "Error", "Totem" };
 }
 
+public enum FightStage
+{
+    Fight_1_3,
+    Fight_4_Boss,
+    Fight_5_7,
+    Fight_8_Boss,
+    Fight_9_11,
+    Fight_12_Boss,
+    Fight_13_15,
+    Fight_16_Boss,
+    Fight_17_19,
+    Fight_20_Boss,
+    Fight_21_30
+}
+
+public static class FightStageExtensions
+{
+    public static string ToDisplayName(this FightStage stage)
+    {
+        return stage switch
+        {
+            FightStage.Fight_1_3 => "Fight 1-3",
+            FightStage.Fight_4_Boss => "Fight 4 (Boss)",
+            FightStage.Fight_5_7 => "Fight 5-7",
+            FightStage.Fight_8_Boss => "Fight 8 (Boss)",
+            FightStage.Fight_9_11 => "Fight 9-11",
+            FightStage.Fight_12_Boss => "Fight 12 (Boss)",
+            FightStage.Fight_13_15 => "Fight 13-15",
+            FightStage.Fight_16_Boss => "Fight 16 (Boss)",
+            FightStage.Fight_17_19 => "Fight 17-19",
+            FightStage.Fight_20_Boss => "Fight 20 (Boss)",
+            FightStage.Fight_21_30 => "Fight 21-30",
+            _ => stage.ToString()
+        };
+    }
+}
+
 public enum PoolState
 {
     None,

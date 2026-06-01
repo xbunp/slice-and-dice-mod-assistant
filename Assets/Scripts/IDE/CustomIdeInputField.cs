@@ -333,6 +333,24 @@ public class CustomIdeInputField : MonoBehaviour, IPointerDownHandler, IDragHand
     }
     public void OnPointerDown(PointerEventData eventData)
     {
+        if (textComponent != null)
+        {
+            textComponent.ForceMeshUpdate();
+            int linkIndex = TMP_TextUtilities.FindIntersectingLink(textComponent, eventData.position, eventData.pressEventCamera);
+            if (linkIndex != -1)
+            {
+                string linkId = textComponent.textInfo.linkInfo[linkIndex].GetLinkID();
+
+                // Query parent to locate the active IDE controller
+                var controller = GetComponentInParent<VirtualizedIdeController>();
+                if (controller != null && controller.OnLinkActivated != null)
+                {
+                    controller.OnLinkActivated.Invoke(linkId);
+                    return; // Return early, blocking caret updates or text selection
+                }
+            }
+        }
+
         Select();
 
         // Increment or reset click sequence manually
