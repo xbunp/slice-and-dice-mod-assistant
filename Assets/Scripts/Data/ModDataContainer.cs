@@ -1,21 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 [System.Serializable]
 public class ModDataContainer
 {
     public event Action OnDataChanged;
 
-    private List<SliceDiceTextMod.ModDirectiveData> _directives = new List<SliceDiceTextMod.ModDirectiveData>();
-    public List<SliceDiceTextMod.ModDirectiveData> Directives
+    // The single source of truth. Natively preserves execution order.
+    public List<SliceDiceTextMod.ModDirectiveData> Directives { get; set; } = new List<SliceDiceTextMod.ModDirectiveData>();
+
+    // MAGICAL HELPER: GUI elements call this to instantly get a categorized list of exactly what they need.
+    // Example: List<HeroPoolData> heroes = loadedMod.Get<HeroPoolData>();
+    public List<T> Get<T>() where T : SliceDiceTextMod.ModDirectiveData
     {
-        get => _directives;
-        set { _directives = value; NotifyDataChanged(); }
+        return Directives.OfType<T>().ToList();
     }
 
     public void LoadFromText(string rawMod)
     {
-        Directives = SliceDiceTextMod.ModTextEngine.Unpack(rawMod);
+        Directives.Clear();
+        SliceDiceTextMod.ModTextEngine.UnpackIntoContainer(rawMod, this);
+        NotifyDataChanged();
     }
 
     public string ExportToText()
@@ -23,5 +29,5 @@ public class ModDataContainer
         return SliceDiceTextMod.ModTextEngine.Repack(Directives);
     }
 
-    protected virtual void NotifyDataChanged() => OnDataChanged?.Invoke();
+    public void NotifyDataChanged() => OnDataChanged?.Invoke();
 }

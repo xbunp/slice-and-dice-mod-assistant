@@ -441,8 +441,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isModLoaded: 0
-  loadedMod:
-    fullTextMod: 
 --- !u!1 &619394800
 GameObject:
   m_ObjectHideFlags: 0
@@ -842,6 +840,7 @@ MonoBehaviour:
   customImgPanel: {fileID: 3294360956217037250, guid: f7331934dfbe82f41987fa316f7f23b5, type: 3}
   popupPrefab: {fileID: 2828585235141268639, guid: ff5f9885c8769a942b5aff211e77a374, type: 3}
   IDEInterfacePrefab: {fileID: 1780181095040110401, guid: b66a4cf77ef368a4ba5db33240f49fb9, type: 3}
+  togglePrefab: {fileID: 5851260622861963385, guid: 7e0f0912bcba4804a95aedc649d01e19, type: 3}
   rowHeight: 30
   rowSpacing: 6
 --- !u!224 &1589936830

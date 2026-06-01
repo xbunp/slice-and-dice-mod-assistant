@@ -11,15 +11,16 @@ public class ModFactory : RootUI
     private ScrollRect directiveScrollView;
     private Button copyModButton;
 
-    // List of dynamically loaded directives in dropdown
-    private readonly Dictionary<string, string> directiveMapping = new Dictionary<string, string>
-    {
-        { "HeroPool", "Hero Pool" },
-        { "MonsterPool", "Monster Pool" },
-        { "ItemPool", "Item Pool" }
-    };
 
     private List<DirectiveUI> directiveUIs = new List<DirectiveUI>();
+
+    private void BuildDropdownOptions()
+    {
+        List<string> dropdownOptions = new List<string> { "Add Directive..." };
+        // Automatically populate dropdown from registry
+        dropdownOptions.AddRange(SliceDiceTextMod.DirectiveRegistry.Entries.Select(e => e.DropdownName));
+        // ... apply to GridCellSpec
+    }
 
     protected override void BuildUIAndBind()
     {
@@ -36,8 +37,9 @@ public class ModFactory : RootUI
 
         float rightScrollViewHeight = totalHeight - buttonRowHeight - spacing;
 
+        // Populate options directly from the Central Registry definitions
         List<string> dropdownOptions = new List<string> { "Add Directive..." };
-        dropdownOptions.AddRange(directiveMapping.Values);
+        dropdownOptions.AddRange(SliceDiceTextMod.DirectiveRegistry.Entries.Select(e => e.DropdownName));
 
         List<ColumnSpec> columns = new List<ColumnSpec>();
 
@@ -77,6 +79,7 @@ public class ModFactory : RootUI
         RebuildDirectivesList();
     }
 
+
     private List<GridRowSpec> leftRows; // Retained to ensure local scope match
 
     private void ExtractReferences()
@@ -113,42 +116,6 @@ public class ModFactory : RootUI
             directive.RestoreState(refs);
         }
     }
-
-    private void OnLoadModClicked()
-    {
-        string clipboardText = GUIUtility.systemCopyBuffer; // Or your platform's clipboard fetcher
-        if (string.IsNullOrWhiteSpace(clipboardText)) return;
-
-        // 1. Load string into the underlying data model
-        ModPackage.Instance.loadedMod.LoadFromText(clipboardText);
-
-        // 2. Clear UI
-        directiveUIs.Clear();
-
-        // 3. Generate UI blocks based on the parsed data classes
-        foreach (var directive in ModPackage.Instance.loadedMod.Directives)
-        {
-            System.Action removeAction = () => {
-                ModPackage.Instance.loadedMod.Directives.Remove(directive);
-                directiveUIs.RemoveAll(ui => ui.DataModel == directive);
-                RebuildDirectivesList();
-            };
-
-            DirectiveUI newUI = directive switch
-            {
-                SliceDiceTextMod.HeroPoolData hp => new HeroPool(hp, uiGenerator, RebuildDirectivesList, removeAction),
-                SliceDiceTextMod.MonsterPoolData mp => new MonsterPool(mp, uiGenerator, RebuildDirectivesList, removeAction),
-                SliceDiceTextMod.ItemPoolData ip => new ItemPool(ip, uiGenerator, RebuildDirectivesList, removeAction),
-                SliceDiceTextMod.RawDirectiveData rd => null, // TODO: Build a RawDirectiveUI to edit raw strings
-                _ => null
-            };
-
-            if (newUI != null) directiveUIs.Add(newUI);
-        }
-
-        RebuildDirectivesList();
-        Debug.Log("Mod Loaded successfully!");
-    }
     private void OnCopyModClicked()
     {
         // 1. The data classes (HeroPoolData, etc.) are already updated via the InputField bindings.
@@ -160,31 +127,50 @@ public class ModFactory : RootUI
         Debug.Log("Mod copied to clipboard:\n" + outputMod);
     }
 
+    private void OnLoadModClicked()
+    {
+        string clipboardText = GUIUtility.systemCopyBuffer;
+        if (string.IsNullOrWhiteSpace(clipboardText)) return;
+
+        ModPackage.Instance.loadedMod.LoadFromText(clipboardText);
+        directiveUIs.Clear();
+
+        foreach (var directive in ModPackage.Instance.loadedMod.Directives)
+        {
+            System.Action removeAction = () => {
+                ModPackage.Instance.loadedMod.Directives.Remove(directive);
+                directiveUIs.RemoveAll(ui => ui.DataModel == directive);
+                RebuildDirectivesList();
+            };
+
+            // Find the registry entry that knows how to build UI for this data type
+            var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => directive.GetType() == e.CreateData().GetType());
+
+            DirectiveUI newUI = null;
+            if (entry != null) newUI = entry.CreateUI(directive, uiGenerator, RebuildDirectivesList, removeAction);
+            // else if (directive is RawDirectiveData) newUI = new RawDirectiveUI(...);
+
+            if (newUI != null) directiveUIs.Add(newUI);
+        }
+
+        RebuildDirectivesList();
+    }
+
     private void OnDirectiveDropdownChanged(int selectedIndex)
     {
         if (selectedIndex <= 0 || directiveDropdown == null) return;
-
         string selectedOption = directiveDropdown.options[selectedIndex].text;
-        directiveDropdown.value = 0; // Reset dropdown selection visually
+        directiveDropdown.value = 0;
 
-        string originalDirective = directiveMapping.FirstOrDefault(x => x.Value == selectedOption).Key;
-        if (string.IsNullOrEmpty(originalDirective)) return;
+        // Find the registry entry by the dropdown name
+        var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => e.DropdownName == selectedOption);
+        if (entry == null) return;
 
-        // 1. Create the new raw Data Model object
-        SliceDiceTextMod.ModDirectiveData newData = originalDirective switch
-        {
-            "HeroPool" => new SliceDiceTextMod.HeroPoolData(),
-            "MonsterPool" => new SliceDiceTextMod.MonsterPoolData(),
-            "ItemPool" => new SliceDiceTextMod.ItemPoolData(),
-            _ => null
-        };
-
-        if (newData == null) return;
-
-        // 2. Add the data model directly to the Singleton's source of truth
+        // 1. Instatiate the Data
+        var newData = entry.CreateData();
         ModPackage.Instance.loadedMod.Directives.Add(newData);
 
-        // 3. Define the UI reference and set up the removal routine to sync both layers
+        // 2. Setup removal
         DirectiveUI newDirective = null;
         System.Action removeAction = () =>
         {
@@ -193,21 +179,9 @@ public class ModFactory : RootUI
             RebuildDirectivesList();
         };
 
-        // 4. Instantiate the corresponding UI block, passing the freshly created data model
-        switch (originalDirective)
-        {
-            case "HeroPool":
-                newDirective = new HeroPool((SliceDiceTextMod.HeroPoolData)newData, uiGenerator, RebuildDirectivesList, removeAction);
-                break;
-            case "MonsterPool":
-                newDirective = new MonsterPool((SliceDiceTextMod.MonsterPoolData)newData, uiGenerator, RebuildDirectivesList, removeAction);
-                break;
-            case "ItemPool":
-                newDirective = new ItemPool((SliceDiceTextMod.ItemPoolData)newData, uiGenerator, RebuildDirectivesList, removeAction);
-                break;
-        }
+        // 3. Instantiate the UI
+        newDirective = entry.CreateUI(newData, uiGenerator, RebuildDirectivesList, removeAction);
 
-        // 5. Add to the active UI array and rebuild the list view
         if (newDirective != null)
         {
             directiveUIs.Add(newDirective);

@@ -6,31 +6,18 @@ namespace SliceDiceTextMod
 {
     public static class ModTextEngine
     {
-        public static List<ModDirectiveData> Unpack(string fullModString)
+        public static void UnpackIntoContainer(string fullModString, ModDataContainer container)
         {
-            var directives = new List<ModDirectiveData>();
-            if (string.IsNullOrWhiteSpace(fullModString)) return directives;
+            if (string.IsNullOrWhiteSpace(fullModString)) return;
 
-            // Remove formatting, split by top-level delimiter '&'
             string cleanString = fullModString.Replace("\r", "").Replace("\n", "");
-            List<string> rawChunks = SplitRespectingParens(cleanString, '&');
+            List<string> rawChunks = DirectiveRegistry.SplitRespectingParens(cleanString, '&');
 
             foreach (string chunk in rawChunks)
             {
                 if (string.IsNullOrWhiteSpace(chunk)) continue;
-                directives.Add(ParseChunk(chunk.Trim()));
+                container.Directives.Add(ParseChunk(chunk.Trim()));
             }
-
-            return directives;
-        }
-
-        public static string Repack(List<ModDirectiveData> directives)
-        {
-            var validStrings = directives
-                .Select(d => d.ToModString())
-                .Where(s => !string.IsNullOrWhiteSpace(s));
-
-            return string.Join("&", validStrings);
         }
 
         private static ModDirectiveData ParseChunk(string chunk)
@@ -38,7 +25,6 @@ namespace SliceDiceTextMod
             bool isHidden = false;
             string core = chunk;
 
-            // Detect and strip hidden wrappers
             if (Regex.IsMatch(core, @"^!?m?\("))
             {
                 core = Regex.Replace(core, @"^!?m?\(", "(");
@@ -49,58 +35,24 @@ namespace SliceDiceTextMod
                 }
             }
 
-            // Extract Floor Selector
             core = ParserHelpers.StripFloorSelector(core, out FloorSelector fs);
             string floorRaw = fs?.ToSyntax();
 
-            // Check for Pools
-            var poolMatch = Regex.Match(core, @"^(replace\.)?(heropool|monsterpool|itempool)\.(.*)", RegexOptions.IgnoreCase);
-            if (poolMatch.Success)
+            // Ask the registry if ANY registered directive knows how to parse this chunk
+            foreach (var entry in DirectiveRegistry.Entries)
             {
-                bool isReplace = !string.IsNullOrEmpty(poolMatch.Groups[1].Value);
-                string poolType = poolMatch.Groups[2].Value.ToLower();
-                string elementsRaw = poolMatch.Groups[3].Value;
-
-                var elements = SplitRespectingParens(elementsRaw, '+')
-                                .Select(e => e.Trim()).Where(e => !string.IsNullOrEmpty(e)).ToList();
-
-                PoolDirectiveData poolData = poolType switch
-                {
-                    "heropool" => new HeroPoolData { ReplaceBaseHeroes = isReplace },
-                    "monsterpool" => new MonsterPoolData(),
-                    "itempool" => new ItemPoolData(),
-                    _ => null
-                };
-
-                if (poolData != null)
-                {
-                    poolData.Elements = elements;
-                    poolData.IsHidden = isHidden;
-                    poolData.FloorSelectorRaw = floorRaw;
-                    return poolData;
-                }
+                var parsedData = entry.TryParse(core, isHidden, floorRaw);
+                if (parsedData != null) return parsedData;
             }
 
-            // Fallback for Phases, Spawns, Forced Fights, etc.
+            // Fallback for unrecognized phases/directives
             return new RawDirectiveData { RawContent = chunk };
         }
 
-        private static List<string> SplitRespectingParens(string input, char delimiter)
+        public static string Repack(List<ModDirectiveData> directives)
         {
-            var result = new List<string>();
-            int depth = 0, start = 0;
-            for (int i = 0; i < input.Length; i++)
-            {
-                if (input[i] == '(') depth++;
-                else if (input[i] == ')') depth--;
-                else if (depth == 0 && input[i] == delimiter)
-                {
-                    result.Add(input.Substring(start, i - start));
-                    start = i + 1;
-                }
-            }
-            result.Add(input.Substring(start));
-            return result;
+            var validStrings = directives.Select(d => d.ToModString()).Where(s => !string.IsNullOrWhiteSpace(s));
+            return string.Join("&", validStrings);
         }
     }
 }
