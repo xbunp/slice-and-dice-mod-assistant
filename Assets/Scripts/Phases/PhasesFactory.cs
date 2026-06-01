@@ -147,11 +147,13 @@ public class PhasesFactory : RootUI
     {
         if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
         {
+            /*
             if (refs.ImagePanels.TryGetValue(spacerKey, out Image img))
             {
                 img.color = Color.clear;
                 img.raycastTarget = false;
             }
+            */
         }
     }
     private void PopulateDemoScrollView(string columnName, string scrollViewKey, string buttonLabel)

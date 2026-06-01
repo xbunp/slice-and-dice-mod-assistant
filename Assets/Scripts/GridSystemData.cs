@@ -16,7 +16,6 @@ public class GridReferences
     public Dictionary<string, Slider> Sliders = new Dictionary<string, Slider>();
     public Dictionary<string, ScrollRect> ScrollViews = new Dictionary<string, ScrollRect>();
     public Dictionary<string, NavigationTabsController> NavigationTabs = new Dictionary<string, NavigationTabsController>();
-    public Dictionary<string, Image> ImagePanels = new Dictionary<string, Image>();
     public Dictionary<string, PortraitPreview> PortraitPanels = new Dictionary<string, PortraitPreview>();
     public Dictionary<string, ImageReceiver> CustomImgImporter = new Dictionary<string, ImageReceiver>();
     public Dictionary<string, VirtualizedIdeController> IDEInterfaces = new Dictionary<string, VirtualizedIdeController>();
@@ -50,12 +49,8 @@ public class GridCellSpec
     public Action onClicked;
 
     public Sprite buttonSprite;
+    public InputAlignment inputAlignment = InputAlignment.Top;
 
-    // Panel
-    public Color panelColor = Color.white;
-    public Sprite panelSprite = null;
-
-    //Sliders
     public float sliderMin;
     public float sliderMax;
     public bool sliderWholeNumbers;
@@ -64,9 +59,9 @@ public class GridCellSpec
     public List<string> tabNames = new List<string>();
     public List<GameObject> tabTargetPanels = new List<GameObject>();
 
-    public static GridCellSpec CreateInput(string key, string label, float ratio, Action<string> onChanged)
+    public static GridCellSpec CreateInput(string key, string label, float ratio, Action<string> onChanged, InputAlignment inputAlignment = InputAlignment.Top)
     {
-        return new GridCellSpec { type = CellType.Input, key = key, labelText = label, widthRatio = ratio, onStringChanged = onChanged };
+        return new GridCellSpec { type = CellType.Input, key = key, labelText = label, widthRatio = ratio, onStringChanged = onChanged, inputAlignment = inputAlignment };
     }
 
     public static GridCellSpec CreateLabel(string label, float ratio)
@@ -85,15 +80,13 @@ public class GridCellSpec
         };
     }
 
-    public static GridCellSpec CreateImagePanel(string key, float ratio, Color? color = null, Sprite sprite = null)
+    public static GridCellSpec CreateImagePanel(string key, float ratio)
     {
         return new GridCellSpec
         {
             type = CellType.ImagePanel,
             key = key,
-            widthRatio = ratio,
-            panelColor = color ?? Color.white,
-            panelSprite = sprite
+            widthRatio = ratio
         };
     }
 
@@ -227,4 +220,10 @@ public class GeneratedScreen
     public Dictionary<string, GridReferences> ColumnRefs = new Dictionary<string, GridReferences>();
     public Dictionary<string, RectTransform> ColumnPanels = new Dictionary<string, RectTransform>();
     public Dictionary<string, RectTransform> CustomPanels = new Dictionary<string, RectTransform>();
+}
+
+public enum InputAlignment
+{
+    Top,
+    Center
 }

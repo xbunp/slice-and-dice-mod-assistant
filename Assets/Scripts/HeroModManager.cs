@@ -525,7 +525,7 @@ public class HeroModManager : RootUI
     {
         // Row 1: ImagePanel Background for the Dice Block (Spans 6 layout blocks vertically)
         var diceBgRow = new GridRowSpec(
-            GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f, new Color(0.15f, 0.15f, 0.15f, 1f))
+            GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f)
         );
         diceBgRow.isBackground = true;
         diceBgRow.rowSpan = 6;
@@ -636,7 +636,7 @@ public class HeroModManager : RootUI
         }
 
         var kwBgRow = new GridRowSpec(
-            GridCellSpec.CreateImagePanel($"BgKw_{index}", 1.0f, new Color(0.2f, 0.2f, 0.2f, 1f))
+            GridCellSpec.CreateImagePanel($"BgKw_{index}", 1.0f)
         );
         kwBgRow.isBackground = true;
         kwBgRow.rowSpan = keywordRowCount;

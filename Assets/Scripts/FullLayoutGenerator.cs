@@ -244,7 +244,6 @@ public class FullScreenUIGenerator : MonoBehaviour
                 if (imagePanelPrefab != null)
                 {
                     cellObj = Instantiate(imagePanelPrefab, rowRt);
-                    ConfigureImagePanelCell(cell, cellObj, refs);
                 }
                 break;
 
@@ -349,21 +348,32 @@ public class FullScreenUIGenerator : MonoBehaviour
             {
                 input.onValueChanged.AddListener((val) => cell.onStringChanged(val));
             }
-        }
-    }
 
-    private void ConfigureImagePanelCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
-    {
-        Image img = cellObj.GetComponentInChildren<Image>();
-        if (img != null)
-        {
-            img.color = cell.panelColor;
-            if (cell.panelSprite != null)
+            if (cell.inputAlignment == InputAlignment.Center)
             {
-                img.sprite = cell.panelSprite;
-                img.type = Image.Type.Sliced;
+                if (input.textComponent != null)
+                {
+                    input.textComponent.alignment = TMPro.TextAlignmentOptions.Left;
+                }
+
+                if (input.placeholder != null)
+                {
+                    var placeholderText = input.placeholder.GetComponent<TMPro.TMP_Text>();
+                    if (placeholderText != null)
+                    {
+                        placeholderText.alignment = TMPro.TextAlignmentOptions.Left;
+                    }
+                }
+
+                RectTransform inputRt = input.GetComponent<RectTransform>();
+                if (inputRt != null)
+                {
+                    inputRt.anchorMin = new Vector2(inputRt.anchorMin.x, 0.5f);
+                    inputRt.anchorMax = new Vector2(inputRt.anchorMax.x, 0.5f);
+                    inputRt.pivot = new Vector2(inputRt.pivot.x, 0.5f);
+                    inputRt.anchoredPosition = new Vector2(inputRt.anchoredPosition.x, 0f);
+                }
             }
-            if (!string.IsNullOrEmpty(cell.key)) refs.ImagePanels[cell.key] = img;
         }
     }
 
@@ -532,8 +542,8 @@ public class FullScreenUIGenerator : MonoBehaviour
             }
             else
             {
-                cellRt.offsetMin = new Vector2(4, 2);
-                cellRt.offsetMax = new Vector2(-4, -2);
+                cellRt.offsetMin = new Vector2(4, 0);
+                cellRt.offsetMax = new Vector2(-4, 0);
             }
         }
 

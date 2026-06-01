@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
 /// Abstract Base Class for all dynamic mod authoring panels.
@@ -32,87 +34,53 @@ public abstract class DirectiveUI
         string foldoutSymbol = isExpanded ? "▼" : "▶";
 
         float headerHeight = uiGenerator.rowHeight;
-        float itemHeight = 22f; // Tight, professional element row height
         float spacing = uiGenerator.rowSpacing;
 
-        // Calculate dynamic height requirements
-        int totalRowsToWrap = 1; // Header always wrapped
-        if (isExpanded)
-        {
-            totalRowsToWrap += GetContentRowCount(); // Includes separator, elements, and footer
-        }
+        // 1. Build the exact collection of rows that live inside the background card
+        List<GridRowSpec> innerRows = new List<GridRowSpec>();
 
-        if (isExpanded)
-        {
-            // Simulate exact layout coordinates of BuildGrid to find the precise backdrop height
-            float padding = 8f; // Margin padding
-            float currentY = -padding;
-
-            // 1. Header height
-            currentY -= headerHeight;
-
-            // 2. Separator height
-            currentY -= spacing;
-            currentY -= 2f;
-
-            // 3. Elements height
-            for (int i = 0; i < GetItemCount(); i++)
-            {
-                currentY -= spacing;
-                currentY -= itemHeight;
-            }
-
-            // 4. Footer Add button height
-            currentY -= spacing;
-            currentY -= itemHeight;
-
-            currentY -= padding; // Bottom padding
-
-            float simulatedBackdropHeight = Mathf.Abs(currentY);
-
-            // Container Panel: Instantiates behind the header and elements
-            var bgRow = new GridRowSpec(GridCellSpec.CreateImagePanel(
-                $"BG_{Id}",
-                1.0f,
-                new Color(0.12f, 0.12f, 0.13f, 1.0f) // Dark-theme charcoal backing
-            ));
-            bgRow.isBackground = true;
-            bgRow.customHeight = simulatedBackdropHeight;
-            bgRow.rowSpan = totalRowsToWrap;
-            rows.Add(bgRow);
-        }
-        else
-        {
-            // Simple closed container covering just the header
-            var bgRow = new GridRowSpec(GridCellSpec.CreateImagePanel(
-                $"BG_{Id}",
-                1.0f,
-                new Color(0.12f, 0.12f, 0.13f, 1.0f)
-            ));
-            bgRow.isBackground = true;
-            bgRow.rowSpan = 1;
-            rows.Add(bgRow);
-        }
-
-        // 1. Header Row
-        rows.Add(new GridRowSpec(headerHeight,
+        // Header Row (Inside the panel)
+        innerRows.Add(new GridRowSpec(headerHeight,
             GridCellSpec.CreateButton($"Foldout_{Id}", foldoutSymbol, 0.1f, ToggleCollapse),
             GridCellSpec.CreateLabel($"Title_{Id}", TypeName, 0.8f),
             GridCellSpec.CreateButton($"RemoveBtn_{Id}", "X", 0.1f, () => onRemoveRequested?.Invoke())
         ));
 
-        // 2. Header separator line and content rows
+        // Separator line and element controls
         if (isExpanded)
         {
-            // Compact 2f horizontal separator line directly beneath the header
-            rows.Add(new GridRowSpec(2f,
-                GridCellSpec.CreateImagePanel($"Separator_{Id}", 1.0f, new Color(0.24f, 0.24f, 0.26f, 1.0f))
+            // Horizontal border line
+            innerRows.Add(new GridRowSpec(2f,
+                GridCellSpec.CreateImagePanel($"Separator_{Id}", 1.0f)
             ));
 
-            rows.AddRange(GetContentRowSpecs());
+            innerRows.AddRange(GetContentRowSpecs());
         }
 
-        // 3. Spacing margin between different directive blocks
+        // 2. Calculate precise height using the actual custom heights of the collected rows
+        float innerHeight = 0f;
+        for (int i = 0; i < innerRows.Count; i++)
+        {
+            innerHeight += innerRows[i].customHeight;
+        }
+
+        // Add layout spacing between the inner elements
+        if (innerRows.Count > 1)
+        {
+            innerHeight += (innerRows.Count - 1) * spacing;
+        }
+
+        // 3. Create the background container row spanning the exact number of rows
+        var bgRow = new GridRowSpec(GridCellSpec.CreateImagePanel($"BG_{Id}", 1.0f));
+        bgRow.isBackground = true;
+        bgRow.customHeight = innerHeight;
+        bgRow.rowSpan = innerRows.Count;
+        rows.Add(bgRow);
+
+        // 4. Add the built rows on top of the background
+        rows.AddRange(innerRows);
+
+        // 5. Add spacing outside the group card
         rows.Add(new GridRowSpec(15f,
             GridCellSpec.CreateLabel($"Spacer_{Id}", "", 1.0f)
         ));
@@ -121,8 +89,6 @@ public abstract class DirectiveUI
     }
 
     protected abstract List<GridRowSpec> GetContentRowSpecs();
-    protected abstract int GetContentRowCount();
-    protected abstract int GetItemCount();
     public abstract void RestoreState(GridReferences refs);
 
     protected void ToggleCollapse()
@@ -153,7 +119,7 @@ public abstract class DirectivePool : DirectiveUI
             int index = i;
             rows.Add(new GridRowSpec(CompactItemHeight,
                 GridCellSpec.CreateLabel($"IndexLabel_{Id}_{index}", $"Element {index}", 0.15f),
-                GridCellSpec.CreateInput($"Input_{Id}_{index}", "", 0.75f, (val) => items[index] = val),
+                GridCellSpec.CreateInput($"Input_{Id}_{index}", "", 0.75f, (val) => items[index] = val, InputAlignment.Center),
                 GridCellSpec.CreateButton($"RemoveElem_{Id}_{index}", "-", 0.1f, () => RemoveElementAt(index))
             ));
         }
@@ -164,16 +130,6 @@ public abstract class DirectivePool : DirectiveUI
         ));
 
         return rows;
-    }
-
-    protected override int GetContentRowCount()
-    {
-        return items.Count + 2; // elements + 1 Add button + 1 Separator line
-    }
-
-    protected override int GetItemCount()
-    {
-        return items.Count;
     }
 
     public override void RestoreState(GridReferences refs)
