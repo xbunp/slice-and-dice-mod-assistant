@@ -39,7 +39,6 @@ public class ModFactory : RootUI
                 ModPackage.Instance.loadedMod.Directives.Clear();
             }
 
-            // FIX: Bind the change listener safely
             ModPackage.Instance.loadedMod.OnDataChanged -= HandleExternalModChanged;
             ModPackage.Instance.loadedMod.OnDataChanged += HandleExternalModChanged;
 
@@ -54,9 +53,7 @@ public class ModFactory : RootUI
     private void BuildDropdownOptions()
     {
         List<string> dropdownOptions = new List<string> { "Add Directive..." };
-        // Automatically populate dropdown from registry
         dropdownOptions.AddRange(SliceDiceTextMod.DirectiveRegistry.Entries.Select(e => e.DropdownName));
-        // ... apply to GridCellSpec
     }
     protected override void BuildUIAndBind()
     {
@@ -73,7 +70,6 @@ public class ModFactory : RootUI
 
         float rightScrollViewHeight = totalHeight - buttonRowHeight - spacing;
 
-        // Populate options directly from the Central Registry definitions
         List<string> dropdownOptions = new List<string> { "Add Directive..." };
         dropdownOptions.AddRange(SliceDiceTextMod.DirectiveRegistry.Entries.Select(e => e.DropdownName));
 
@@ -112,7 +108,7 @@ public class ModFactory : RootUI
         uiGenerator.PopulateScreen(generatedScreen, columns, useMargins);
 
         ExtractReferences();
-        RebuildDirectiveUIsFromModel(); // Changed from RebuildDirectivesList()
+        RebuildDirectiveUIsFromModel();
     }
     private void ExtractReferences()
     {
@@ -132,19 +128,31 @@ public class ModFactory : RootUI
     {
         if (directiveScrollView == null || directiveScrollView.content == null) return;
 
-        List<GridRowSpec> masterRows = new List<GridRowSpec>();
+        // Suppress notifications during the rebuild/restore phase
+        var mod = ModPackage.Instance?.loadedMod;
+        if (mod != null) mod.SuppressNotifications = true;
 
-        foreach (var directive in directiveUIs)
+        try
         {
-            masterRows.AddRange(directive.GetRowSpecs());
+            List<GridRowSpec> masterRows = new List<GridRowSpec>();
+
+            foreach (var directive in directiveUIs)
+            {
+                masterRows.AddRange(directive.GetRowSpecs());
+            }
+
+            GridReferences refs = uiGenerator.RebuildGrid(directiveScrollView.content, masterRows, true);
+            directiveScrollView.content.sizeDelta = new Vector2(0f, refs.TotalHeight);
+
+            foreach (var directive in directiveUIs)
+            {
+                directive.RestoreState(refs);
+            }
         }
-
-        GridReferences refs = uiGenerator.RebuildGrid(directiveScrollView.content, masterRows, true);
-        directiveScrollView.content.sizeDelta = new Vector2(0f, refs.TotalHeight);
-
-        foreach (var directive in directiveUIs)
+        finally
         {
-            directive.RestoreState(refs);
+            // Re-enable notifications safely
+            if (mod != null) mod.SuppressNotifications = false;
         }
     }
     private void OnLoadModClicked()
@@ -161,12 +169,9 @@ public class ModFactory : RootUI
                 ModPackage.Instance.loadedMod.Directives.Remove(directive);
                 directiveUIs.RemoveAll(ui => ui.DataModel == directive);
                 RebuildDirectivesList();
-
-                // Notify other managers of a deletion from the SSOT
                 ModPackage.Instance.loadedMod.NotifyDataChanged(this);
             };
 
-            // Find the registry entry that knows how to build UI for this data type
             var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => directive.GetType() == e.CreateData().GetType());
 
             DirectiveUI newUI = null;
@@ -176,8 +181,6 @@ public class ModFactory : RootUI
         }
 
         RebuildDirectivesList();
-
-        // FIX: Simply notify the system that a load has finalized, updating HeroModManager
         ModPackage.Instance.loadedMod.NotifyDataChanged(this);
     }
     private void OnDirectiveDropdownChanged(int selectedIndex)
@@ -186,41 +189,37 @@ public class ModFactory : RootUI
         string selectedOption = directiveDropdown.options[selectedIndex].text;
         directiveDropdown.value = 0;
 
-        // Find the registry entry by the dropdown name
         var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => e.DropdownName == selectedOption);
         if (entry == null) return;
 
-        // 1. Instantiate the Data
         var newData = entry.CreateData();
         ModPackage.Instance.loadedMod.Directives.Add(newData);
 
-        // 2. Setup removal
         DirectiveUI newDirective = null;
         System.Action removeAction = () =>
         {
             ModPackage.Instance.loadedMod.Directives.Remove(newData);
             directiveUIs.Remove(newDirective);
             RebuildDirectivesList();
-            ModPackage.Instance.loadedMod.NotifyDataChanged(this); // Notify other components of deletion
+            ModPackage.Instance.loadedMod.NotifyDataChanged(this);
         };
 
-        // 3. Instantiate the UI
         newDirective = entry.CreateUI(newData, uiGenerator, RebuildDirectivesList, removeAction);
 
         if (newDirective != null)
         {
             directiveUIs.Add(newDirective);
             RebuildDirectivesList();
-            ModPackage.Instance.loadedMod.NotifyDataChanged(this); // Notify other components of addition
+            ModPackage.Instance.loadedMod.NotifyDataChanged(this);
         }
     }
 
     private void HandleExternalModChanged(object sender)
     {
-        // If we initiated the change, ignore it to prevent redundant rebuilds
-        if (object.ReferenceEquals(sender, this)) return;
+        // If the sender is this view or one of our internal Directives UI, skip
+        // so we don't destroy and recreate the UI layout recursively.
+        if (object.ReferenceEquals(sender, this) || sender is DirectiveUI) return;
 
-        // Reuse the exact loop behavior to rebuild the list from the modified backend
         directiveUIs.Clear();
         foreach (var directive in ModPackage.Instance.loadedMod.Directives)
         {
@@ -252,7 +251,7 @@ public class ModFactory : RootUI
                 ModPackage.Instance.loadedMod.Directives.Remove(directive);
                 directiveUIs.RemoveAll(ui => ui.DataModel == directive);
                 RebuildDirectivesList();
-                ModPackage.Instance.loadedMod.NotifyDataChanged(this); // Notify other components of deletion
+                ModPackage.Instance.loadedMod.NotifyDataChanged(this);
             };
 
             var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(
@@ -277,10 +276,7 @@ public class ModFactory : RootUI
     {
         if (ModPackage.Instance?.loadedMod == null) return;
 
-        // 1. Export the current state of directives to the mod string
         string outputMod = ModPackage.Instance.loadedMod.ExportToText();
-
-        // 2. Copy the resulting plain text string to the system clipboard
         GUIUtility.systemCopyBuffer = outputMod;
         Debug.Log("Mod copied to clipboard:\n" + outputMod);
     }

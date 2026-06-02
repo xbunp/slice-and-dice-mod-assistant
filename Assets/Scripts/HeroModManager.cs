@@ -59,31 +59,33 @@ public class HeroModManager : RootUI
     private HeroPoolData _activePoolData;
     private int _currentPoolIndex = 0; // 0 = Stand Alone, 1+ = Pool Elements
 
-    private void OnDestroy()
-    {
-        if (ModPackage.Instance != null && ModPackage.Instance.loadedMod != null)
-        {
-            ModPackage.Instance.loadedMod.OnDataChanged -= HandleExternalModChanged;
-        }
-    }
+
+    //================
 
     private void HandleExternalModChanged(object sender)
     {
-        // Safely check if this specific UI instance initiated the event
+        if (!gameObject.activeInHierarchy || !enabled) return;
         if (object.ReferenceEquals(sender, this)) return;
 
         var loadedMod = ModPackage.Instance.loadedMod;
+        if (loadedMod == null) return;
+
         var activePool = loadedMod.Get<HeroPoolData>().FirstOrDefault();
 
         if (activePool == null)
         {
+            // Silently add the pool without triggering an event cascade
+            bool wasSuppressing = loadedMod.SuppressNotifications;
+            loadedMod.SuppressNotifications = true;
+
             activePool = new HeroPoolData();
             loadedMod.Directives.Add(activePool);
+
+            loadedMod.SuppressNotifications = wasSuppressing;
         }
 
         LoadFromPool(activePool);
     }
-
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
         if (uiGeneratorRef == null)
@@ -95,43 +97,257 @@ public class HeroModManager : RootUI
         uiGenerator = uiGeneratorRef;
         currentHero = new HeroData();
 
-        // 1. First, try searching from the absolute root of this UI tree (usually the Canvas)
         if (diceFaceIconPicker == null)
-        {
             diceFaceIconPicker = transform.root.GetComponentInChildren<IconPickerModal>(true);
-        }
 
-        // 2. Fallback to a global search in case it was instantiated in a different hierarchy
         if (diceFaceIconPicker == null)
-        {
             diceFaceIconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
-        }
 
-        // Fail loudly so you know instantly if both methods somehow failed
         if (diceFaceIconPicker == null)
-        {
             Debug.LogError("[HeroModManager] CRITICAL: Failed to locate 'IconPickerModal' globally or in the Canvas tree!", this);
-        }
 
         LoadAllSprites();
-
-        // FIX: Build and bind the UI elements FIRST before listening to data updates
         BuildUIAndBind();
 
-        // FIX: Only register and fire the data change event once the UI exists to receive it
+        bool dataLoaded = false;
+
         if (ModPackage.Instance != null && ModPackage.Instance.loadedMod != null)
         {
             ModPackage.Instance.loadedMod.OnDataChanged += HandleExternalModChanged;
 
             if (ModPackage.Instance.isModLoaded)
             {
-                // Safe to call now because generatedScreen and input fields are instantiated
                 HandleExternalModChanged(null);
+                dataLoaded = true;
             }
         }
 
+        // Only do the manual initial population if the mod event didn't already trigger it
+        if (!dataLoaded)
+        {
+            UpdateUIFromData();
+            GenerateRawText();
+        }
+    }
+    private void UpdateUIFromData()
+    {
+        if (statsUI == null || diceUI == null) return;
+
+        isSyncing = true;
+
+        if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop))
+            poolDrop.SetValueWithoutNotify(_currentPoolIndex);
+
+        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(currentHero.heroName);
+        if (statsUI.Inputs.TryGetValue("HP", out var hpIn)) hpIn.SetTextWithoutNotify(currentHero.hp.ToString());
+        if (statsUI.Inputs.TryGetValue("Tier", out var tierIn)) tierIn.SetTextWithoutNotify(currentHero.tier.ToString());
+
+        if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(currentHero.baseReplica);
+        if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(currentHero.imageOverride);
+
+        if (statsUI.Buttons.TryGetValue("ReplicaBtn", out var repBtn)) SetButtonIcon(repBtn, GetSpriteForPortrait(currentHero.baseReplica));
+        if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overBtn)) SetButtonIcon(overBtn, GetSpriteForPortrait(currentHero.imageOverride));
+
+        if (statsUI.Inputs.TryGetValue("HeroFacH", out var hH)) hH.SetTextWithoutNotify(currentHero.h.ToString());
+        if (statsUI.Inputs.TryGetValue("HeroFacS", out var hS)) hS.SetTextWithoutNotify(currentHero.s.ToString());
+        if (statsUI.Inputs.TryGetValue("HeroFacV", out var hV)) hV.SetTextWithoutNotify(currentHero.v.ToString());
+
+        if (statsUI.Sliders.TryGetValue("HeroSliH", out var shH)) shH.SetValueWithoutNotify(currentHero.h);
+        if (statsUI.Sliders.TryGetValue("HeroSliS", out var shS)) shS.SetValueWithoutNotify(currentHero.s);
+        if (statsUI.Sliders.TryGetValue("HeroSliV", out var shV)) shV.SetValueWithoutNotify(currentHero.v);
+
+        if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
+        {
+            HeroColorOption colOpt = ReverseLookupColor(currentHero.colorClass);
+            colDrop.SetValueWithoutNotify((int)colOpt);
+            if (portraitPreview != null) portraitPreview.SetHeroColor(SDColors.GetColor(colOpt));
+        }
+
+        if (portraitPreview != null)
+        {
+            portraitPreview.SetNameText(currentHero.heroName);
+            portraitPreview.SetHPText(currentHero.hp.ToString());
+            portraitPreview.SetTierText(currentHero.tier.ToString());
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            var face = currentHero.diceSides[i];
+
+            if (diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
+            if (diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
+            if (diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.SetTextWithoutNotify(face.facadeID);
+
+            if (diceUI.Buttons.TryGetValue($"BtnPipDown_{i}", out var btnDown) && btnDown.image != null)
+                btnDown.image.color = new Color(0.9f, 0.3f, 0.3f, 1f);
+            if (diceUI.Buttons.TryGetValue($"BtnPipUp_{i}", out var btnUp) && btnUp.image != null)
+                btnUp.image.color = new Color(0.3f, 0.7f, 0.3f, 1f);
+
+            int h = 0, s = 0, v = 0;
+            string[] hsv = (face.facadeColor ?? "").Split(':');
+
+            if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
+            if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
+            if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
+
+            if (diceUI.Inputs.TryGetValue($"FacH_{i}", out var dH)) dH.SetTextWithoutNotify(hsv.Length > 0 ? hsv[0] : "");
+            if (diceUI.Inputs.TryGetValue($"FacS_{i}", out var dS)) dS.SetTextWithoutNotify(hsv.Length > 1 ? hsv[1] : "");
+            if (diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.SetTextWithoutNotify(hsv.Length > 2 ? hsv[2] : "");
+
+            if (diceUI.Sliders.TryGetValue($"SliH_{i}", out var sliH)) sliH.SetValueWithoutNotify(h);
+            if (diceUI.Sliders.TryGetValue($"SliS_{i}", out var sliS)) sliS.SetValueWithoutNotify(s);
+            if (diceUI.Sliders.TryGetValue($"SliV_{i}", out var sliV)) sliV.SetValueWithoutNotify(v);
+
+            if (diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn)) SetButtonIcon(baseBtn, GetSpriteForBase(face.effectID));
+            if (diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn)) SetButtonIcon(facBtn, GetSpriteForFacade(face.facadeID));
+
+            UpdateDiceIcon(i);
+        }
+
+        // Do not call GenerateRawText here, let callers handle text generation explicitly
+        UpdateHeroIcon();
+        isSyncing = false;
+    }
+    private void OnRawTextChanged(string rawText)
+    {
+        if (isSyncing) return;
+
+        syntaxHighlighterText.text = FormatSyntaxHighlighting(rawText);
+        ParseRawText(rawText);
+        RebuildDiceScrollView();
+
+        // Update the visual UI from the parsed string, but DO NOT call OnUIChanged/GenerateRawText, 
+        // because that will format and overwrite the input box the user is actively typing in.
         UpdateUIFromData();
-        GenerateRawText();
+    }
+    private void RefreshDiceUI()
+    {
+        RebuildDiceScrollView();
+        UpdateUIFromData();
+        OnUIChanged();
+    }
+    private void RebuildStatsUI()
+    {
+        RebuildStatsUICore();
+        UpdateUIFromData();
+    }
+    private void RebuildStatsUICore()
+    {
+        if (generatedScreen == null || !generatedScreen.ColumnPanels.TryGetValue("LeftStats", out var panel)) return;
+
+        if (_persistentCustomImageReceiver != null)
+        {
+            _persistentCustomImageReceiver.transform.SetParent(this.transform, false);
+        }
+
+        bool wasSyncing = isSyncing;
+        isSyncing = true;
+        statsUI = uiGenerator.RebuildGrid(panel, GenerateStatsLayout());
+        isSyncing = wasSyncing;
+
+        if (statsUI == null) return;
+
+        if (showCustomImagePanel)
+        {
+            if (statsUI.CustomImgImporter.TryGetValue("CustomImgPanel", out ImageReceiver dummyGridReceiver))
+            {
+                if (_persistentCustomImageReceiver == null)
+                {
+                    _persistentCustomImageReceiver = dummyGridReceiver;
+                    BindPersistentReceiver();
+                }
+                else
+                {
+                    Transform targetPlaceholder = dummyGridReceiver.transform.parent;
+                    Destroy(dummyGridReceiver.gameObject);
+
+                    _persistentCustomImageReceiver.transform.SetParent(targetPlaceholder, false);
+                    _persistentCustomImageReceiver.gameObject.SetActive(true);
+
+                    RectTransform rt = _persistentCustomImageReceiver.GetComponent<RectTransform>();
+                    FullScreenUIGenerator.SetAnchors(rt, 0, 0, 1, 1);
+                }
+            }
+        }
+        else
+        {
+            if (_persistentCustomImageReceiver != null)
+            {
+                _persistentCustomImageReceiver.gameObject.SetActive(false);
+            }
+        }
+    }
+    private void ResetToDefault()
+    {
+        currentHero = new HeroData();
+        showCustomImagePanel = false;
+        _currentPoolIndex = 0;
+
+        for (int i = 0; i < 6; i++)
+        {
+            if (currentHero.diceSides[i].keywords == null)
+                currentHero.diceSides[i].keywords = new List<string>();
+        }
+
+        // Rebuild both grids without triggering duplicate UI data populates
+        isSyncing = true;
+        RebuildStatsUICore();
+        RebuildDiceScrollView();
+        isSyncing = false;
+
+        UpdateUIFromData();
+        OnUIChanged();
+    }
+    public void LoadFromPool(HeroPoolData poolData)
+    {
+        _activePoolData = poolData;
+
+        if (_activePoolData != null && _currentPoolIndex > _activePoolData.Elements.Count)
+        {
+            _currentPoolIndex = Mathf.Max(0, _activePoolData.Elements.Count);
+        }
+
+        if (_activePoolData != null && _activePoolData.Elements.Count > 0)
+        {
+            // Rebuild the core layout grid, but delay populating the data fields
+            RebuildStatsUICore();
+
+            if (_currentPoolIndex > 0)
+            {
+                string heroStr = _activePoolData.Elements[_currentPoolIndex - 1];
+                rawTextOutput.text = heroStr;
+                OnRawTextChanged(heroStr); // This will call Parse and UpdateUIFromData once
+            }
+            else if (string.IsNullOrEmpty(rawTextOutput.text) || rawTextOutput.text == "()")
+            {
+                _currentPoolIndex = 1;
+                string heroStr = _activePoolData.Elements[0];
+                rawTextOutput.text = heroStr;
+                OnRawTextChanged(heroStr);
+
+                if (statsUI != null && statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop))
+                {
+                    poolDrop.SetValueWithoutNotify(_currentPoolIndex);
+                }
+            }
+            else
+            {
+                UpdateUIFromData();
+            }
+        }
+        else
+        {
+            ResetToDefault();
+        }
+    }
+
+    //=============
+    private void OnDestroy()
+    {
+        if (ModPackage.Instance != null && ModPackage.Instance.loadedMod != null)
+        {
+            ModPackage.Instance.loadedMod.OnDataChanged -= HandleExternalModChanged;
+        }
     }
     protected override void BuildUIAndBind()
     {
@@ -487,7 +703,8 @@ public class HeroModManager : RootUI
                     OnUIChanged();
                 });
             }),
-            GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) => {
+            GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) =>
+            {
                 currentHero.baseReplica = val;
                 OnUIChanged();
             })
@@ -506,7 +723,8 @@ public class HeroModManager : RootUI
                     OnUIChanged();
                 });
             }),
-            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => {
+            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) =>
+            {
                 currentHero.imageOverride = val;
                 OnUIChanged();
             }),
@@ -549,7 +767,8 @@ public class HeroModManager : RootUI
         // 9. Color Class Dropdown Row
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Color Label", "Color Class:", 0.35f),
-            GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
+            GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) =>
+            {
                 HeroColorOption selectedColor = (HeroColorOption)val;
                 currentHero.colorClass = SDColors.GetColorCode(selectedColor);
                 portraitPreview.SetHeroColor(SDColors.GetColor(selectedColor));
@@ -1035,19 +1254,6 @@ public class HeroModManager : RootUI
     }
 
     //===================================================================================================
-
-    private void RefreshDiceUI()
-    {
-        // 1. Rebuild ONLY the inside of the scroll view, leaving Tabs & Scrollrect intact
-        RebuildDiceScrollView();
-
-        // 2. Populate the newly spawned input fields with your current data
-        UpdateUIFromData();
-
-        // 3. Fire the standard text output updates
-        OnUIChanged();
-    }
-
     private void BuildRightPanelContent(RectTransform parent)
     {
         // 1. Create a container for the side-by-side preview block (Top 25% of the panel)
@@ -1175,8 +1381,10 @@ public class HeroModManager : RootUI
         if (pasteText != null) pasteText.text = "Paste String";
         Button pasteBtn = pasteBtnObj.GetComponentInChildren<Button>();
 
-        if (pasteBtn != null) pasteBtn.onClick.AddListener(() => {
-            ClipboardManager.RequestPaste(uiGenerator, (clipboardText) => {
+        if (pasteBtn != null) pasteBtn.onClick.AddListener(() =>
+        {
+            ClipboardManager.RequestPaste(uiGenerator, (clipboardText) =>
+            {
                 if (!string.IsNullOrEmpty(clipboardText))
                 {
                     rawTextOutput.text = clipboardText;
@@ -1199,152 +1407,33 @@ public class HeroModManager : RootUI
             OnRawTextChanged(clipboardText);
         }
     }
-
-    private void OnRawTextChanged(string rawText)
-    {
-        if (isSyncing) return;
-
-        // Colorize user input in real-time
-        syntaxHighlighterText.text = FormatSyntaxHighlighting(rawText);
-
-        // 1. Update the Data Model from the string
-        ParseRawText(rawText);
-
-        // 2. Rebuild the visual layout to accommodate new/removed keyword rows
-        RebuildDiceScrollView();
-
-        // 3. Populate the newly rebuilt layout with the parsed Data Model
-        // (We do NOT call RefreshDiceUI() because that triggers OnUIChanged() -> GenerateRawText(), 
-        // which would forcefully overwrite the text box the user is currently typing in!)
-        UpdateUIFromData();
-    }
-
     private void OnUIChanged()
     {
         if (isSyncing) return;
         GenerateRawText();
         UpdateHeroIcon();
-        UpdateUIFromData(); // <--- ADDED THIS LINE
-    }
 
-    private void UpdateUIFromData()
-    {
-        if (statsUI == null || diceUI == null) return;
-
-        isSyncing = true;
-
-        if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop))
+        // Keep the Left Column input fields and button icons in sync with the current hero data
+        if (statsUI != null)
         {
-            poolDrop.value = _currentPoolIndex;
+            if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn))
+                repNameIn.SetTextWithoutNotify(currentHero.baseReplica);
+            if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn))
+                overNameIn.SetTextWithoutNotify(currentHero.imageOverride);
+
+            if (statsUI.Buttons.TryGetValue("ReplicaBtn", out var repBtn))
+                SetButtonIcon(repBtn, GetSpriteForPortrait(currentHero.baseReplica));
+            if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overBtn))
+                SetButtonIcon(overBtn, GetSpriteForPortrait(currentHero.imageOverride));
         }
 
-        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.text = currentHero.heroName;
-        if (statsUI.Inputs.TryGetValue("HP", out var hpIn)) hpIn.text = currentHero.hp.ToString();
-        if (statsUI.Inputs.TryGetValue("Tier", out var tierIn)) tierIn.text = currentHero.tier.ToString();
-
-        // HERO ICON AND LABEL
-        /////////////////////////
-        if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(currentHero.baseReplica);
-        if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(currentHero.imageOverride);
-
-        if (statsUI.Buttons.TryGetValue("ReplicaBtn", out var repBtn))
-        {
-            SetButtonIcon(repBtn, GetSpriteForPortrait(currentHero.baseReplica));
-        }
-        if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overBtn))
-        {
-            SetButtonIcon(overBtn, GetSpriteForPortrait(currentHero.imageOverride));
-        }
-
-        // Update Hero HSV Inputs and Sliders from Data Model
-        if (statsUI.Inputs.TryGetValue("HeroFacH", out var hH)) hH.text = currentHero.h.ToString();
-        if (statsUI.Inputs.TryGetValue("HeroFacS", out var hS)) hS.text = currentHero.s.ToString();
-        if (statsUI.Inputs.TryGetValue("HeroFacV", out var hV)) hV.text = currentHero.v.ToString();
-
-        if (statsUI.Sliders.TryGetValue("HeroSliH", out var shH)) shH.SetValueWithoutNotify(currentHero.h);
-        if (statsUI.Sliders.TryGetValue("HeroSliS", out var shS)) shS.SetValueWithoutNotify(currentHero.s);
-        if (statsUI.Sliders.TryGetValue("HeroSliV", out var shV)) shV.SetValueWithoutNotify(currentHero.v);
-
-        /////////////////////////
-
-        if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
-        {
-            HeroColorOption colOpt = ReverseLookupColor(currentHero.colorClass);
-            colDrop.value = (int)colOpt;
-
-            if (portraitPreview != null)
-            {
-                portraitPreview.SetHeroColor(SDColors.GetColor(colOpt));
-            }
-        }
-
+        // Instantly push text updates to the active portrait preview
         if (portraitPreview != null)
         {
             portraitPreview.SetNameText(currentHero.heroName);
             portraitPreview.SetHPText(currentHero.hp.ToString());
             portraitPreview.SetTierText(currentHero.tier.ToString());
         }
-
-        for (int i = 0; i < 6; i++)
-        {
-            var face = currentHero.diceSides[i];
-
-            if (diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.text = face.effectID.ToString();
-            if (diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.text = face.pips.ToString();
-            if (diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.text = face.facadeID;
-
-            if (diceUI.Buttons.TryGetValue($"BtnPipDown_{i}", out var btnDown))
-            {
-                if (btnDown.image != null)
-                {
-                    btnDown.image.color = new Color(0.9f, 0.3f, 0.3f, 1f);
-                }
-            }
-
-            if (diceUI.Buttons.TryGetValue($"BtnPipUp_{i}", out var btnUp))
-            {
-                if (btnUp.image != null)
-                {
-                    btnUp.image.color = new Color(0.3f, 0.7f, 0.3f, 1f);
-                }
-            }
-
-            int h = 0, s = 0, v = 0;
-            string[] hsv = (face.facadeColor ?? "").Split(':');
-
-            if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
-            if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
-            if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
-
-            // Set text boxes
-            if (diceUI.Inputs.TryGetValue($"FacH_{i}", out var dH)) dH.text = hsv.Length > 0 ? hsv[0] : "";
-            if (diceUI.Inputs.TryGetValue($"FacS_{i}", out var dS)) dS.text = hsv.Length > 1 ? hsv[1] : "";
-            if (diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.text = hsv.Length > 2 ? hsv[2] : "";
-
-            // Set sliders
-            if (diceUI.Sliders.TryGetValue($"SliH_{i}", out var sliH)) sliH.SetValueWithoutNotify(h);
-            if (diceUI.Sliders.TryGetValue($"SliS_{i}", out var sliS)) sliS.SetValueWithoutNotify(s);
-            if (diceUI.Sliders.TryGetValue($"SliV_{i}", out var sliV)) sliV.SetValueWithoutNotify(v);
-
-            // --- Update buttons ---
-            if (diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
-            {
-                Sprite sSprite = GetSpriteForBase(face.effectID);
-                SetButtonIcon(baseBtn, sSprite);
-            }
-
-            if (diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
-            {
-                Sprite sSprite = GetSpriteForFacade(face.facadeID);
-                SetButtonIcon(facBtn, sSprite);
-            }
-
-            UpdateDiceIcon(i);
-        }
-
-        UpdateHeroIcon();
-
-        isSyncing = false;
     }
 
     // Helper for bidirectional mapping of targets (left -> 0, mid -> 1, etc.)
@@ -1557,7 +1646,7 @@ public class HeroModManager : RootUI
         }
         else
         {
-            Debug.Log($"<b><color=yellow>[SCREAM-MANAGER] Deterministic check skipped. isUsingCustomImage={isUsingCustomImage}, _customImageTexture={(_customImageTexture != null ? "Assigned" : "Null")}</color></b>");
+            //Debug.Log($"<b><color=yellow>[SCREAM-MANAGER] Deterministic check skipped. isUsingCustomImage={isUsingCustomImage}, _customImageTexture={(_customImageTexture != null ? "Assigned" : "Null")}</color></b>");
         }
 
         Sprite targetSprite = GetSpriteForPortrait(activeHeroNameStr);
@@ -2019,26 +2108,6 @@ public class HeroModManager : RootUI
         }
     }
 
-    private void ResetToDefault()
-    {
-        // Reset the data model to a brand new state
-        currentHero = new HeroData();
-        showCustomImagePanel = false;
-
-        _currentPoolIndex = 0; // NEW: Revert focus back to Stand Alone
-
-        // Ensure lists are initialized
-        for (int i = 0; i < 6; i++)
-        {
-            if (currentHero.diceSides[i].keywords == null)
-                currentHero.diceSides[i].keywords = new List<string>();
-        }
-
-        // Rebuild entire UI, map data, and regenerate text
-        RebuildStatsUI(); // Ensure the layout rebuilds to catch the dropdown reverting
-        RefreshDiceUI();
-    }
-
     private void OnDiceTabSelected(int index)
     {
         currentDiceTab = index;
@@ -2069,75 +2138,6 @@ public class HeroModManager : RootUI
         showCustomImagePanel = !showCustomImagePanel;
         RebuildStatsUI();
     }
-
-    private void RebuildStatsUI()
-    {
-        if (generatedScreen == null)
-        {
-            Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: currentScreen is NULL!</color></b>");
-            return;
-        }
-
-        if (!generatedScreen.ColumnPanels.TryGetValue("LeftStats", out var panel))
-        {
-            Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: 'LeftStats' column panel reference is missing!</color></b>");
-            return;
-        }
-
-        // 1. Detach persistent receiver to protect it from destruction
-        if (_persistentCustomImageReceiver != null)
-        {
-            _persistentCustomImageReceiver.transform.SetParent(this.transform, false);
-        }
-
-        // 2. Rebuild the Grid
-        statsUI = uiGenerator.RebuildGrid(panel, GenerateStatsLayout());
-
-        if (statsUI == null)
-        {
-            Debug.LogError("<b><color=red>[SCREAM-MANAGER] FATAL ERROR: RebuildGrid returned NULL statsUI!</color></b>");
-            return;
-        }
-
-        // 3. Inject our persistent receiver into the new slot
-        if (showCustomImagePanel)
-        {
-            // Log every key present in the CustomImgImporter dictionary for diagnostic checking
-            if (statsUI.CustomImgImporter.TryGetValue("CustomImgPanel", out ImageReceiver dummyGridReceiver))
-            {
-                if (_persistentCustomImageReceiver == null)
-                {
-                    _persistentCustomImageReceiver = dummyGridReceiver;
-                    BindPersistentReceiver();
-                }
-                else
-                {
-                    Transform targetPlaceholder = dummyGridReceiver.transform.parent;
-                    Destroy(dummyGridReceiver.gameObject);
-
-                    _persistentCustomImageReceiver.transform.SetParent(targetPlaceholder, false);
-                    _persistentCustomImageReceiver.gameObject.SetActive(true);
-
-                    RectTransform rt = _persistentCustomImageReceiver.GetComponent<RectTransform>();
-                    FullScreenUIGenerator.SetAnchors(rt, 0, 0, 1, 1);
-                }
-            }
-            else
-            {
-                Debug.LogError("<b><color=red>[SCREAM-MANAGER] ERROR: 'CustomImgPanel' key was NOT found in CustomImgImporter dictionary! Binding failed.</color></b>");
-            }
-        }
-        else
-        {
-            if (_persistentCustomImageReceiver != null)
-            {
-                _persistentCustomImageReceiver.gameObject.SetActive(false);
-            }
-        }
-
-        UpdateUIFromData();
-    }
-
     private void BindPersistentReceiver()
     {
         if (_persistentCustomImageReceiver == null)
@@ -2157,32 +2157,13 @@ public class HeroModManager : RootUI
 
     //=======================================================================
 
-    /// <summary>
-    /// Pass in a HeroPoolData object to link this UI to a mod file.
-    /// Unlinks and runs in standalone mode if passed null.
-    /// </summary>
-    public void LoadFromPool(HeroPoolData poolData)
-    {
-        _activePoolData = poolData;
-        _currentPoolIndex = 0;
-
-        RebuildStatsUI();
-
-        // If pool has elements, default to loading the first one
-        if (_activePoolData != null && _activePoolData.Elements.Count > 0)
-        {
-            // Trigger the dropdown logic for the first hero (index 1 since 0 is standalone)
-            OnModDropdownChanged(1);
-        }
-        else
-        {
-            ResetToDefault();
-        }
-    }
-
     private void OnModDropdownChanged(int index)
     {
         if (isSyncing) return;
+
+        // FIX: Instantly block deferred feedback loops if the index hasn't actually changed
+        if (_currentPoolIndex == index) return;
+
         _currentPoolIndex = index;
 
         if (index == 0)
@@ -2234,3 +2215,6 @@ public class HeroModManager : RootUI
         return "Unknown Hero";
     }
 }
+
+
+

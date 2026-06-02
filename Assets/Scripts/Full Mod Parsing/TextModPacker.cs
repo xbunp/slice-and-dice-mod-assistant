@@ -2,11 +2,11 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public static class PackTextMod
+public static class TextModPacker
 {
     private const string directiveDelimiter = ",";
 
-    public static string PackThisTextMod(List<SliceDiceTextMod.ModDirectiveData> Directives)
+    public static string PackTextMod(List<SliceDiceTextMod.ModDirectiveData> Directives)
     {
         string textmod = "";
 
@@ -20,6 +20,13 @@ public static class PackTextMod
         }
 
         return textmod;
+    }
+
+    public static List<SliceDiceTextMod.ModDirectiveData> UnpackTextMod(string textmod)
+    {
+        // the opposite of PackTextMod();
+        List<SliceDiceTextMod.ModDirectiveData> unpackedtextmod = new List<SliceDiceTextMod.ModDirectiveData> ();
+        return unpackedtextmod;
     }
 
 }

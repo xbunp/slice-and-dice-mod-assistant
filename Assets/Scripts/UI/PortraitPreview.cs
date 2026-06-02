@@ -38,6 +38,7 @@ public class PortraitPreview : MonoBehaviour
         CloneMaterial(Rightmost);
         CloneMaterial(Top);
         CloneMaterial(Bottom);
+        CloneMaterial(portrait); // Fix: Clone the main portrait material to protect its HSV state
 
         // Load the new atlas
         Sprite[] allSprites = SpriteCache.GetCommunitySprites(); //todo support base sprites
