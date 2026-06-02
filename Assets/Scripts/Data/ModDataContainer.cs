@@ -5,13 +5,10 @@ using System.Linq;
 [System.Serializable]
 public class ModDataContainer
 {
-    public event Action OnDataChanged;
-
-    // The single source of truth. Natively preserves execution order.
+    // 1. Updated to pass the sender of the modification
+    public event Action<object> OnDataChanged;
     public List<SliceDiceTextMod.ModDirectiveData> Directives { get; set; } = new List<SliceDiceTextMod.ModDirectiveData>();
 
-    // MAGICAL HELPER: GUI elements call this to instantly get a categorized list of exactly what they need.
-    // Example: List<HeroPoolData> heroes = loadedMod.Get<HeroPoolData>();
     public List<T> Get<T>() where T : SliceDiceTextMod.ModDirectiveData
     {
         return Directives.OfType<T>().ToList();
@@ -21,7 +18,7 @@ public class ModDataContainer
     {
         Directives.Clear();
         SliceDiceTextMod.ModTextEngine.UnpackIntoContainer(rawMod, this);
-        NotifyDataChanged();
+        NotifyDataChanged(this); // Sender is the container itself
     }
 
     public string ExportToText()
@@ -29,5 +26,6 @@ public class ModDataContainer
         return SliceDiceTextMod.ModTextEngine.Repack(Directives);
     }
 
-    public void NotifyDataChanged() => OnDataChanged?.Invoke();
+    // 2. Accept the sender parameter
+    public void NotifyDataChanged(object sender) => OnDataChanged?.Invoke(sender);
 }

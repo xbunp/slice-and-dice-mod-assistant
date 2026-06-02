@@ -12,10 +12,14 @@ namespace SliceDiceTextMod
     /// 1. Top-Level Delimiters: 
     ///    - ',' (comma) separates different independent list elements or objects (such as exported pools).
     ///    - '&' (ampersand) chains modifiers/attributes sequentially within a single definition or line.
+    ///    - '#' (hash) acts as a structural delimiter to combine multiple item modifiers globally, 
+    ///      and serves as a terminal boundary during property extraction.
     ///    - Supports stripping a leading '=' expression indicator when parsing raw strings.
     /// 2. Wrappers: '()' group elements. 
     ///    - Supports recursive parenthetical nesting for replicas, triggers, and nested property definitions.
-    ///    - '!m()' and variants wrap elements to create hidden modifiers.
+    ///    - Supports both parenthesized hidden modifier wrappers like '!m()' and inline, parentheseless 
+    ///      hidden modifier prefixes like '!mmodifier' or '!mparty'. Supports generalized alphanumeric 
+    ///      hidden prefixes (e.g., '!go0.271' or '!mh.top').
     /// 3. Floor Selectors: Prepend directives to restrict them to specific floors.
     ///    - Exact: "4.fight.Rat" (Floor 4)
     ///    - Range: "1-5.add.Rat" (Floors 1 through 5)
@@ -24,30 +28,44 @@ namespace SliceDiceTextMod
     ///      maintains balanced parenthesis stripping across the expression.
     /// 4. Pools & Injections: Target game lists using prefix + '.' + '+'-delimited items.
     ///    - e.g., "heropool.Thief+Fighter", "fight.Rat+Boar", "add.Goblin"
+    ///    - Supports pool expression splitting using the balance-aware '+' operator.
     /// 5. Phases: Trigger logic on specific game phases. Uses "ph." or "phmp." + Code.
-    ///    - e.g., "ph.4Message;Button", "ph.bY;1;!mheropool.(...)", "phmp.0"
+    ///    - e.g., "ph.4Message;Button", "ph.bY;1;!mheropool.(...)", "phmp.0", "phmp.-1"
+    ///    - Avoids greedy consumption of run-on message text by matching short alphanumeric phase bounds.
+    ///    - Correctly recognizes negative sub-phase configurations containing negative signs.
     ///    - Handles conditional branching targets (e.g., "@2bChestLvlTwo" or "@2!m") separately from UI menus.
     /// 6. Choosables / Rewards: Starts with "ch." followed by tag and payload.
-    ///    - Supports multi-character prefixes like "ch.pm" (Permanent Modifier) and "ch.r" (Random reward).
+    ///    - Supports multi-character prefixes like "ch.pm" (Permanent Modifier), "ch.oi" (Choice Item), and "ch.r" (Random reward).
+    ///    - Supports random colored reward prefixes: rgreen, rblue, rred, ryellow, rorange, rgrey, rgray, rpurple, rcyan.
     ///    - Parsed parameter structures evaluate tilde-delimited formats: e.g., "r1~2~i" (Tier 1, Qty 2, Item).
-    /// 7. Interactive UI Choice Menus: Matches option indicators "@1 Label" and binds them structurally
-    ///    - Binds labels sequentially to implementation payloads "@2 Modifiers".
-    ///    - Excludes non-UI phase branches by verifying preceding active option context, structural boundaries,
-    ///      and trailing variable/conditional characters.
-    /// 8. Entity Properties: Custom heroes/items chain properties together with dots.
-    ///    - e.g., "replica.Statue.n.NewHero.hp.10.tier.3.col.y.sd.1-1:2-2.i.left.k.acidic"
+    ///    - Handles rewards defined either standalone or nested within "ch." prefixes, supporting expanded
+    ///      class/color codes (Yellow, Blue, Green, and Grey/None).
+    /// 7. Interactive UI Choice Menus: Matches option indicators "@1 Label" and binds them structurally.
+    ///    - Distinguishes options from actions using an odd/even marker distribution rule. Odd markers (e.g., @1, @3) 
+    ///      initialize new standard or sibling choice selections, while even markers (e.g., @2, @4) map to actions.
+    ///    - Strips whitelisted option layout suffixes (l, s, b, r, p, lb) to ensure standard text labels and 
+    ///      implicit payloads (e.g., colored item/hero coordinates) are preserved.
+    /// 8. Entity Properties: Custom heroes/items chain properties together with dots or open parentheses.
+    ///    - e.g., "replica.Statue.n.NewHero.hp.10.tier.3" or "draw.(Sapphire Skull...)"
+    ///    - Flat-nested sub-properties (e.g., inside 'triggerhpdata' or 'onhitdata') evaluate structural
+    ///      non-breaking whitelists to prevent premature dot-chain breaks on nested sub-entity values.
     ///    - Tracks balanced parenthesis depths, square brackets, and curly braces to avoid premature truncation.
+    ///    - Terminates extraction properly on choice indicator markers (`@`), structural equal signs (`=`), and hashes (`#`).
     /// 9. Dice Sides: "sd.Eff-Pips:Eff-Pips..." (6 sides). '0' means blank.
     ///    - Supports pipless/flat side effects, e.g., "sd.43:170-3:0:0:0:0" (effect 43 with 0 pips).
-    /// 10. Dice Modifiers: ".i.{targets}.{payload}".
-    ///    - Targets = left, mid, self, all, topbot, left2, etc.
-    ///    - Payloads are '#' separated: "k.acidic#facade.bas1"
-    ///    - Context-Aware Filtering: Differentiates side modifications from general item attachments 
-    ///      (e.g., .i.pendulum) by verifying presence of side target keywords.
-    /// 11. Formatting & Animation Tags: Automatically classifies and handles non-syntactic aesthetic markup
-    ///     such as color triggers, keyword containers, and animation tags.
+    /// 10. Dice and Inherent Modifiers: ".i.{targets}.{payload}".
+    ///     - Targets = left, mid, self, all, topbot, left2, rightmost, right, bot, top, mid, left.
+    ///     - Supports inherent item/hero modifications and tags using target codes "k" (keywords) and "t" (tags).
+    ///     - Payloads are '#' separated: "k.acidic#facade.bas1"
+    /// 11. Formatting, Color, & Animation Tags: Automatically classifies and handles non-syntactic aesthetic markup.
+    ///     - Supports structural color rules (including pink, ultragrey, and hsl/hsv settings), bold formatting tags, 
+    ///       icons, keyword containers, and animation/style tags.
+    ///     - Strips custom bracketed drawing and sprite strings containing periods and colons (e.g. `[Void.rect.03021111:d61]`).
     ///     - Translates "[comma]" sequences to literal commas during sanitization.
-    /// 12. Formula Operators: Supports inline division `/` and exponential `^` calculations inside modifiers.
+    ///     - Translates "[n]" markup into structural literal newlines to preserve formatted text layouts.
+    ///     - Translates "[dot]" markup into literal periods.
+    /// 12. Modifier Levels: Supports modifier intensity levels and stacks using the `^` indicator (e.g., `hurried^2` for 
+    ///     Hurried level 2) as well as inline division `/`.
     /// -----------------------------------------------------------------------------------------
     /// </summary>
     public static class SDSyntaxBrain
@@ -66,20 +84,21 @@ namespace SliceDiceTextMod
         public static readonly string[] GlobalCommands = {
             "Delevel", "Level Up", "No Flee", "skip all", "skip", "temporary",
             "Wish", "Clear Party", "Missing", "Hidden", "Add Fight",
-            "Add 10 Fights", "Add 100 Fights", "Minus Fight", "Cursemode Loopdiff", "horde"
+            "Add 10 Fights", "Add 100 Fights", "Minus Fight", "Cursemode Loopdiff", "horde",
+            "double monsters", "skip rewards"
         };
 
         // Side positions/targets
-        public static readonly string[] SideposDefs = { "all", "self", "right5", "right3", "right2", "row", "mid2", "col", "topbot", "left2", "rightmost", "right", "bot", "top", "mid", "left" };
+        public static readonly string[] SideposDefs = { "all", "self", "right5", "right3", "right2", "row", "mid2", "col", "topbot", "left2", "rightmost", "right", "bot", "top", "mid", "left", "k", "t" };
 
         // Entities
-        public static readonly string[] HeroPropertyKeys = { "replica", "img", "n", "col", "hp", "tier", "hsv", "sd", "speech", "doc", "i", "p", "t", "gift", "abilitydata", "adj", "b", "rect", "thue" };
-        public static readonly string[] MonsterPropertyKeys = { "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "b", "draw", "hsv", "rect", "thue", "p" };
-        public static readonly string[] ItemPropertyKeys = { "k", "learn", "hat", "t", "#", "sidepos", "tier", "n", "ritem", "ritemx", "facade", "mrg", "self", "m", "doc", "pertier", "part", "rditem", "unpack", "sidesc", "splice", "onhitdata", "triggerhpdata", "sticker", "enchant", "cast", "img", "hue", "b", "draw", "hsv", "rect", "thue", "p" };
+        public static readonly string[] HeroPropertyKeys = { "replica", "img", "n", "col", "hp", "tier", "hsv", "hsl", "sd", "speech", "doc", "i", "p", "t", "gift", "abilitydata", "adj", "b", "rect", "thue", "rdhero", "statue", "pockets", "dancer" };
+        public static readonly string[] MonsterPropertyKeys = { "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p" };
+        public static readonly string[] ItemPropertyKeys = { "k", "learn", "hat", "t", "#", "sidepos", "tier", "n", "ritem", "ritemx", "facade", "mrg", "self", "m", "doc", "pertier", "part", "rditem", "unpack", "sidesc", "splice", "onhitdata", "triggerhpdata", "sticker", "enchant", "cast", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "summon", "cleardesc", "clearicon", "oi", "t1", "t2" };
         public static readonly string[] EntityCommonPropertyKeys = { "img", "n", "doc", "p", "t", "b", "rect", "thue" };
 
         // Directives
-        public static readonly string[] ModifierPropertyKeys = { "hero", "add", "party", "diff", "modifier", "lvl", "t#", "heropool", "itempool", "monsterpool", "monster", "allitem", "alliteme", "fight", "mn", "heropos", "ph", "phi", "phmp", "e", "et#", "inv", "part", "zone", "delivery", "rmod", "pl", "pb", "pt", "peritem", "spirit", "ch", "rdmod", "temporary", "hidden", "missing", "skip", "skip all", "minus fight", "clear party", "wish", "cursemode loopdiff", "mch", "m#", "x#", "dabble", "bal", "ea" };
+        public static readonly string[] ModifierPropertyKeys = { "hero", "add", "party", "diff", "modifier", "lvl", "t#", "heropool", "itempool", "monsterpool", "monster", "allitem", "alliteme", "fight", "mn", "heropos", "ph", "phi", "phmp", "e", "et#", "inv", "part", "zone", "delivery", "rmod", "pl", "pb", "pt", "peritem", "spirit", "ch", "rdmod", "temporary", "hidden", "missing", "skip", "skip all", "minus fight", "clear party", "wish", "cursemode loopdiff", "mch", "m#", "x#", "dabble", "bal", "ea", "summon", "rdhero", "modtier", "tm", "tmi", "tmrdmod", "sthief", "statue", "pockets", "dancer", "t", "rgreen", "rblue", "rred", "ryellow", "rorange", "rgrey", "rgray", "rpurple", "rcyan", "t1", "t2" };
         public static readonly string[] Togitems = { "togtime", "togtarg", "togfri", "togvis", "togeft", "togpip", "togkey", "togorf", "togunt", "togres" };
 
         public static readonly string[] AllPropertyKeys = HeroPropertyKeys
@@ -92,7 +111,7 @@ namespace SliceDiceTextMod
             .ToArray();
 
         // ======================================================================================
-        // 2. MASTER REGEX PATTERNS
+        // 2. MASTER REGEX PATTERNS & REGISTRATION
         // ======================================================================================
 
         private static string CleanKeyForRegex(string key)
@@ -106,7 +125,30 @@ namespace SliceDiceTextMod
         }
 
         public static readonly Regex MasterSyntaxRegex;
-        private static readonly Regex FormattingTagRegex;
+        private static Regex FormattingTagRegex;
+
+        private static readonly object RegexLock = new object();
+        private static readonly List<string> BaseFormattingTags = new List<string>
+        {
+            // Full color names
+            "orange", "yellow", "grey", "gray", "red", "blue", "green", "purple", "cyan",
+            "sea", "euish", "white", "kuish", "uuish", "violet", "huish", "mahogany",
+            "lime", "tuish", "zuish", "amber", "iuish", "quish", "xuish", "fuish", "juish",
+            "blurple", "brown", "dark", "light", "pink", "ultragrey",
+
+            // Single-character and secondary color short codes
+            "o", "y", "g", "r", "b", "n", "p", "c", "s", "e", "w", "k", "u", "v", "h", "m", "l", "t", "z", "a", "i", "q", "x", "f", "j", "nh",
+
+            // Layout, formatting, and effect tags
+            "sin", "wiggle", "cu", "nokeyword", "hp-plus", "pips", "pipsk", "minus", "weird", "fullheart", "secret", "text", "dot",
+
+            // Tooltip and inline custom icons
+            "cog", "confirmSkull", "mana", "info", "checkbox", "checkboxTicked", "hash", "plusfive", "equals", "tick", "tinyDice", "plus",
+            "roso", "zablocki", "hp", "hp-hole", "hp-arrow_up", "hp-arrow_left", "hp-girder", "hp-cross", "hp-square", "hp-diamond",
+            "hp-bar", "hp-bracket", "hp-glider", "hp-reverse", "mysteryVoice"
+        };
+
+        private static readonly List<string> RegisteredItemNames = new List<string>();
 
         static SDSyntaxBrain()
         {
@@ -114,43 +156,71 @@ namespace SliceDiceTextMod
 
             MasterSyntaxRegex = new Regex(
                 @"(?<=^|[(&@!~\[])(?<floor>e?\d+(?:\.\d+)?\.|\d+-\d+\.|\-?\d+\.)" +
-                @"|(?<phase>ph\.[!0-9a-zA-Z#]+|phmp\.[!0-9a-zA-Z#]+|\.phi\b)" +
-                @"|(?<delimiter>[&,;=:#]|@\d+[a-zA-Z0-9_]*|@\d+|\b(?i:Delevel|Level Up|No Flee|skip(?: all)?|temporary|Wish|Clear Party|Missing|Hidden|Add(?: 10| 100)? Fights?|Minus Fight|Cursemode Loopdiff|horde)\b|![mv][a-zA-Z0-9_]*)" +
+                @"|(?<phase>ph\.[a-z0-9#_]{1,2}(?=[A-Z\s\[?])|ph\.[a-zA-Z0-9_#]{1,3}(?=\b|[^a-zA-Z0-9_#])|ph\.[!\-0-9a-zA-Z#]+|phmp\.[!\-0-9a-zA-Z#]+|\.phi\b)" +
+                @"|(?<delimiter>[&,;=:#+]|@\d+(?:lb|b|r|l|p|s)?\b|@\d+|\b(?i:Delevel|Level Up|No Flee|skip(?: all| rewards)?|temporary|Wish|Clear Party|Missing|Hidden|Add(?: 10| 100)? Fights?|Minus Fight|Cursemode Loopdiff|horde|double monsters)\b|![mv][a-zA-Z0-9_]*)" +
                 @"|(?<sq_bracket>\[[^\]]*\])" +
                 @"|(?<bracket>[{}()])" +
-                @"|(?<itempool_block>itempool\.[^\.]*)" +
-                @"|(?<sd_block>sd\.[^.)]*)" +
-                @"|(?<ritemx>(?i)(?:i\.)?ritemx\.[^.)]*)" +
-                @"|(?<hsv_block>(?i)hsv\.[^\.]*)" +
-                @"|(?<k_block>k\.[^.#\s,)]*)" +
+                @"|(?<itempool_block>itempool\.[^\.&,;]*)" +
+                @"|(?<sd_block>sd\.[^.)&,;]*)" +
+                @"|(?<ritemx>(?i)(?:i\.)?ritemx\.[^.)&,;]*)" +
+                @"|(?<hsv_block>(?i)hsv\.[^\.&,;]*)" +
+                @"|(?<k_block>k\.[^.#\s,)&,;]*)" +
                 @"|(?<tog>\btog[a-zA-Z0-9_]*\b)" +
-                @"|(?<method>\b(?:" + keysPattern + @")\.|\.(?:modtier|add|doc|all|egg|hsv|speech|unpack)\b)" +
-                @"|(?<reward>\(?[miglrqovs]\.[a-zA-Z0-9_\-~\^\/ ]*\)?|(?<=[\!&@+=])\(?[miglrqovs]\b\)?|\(?[miglrqovs][a-zA-Z0-9_\-~\^\/]*[\~^\/][a-zA-Z0-9_\-~\^\/]*\)?|\b[ov][A-Z][a-zA-Z0-9_]*\b)" +
-                @"|(?<number>\b\d+\b)" +
-                @"|(?<text>[a-zA-Z_][a-zA-Z0-9_]*(?:\^(?:\d+\/\d+|\d+)|/\d+)?)",
+                @"|(?<method>\b(?:" + keysPattern + @")(?:\.|\()|\.(?:modtier|add|doc|all|egg|hsv|speech|unpack)\b)" +
+                @"|(?<reward>\(?(?:rgreen|rblue|rred|ryellow|rorange|rgrey|rgray|rpurple|rcyan|[miglrqovsybn])\.[a-zA-Z0-9_\-~\^\/ ]*\)?|(?<=[\!&@+=])\(?[miglrqovsybn]\b\)?|\(?[miglrqovsybn][a-zA-Z0-9_\-~\^\/]*[\~^\/][a-zA-Z0-9_\-~\^\/]*\)?|\b[ov][A-Z][a-zA-Z0-9_]*\b)" +
+                @"|(?<number>(?<!\w)\-?\d+\b)" +
+                @"|(?<text>\b(?:[a-zA-Z_][a-zA-Z0-9_']*|\d+[a-zA-Z_][a-zA-Z0-9_']*)(?:\s+(?:[a-zA-Z_][a-zA-Z0-9_']*|\d+[a-zA-Z_][a-zA-Z0-9_']*))*\b[!?]?(?:\^(?:\d+\/\d+|\d+)|/\d+)?)",
                 RegexOptions.Compiled | RegexOptions.ExplicitCapture);
 
-            // 2. Build the formatting tag removal regex using the definitive color list
-            var tags = new List<string>
+            RebuildFormattingTagRegex();
+        }
+
+        public static void RegisterItemNames(IEnumerable<string> names)
+        {
+            if (names == null) return;
+
+            lock (RegexLock)
             {
-            // Full color names
-            "orange", "yellow", "grey", "gray", "red", "blue", "green", "purple", "cyan",
-            "sea", "euish", "white", "kuish", "uuish", "violet", "huish", "mahogany",
-            "lime", "tuish", "zuish", "amber", "iuish", "quish", "xuish", "fuish", "juish",
-            "blurple", "brown", "dark", "light",
+                RegisteredItemNames.Clear();
+                foreach (var name in names)
+                {
+                    if (string.IsNullOrWhiteSpace(name)) continue;
 
-            // Single-character and secondary color short codes
-            "o", "y", "g", "r", "b", "n", "p", "c", "s", "e", "w", "k", "u", "v", "h", "m", "l", "t", "z", "a", "i", "q", "x", "f", "j", "nh",
+                    RegisteredItemNames.Add(name);
 
-            // Layout, formatting, and effect tags
-            "sin", "wiggle", "cu", "nokeyword", "hp-plus", "pips", "pipsk"
-            };
+                    string spaced = SplitPascalCase(name);
+                    if (spaced != name)
+                    {
+                        RegisteredItemNames.Add(spaced);
+                    }
+                }
+                RebuildFormattingTagRegex();
+            }
+        }
 
-            // Sort descending by length to prevent shorter prefix strings from matching before longer tags
-            tags.Sort((a, b) => b.Length.CompareTo(a.Length));
+        public static void RegisterItemNamesFromEnum<TEnum>() where TEnum : struct, Enum
+        {
+            string[] names = Enum.GetNames(typeof(TEnum));
+            RegisterItemNames(names);
+        }
 
-            string pattern = @"\[(/?(?:" + string.Join("|", tags.Select(Regex.Escape)) + @"))\]";
+        private static void RebuildFormattingTagRegex()
+        {
+            var allTags = new List<string>(BaseFormattingTags);
+            allTags.AddRange(RegisteredItemNames);
+
+            allTags = allTags.Distinct(StringComparer.OrdinalIgnoreCase)
+                             .OrderByDescending(t => t.Length)
+                             .ToList();
+
+            string pattern = @"\[(/?(?:" + string.Join("|", allTags.Select(Regex.Escape)) + @"|alp\d+)|[a-zA-Z0-9%=\-+_/.:]{12,})\]";
             FormattingTagRegex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        }
+
+        private static string SplitPascalCase(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+            return Regex.Replace(input, "([a-z])([A-Z])", "$1 $2");
         }
 
         public static readonly Regex FloorSelectorRegex = new Regex(@"^(\(?)(e?\d+(?:\.\d+)?|\-?\d+\-\-?\d+|\-?\d+)\.", RegexOptions.Compiled);
@@ -207,6 +277,11 @@ namespace SliceDiceTextMod
             return SplitRespectingParens(input, new[] { delimiter });
         }
 
+        public static List<string> SplitPool(string poolContent)
+        {
+            return SplitRespectingParens(poolContent, PoolDelimiter);
+        }
+
         public static (string core, bool isHidden) UnwrapHiddenModifier(string chunk)
         {
             if (string.IsNullOrEmpty(chunk)) return (chunk, false);
@@ -215,34 +290,42 @@ namespace SliceDiceTextMod
 
             bool isHidden = false;
 
-            var match = Regex.Match(core, @"^(!?[mv][a-zA-Z0-9_]*)\.?\(");
-            if (match.Success && core.EndsWith(")"))
+            // General support for numeric weights, category codes, and decimals (e.g., '!go0.271' or '!m')
+            var match = Regex.Match(core, @"^(![a-zA-Z0-9_]+(?:\.[0-9]+)?)\.?");
+            if (match.Success)
             {
-                int parenCount = 0;
-                int firstParenIdx = match.Length - 1;
-                bool isBalanced = true;
+                int prefixLength = match.Length;
+                string remaining = core.Substring(prefixLength).Trim();
 
-                for (int i = firstParenIdx; i < core.Length; i++)
+                if (remaining.StartsWith("(") && remaining.EndsWith(")"))
                 {
-                    if (core[i] == '(') parenCount++;
-                    else if (core[i] == ')')
+                    int parenCount = 0;
+                    bool isBalanced = true;
+                    for (int i = 0; i < remaining.Length; i++)
                     {
-                        parenCount--;
-                        if (parenCount == 0 && i < core.Length - 1)
+                        if (remaining[i] == '(') parenCount++;
+                        else if (remaining[i] == ')')
                         {
-                            isBalanced = false;
-                            break;
+                            parenCount--;
+                            if (parenCount == 0 && i < remaining.Length - 1)
+                            {
+                                isBalanced = false;
+                                break;
+                            }
                         }
+                    }
+                    if (isBalanced && parenCount == 0)
+                    {
+                        core = remaining.Substring(1, remaining.Length - 2).Trim();
+                        isHidden = true;
+                        return (core, isHidden);
                     }
                 }
 
-                if (isBalanced && parenCount == 0)
-                {
-                    int prefixLength = match.Length;
-                    core = core.Substring(prefixLength, core.Length - prefixLength - 1).Trim();
-                    isHidden = true;
-                }
+                core = remaining;
+                isHidden = true;
             }
+
             return (core, isHidden);
         }
 
@@ -287,6 +370,8 @@ namespace SliceDiceTextMod
 
             string searchKey1 = propertyKey + ".";
             string searchKey2 = "." + propertyKey + ".";
+            string searchKey3 = propertyKey + "(";
+            string searchKey4 = "." + propertyKey + "(";
 
             int startIdx = -1;
 
@@ -294,12 +379,24 @@ namespace SliceDiceTextMod
             {
                 startIdx = searchKey1.Length;
             }
+            else if (syntax.StartsWith(searchKey3, StringComparison.OrdinalIgnoreCase))
+            {
+                startIdx = searchKey3.Length - 1;
+            }
             else
             {
                 int idx = syntax.IndexOf(searchKey2, StringComparison.OrdinalIgnoreCase);
                 if (idx != -1)
                 {
                     startIdx = idx + searchKey2.Length;
+                }
+                else
+                {
+                    idx = syntax.IndexOf(searchKey4, StringComparison.OrdinalIgnoreCase);
+                    if (idx != -1)
+                    {
+                        startIdx = idx + searchKey4.Length - 1;
+                    }
                 }
             }
 
@@ -309,6 +406,17 @@ namespace SliceDiceTextMod
             int sqDepth = 0;
             int curlyDepth = 0;
             int length = 0;
+
+            var containerKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "triggerhpdata", "onhitdata", "learn", "unpack", "splice", "replica", "abilitydata", "peritem", "allitem", "alliteme"
+            };
+            var nonBreakingSubKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "sd", "hp", "i", "k", "hsv", "hsl", "draw", "rect", "p", "b", "t", "sticker", "cast", "sidesc", "splice", "m"
+            };
+
+            bool isContainer = containerKeys.Contains(propertyKey);
 
             while (startIdx + length < syntax.Length)
             {
@@ -333,7 +441,11 @@ namespace SliceDiceTextMod
 
                 if (depth == 0 && sqDepth == 0 && curlyDepth == 0)
                 {
-                    if (c == '&' || c == ',' || c == ';')
+                    if (c == '&' || c == ',' || c == ';' || c == '=' || c == '#')
+                    {
+                        break;
+                    }
+                    if (c == '@' && startIdx + length + 1 < syntax.Length && char.IsDigit(syntax[startIdx + length + 1]))
                     {
                         break;
                     }
@@ -341,16 +453,31 @@ namespace SliceDiceTextMod
                     {
                         string remaining = syntax.Substring(startIdx + length + 1);
                         bool isNextKey = false;
+                        string matchedKey = null;
+
                         foreach (var key in AllPropertyKeys)
                         {
                             string keyPattern = CleanKeyForRegex(key);
-                            if (Regex.IsMatch(remaining, $"^({keyPattern})(?:\\.|\\(|$)"))
+                            var match = Regex.Match(remaining, $"^({keyPattern})(?:\\.|\\(|$)");
+                            if (match.Success)
                             {
                                 isNextKey = true;
+                                matchedKey = match.Groups[1].Value;
                                 break;
                             }
                         }
-                        if (isNextKey) break;
+
+                        if (isNextKey)
+                        {
+                            if (isContainer && matchedKey != null && nonBreakingSubKeys.Contains(matchedKey))
+                            {
+                                // Do not terminate flat dot-chaining on common nested entity properties
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
                     }
                 }
 
@@ -463,7 +590,7 @@ namespace SliceDiceTextMod
                                 if (isKey)
                                 {
                                     string matchedKey = Regex.Match(remainingText, @"^[a-zA-Z0-9#]+").Value.ToLower();
-                                    if (!SideposDefs.Contains(matchedKey) && matchedKey != "self" && matchedKey != "t")
+                                    if (!SideposDefs.Contains(matchedKey) && matchedKey != "self")
                                     {
                                         break;
                                     }
@@ -526,7 +653,7 @@ namespace SliceDiceTextMod
                                 firstToken = firstToken.Substring(1, firstToken.Length - 2).Trim();
                             }
 
-                            if (SideposDefs.Contains(firstToken) || firstToken == "self" || firstToken == "t")
+                            if (SideposDefs.Contains(firstToken) || firstToken == "self")
                             {
                                 targets.Add(firstToken);
                                 remaining = remaining.Substring(dotIdx + 1).Trim();
@@ -537,7 +664,6 @@ namespace SliceDiceTextMod
                             }
                         }
 
-                        // Context-aware filter: Differentiate side modification from item properties
                         if (targets.Count > 0)
                         {
                             string targetStr = string.Join(".", targets);
@@ -568,8 +694,8 @@ namespace SliceDiceTextMod
         }
 
         /// <summary>
-        /// Structurally parses interactive custom menus based on sequential @1 and @2 options.
-        /// Ignores non-UI phase branches by tracking depth, delimiter context, and variable suffix bounds.
+        /// Structurally parses interactive custom menus based on sequential choice indicators (e.g., @1, @2, @3).
+        /// Standard label and action assignments are preserved using an odd/even marker distribution rule.
         /// </summary>
         public static List<ChoiceOption> ParseChoiceOptions(string syntax)
         {
@@ -607,55 +733,57 @@ namespace SliceDiceTextMod
                 {
                     int start = i;
                     i++;
+
                     while (i < syntax.Length && char.IsDigit(syntax[i])) i++;
+
                     string numStr = syntax.Substring(start + 1, i - start - 1);
                     if (int.TryParse(numStr, out int marker))
                     {
-                        // Check if the digit is followed by a phase branch variable (e.g. @2bChestLvlTwo)
-                        bool isPhaseBranch = false;
-                        if (i < syntax.Length && char.IsLetter(syntax[i]))
+                        var whitelist = new[] { "lb", "b", "r", "l", "p", "s" };
+                        foreach (var sfx in whitelist)
                         {
-                            string suffix = syntax.Substring(i);
-                            if (!suffix.StartsWith("m(") && !suffix.StartsWith("v(") &&
-                                !suffix.StartsWith("m.") && !suffix.StartsWith("v."))
+                            if (i + sfx.Length <= syntax.Length &&
+                                syntax.Substring(i, sfx.Length).Equals(sfx, StringComparison.OrdinalIgnoreCase))
                             {
-                                isPhaseBranch = true;
-                            }
-                        }
-
-                        if (!isPhaseBranch)
-                        {
-                            int contentStart = i;
-                            int depth = 0;
-                            int length = 0;
-                            while (contentStart + length < syntax.Length)
-                            {
-                                char cc = syntax[contentStart + length];
-                                if (cc == '(') depth++;
-                                else if (cc == ')') depth--;
-
-                                if (depth == 0 && cc == '@' && (contentStart + length + 1 < syntax.Length && char.IsDigit(syntax[contentStart + length + 1])))
+                                int boundaryIdx = i + sfx.Length;
+                                if (boundaryIdx == syntax.Length || !char.IsLetterOrDigit(syntax[boundaryIdx]))
                                 {
+                                    i += sfx.Length;
                                     break;
                                 }
-                                length++;
                             }
-
-                            string content = syntax.Substring(contentStart, length).Trim();
-                            i = contentStart + length;
-
-                            if (marker == 1)
-                            {
-                                currentOption = new ChoiceOption { Label = content, Marker = 1 };
-                                choiceParenDepth = parenDepth;
-                                options.Add(currentOption);
-                            }
-                            else if (marker == 2 && currentOption != null)
-                            {
-                                currentOption.Payloads.Add(content);
-                            }
-                            continue;
                         }
+
+                        int contentStart = i;
+                        int depth = 0;
+                        int length = 0;
+                        while (contentStart + length < syntax.Length)
+                        {
+                            char cc = syntax[contentStart + length];
+                            if (cc == '(') depth++;
+                            else if (cc == ')') depth--;
+
+                            if (depth == 0 && cc == '@' && (contentStart + length + 1 < syntax.Length && char.IsDigit(syntax[contentStart + length + 1])))
+                            {
+                                break;
+                            }
+                            length++;
+                        }
+
+                        string content = syntax.Substring(contentStart, length).Trim();
+                        i = contentStart + length;
+
+                        if (marker % 2 == 1)
+                        {
+                            currentOption = new ChoiceOption { Label = content, Marker = marker };
+                            choiceParenDepth = parenDepth;
+                            options.Add(currentOption);
+                        }
+                        else if (marker % 2 == 0 && currentOption != null)
+                        {
+                            currentOption.Payloads.Add(content);
+                        }
+                        continue;
                     }
                     i = start;
                 }
@@ -672,12 +800,12 @@ namespace SliceDiceTextMod
         {
             public int Tier { get; set; }
             public int Quantity { get; set; }
-            public string RewardType { get; set; } // "l" (level up), "i" (item), "g" (green tier), etc.
+            public string RewardType { get; set; }
         }
 
         public static RandomReward ParseRandomReward(string rewardSyntax)
         {
-            var match = Regex.Match(rewardSyntax, @"^r(\d+)~(\d+)~([a-zA-Z]+)", RegexOptions.IgnoreCase);
+            var match = Regex.Match(rewardSyntax, @"^(?:ch\.)?r(\d+)~(\d+)~([a-zA-Z]+)", RegexOptions.IgnoreCase);
             if (match.Success)
             {
                 return new RandomReward
@@ -698,11 +826,14 @@ namespace SliceDiceTextMod
         {
             if (string.IsNullOrEmpty(text)) return text;
 
-            // Translate the [comma] escape sequence back into literal commas
             text = Regex.Replace(text, @"\[comma\]", ",", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\[n\]", "\n", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\[dot\]", ".", RegexOptions.IgnoreCase);
 
-            // Cleans color, animation, and layout decorators safely while preserving functional gameplay bracket keys.
-            return FormattingTagRegex.Replace(text, "");
+            lock (RegexLock)
+            {
+                return FormattingTagRegex.Replace(text, "");
+            }
         }
 
         public static string CleanEntityName(string rawName)
@@ -715,25 +846,20 @@ namespace SliceDiceTextMod
                 string prefix = parts[0].ToLower();
                 string suffix = parts[1];
 
-                //reminder: "jinx.uhh, orb.Slice, egg.Bee, vase.uhh" are all safe valid ways to use these keywords when the second word is not known. 
                 if (prefix == "jinx")
                 {
-                    if (suffix.Equals("uhh", StringComparison.OrdinalIgnoreCase)) return "jinx";
                     return ToTitleCase(suffix) + " Jinx";
                 }
                 if (prefix == "orb")
                 {
-                    if (suffix.Equals("Slice", StringComparison.OrdinalIgnoreCase)) return "orb";
                     return ToTitleCase(suffix) + " Orb";
                 }
                 if (prefix == "egg")
                 {
-                    if (suffix.Equals("Bee", StringComparison.OrdinalIgnoreCase)) return "egg";
                     return ToTitleCase(suffix) + " Egg";
                 }
                 if (prefix == "vase")
                 {
-                    if (suffix.Equals("uhh", StringComparison.OrdinalIgnoreCase)) return "vase";
                     return ToTitleCase(suffix) + " Vase";
                 }
             }
@@ -749,10 +875,6 @@ namespace SliceDiceTextMod
             return rawName;
         }
 
-        /// <summary>
-        /// Helper to convert raw, delimited identifiers (like "reduced_defense" or "sThief") 
-        /// into clean, capitalized display names.
-        /// </summary>
         private static string ToTitleCase(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -765,7 +887,7 @@ namespace SliceDiceTextMod
         public static string StripTrailingMetadata(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;
-            string pattern = @"\.(mn|doc|modtier|bal|speech|img|hsv)\.(?:\[.*?\]|[a-zA-Z0-9 _\-!?^/]+)+";
+            string pattern = @"\.(mn|doc|modtier|bal|speech|img|hsv|part)\.(?:\[.*?\]|[a-zA-Z0-9 _\-!?^/]+)+";
             return Regex.Replace(text, pattern, "", RegexOptions.IgnoreCase);
         }
     }

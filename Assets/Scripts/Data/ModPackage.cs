@@ -23,4 +23,9 @@ public class ModPackage : MonoBehaviour
         isModLoaded = true;
         loadedMod.LoadFromText(fullMod);
     }
+
+    private void Start()
+    {
+        LoadModFromText("");
+    }
 }

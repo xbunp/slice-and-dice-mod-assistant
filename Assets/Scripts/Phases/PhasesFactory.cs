@@ -97,7 +97,7 @@ public class PhasesFactory : RootUI
             if (leftRefs.IDEInterfaces.TryGetValue("LeftPanelIDE", out VirtualizedIdeController ideObj))
             {
                 mainIdeController = ideObj;
-                IDEconfig = new SDTextmodSyntaxConfig { watchPaste = true };
+                IDEconfig = new SDTextmodSyntaxConfig { watchPaste = true, scrollHorizontal = true };
                 mainIdeController.Initialize(IDEconfig);
                 mainIdeController.TextPreprocessor = PreprocessPastedText;
             }

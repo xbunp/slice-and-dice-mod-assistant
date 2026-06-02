@@ -6,6 +6,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using static SDColors;
+using SliceDiceTextMod;
 
 public class HeroModManager : RootUI
 {
@@ -13,65 +14,121 @@ public class HeroModManager : RootUI
     [System.Runtime.InteropServices.DllImport("__Internal")]
     private static extern void ReadOSClipboard(string objectName, string methodName);
 #endif
-
     [Header("UI Modal References")]
     [SerializeField] private IconPickerModal diceFaceIconPicker;
 
-    private HeroData currentHero;
-    private bool isSyncing = false;
-    private string _customImageString;
-
-    private bool showCustomImagePanel = false;
-    private Texture2D _customImageTexture;
-    private ImageReceiver _persistentCustomImageReceiver; // Keeps the UI alive forever
-
-    [Header("Right Column Prefabs")]
+    //[Header("Right Column Prefabs")]
     private PortraitPreview portraitPreview;
 
-    [Header("Dynamically Generated Components")]
-    // References to dynamically generated components
+    //[Header("Dynamically Generated Components")]
     private GridReferences statsUI;
     private GridReferences diceUI;
     private TMP_InputField rawTextOutput;
     private TextMeshProUGUI syntaxHighlighterText;
-
-    // Internal shit. 
-    private Sprite[] atlasSprites;
-    //private GeneratedScreen currentScreen = new GeneratedScreen();
-
-    // Sprite Caches
-    private Sprite[] _baseActionSprites;
-    private Dictionary<int, string> _baseActionNames;
-
-    private Sprite[] _allActionSprites;
-    private Dictionary<int, string> _allActionNames;
-
-    private int currentDiceTab = 0; // 0 = All, 1 = Left, 2 = Middle, etc.
     private ScrollRect diceScrollRect;
 
+    //[Header("System & Sync State")]
+    private HeroData currentHero;
+    private bool isSyncing = false;
+
+    //[Header("Custom Image State")]
+    private bool showCustomImagePanel = false;
+    private string _customImageString;
+    private Texture2D _customImageTexture;
+    private ImageReceiver _persistentCustomImageReceiver;
+
+    //[Header("Sprite & Action Caches")]
+    private Sprite[] atlasSprites;
+    private Sprite[] _baseActionSprites;
+    private Sprite[] _allActionSprites;
+    private Dictionary<int, string> _baseActionNames;
+    private Dictionary<int, string> _allActionNames;
     private Dictionary<int, List<string>> cleanDropdownKeywords = new Dictionary<int, List<string>>();
 
-    // Clipboard storage for per-face Copy/Paste operations
+    //[Header("Navigation State")]
+    private int currentDiceTab = 0; // 0 = All, 1 = Left, 2 = Middle, etc.
+
+    //[Header("Clipboard Data (Per-Face Copy/Paste)")]
+    private bool hasCopiedDiceData = false;
     private int copiedEffectID;
     private int copiedPips;
     private string copiedFacadeID;
     private string copiedFacadeColor;
     private List<string> copiedKeywords;
-    private bool hasCopiedDiceData = false;
+
+    private HeroPoolData _activePoolData;
+    private int _currentPoolIndex = 0; // 0 = Stand Alone, 1+ = Pool Elements
+
+    private void OnDestroy()
+    {
+        if (ModPackage.Instance != null && ModPackage.Instance.loadedMod != null)
+        {
+            ModPackage.Instance.loadedMod.OnDataChanged -= HandleExternalModChanged;
+        }
+    }
+
+    private void HandleExternalModChanged(object sender)
+    {
+        // Safely check if this specific UI instance initiated the event
+        if (object.ReferenceEquals(sender, this)) return;
+
+        var loadedMod = ModPackage.Instance.loadedMod;
+        var activePool = loadedMod.Get<HeroPoolData>().FirstOrDefault();
+
+        if (activePool == null)
+        {
+            activePool = new HeroPoolData();
+            loadedMod.Directives.Add(activePool);
+        }
+
+        LoadFromPool(activePool);
+    }
 
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
         if (uiGeneratorRef == null)
         {
-            Debug.Log("No UI Generator defined", this);
+            Debug.LogError("[HeroModManager] No UI Generator defined", this);
             return;
         }
 
         uiGenerator = uiGeneratorRef;
         currentHero = new HeroData();
 
+        // 1. First, try searching from the absolute root of this UI tree (usually the Canvas)
+        if (diceFaceIconPicker == null)
+        {
+            diceFaceIconPicker = transform.root.GetComponentInChildren<IconPickerModal>(true);
+        }
+
+        // 2. Fallback to a global search in case it was instantiated in a different hierarchy
+        if (diceFaceIconPicker == null)
+        {
+            diceFaceIconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
+        }
+
+        // Fail loudly so you know instantly if both methods somehow failed
+        if (diceFaceIconPicker == null)
+        {
+            Debug.LogError("[HeroModManager] CRITICAL: Failed to locate 'IconPickerModal' globally or in the Canvas tree!", this);
+        }
+
         LoadAllSprites();
+
+        // FIX: Build and bind the UI elements FIRST before listening to data updates
         BuildUIAndBind();
+
+        // FIX: Only register and fire the data change event once the UI exists to receive it
+        if (ModPackage.Instance != null && ModPackage.Instance.loadedMod != null)
+        {
+            ModPackage.Instance.loadedMod.OnDataChanged += HandleExternalModChanged;
+
+            if (ModPackage.Instance.isModLoaded)
+            {
+                // Safe to call now because generatedScreen and input fields are instantiated
+                HandleExternalModChanged(null);
+            }
+        }
 
         UpdateUIFromData();
         GenerateRawText();
@@ -119,6 +176,12 @@ public class HeroModManager : RootUI
     }
     private void GenerateRawText()
     {
+        // FIX: Silent return during startup if layout hasn't been built yet
+        if (generatedScreen == null)
+        {
+            return;
+        }
+
         isSyncing = true;
 
         // 1. Build Base SD Array
@@ -384,62 +447,79 @@ public class HeroModManager : RootUI
 
     private List<GridRowSpec> GenerateStatsLayout()
     {
-        var layout = new List<GridRowSpec>
+        var layout = new List<GridRowSpec>();
+
+        // 2. Reset Button Row
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
+        ));
+
+        // 1. Mod Pool Row (Only inserted if a pool is active)
+        if (_activePoolData != null)
         {
-            // Row 8: RESET BUTTON
-            new GridRowSpec(
-                GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
-            ),
+            List<string> poolOptions = new List<string> { "Stand Alone Hero (New)" };
+            foreach (var heroStr in _activePoolData.Elements)
+            {
+                poolOptions.Add(ExtractHeroName(heroStr));
+            }
 
-            // Row 1: Name
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Hero Name Label", "Hero Name:", 0.35f),
-                GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { currentHero.heroName = val; OnUIChanged(); })
-            ),
-            // Row 2: Base Class
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Base Class Label", "Replica Base:", 0.35f),
-                GridCellSpec.CreateDiceButton("ReplicaBtn", "P", 0.15f, () =>
-                {
-                    OpenHeroPortraitsModal((selectedHero, selectedSprite) =>
-                    {
-                        currentHero.baseReplica = selectedHero.ToString();
-                        OnUIChanged();
-                    });
-                }),
-                GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) => {
-                    currentHero.baseReplica = val;
-                    OnUIChanged();
-                })
-            ),
-            // Row 3: Image Override + Toggle Button
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("Image Override Label", "Icon Override:", 0.30f),
-                GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () =>
-                {
-                    OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
-                    {
-                        currentHero.imageOverride = isHero
-                            ? ((HeroType)enumValue).ToString()
-                            : ((MonsterType)enumValue).ToString();
-                        OnUIChanged();
-                    });
-                }),
-                GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => {
-                    currentHero.imageOverride = val;
-                    OnUIChanged();
-                }),
-                GridCellSpec.CreateButton("ToggleCustomImgBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
-            )
-        };
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("PoolLbl", "Mod Pool:", 0.20f),
+                GridCellSpec.CreateDropdown("PoolDropdown", "", 0.50f, poolOptions.ToArray(), OnModDropdownChanged),
+                GridCellSpec.CreateButton("BtnSavePool", "Save to Mod", 0.30f, SaveToMod)
+            ));
+        }
 
-        // Inject Custom Image Panel Row if toggled on
+        // 3. Name Input Row
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Hero Name Label", "Hero Name:", 0.35f),
+            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { currentHero.heroName = val; OnUIChanged(); })
+        ));
+
+        // 4. Base Class Row
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Base Class Label", "Replica Base:", 0.35f),
+            GridCellSpec.CreateDiceButton("ReplicaBtn", "P", 0.15f, () =>
+            {
+                OpenHeroPortraitsModal((selectedHero, selectedSprite) =>
+                {
+                    currentHero.baseReplica = selectedHero.ToString();
+                    OnUIChanged();
+                });
+            }),
+            GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) => {
+                currentHero.baseReplica = val;
+                OnUIChanged();
+            })
+        ));
+
+        // 5. Image Override + Toggle Button Row
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Image Override Label", "Icon Override:", 0.30f),
+            GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () =>
+            {
+                OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
+                {
+                    currentHero.imageOverride = isHero
+                        ? ((HeroType)enumValue).ToString()
+                        : ((MonsterType)enumValue).ToString();
+                    OnUIChanged();
+                });
+            }),
+            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => {
+                currentHero.imageOverride = val;
+                OnUIChanged();
+            }),
+            GridCellSpec.CreateButton("ToggleCustomImgBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
+        ));
+
+        // 6. Custom Image Panel Row (Injected conditionally)
         if (showCustomImagePanel)
         {
             layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
         }
 
-        // Add the rest of your original rows...
+        // 7. HP and Tier Row
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP Label", "HP:", 0.2f),
             GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) currentHero.hp = hp; OnUIChanged(); }),
@@ -447,22 +527,26 @@ public class HeroModManager : RootUI
             GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => { if (int.TryParse(val, out int t)) currentHero.tier = t; OnUIChanged(); })
         ));
 
+        // 8. HSV Color Sliders
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("LblHeroHue", "Hue:", 0.30f),
             GridCellSpec.CreateSlider("HeroSliH", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(0, val); }),
             GridCellSpec.CreateInput("HeroFacH", "H", 0.20f, (val) => { UpdateHeroHsvInput(0, val); })
         ));
+
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("LblHeroSat", "Saturation:", 0.30f),
             GridCellSpec.CreateSlider("HeroSliS", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(1, val); }),
             GridCellSpec.CreateInput("HeroFacS", "S", 0.20f, (val) => { UpdateHeroHsvInput(1, val); })
         ));
+
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("LblHeroVal", "Value:", 0.30f),
             GridCellSpec.CreateSlider("HeroSliV", -99, 99, true, 0.50f, (val) => { UpdateHeroHsvFromSlider(2, val); }),
             GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { UpdateHeroHsvInput(2, val); })
         ));
 
+        // 9. Color Class Dropdown Row
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Color Label", "Color Class:", 0.35f),
             GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
@@ -473,11 +557,13 @@ public class HeroModManager : RootUI
             })
         ));
 
+        // 10. Speech Row
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Speech Label", "Speech:", 0.2f),
             GridCellSpec.CreateInput("Speech", "", 0.8f, (val) => { currentHero.speech = val; OnUIChanged(); })
         ));
 
+        // 11. Doc Row
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Doc Label", "Doc:", 0.2f),
             GridCellSpec.CreateInput("Doc", "", 0.8f, (val) => { currentHero.doc = val; OnUIChanged(); })
@@ -900,7 +986,11 @@ public class HeroModManager : RootUI
     /// </summary>
     public void OpenAllPortraitsModal(Action<bool, int, Sprite> onPortraitSelected)
     {
+        Debug.Log($"[Modal Step 1] OpenAllPortraitsModal started. diceFaceIconPicker is null: {diceFaceIconPicker == null}");
+
         if (diceFaceIconPicker == null) return;
+
+        Debug.Log($"[Modal Step 2] _allActionSprites count: {_allActionSprites?.Length ?? 0}");
 
         IconPickerConfig config = new IconPickerConfig
         {
@@ -1142,6 +1232,11 @@ public class HeroModManager : RootUI
         if (statsUI == null || diceUI == null) return;
 
         isSyncing = true;
+
+        if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop))
+        {
+            poolDrop.value = _currentPoolIndex;
+        }
 
         if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.text = currentHero.heroName;
         if (statsUI.Inputs.TryGetValue("HP", out var hpIn)) hpIn.text = currentHero.hp.ToString();
@@ -1928,8 +2023,9 @@ public class HeroModManager : RootUI
     {
         // Reset the data model to a brand new state
         currentHero = new HeroData();
-
         showCustomImagePanel = false;
+
+        _currentPoolIndex = 0; // NEW: Revert focus back to Stand Alone
 
         // Ensure lists are initialized
         for (int i = 0; i < 6; i++)
@@ -1939,6 +2035,7 @@ public class HeroModManager : RootUI
         }
 
         // Rebuild entire UI, map data, and regenerate text
+        RebuildStatsUI(); // Ensure the layout rebuilds to catch the dropdown reverting
         RefreshDiceUI();
     }
 
@@ -2056,5 +2153,84 @@ public class HeroModManager : RootUI
             _customImageTexture = tex;
             OnUIChanged();
         };
+    }
+
+    //=======================================================================
+
+    /// <summary>
+    /// Pass in a HeroPoolData object to link this UI to a mod file.
+    /// Unlinks and runs in standalone mode if passed null.
+    /// </summary>
+    public void LoadFromPool(HeroPoolData poolData)
+    {
+        _activePoolData = poolData;
+        _currentPoolIndex = 0;
+
+        RebuildStatsUI();
+
+        // If pool has elements, default to loading the first one
+        if (_activePoolData != null && _activePoolData.Elements.Count > 0)
+        {
+            // Trigger the dropdown logic for the first hero (index 1 since 0 is standalone)
+            OnModDropdownChanged(1);
+        }
+        else
+        {
+            ResetToDefault();
+        }
+    }
+
+    private void OnModDropdownChanged(int index)
+    {
+        if (isSyncing) return;
+        _currentPoolIndex = index;
+
+        if (index == 0)
+        {
+            ResetToDefault();
+        }
+        else if (_activePoolData != null)
+        {
+            string heroStr = _activePoolData.Elements[index - 1];
+            rawTextOutput.text = heroStr;
+            OnRawTextChanged(heroStr);
+        }
+    }
+
+    private void SaveToMod()
+    {
+        if (_activePoolData == null) return;
+
+        GenerateRawText();
+        string currentString = rawTextOutput.text;
+
+        if (_currentPoolIndex == 0)
+        {
+            _activePoolData.Elements.Add(currentString);
+            _currentPoolIndex = _activePoolData.Elements.Count;
+            RebuildStatsUI();
+        }
+        else
+        {
+            _activePoolData.Elements[_currentPoolIndex - 1] = currentString;
+            RebuildStatsUI();
+        }
+
+        // Notify the ModDataContainer, declaring 'this' (the UI) as the sender
+        if (ModPackage.Instance != null && ModPackage.Instance.loadedMod != null)
+        {
+            ModPackage.Instance.loadedMod.NotifyDataChanged(this);
+        }
+    }
+
+    private string ExtractHeroName(string rawText)
+    {
+        Match mName = Regex.Match(rawText, @"(?<=\.)n\.([a-zA-Z0-9_\s]+)");
+        if (mName.Success) return mName.Groups[1].Value;
+
+        Match mReplica = Regex.Match(rawText, @"replica\.(.*?)(?=\.hsv|\.n|\.col|\.hp|\.tier|\.img|\.sd|\.speech|\.doc|\.i|\)|$)");
+        if (mReplica.Success) return mReplica.Groups[1].Value;
+
+        return "Unknown Hero";
     }
 }

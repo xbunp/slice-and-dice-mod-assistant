@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class FullScreenUIGenerator : MonoBehaviour
@@ -192,8 +193,9 @@ public class FullScreenUIGenerator : MonoBehaviour
 
             if (rowsRemainingInContainer > 0 && contentRowRt != null)
             {
-                contentRowRt.offsetMin = new Vector2(padding, contentRowRt.offsetMin.y);
-                contentRowRt.offsetMax = new Vector2(-padding, contentRowRt.offsetMax.y);
+                // Reduce width by padding * 2 to safely apply horizontal margins 
+                // without disturbing the vertical height and positioning.
+                contentRowRt.sizeDelta = new Vector2(-padding * 2, contentRowRt.sizeDelta.y);
             }
 
             float currentX2 = 0;
@@ -457,13 +459,29 @@ public class FullScreenUIGenerator : MonoBehaviour
         if (diceBtn != null)
         {
             if (!string.IsNullOrEmpty(cell.key)) refs.Buttons[cell.key] = diceBtn;
-            if (cell.onClicked != null)
+        }
+
+        if (cell.onClicked != null)
+        {
+            // Add or retrieve an EventTrigger to capture clicks directly 
+            // from the EventSystem, bypassing standard Button.onClick overrides.
+            EventTrigger trigger = cellObj.GetComponent<EventTrigger>();
+            if (trigger == null) trigger = cellObj.AddComponent<EventTrigger>();
+
+            // Clear existing PointerClick entries to prevent duplicates on rebuild
+            trigger.triggers.RemoveAll(t => t.eventID == EventTriggerType.PointerClick);
+
+            EventTrigger.Entry entry = new EventTrigger.Entry();
+            entry.eventID = EventTriggerType.PointerClick;
+            entry.callback.AddListener((data) =>
             {
-                diceBtn.onClick.AddListener(() => cell.onClicked());
-            }
+                Debug.Log($"[EventSystem Success] Click detected on button key: {cell.key}");
+                cell.onClicked();
+            });
+
+            trigger.triggers.Add(entry);
         }
     }
-
     private void ConfigureSliderCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
     {
         Slider slider = cellObj.GetComponentInChildren<Slider>();

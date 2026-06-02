@@ -133,6 +133,7 @@ public class IconPickerModal : MonoBehaviour
         // Build a cache ONCE so searching and filtering is instantaneous
         BuildCache(config);
 
+        this.gameObject.SetActive(true);
         modalPanel.SetActive(true);
 
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);

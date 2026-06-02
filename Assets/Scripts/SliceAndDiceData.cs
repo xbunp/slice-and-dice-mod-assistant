@@ -44,6 +44,25 @@ public static class FightStageExtensions
             _ => stage.ToString()
         };
     }
+
+    public static string ToSyntax(this FightStage stage)
+    {
+        return stage switch
+        {
+            FightStage.Fight_1_3 => "1-3",
+            FightStage.Fight_4_Boss => "4",
+            FightStage.Fight_5_7 => "5-7",
+            FightStage.Fight_8_Boss => "8",
+            FightStage.Fight_9_11 => "9-11",
+            FightStage.Fight_12_Boss => "12",
+            FightStage.Fight_13_15 => "13-15",
+            FightStage.Fight_16_Boss => "16",
+            FightStage.Fight_17_19 => "17-19",
+            FightStage.Fight_20_Boss => "20",
+            FightStage.Fight_21_30 => "21-30",
+            _ => stage.ToString()
+        };
+    }
 }
 
 public enum PoolState
