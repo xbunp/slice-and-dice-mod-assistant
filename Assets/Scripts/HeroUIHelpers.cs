@@ -326,7 +326,7 @@ public static class HeroUIHelpers
     public static string ExtractHeroName(string rawText)
     {
         HeroData dummy = TextModLexerParser.ParseHero(rawText);
-        return string.IsNullOrEmpty(dummy.heroName) ? "Unknown Hero" : dummy.heroName;
+        return string.IsNullOrEmpty(dummy.entityName) ? "Unknown Hero" : dummy.entityName;
     }
 
     public static string[] GetKeywordOptions()

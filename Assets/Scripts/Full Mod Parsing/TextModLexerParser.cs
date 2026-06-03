@@ -292,7 +292,7 @@ namespace SliceDiceTextMod
                     }
                     if (key == "n" && Peek(tokens, pos, 1).Type == TokenType.Dot)
                     {
-                        hero.heroName = Peek(tokens, pos, 2).Value.Replace("_", " ");
+                        hero.entityName = Peek(tokens, pos, 2).Value.Replace("_", " ");
                         pos += 3; continue;
                     }
                     if (key == "hp" && Peek(tokens, pos, 1).Type == TokenType.Dot)

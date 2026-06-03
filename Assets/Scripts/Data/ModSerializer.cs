@@ -11,9 +11,9 @@ public static class ModSerializer
         List<string> blocks = new List<string>();
 
         // 1. Compile active entities
-        if (modData.ActiveHero != null && !string.IsNullOrEmpty(modData.ActiveHero.heroName))
+        if (modData.ActiveHero != null && !string.IsNullOrEmpty(modData.ActiveHero.entityName))
         {
-            blocks.Add(HeroSerializer.Export(modData.ActiveHero));
+            blocks.Add(HeroData.Export(modData.ActiveHero));
         }
 
         // 2. Compile structural rules

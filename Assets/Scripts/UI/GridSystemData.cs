@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter, IDEInterface, Toggle }
+public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter, IDEInterface, Toggle, FilteredDropdown }
 
 public class GridReferences
 {
@@ -20,6 +20,8 @@ public class GridReferences
     public Dictionary<string, ImageReceiver> CustomImgImporter = new Dictionary<string, ImageReceiver>();
     public Dictionary<string, VirtualizedIdeController> IDEInterfaces = new Dictionary<string, VirtualizedIdeController>();
     public Dictionary<string, Toggle> Toggles = new Dictionary<string, Toggle>();
+    public Dictionary<string, FilteredDropdown> FilteredDropdowns = new Dictionary<string, FilteredDropdown>();
+
 }
 
 public class GridRowSpec
@@ -198,6 +200,20 @@ public class GridCellSpec
             widthRatio = ratio
         };
     }
+
+    public static GridCellSpec CreateFilteredDropdown(string key, string label, float ratio, string[] options, Action<int> onChanged)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.FilteredDropdown,
+            key = key,
+            labelText = label,
+            widthRatio = ratio,
+            dropdownOptions = new List<string>(options),
+            onIntChanged = onChanged
+        };
+    }
+
 }
 
 public class ColumnSpec

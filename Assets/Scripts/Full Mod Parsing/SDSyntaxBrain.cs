@@ -92,8 +92,14 @@ namespace SliceDiceTextMod
         public static readonly string[] SideposDefs = { "all", "self", "right5", "right3", "right2", "row", "mid2", "col", "topbot", "left2", "rightmost", "right", "bot", "top", "mid", "left", "k", "t" };
 
         // Entities
-        public static readonly string[] HeroPropertyKeys = { "replica", "img", "n", "col", "hp", "tier", "hsv", "hsl", "sd", "speech", "doc", "i", "p", "t", "gift", "abilitydata", "adj", "b", "rect", "thue", "rdhero", "statue", "pockets", "dancer" };
-        public static readonly string[] MonsterPropertyKeys = { "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p" };
+        public static readonly string[] HeroPropertyKeys =
+        {
+        "replica", "img", "n", "col", "hp", "tier", "hsv", "hsl", "hue", "sd",
+        "speech", "doc", "i", "p", "t", "gift", "abilitydata", "adj", "b", "rect",
+        "draw", "thue", "triggerhpdata"
+        };
+
+        public static readonly string[] MonsterPropertyKeys = { "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata" };
         public static readonly string[] ItemPropertyKeys = { "k", "learn", "hat", "t", "#", "sidepos", "tier", "n", "ritem", "ritemx", "facade", "mrg", "self", "m", "doc", "pertier", "part", "rditem", "unpack", "sidesc", "splice", "onhitdata", "triggerhpdata", "sticker", "enchant", "cast", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "summon", "cleardesc", "clearicon", "oi", "t1", "t2" };
         public static readonly string[] EntityCommonPropertyKeys = { "img", "n", "doc", "p", "t", "b", "rect", "thue" };
 

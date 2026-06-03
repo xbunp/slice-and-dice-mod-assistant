@@ -17,6 +17,7 @@ public class HeroUI : RootUI
     private GridReferences diceUI;
     private TMP_InputField rawTextOutput;
     private TextMeshProUGUI syntaxHighlighterText;
+    private ScrollRect statsScrollRect; 
     private ScrollRect diceScrollRect;
 
     // Navigation and Mod Pool State
@@ -226,7 +227,7 @@ public class HeroUI : RootUI
 
         isDrawingUI = true;
 
-        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentHero.heroName);
+        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentHero.entityName);
         if (statsUI.Inputs.TryGetValue("HP", out var hpIn)) hpIn.SetTextWithoutNotify(CurrentHero.hp.ToString());
         if (statsUI.Inputs.TryGetValue("Tier", out var tierIn)) tierIn.SetTextWithoutNotify(CurrentHero.tier.ToString());
         if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentHero.baseReplica);
@@ -282,7 +283,7 @@ public class HeroUI : RootUI
     {
         if (portraitPreview != null)
         {
-            portraitPreview.SetNameText(CurrentHero.heroName);
+            portraitPreview.SetNameText(CurrentHero.entityName);
             portraitPreview.SetHPText(CurrentHero.hp.ToString());
             portraitPreview.SetTierText(CurrentHero.tier.ToString());
 
@@ -346,7 +347,7 @@ public class HeroUI : RootUI
 
         if (rawTextOutput != null)
         {
-            string exportedString = HeroSerializer.Export(CurrentHero);
+            string exportedString = HeroData.Export(CurrentHero);
             rawTextOutput.SetTextWithoutNotify(exportedString);
 
             if (syntaxHighlighterText != null)
@@ -556,7 +557,7 @@ public class HeroUI : RootUI
         var activePool = SSOT.Get<HeroPoolData>().FirstOrDefault();
         if (activePool == null) return;
 
-        string heroStr = HeroSerializer.Export(CurrentHero);
+        string heroStr = HeroData.Export(CurrentHero);
 
         if (_currentPoolIndex == 0)
         {
@@ -602,7 +603,7 @@ public class HeroUI : RootUI
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Hero Name:", 0.35f),
-            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentHero.heroName = val; NotifyStateChanged(); })
+            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentHero.entityName = val; NotifyStateChanged(); })
         ));
 
         layout.Add(new GridRowSpec(
@@ -742,7 +743,7 @@ public class HeroUI : RootUI
 
             layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
-                GridCellSpec.CreateDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddKeywordToFace(index, val))
+                GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddKeywordToFace(index, val))
             ));
 
             foreach (var kw in face.keywords)
@@ -772,12 +773,17 @@ public class HeroUI : RootUI
 
     private void RebuildStatsUI()
     {
-        if (generatedScreen == null || !generatedScreen.ColumnPanels.TryGetValue("LeftStats", out var panel)) return;
+        // Safety check to ensure the scroll container exists before generating
+        if (statsScrollRect == null) return;
 
         bool wasDrawing = isDrawingUI;
         isDrawingUI = true;
 
-        statsUI = uiGenerator.RebuildGrid(panel, GenerateStatsLayout());
+        // Target the content panel of the ScrollView instead of the column panel
+        statsUI = uiGenerator.RebuildGrid(statsScrollRect.content, GenerateStatsLayout());
+
+        // Dynamically adjust the height of the ScrollRect content so scrolling functions properly
+        statsScrollRect.content.sizeDelta = new Vector2(0, statsUI.TotalHeight);
 
         if (showCustomImagePanel)
         {
@@ -820,20 +826,28 @@ public class HeroUI : RootUI
     {
         var columns = new List<ColumnSpec>
         {
-            new ColumnSpec("LeftStats", 0.02f, 0.35f, GenerateStatsLayout()),
-            new ColumnSpec("MiddleDiceBase", 0.38f, 0.68f, new List<GridRowSpec>
+            // Halved left margin (starts at 0.01f), expanded width
+            new ColumnSpec("LeftStats", 0.01f, 0.35f, new List<GridRowSpec>
+            {
+                new GridRowSpec(800f, GridCellSpec.CreateScrollView("StatsScrollView", 1.0f))
+            }),
+            // Halved gap (starts at 0.365f)
+            new ColumnSpec("MiddleDiceBase", 0.365f, 0.685f, new List<GridRowSpec>
             {
                 new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateNavigationTabs("DiceTabs", new List<string> { "All", "Left", "Middle", "Top", "Bottom", "Right", "Rightmost" }, new List<GameObject>(), 1.0f, (idx) => {
                     currentDiceTab = idx;
                     RebuildDiceScrollView();
                 })),
-                new GridRowSpec(600f, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
+                new GridRowSpec(800f, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
             }),
-            new ColumnSpec("RightOutput", 0.71f, 0.98f)
+            // Halved gap (starts at 0.70f), halved right margin (ends at 0.99f)
+            new ColumnSpec("RightOutput", 0.70f, 0.99f)
         };
 
         generatedScreen = uiGenerator.SetupScreen(columns, false);
-        statsUI = generatedScreen.ColumnRefs["LeftStats"];
+
+        // Grab scroll rect references
+        statsScrollRect = generatedScreen.ColumnRefs["LeftStats"].ScrollViews["StatsScrollView"];
         diceScrollRect = generatedScreen.ColumnRefs["MiddleDiceBase"].ScrollViews["DiceScrollView"];
 
         if (generatedScreen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
@@ -841,6 +855,8 @@ public class HeroUI : RootUI
             BuildRightPanelContent(rightPanel);
         }
 
+        // Must explicitly build the scroll view contents immediately to prevent initialization crashes
+        RebuildStatsUI();
         RebuildDiceScrollView();
     }
 
@@ -925,7 +941,7 @@ public class HeroUI : RootUI
 
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         copyBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Copy Hero String";
-        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = HeroSerializer.Export(CurrentHero));
+        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = HeroData.Export(CurrentHero));
         FullScreenUIGenerator.SetAnchors(copyBtnObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 0.48f, 0.06f);
 
         GameObject pasteBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);

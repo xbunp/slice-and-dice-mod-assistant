@@ -25,6 +25,7 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject popupPrefab;
     public GameObject IDEInterfacePrefab;
     public GameObject togglePrefab;
+    public GameObject filteredDropdown;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
@@ -334,6 +335,13 @@ public class FullScreenUIGenerator : MonoBehaviour
                     ConfigureToggleCell(cell, cellObj, refs);
                 }
                 break;
+            case CellType.FilteredDropdown:
+                if (filteredDropdown != null)
+                {
+                    cellObj = Instantiate(filteredDropdown, rowRt);
+                    ConfigureFilteredDropdownCell(cell, cellObj, refs);
+                }
+                break;
         }
 
         return cellObj;
@@ -559,6 +567,27 @@ public class FullScreenUIGenerator : MonoBehaviour
                 {
                     legacyLabel.text = cell.labelText;
                 }
+            }
+        }
+    }
+
+    private void ConfigureFilteredDropdownCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
+    {
+        FilteredDropdown drop = cellObj.GetComponentInChildren<FilteredDropdown>();
+        if (drop != null)
+        {
+            if (!string.IsNullOrEmpty(cell.key))
+            {
+                refs.FilteredDropdowns[cell.key] = drop;
+                // Also assign to the standard dropdown dictionary for polymorphic access
+                refs.Dropdowns[cell.key] = drop;
+            }
+            drop.ClearOptions();
+            if (cell.dropdownOptions != null) drop.AddOptions(new List<string>(cell.dropdownOptions));
+
+            if (cell.onIntChanged != null)
+            {
+                drop.onValueChanged.AddListener((val) => cell.onIntChanged(val));
             }
         }
     }
