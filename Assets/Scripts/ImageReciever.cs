@@ -49,7 +49,7 @@ public class ImageReceiver : MonoBehaviour
         if (copyString != null)
         {
             copyString.onClick.AddListener(() => {
-                ClipboardHelper.CopyToClipboard(EncodedString);
+                ClipboardManager.CopyToClipboard(EncodedString);
             });
         }
         else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: copyString button is MISSING in inspector!</color></b>", this);
@@ -140,7 +140,7 @@ public class ImageReceiver : MonoBehaviour
     {
         if (_uploadedTexture == null)
         {
-            Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ABORT: _uploadedTexture is NULL!</color></b>", this);
+            Debug.Log("No image set to compress.", this);
             return;
         }
 

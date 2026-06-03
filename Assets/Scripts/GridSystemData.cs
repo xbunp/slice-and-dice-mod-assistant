@@ -15,8 +15,8 @@ public class GridReferences
     public Dictionary<string, Button> Buttons = new Dictionary<string, Button>();
     public Dictionary<string, Slider> Sliders = new Dictionary<string, Slider>();
     public Dictionary<string, ScrollRect> ScrollViews = new Dictionary<string, ScrollRect>();
-    public Dictionary<string, NavigationTabsController> NavigationTabs = new Dictionary<string, NavigationTabsController>();
-    public Dictionary<string, PortraitPreview> PortraitPanels = new Dictionary<string, PortraitPreview>();
+    public Dictionary<string, NavigationTabsUI> NavigationTabs = new Dictionary<string, NavigationTabsUI>();
+    public Dictionary<string, PortraitPreviewUI> PortraitPanels = new Dictionary<string, PortraitPreviewUI>();
     public Dictionary<string, ImageReceiver> CustomImgImporter = new Dictionary<string, ImageReceiver>();
     public Dictionary<string, VirtualizedIdeController> IDEInterfaces = new Dictionary<string, VirtualizedIdeController>();
     public Dictionary<string, Toggle> Toggles = new Dictionary<string, Toggle>();

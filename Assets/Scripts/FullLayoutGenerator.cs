@@ -341,7 +341,7 @@ public class FullScreenUIGenerator : MonoBehaviour
 
     private void ConfigurePortraitPanelCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
     {
-        PortraitPreview preview = cellObj.GetComponent<PortraitPreview>();
+        PortraitPreviewUI preview = cellObj.GetComponent<PortraitPreviewUI>();
         if (preview != null && !string.IsNullOrEmpty(cell.key))
         {
             refs.PortraitPanels[cell.key] = preview;
@@ -510,7 +510,7 @@ public class FullScreenUIGenerator : MonoBehaviour
 
     private void ConfigureNavigationTabsCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
     {
-        NavigationTabsController navTabs = cellObj.GetComponent<NavigationTabsController>();
+        NavigationTabsUI navTabs = cellObj.GetComponent<NavigationTabsUI>();
         if (navTabs != null)
         {
             navTabs.Initialize(cell.tabNames, cell.tabTargetPanels, buttonPrefab, cell.onIntChanged);

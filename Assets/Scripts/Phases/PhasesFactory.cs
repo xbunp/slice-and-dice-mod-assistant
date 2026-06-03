@@ -242,7 +242,7 @@ public class PhasesFactory : RootUI
 
         // 5. Send to Clipboard
 #if UNITY_WEBGL && !UNITY_EDITOR
-        ClipboardHelper.CopyToClipboard(finalOutputText);
+        ClipboardManager.CopyToClipboard(finalOutputText);
 #else
         GUIUtility.systemCopyBuffer = finalOutputText;
 #endif

@@ -1858,15 +1858,28 @@ public static class DefaultDiceData
 };
 }
 
-[Serializable]
+
+[System.Serializable]
 public class DiceSideData
 {
     public int effectID = 0;
     public int pips = 0;
-
-    public List<string> keywords = new List<string>();
     public string facadeID = "";
     public string facadeColor = "";
+    public List<string> keywords = new List<string>();
+
+    // Deep copy helper for your Copy/Paste UI functionality
+    public DiceSideData Clone()
+    {
+        return new DiceSideData
+        {
+            effectID = this.effectID,
+            pips = this.pips,
+            facadeID = this.facadeID,
+            facadeColor = this.facadeColor,
+            keywords = new List<string>(this.keywords)
+        };
+    }
 }
 
 public static class DiceTargetHelper
