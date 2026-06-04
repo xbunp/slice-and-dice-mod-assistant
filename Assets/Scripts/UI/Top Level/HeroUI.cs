@@ -8,11 +8,11 @@ using UnityEngine.UI;
 
 public class HeroUI : RootUI
 {
-    [Header("UI Modal References")]
-    [SerializeField] private IconPickerModal diceFaceIconPicker;
+    //[Header("UI Modal References")]
+    private IconPickerModal diceFaceIconPicker;
     private PortraitPreviewUI portraitPreview;
 
-    [Header("Dynamically Generated Components")]
+    //[Header("Dynamically Generated Components")]
     private GridReferences statsUI;
     private GridReferences diceUI;
     private TMP_InputField rawTextOutput;
@@ -34,8 +34,25 @@ public class HeroUI : RootUI
     private Texture2D _customImageTexture;
     private ImageReceiver _persistentCustomImageReceiver;
 
-    private HeroData CurrentHero => ModPackage.Instance.loadedMod.ActiveHero;
-    private ModDataContainer SSOT => ModPackage.Instance.loadedMod;
+    private HeroData CurrentHero
+    {
+        get
+        {
+            if (ModPackage.Instance == null) return null;
+
+            var hero = ModPackage.Instance.GetActiveEntity<HeroData>();
+
+            // If no active editing session exists yet, auto-provision a clean template
+            if (hero == null)
+            {
+                ModPackage.Instance.LoadEntityForEditing(new HeroData());
+                hero = ModPackage.Instance.GetActiveEntity<HeroData>();
+            }
+
+            return hero;
+        }
+    }
+    private IReadOnlyList<HeroData> AllHeroes => ModPackage.Instance.loadedMod.GetAll<HeroData>();
 
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
@@ -44,22 +61,22 @@ public class HeroUI : RootUI
         if (diceFaceIconPicker == null)
             diceFaceIconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
 
-        // Assets and data helper initialization
         HeroUIHelpers.Initialize();
         BuildUIAndBind();
 
-        if (ModPackage.Instance != null && SSOT != null)
+        if (ModPackage.Instance != null)
         {
-            SSOT.OnDataChanged += OnStateChanged;
+            // This now compiles perfectly because both expect an 'object' parameter
+            ModPackage.Instance.OnModDataChanged += OnStateChanged;
             OnStateChanged(null);
         }
     }
 
     private void OnDestroy()
     {
-        if (ModPackage.Instance != null && SSOT != null)
+        if (ModPackage.Instance != null)
         {
-            SSOT.OnDataChanged -= OnStateChanged;
+            ModPackage.Instance.OnModDataChanged -= OnStateChanged;
         }
     }
 
@@ -149,7 +166,7 @@ public class HeroUI : RootUI
         };
 
         diceFaceIconPicker.OpenModal(config);
-    }
+    }   
 
     private void OpenAllPortraitsModal(Action<bool, int, Sprite> onPortraitSelected)
     {
@@ -201,8 +218,10 @@ public class HeroUI : RootUI
     {
         if (string.IsNullOrWhiteSpace(pastedString)) return;
         HeroData importedHero = TextModLexerParser.ParseHero(pastedString);
-        SSOT.ActiveHero = importedHero;
-        SSOT.NotifyDataChanged(this);
+
+        // Safely replace the active working clone with the imported hero
+        ModPackage.Instance.UpdateActiveEntityClone<HeroData>(importedHero);
+        ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
         UpdateUIFromData();
     }
 
@@ -402,16 +421,18 @@ public class HeroUI : RootUI
     private void NotifyStateChanged()
     {
         if (isDrawingUI) return;
-        SSOT.NotifyDataChanged(this);
+        // Signal updates on the active clone using the Singleton facade
+        ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
     }
 
     private void ResetToDefault()
     {
-        SSOT.ActiveHero = new HeroData();
+        // Replace active working clone with a clean template
+        ModPackage.Instance.UpdateActiveEntityClone<HeroData>(new HeroData());
         showCustomImagePanel = false;
         _currentPoolIndex = 0;
 
-        SSOT.NotifyDataChanged(this);
+        ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
@@ -538,38 +559,42 @@ public class HeroUI : RootUI
         if (isDrawingUI) return;
         _currentPoolIndex = index;
 
-        var activePool = SSOT.Get<HeroPoolData>().FirstOrDefault();
-        if (index > 0 && activePool != null)
+        var heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
+
+        if (index > 0 && (index - 1) < heroes.Count)
         {
-            string rawHeroStr = activePool.Elements[index - 1];
-            SSOT.ActiveHero = TextModLexerParser.ParseHero(rawHeroStr);
+            // Load the existing structured hero into our editing session
+            var originalHero = heroes[index - 1];
+            ModPackage.Instance.LoadEntityForEditing(originalHero);
         }
         else
         {
-            SSOT.ActiveHero = new HeroData();
+            // Load a fresh, clean hero template into the editing session
+            ModPackage.Instance.LoadEntityForEditing(new HeroData());
         }
 
-        SSOT.NotifyDataChanged(this);
+        // Notify visual components to redraw
+        ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
     }
 
     private void SaveToModPool()
     {
-        var activePool = SSOT.Get<HeroPoolData>().FirstOrDefault();
-        if (activePool == null) return;
+        // 1. Commit active clone back to the database (updates original or appends a new one)
+        ModPackage.Instance.SaveActiveEntity<HeroData>();
 
-        string heroStr = HeroData.Export(CurrentHero);
+        // 2. Fetch the newly updated list to align our selection index
+        HeroData savedHero = ModPackage.Instance.GetActiveEntity<HeroData>();
+        IReadOnlyList<HeroData> heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
 
-        if (_currentPoolIndex == 0)
+        // Safe cast to List<T> to use IndexOf
+        int newIndex = (heroes as List<HeroData>)?.IndexOf(savedHero) ?? -1;
+        if (newIndex >= 0)
         {
-            activePool.Elements.Add(heroStr);
-            _currentPoolIndex = activePool.Elements.Count;
-        }
-        else
-        {
-            activePool.Elements[_currentPoolIndex - 1] = heroStr;
+            _currentPoolIndex = newIndex + 1; // Update dropdown tracking index
         }
 
-        SSOT.NotifyDataChanged(this);
+        // 3. Notify the UI to trigger dropdown updates and stats redraws
+        ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
         RebuildStatsUI();
     }
 
@@ -585,13 +610,16 @@ public class HeroUI : RootUI
             GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
         ));
 
-        var activePool = SSOT.Get<HeroPoolData>().FirstOrDefault();
-        if (activePool != null)
+        var heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
+        if (heroes != null)
         {
             List<string> poolOptions = new List<string> { "Stand Alone Hero (New)" };
-            foreach (var heroStr in activePool.Elements)
+
+            foreach (var hero in heroes)
             {
-                poolOptions.Add(HeroUIHelpers.ExtractHeroName(heroStr));
+                // Access the name directly from the structured C# object.
+                string heroName = string.IsNullOrEmpty(hero.entityName) ? "New Hero" : hero.entityName;
+                poolOptions.Add(heroName);
             }
 
             layout.Add(new GridRowSpec(
@@ -675,6 +703,41 @@ public class HeroUI : RootUI
             GridCellSpec.CreateLabel("Doc:", 0.20f),
             GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentHero.doc = val; NotifyStateChanged(); })
         ));
+
+        AppendCollectionSelector<BaseAbility>(
+            layout: layout,
+            label: "Add Ability:",
+            uniqueKey: "BaseAbility",
+            availableChoices: BaseAbilityDatabase.Abilities,
+            currentActiveItems: CurrentHero.baseAbilityData,
+            getKey: (ability) => ability.name,
+            getDisplay: (ability) =>
+            {
+                // Format display as "Burst (2 mana): 2 damage or shield 2"
+                string cleanEffect = (ability.effect ?? "").Replace("\n", " | ");
+                return $"{ability.name} ({ability.cost}): {cleanEffect}";
+            },
+            onAdd: (abilityName) =>
+            {
+                if (CurrentHero.baseAbilityData == null)
+                    CurrentHero.baseAbilityData = new List<string>();
+
+                if (!CurrentHero.baseAbilityData.Contains(abilityName))
+                {
+                    CurrentHero.baseAbilityData.Add(abilityName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (abilityName) =>
+            {
+                if (CurrentHero.baseAbilityData != null && CurrentHero.baseAbilityData.Remove(abilityName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
 
         return layout;
     }
@@ -948,5 +1011,27 @@ public class HeroUI : RootUI
         pasteBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Paste Hero String";
         pasteBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => OnPasteHeroString(GUIUtility.systemCopyBuffer));
         FullScreenUIGenerator.SetAnchors(pasteBtnObj.GetComponent<RectTransform>(), 0.52f, 0.0f, 1.0f, 0.06f);
+    }
+
+    private void AddAbilityToHero(int dropdownValue)
+    {
+        if (dropdownValue <= 0) return;
+
+        var selectedAbility = BaseAbilityDatabase.Abilities[dropdownValue - 1];
+
+        if (CurrentHero.AddAbility(selectedAbility.name))
+        {
+            NotifyStateChanged();
+            RebuildStatsUI();
+        }
+    }
+
+    private void RemoveAbilityFromHero(string abilityName)
+    {
+        if (CurrentHero.RemoveAbility(abilityName))
+        {
+            NotifyStateChanged();
+            RebuildStatsUI();
+        }
     }
 }

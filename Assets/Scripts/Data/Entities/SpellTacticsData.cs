@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [System.Serializable]
-public class SpellData : AbilityBase
+public class SpellData : AbilityData
 {
     [Header("Spell Properties")]
     public int manaCost = 1;
@@ -31,7 +31,7 @@ public class SpellData : AbilityBase
 }
 
 [System.Serializable]
-public class TacticData : AbilityBase
+public class TacticData : AbilityData
 {
     // Tactic costs map natively to the Top (Index 2), Bottom (Index 3), and Rightmost (Index 5) slots
     public DiceSideData TacticCostTop

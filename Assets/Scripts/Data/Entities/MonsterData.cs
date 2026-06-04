@@ -10,7 +10,6 @@ public class MonsterData : EntityData
     public string baseMonster = "Rat";      // Counterpart to baseReplica
 
     [Header("Monster Modifiers")]
-    public List<string> jinxs = new List<string>(); // Like traits, can be chained
     public string bal; // String representation, singular
 
     public static string Export(MonsterData monster)
@@ -37,7 +36,7 @@ public class MonsterData : EntityData
         // 3. Modifiers
         monster.AppendListAsChained(sb, "i", monster.items);
         monster.AppendListAsChained(sb, "t", monster.traits);
-        monster.AppendListAsChained(sb, "jinx", monster.jinxs);
+        //monster.AppendListAsChained(sb, "jinx", monster.jinxs);
 
         if (!string.IsNullOrEmpty(monster.bal)) sb.Append($".bal.{FormatName(monster.bal)}");
         if (!string.IsNullOrEmpty(monster.p)) sb.Append($".p.{monster.p}");
@@ -104,7 +103,7 @@ public class MonsterData : EntityData
 
                 case "i": monster.items.AddRange(value.Split('#')); break;
                 case "t": monster.traits.AddRange(value.Split('#')); break;
-                case "jinx": monster.jinxs.AddRange(value.Split('#')); break;
+                //case "jinx": monster.jinxs.AddRange(value.Split('#')); break;
                 case "bal": monster.bal = value; break;
 
                 case "p": monster.p = value; break;

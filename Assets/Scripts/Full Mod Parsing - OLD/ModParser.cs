@@ -6,9 +6,12 @@ namespace SliceDiceTextMod
 {
     public static class ModParser
     {
-        public static void ParseIntoContainer(string rawModText, ModDataContainer container)
+        public static void ParseIntoContainer(string rawModText, ModData container)
         {
-            container.Directives.Clear();
+            // Suppress event fires during batch parsing
+            container.SuppressNotifications = true;
+
+            container.ClearDirectives();
 
             // Run compression over raw assets first
             string cleanText = ImageUtility.CompressImages(rawModText).Replace("\r", "").Replace("\n", "");
@@ -22,9 +25,12 @@ namespace SliceDiceTextMod
                 var directive = ParseBlockDirective(block);
                 if (directive != null)
                 {
-                    container.Directives.Add(directive);
+                    container.SaveDirective(null, directive);
                 }
             }
+
+            // Setting this to false automatically triggers a single event notification internally
+            container.SuppressNotifications = false;
         }
 
         private static List<List<Token>> SplitByTopLevelOperators(List<Token> tokens)

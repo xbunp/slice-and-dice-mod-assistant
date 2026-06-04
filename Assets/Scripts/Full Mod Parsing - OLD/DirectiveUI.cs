@@ -111,14 +111,19 @@ public abstract class DirectivePool : DirectiveUI
     {
         List<GridRowSpec> rows = new List<GridRowSpec>();
 
-        for (int i = 0; i < PoolData.Elements.Count; i++)
+        var data = PoolData;
+        if (data == null) return rows; // Safe check if no entity is loaded
+
+        for (int i = 0; i < data.Elements.Count; i++)
         {
             int index = i;
             rows.Add(new GridRowSpec(CompactItemHeight,
                 GridCellSpec.CreateLabel($"IndexLabel_{Id}_{index}", $"Element {index}", 0.15f),
-                GridCellSpec.CreateInput($"Input_{Id}_{index}", PoolData.Elements[index], 0.75f, (val) => {
-                    PoolData.Elements[index] = val;
-                    ModPackage.Instance.loadedMod?.NotifyDataChanged(this);
+                GridCellSpec.CreateInput($"Input_{Id}_{index}", data.Elements[index], 0.75f, (val) => {
+                    data.Elements[index] = val;
+
+                    // Notify the UI using the Singleton facade instead of touching ModData
+                    ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
                 }, InputAlignment.Center),
                 GridCellSpec.CreateButton($"RemoveElem_{Id}_{index}", "-", 0.1f, () => RemoveElementAt(index))
             ));
@@ -152,20 +157,30 @@ public abstract class DirectivePool : DirectiveUI
         }
     }
 
-    private void AddElement()
+    protected void AddElement()
     {
-        PoolData.Elements.Add(GetNewElementString());
+        var data = PoolData;
+        if (data == null) return;
+
+        data.Elements.Add(GetNewElementString());
         onRebuildNeeded?.Invoke();
-        ModPackage.Instance.loadedMod?.NotifyDataChanged(this);
+
+        // Notify through the Singleton facade
+        ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
     }
 
-    private void RemoveElementAt(int index)
+    protected void RemoveElementAt(int index)
     {
-        if (index >= 0 && index < PoolData.Elements.Count)
+        var data = PoolData;
+        if (data == null) return;
+
+        if (index >= 0 && index < data.Elements.Count)
         {
-            PoolData.Elements.RemoveAt(index);
+            data.Elements.RemoveAt(index);
             onRebuildNeeded?.Invoke();
-            ModPackage.Instance.loadedMod?.NotifyDataChanged(this);
+
+            // Notify through the Singleton facade
+            ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
         }
     }
 }
@@ -180,18 +195,29 @@ public class HeroPool : DirectivePool
 
     protected override List<GridRowSpec> GetContentRowSpecs()
     {
-        var heroData = (SliceDiceTextMod.HeroPoolData)DataModel;
         List<GridRowSpec> rows = new List<GridRowSpec>();
 
-        rows.Add(new GridRowSpec(CompactItemHeight,
-            GridCellSpec.CreateToggle($"HeroToggle_{Id}", "Replace Base Heroes", 0.3f, (val) => {
-                heroData.ReplaceBaseHeroes = val;
-                ModPackage.Instance.loadedMod?.NotifyDataChanged(this);
-            }),
-            GridCellSpec.CreateLabel($"HeroToggleSpacer_{Id}", "", 0.7f)
-        ));
+        var data = PoolData;
+        if (data == null) return rows; // Safe check if no entity is loaded
 
-        rows.AddRange(base.GetContentRowSpecs());
+        for (int i = 0; i < data.Elements.Count; i++)
+        {
+            int index = i;
+            rows.Add(new GridRowSpec(CompactItemHeight,
+                GridCellSpec.CreateLabel($"IndexLabel_{Id}_{index}", $"Element {index}", 0.15f),
+                GridCellSpec.CreateInput($"Input_{Id}_{index}", data.Elements[index], 0.75f, (val) => {
+                    data.Elements[index] = val;
+
+                    // Notify the UI using the Singleton facade instead of touching ModData
+                    ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
+                }, InputAlignment.Center),
+                GridCellSpec.CreateButton($"RemoveElem_{Id}_{index}", "-", 0.1f, () => RemoveElementAt(index))
+            ));
+        }
+
+        rows.Add(new GridRowSpec(CompactItemHeight,
+            GridCellSpec.CreateButton($"AddElem_{Id}", "+ Add Element", 1.0f, AddElement)
+        ));
 
         return rows;
     }

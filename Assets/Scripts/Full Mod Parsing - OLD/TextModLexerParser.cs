@@ -40,7 +40,7 @@ namespace SliceDiceTextMod
         /// <summary>
         /// Parses a raw, multi-line Mod string directly into a ModDataContainer.
         /// </summary>
-        public static void ParseModIntoContainer(string rawModText, ModDataContainer container)
+        public static void ParseModIntoContainer(string rawModText, ModData container)
         {
             if (string.IsNullOrWhiteSpace(rawModText)) return;
 
@@ -153,7 +153,7 @@ namespace SliceDiceTextMod
             return tokens;
         }
 
-        private static void ParseModIntoContainer(List<Token> tokens, ref int pos, ModDataContainer container)
+        private static void ParseModIntoContainer(List<Token> tokens, ref int pos, ModData container)
         {
             while (pos < tokens.Count && tokens[pos].Type != TokenType.EOF)
             {
@@ -166,7 +166,7 @@ namespace SliceDiceTextMod
                 if (tokens[pos].Type == TokenType.Word && tokens[pos].Value.ToLower() == "replica")
                 {
                     var hero = ParseHero(tokens, ref pos);
-                    container.Heroes.Add(hero);
+                    //container.Heroes.Add(hero);
                 }
                 else
                 {

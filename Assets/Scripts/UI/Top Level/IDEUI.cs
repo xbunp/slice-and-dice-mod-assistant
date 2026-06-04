@@ -8,7 +8,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class PhasesFactory : RootUI
+public class IDEUI : RootUI
 {
     private VirtualizedIdeController mainIdeController;
     private VirtualizedIdeController phasesIdeController;

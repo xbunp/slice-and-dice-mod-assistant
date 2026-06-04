@@ -5,7 +5,7 @@ using System.Text;
 using UnityEngine;
 
 [System.Serializable]
-public abstract class AbilityBase : HeroData
+public abstract class AbilityData : HeroData
 {
     // Defines top-level metadata tags used within entities.
     // Differentiates actual parameters from raw dot-separated text strings.
@@ -34,7 +34,7 @@ public abstract class AbilityBase : HeroData
         set => diceSides[1] = value;
     }
 
-    public AbilityBase() : base()
+    public AbilityData() : base()
     {
         // Abilities share HeroData structures, but heroes natively default to 7 HP.
         // We override and force HP to 0 here on construction so our exported ability data string 
@@ -69,10 +69,10 @@ public abstract class AbilityBase : HeroData
         foreach (var gft in gifts.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".gift.{gft}");
         foreach (var trt in traits.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".t.{trt}");
 
-        if (abilityData != null && abilityData.Count > 0)
+        if (baseAbilityData != null && baseAbilityData.Count > 0)
         {
             List<string> formattedAbilities = new List<string>();
-            foreach (var ab in abilityData)
+            foreach (var ab in baseAbilityData)
             {
                 if (string.IsNullOrEmpty(ab)) continue;
                 formattedAbilities.Add(ab.StartsWith("(") && ab.EndsWith(")") ? ab : $"({ab})");
@@ -110,7 +110,7 @@ public abstract class AbilityBase : HeroData
         return sb.ToString();
     }
 
-    public static new AbilityBase Parse(string data)
+    public static new AbilityData Parse(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return new SpellData();
 
@@ -132,7 +132,7 @@ public abstract class AbilityBase : HeroData
             }
         }
 
-        AbilityBase ability = isSpell ? (AbilityBase)new SpellData() : new TacticData();
+        AbilityData ability = isSpell ? (AbilityData)new SpellData() : new TacticData();
         ability.baseReplica = chunks[0];
 
         int i = 1;
@@ -158,7 +158,7 @@ public abstract class AbilityBase : HeroData
                     if (key == "i") ability.items.Add(joined);
                     else if (key == "t") ability.traits.Add(joined);
                     else if (key == "gift") ability.gifts.Add(joined);
-                    else if (key == "abilitydata") ability.abilityData.Add(joined);
+                    else if (key == "abilitydata") ability.baseAbilityData.Add(joined);
                 }
                 else if (i + 1 < chunks.Count)
                 {

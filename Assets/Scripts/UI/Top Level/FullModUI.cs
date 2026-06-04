@@ -11,8 +11,6 @@ public class FullModUI : RootUI
     private ScrollRect directiveScrollView;
     private List<DirectiveUI> directiveUIs = new List<DirectiveUI>();
 
-    private ModDataContainer SSOT => ModPackage.Instance.loadedMod;
-
     protected override void BuildUIAndBind()
     {
         var columns = new List<ColumnSpec>
@@ -34,16 +32,19 @@ public class FullModUI : RootUI
         directiveDropdown = generatedScreen.ColumnRefs["Left_Column"].Dropdowns["ModDropdown"];
         directiveScrollView = generatedScreen.ColumnRefs["Right_Column"].ScrollViews["ModScrollView"];
 
-        // Connect to Single Source of Truth
-        SSOT.OnDataChanged += OnStateChanged;
-        OnStateChanged(null);
+        // Connect to the Singleton facade rather than directly subscribing to ModData
+        if (ModPackage.Instance != null)
+        {
+            ModPackage.Instance.OnModDataChanged += OnStateChanged;
+            OnStateChanged(null);
+        }
     }
 
     private void OnDestroy()
     {
-        if (ModPackage.Instance != null && SSOT != null)
+        if (ModPackage.Instance != null)
         {
-            SSOT.OnDataChanged -= OnStateChanged;
+            ModPackage.Instance.OnModDataChanged -= OnStateChanged;
         }
     }
 
@@ -52,19 +53,31 @@ public class FullModUI : RootUI
         if (object.ReferenceEquals(sender, this)) return;
 
         directiveUIs.Clear();
-        foreach (var directive in SSOT.Directives)
+
+        // Fetch raw elements using the read-only getter GetDirectives()
+        var directives = ModPackage.Instance.loadedMod.GetDirectives();
+
+        foreach (var directive in directives)
         {
             var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => directive.GetType() == e.CreateData().GetType());
             if (entry != null)
             {
+                // Fetch or generate a secure, isolated clone of this directive
+                var workingClone = ModPackage.Instance.GetOrCreateDirectiveSession(directive);
+
                 System.Action removeAction = () =>
                 {
-                    SSOT.Directives.Remove(directive);
-                    SSOT.NotifyDataChanged(this);
-                    OnStateChanged(null);
+                    // Safe deletion through the Singleton
+                    ModPackage.Instance.DeleteDirective(directive);
                 };
 
-                directiveUIs.Add(entry.CreateUI(directive, uiGenerator, () => RebuildScrollView(), removeAction));
+                // Pass the safe workingClone to the visual UI builders
+                directiveUIs.Add(entry.CreateUI(workingClone, uiGenerator, () =>
+                {
+                    // Auto-save this specific directive instance to ModData on layout changes
+                    ModPackage.Instance.SaveDirective(directive);
+                    RebuildScrollView();
+                }, removeAction));
             }
         }
 
@@ -95,17 +108,23 @@ public class FullModUI : RootUI
         string clipboard = GUIUtility.systemCopyBuffer;
         if (string.IsNullOrWhiteSpace(clipboard)) return;
 
-        // Parse via the structured parsing engine directly into the SSOT
-        ModParser.ParseIntoContainer(clipboard, SSOT);
+        // Parse using the loadedMod reference from the Singleton
+        ModParser.ParseIntoContainer(clipboard, ModPackage.Instance.loadedMod);
 
-        SSOT.NotifyDataChanged(this);
-        OnStateChanged(null);
+        // Notify that the directive state has completely changed
+        ModPackage.Instance.NotifyDirectiveSessionChanged(this);
     }
 
     private void OnCopyModClicked()
     {
-        // Serialize clean C# objects to string
-        string output = ModSerializer.Export(SSOT);
+        // Serialize using the clean loadedMod instance
+        string output = ModPackage.Instance.ExportModToTextModString();
+
+        if (string.IsNullOrEmpty(output))
+        {
+            Debug.LogError("No TextMod loaded to export!");
+            return;
+        }
 
         // Restore any compressed custom textures safely
         string rawText = ImageUtility.RestoreImages(output);
@@ -123,9 +142,9 @@ public class FullModUI : RootUI
         var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => e.DropdownName == option);
         if (entry != null)
         {
-            SSOT.Directives.Add(entry.CreateData());
-            SSOT.NotifyDataChanged(this);
-            OnStateChanged(null);
+            // Add a new directive safely to the mod container
+            ModPackage.Instance.loadedMod.SaveDirective(null, entry.CreateData());
+            ModPackage.Instance.NotifyDirectiveSessionChanged(this);
         }
     }
 

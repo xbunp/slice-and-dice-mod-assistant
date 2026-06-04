@@ -12,7 +12,7 @@ using UnityEngine;
 public class ItemAbility
 {
     public string Prefix; // e.g., "learn.sThief" or "t.jinx.allitem"
-    public AbilityBase Ability;
+    public AbilityData Ability;
 }
 
 [System.Serializable]
@@ -131,7 +131,7 @@ public class ItemData
                     item.GrantedAbilities.Add(new ItemAbility
                     {
                         Prefix = prefix,
-                        Ability = AbilityBase.Parse(abilityStr)
+                        Ability = AbilityData.Parse(abilityStr)
                     });
                 }
                 else

@@ -22,7 +22,7 @@ public class RootUIFactory : MonoBehaviour
 
     // Direct, strongly-typed references to each instantiated class
     public HeroUI HeroUI { get; private set; }
-    public PhasesFactory PhasesUI { get; private set; }
+    public IDEUI PhasesUI { get; private set; }
     public MonsterUI MonsterUI { get; private set; }
     public FullModUI FullModUI { get; private set; } // Added ModFactory reference
     //public SettingsUI SettingsUI { get; private set; }
@@ -35,7 +35,7 @@ public class RootUIFactory : MonoBehaviour
     private List<string> tabNames = new List<string>();
     private List<GameObject> tabWrappers = new List<GameObject>();
 
-    void Start()
+    public void InitializeEntireUI()
     {
         if (uiGenerator == null || uiGenerator.canvas == null)
         {
@@ -89,7 +89,7 @@ public class RootUIFactory : MonoBehaviour
 
         // Instantiate classes directly, assign references, and register them as tabs
         HeroUI = CreateTabInstance<HeroUI>("HeroUI", "Heroes");
-        PhasesUI = CreateTabInstance<PhasesFactory>("PhasesFactory", "Phases");
+        PhasesUI = CreateTabInstance<IDEUI>("PhasesFactory", "Phases");
         MonsterUI = CreateTabInstance<MonsterUI>("MonsterFactory", "Monsters");
         FullModUI = CreateTabInstance<FullModUI>("FullModUI", "Mods"); // Added ModFactory instantiation
         //SettingsUI = CreateTabInstance<SettingsUI>("SettingsUI", "Settings");

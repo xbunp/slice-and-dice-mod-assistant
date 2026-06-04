@@ -18,9 +18,15 @@ public abstract class EntityData
     public int? hue;
     public string hsl;
 
-    [Header("Shared Extended Modifiers")]
-    public List<string> items = new List<string>();   // i
-    public List<string> traits = new List<string>();  // t
+    [Header("Shared Extended Modifiers")] 
+    public List<string> items = new List<string>();     // i
+    public List<string> traits = new List<string>();    // t
+    public List<string> gifts = new List<string>();     // gift.    
+    
+    //public List<string> jinxs = new List<string>();     // jinx.
+    // todo: jinxes are not actually a thing. 
+    // jinx is a monster, to give a creature 'a jinx' do this:
+    // i.t.jinx.<curse>
 
     public string p;
     public string b;

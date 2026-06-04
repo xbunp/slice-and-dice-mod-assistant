@@ -12,8 +12,8 @@ public class HeroData : EntityData
     public int tier = 1;
 
     [Header("Hero Modifiers")]
-    public List<string> gifts = new List<string>();
-    public List<string> abilityData = new List<string>();
+    public List<string> baseAbilityData = new List<string>();
+    public List<AbilityData> customAbilityData = new List<AbilityData>();
     public int? adj;
 
     [Header("Post-Dice Info")]
@@ -26,9 +26,9 @@ public class HeroData : EntityData
         List<string> customAbilities = new List<string>();
         List<string> stockAbilities = new List<string>();
 
-        if (hero.abilityData != null)
+        if (hero.baseAbilityData != null)
         {
-            foreach (var ab in hero.abilityData)
+            foreach (var ab in hero.baseAbilityData)
             {
                 if (string.IsNullOrEmpty(ab)) continue;
 
@@ -95,15 +95,22 @@ public class HeroData : EntityData
 
         string result = sb.ToString();
 
-        // Wrap core game abilities: ((<hero>)i.learn.<name>)
-        foreach (var stockAbility in stockAbilities)
+        if (stockAbilities.Count > 0)
         {
-            result = $"({result}i.learn.{FormatName(stockAbility)})";
+            StringBuilder wrappedResult = new StringBuilder();
+            wrappedResult.Append($"({result}i.learn.{FormatName(stockAbilities[0])}");
+
+            for (int i = 1; i < stockAbilities.Count; i++)
+            {
+                wrappedResult.Append($".i.learn.{FormatName(stockAbilities[i])}");
+            }
+
+            wrappedResult.Append(")");
+            result = wrappedResult.ToString();
         }
 
         return result;
     }
-
     public static HeroData Parse(string data)
     {
         HeroData hero = new HeroData();
@@ -125,7 +132,7 @@ public class HeroData : EntityData
                 {
                     string abilityName = data.Substring(nameStart, nameLength);
                     // Insert at 0 so nested wrapped abilities maintain original order
-                    hero.abilityData.Insert(0, abilityName);
+                    hero.baseAbilityData.Insert(0, abilityName);
 
                     // Strip the outer wrapper to process the inner hero data: "((hero)i.learn.Strike)" -> "(hero)"
                     data = data.Substring(1, learnIndex);
@@ -169,7 +176,7 @@ public class HeroData : EntityData
                     // Fallback to protect against flat/unwrapped "i.learn.<ability>" inside the string
                     if (string.Equals(value, "learn", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
                     {
-                        hero.abilityData.Add(tokens[i + 2]);
+                        hero.baseAbilityData.Add(tokens[i + 2]);
                         i += 2; // Skip "learn" and the ability name
                     }
                     else
@@ -180,7 +187,7 @@ public class HeroData : EntityData
 
                 case "gift": hero.gifts.AddRange(value.Split('#')); break;
                 case "t": hero.traits.AddRange(value.Split('#')); break;
-                case "abilitydata": hero.abilityData.AddRange(value.Split('#')); break;
+                case "abilitydata": hero.baseAbilityData.AddRange(value.Split('#')); break;
 
                 case "p": hero.p = value; break;
                 case "b": hero.b = value; break;
@@ -228,7 +235,6 @@ public class HeroData : EntityData
         }
         return false;
     }
-
     private static bool IsStockAbility(string abilityName, out string matchedName)
     {
         matchedName = abilityName;
@@ -245,5 +251,22 @@ public class HeroData : EntityData
             }
         }
         return false;
+    }
+
+
+    public bool AddAbility(string abilityName)
+    {
+        if (string.IsNullOrEmpty(abilityName)) return false;
+        if (!baseAbilityData.Contains(abilityName))
+        {
+            baseAbilityData.Add(abilityName);
+            return true;
+        }
+        return false;
+    }
+
+    public bool RemoveAbility(string abilityName)
+    {
+        return baseAbilityData.Remove(abilityName);
     }
 }
