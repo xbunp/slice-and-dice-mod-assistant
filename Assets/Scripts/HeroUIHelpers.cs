@@ -113,9 +113,9 @@ public static class HeroUIHelpers
     {
         if (string.IsNullOrEmpty(name)) return false;
 
-        for (int i = 0; i < SDData.UnusuablePortraits.Length; i++)
+        for (int i = 0; i < RandomSDData.UnusuablePortraits.Length; i++)
         {
-            if (name.IndexOf(SDData.UnusuablePortraits[i], StringComparison.OrdinalIgnoreCase) >= 0)
+            if (name.IndexOf(RandomSDData.UnusuablePortraits[i], StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return true;
             }

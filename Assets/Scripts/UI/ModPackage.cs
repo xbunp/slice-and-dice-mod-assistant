@@ -9,6 +9,10 @@ public class ModPackage : MonoBehaviour
 
     public bool isModLoaded { get; private set; } = false;
     public readonly ModData loadedMod = new ModData();
+    public IReadOnlyList<AbilityData> CustomAbilities => loadedMod.GetAll<AbilityData>();
+    public IReadOnlyList<HeroData> Heroes => loadedMod.GetAll<HeroData>();
+    public IReadOnlyList<MonsterData> Monsters => loadedMod.GetAll<MonsterData>();
+    public IReadOnlyList<ItemData> Items => loadedMod.GetAll<ItemData>();
 
     // --- CONCURRENT SESSION TRACKING (ENTITIES) ---
     private class EditingSession

@@ -5,7 +5,7 @@ using UnityEngine;
 using static SDColors;
 using static UnityEditor.Progress;
 
-public static class SDData
+public static class RandomSDData
 {
     public static readonly string[] UnusuablePortraits = { "Glitch", "Error", "Totem" };
 }
@@ -1227,7 +1227,7 @@ public static class SDColors
         { "j", "J: Juish" }
     };
 
-    private static readonly Dictionary<string, string> TraitNiceNames = new Dictionary<string, string>
+    public static readonly Dictionary<string, string> TraitNiceNames = new Dictionary<string, string>
 {
     { "Bones", "1 damage to adjacent allies upon death." },
     { "Imp", "On-hit: damage the attacker for 1" },
@@ -3622,7 +3622,7 @@ public static class BlessingDataset
         { "Challenge each fight", "Before each fight: standard challenge" },
         { "Deep Pockets", "All heroes: +1 item slot (max 4)" },
         { "Divine^1", "All heroes: Side pips minimum 1" },
-        { "Growth fan", "Gain the items 'Seedling' (Replace the left side with '2 damage growth')\\nand 'Glowing Egg' (Add growth to the left side)" },
+        { "Growth fan", "Gain the items 'Seedling' and 'Glowing Egg'" },
         { "Keep Rolls", "Keep unused rerolls" },
         { "Level 7 levelup", "Before fight 7: levelup phase" },
         { "Leyline^8", "The 8th spell you cast each fight is free." },
@@ -3653,7 +3653,7 @@ public static class BlessingDataset
         { "Poison Immunity", "All heroes: Immune to poison" },
         { "Preparation", "At the start of the first turn, shield 2 to all heroes" },
         { "Save Spell", "Learn Spell 'Save' (Cost: 1 mana - Heal and shield 5 cleanse, singleCast)" },
-        { "Stun Specialist", "Gain the items 'Fearless' (+1 hp; Replace the rightmost side with 'Stun an enemy with equal or less hp than you') and 'Wand of Stun' (Replace the middle side with 'Stun an enemy singleUse')" },
+        { "Stun Specialist", "Gain the items 'Fearless' and 'Wand of Stun')" },
         { "Survive", "All heroes: +1 to incoming healing\\nAll heroes: +2 empty hp" },
         { "Threee", "At the start of every 3rd turn, +3 mana" },
         { "Turn 3 Heal", "At the start of the 3rd turn, heal and shield 3 to all heroes" },

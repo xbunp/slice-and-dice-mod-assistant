@@ -21,10 +21,13 @@ public class RootUIFactory : MonoBehaviour
     [SerializeField] private float topBarHeight = 45f;
 
     // Direct, strongly-typed references to each instantiated class
-    public HeroUI HeroUI { get; private set; }
-    public IDEUI PhasesUI { get; private set; }
-    public MonsterUI MonsterUI { get; private set; }
+    public IDEUI IDEUI { get; private set; }
     public FullModUI FullModUI { get; private set; } // Added ModFactory reference
+    public HeroUI HeroUI { get; private set; }
+    public MonsterUI MonsterUI { get; private set; }
+    public ItemUI ItemUI { get; private set; }
+    public AbilityUI AbilityUI { get; private set; }
+
     //public SettingsUI SettingsUI { get; private set; }
     //public AbilityDataFactory AbilityDataFactory { get; private set; } //todo: support abilities.
 
@@ -88,14 +91,12 @@ public class RootUIFactory : MonoBehaviour
         uiGenerator.canvas = contentCanvas;
 
         // Instantiate classes directly, assign references, and register them as tabs
+        IDEUI = CreateTabInstance<IDEUI>("IDEUI", "IDE");
+        FullModUI = CreateTabInstance<FullModUI>("FullModUI", "Modifiers");
         HeroUI = CreateTabInstance<HeroUI>("HeroUI", "Heroes");
-        PhasesUI = CreateTabInstance<IDEUI>("PhasesFactory", "Phases");
-        MonsterUI = CreateTabInstance<MonsterUI>("MonsterFactory", "Monsters");
-        FullModUI = CreateTabInstance<FullModUI>("FullModUI", "Mods"); // Added ModFactory instantiation
-        //SettingsUI = CreateTabInstance<SettingsUI>("SettingsUI", "Settings");
-
-        // Instantiated directly, but excluded from tab setup
-        //AbilityDataFactory = CreateInstanceOnly<AbilityDataFactory>("AbilityDataFactory");
+        MonsterUI = CreateTabInstance<MonsterUI>("MonsterUI", "Monsters");
+        ItemUI = CreateTabInstance<ItemUI>("ItemUI", "Items");
+        AbilityUI = CreateTabInstance<AbilityUI>("AbilityUI", "Spells & Tactics");
 
         uiGenerator.canvas = originalCanvas;
     }

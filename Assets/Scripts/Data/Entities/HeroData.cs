@@ -6,6 +6,13 @@ using UnityEngine;
 [System.Serializable]
 public class HeroData : EntityData
 {
+    public static readonly string[] HeroPropertyKeys =
+{
+        "replica", "img", "n", "col", "hp", "tier", "hsv", "hsl", "hue", "sd",
+        "speech", "doc", "i", "p", "t", "gift", "abilitydata", "adj", "b", "rect",
+        "draw", "thue", "triggerhpdata"
+        };
+
     [Header("Hero Specific Info")]
     public string baseReplica = "Statue";
     public string colorClass = "y";
@@ -22,22 +29,6 @@ public class HeroData : EntityData
     public static string Export(HeroData hero)
     {
         if (hero == null) return "()";
-
-        List<string> customAbilities = new List<string>();
-        List<string> stockAbilities = new List<string>();
-
-        if (hero.baseAbilityData != null)
-        {
-            foreach (var ab in hero.baseAbilityData)
-            {
-                if (string.IsNullOrEmpty(ab)) continue;
-
-                if (IsStockAbility(ab, out string matchedName))
-                    stockAbilities.Add(matchedName);
-                else
-                    customAbilities.Add(ab);
-            }
-        }
 
         StringBuilder sb = new StringBuilder();
         sb.Append("(");
@@ -58,18 +49,67 @@ public class HeroData : EntityData
 
         sb.Append($".hp.{hero.hp}.tier.{hero.tier}");
 
-        hero.AppendListAsChained(sb, "i", hero.items);
-        hero.AppendListAsChained(sb, "gift", hero.gifts);
-        hero.AppendListAsChained(sb, "t", hero.traits);
-
-        if (customAbilities.Count > 0)
+        // Traits: t.<name>
+        if (hero.traits != null)
         {
-            List<string> formattedAbilities = new List<string>();
-            foreach (var ab in customAbilities)
+            foreach (var t in hero.traits)
             {
-                formattedAbilities.Add(ab.StartsWith("(") && ab.EndsWith(")") ? ab : $"({ab})");
+                if (!string.IsNullOrEmpty(t)) sb.Append($".t.{FormatName(t)}");
             }
-            sb.Append($".abilitydata.{string.Join("#", formattedAbilities)}");
+        }
+
+        // Items: i.<name>
+        if (hero.items != null)
+        {
+            foreach (var i in hero.items)
+            {
+                if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
+            }
+        }
+
+        // Custom Items: i.(<custom item>)
+        if (hero.customItems != null)
+        {
+            foreach (var ci in hero.customItems)
+            {
+                if (ci != null) sb.Append($".i.({ItemData.Export(ci)})");
+            }
+        }
+
+        // Blessings: i.gift.<name>
+        if (hero.blessings != null)
+        {
+            foreach (var b in hero.blessings)
+            {
+                if (!string.IsNullOrEmpty(b)) sb.Append($".i.gift.{FormatName(b)}");
+            }
+        }
+
+        // Curses: i.t.jinx.<curse>
+        if (hero.curses != null)
+        {
+            foreach (var c in hero.curses)
+            {
+                if (!string.IsNullOrEmpty(c)) sb.Append($".i.t.jinx.{FormatName(c)}");
+            }
+        }
+
+        // Base Abilities: i.learn.<ability>
+        if (hero.baseAbilityData != null)
+        {
+            foreach (var ab in hero.baseAbilityData)
+            {
+                if (!string.IsNullOrEmpty(ab)) sb.Append($".i.learn.{FormatName(ab)}");
+            }
+        }
+
+        // Custom Abilities: abilitydata.(<custom ability>)
+        if (hero.customAbilityData != null)
+        {
+            foreach (var cab in hero.customAbilityData)
+            {
+                if (cab != null) sb.Append($".abilitydata.({AbilityData.Export(cab)})");
+            }
         }
 
         if (!string.IsNullOrEmpty(hero.p)) sb.Append($".p.{hero.p}");
@@ -93,24 +133,9 @@ public class HeroData : EntityData
 
         sb.Append(")");
 
-        string result = sb.ToString();
-
-        if (stockAbilities.Count > 0)
-        {
-            StringBuilder wrappedResult = new StringBuilder();
-            wrappedResult.Append($"({result}i.learn.{FormatName(stockAbilities[0])}");
-
-            for (int i = 1; i < stockAbilities.Count; i++)
-            {
-                wrappedResult.Append($".i.learn.{FormatName(stockAbilities[i])}");
-            }
-
-            wrappedResult.Append(")");
-            result = wrappedResult.ToString();
-        }
-
-        return result;
+        return sb.ToString();
     }
+
     public static HeroData Parse(string data)
     {
         HeroData hero = new HeroData();
@@ -118,31 +143,27 @@ public class HeroData : EntityData
 
         data = data.Trim();
 
-        // 1. Unwrap core abilities structured as ((<hero_data>)i.learn.<ability>)
-        // We do this from the outside-in to protect the TokenizeString process.
+        // 1. Unwrap core abilities structured as ((<hero_data>)i.learn.<ability>) 
+        // (Kept for backwards compatibility with older versions of your exporter)
         while (data.StartsWith("(") && data.EndsWith(")"))
         {
             int learnIndex = data.LastIndexOf(")i.learn.", StringComparison.OrdinalIgnoreCase);
             if (learnIndex != -1)
             {
-                int nameStart = learnIndex + 9; // Length of ")i.learn."
-                int nameLength = data.Length - nameStart - 1; // Exclude the closing ')'
+                int nameStart = learnIndex + 9;
+                int nameLength = data.Length - nameStart - 1;
 
                 if (nameLength > 0)
                 {
-                    string abilityName = data.Substring(nameStart, nameLength);
-                    // Insert at 0 so nested wrapped abilities maintain original order
-                    hero.baseAbilityData.Insert(0, abilityName);
-
-                    // Strip the outer wrapper to process the inner hero data: "((hero)i.learn.Strike)" -> "(hero)"
+                    hero.baseAbilityData.Insert(0, data.Substring(nameStart, nameLength));
                     data = data.Substring(1, learnIndex);
                     continue;
                 }
             }
-            break; // Break if wrapped in parens but doesn't match the specific i.learn pattern
+            break;
         }
 
-        // 2. Normal tokenization on the clean inner string
+        // 2. Normal tokenization
         List<string> tokens = TokenizeString(data);
 
         for (int i = 0; i < tokens.Count; i++)
@@ -173,21 +194,56 @@ public class HeroData : EntityData
                 case "hue": if (int.TryParse(value, out int hVal)) hero.hue = hVal; break;
 
                 case "i":
-                    // Fallback to protect against flat/unwrapped "i.learn.<ability>" inside the string
-                    if (string.Equals(value, "learn", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
+                    // Lookahead Parsing for multi-dot "i" modifiers
+                    if (string.Equals(value, "t", StringComparison.OrdinalIgnoreCase) &&
+                        i + 2 < tokens.Count && string.Equals(tokens[i + 2], "jinx", StringComparison.OrdinalIgnoreCase) &&
+                        i + 3 < tokens.Count)
                     {
-                        hero.baseAbilityData.Add(tokens[i + 2]);
-                        i += 2; // Skip "learn" and the ability name
+                        // i.t.jinx.<curse>
+                        hero.curses.AddRange(tokens[i + 3].Split('#'));
+                        i += 3; // Consume "t", "jinx", and "<curse>"
+                    }
+                    else if (string.Equals(value, "gift", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
+                    {
+                        // i.gift.<blessing>
+                        hero.blessings.AddRange(tokens[i + 2].Split('#'));
+                        i += 2; // Consume "gift", and "<blessing>"
+                    }
+                    else if (string.Equals(value, "learn", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
+                    {
+                        // i.learn.<ability>
+                        hero.baseAbilityData.AddRange(tokens[i + 2].Split('#'));
+                        i += 2; // Consume "learn", and "<ability>"
+                    }
+                    else if (value.StartsWith("("))
+                    {
+                        // i.(<custom item>)
+                        hero.customItems.Add(ItemData.Parse(value));
                     }
                     else
                     {
+                        // i.<item>
                         hero.items.AddRange(value.Split('#'));
                     }
                     break;
 
-                case "gift": hero.gifts.AddRange(value.Split('#')); break;
-                case "t": hero.traits.AddRange(value.Split('#')); break;
-                case "abilitydata": hero.baseAbilityData.AddRange(value.Split('#')); break;
+                case "t":
+                    // t.<trait>
+                    hero.traits.AddRange(value.Split('#'));
+                    break;
+
+                case "abilitydata":
+                    if (value.StartsWith("("))
+                    {
+                        // abilitydata.(<custom ability>)
+                        hero.customAbilityData.Add(AbilityData.Parse(value));
+                    }
+                    else
+                    {
+                        // Legacy fallback logic
+                        hero.baseAbilityData.AddRange(value.Split('#'));
+                    }
+                    break;
 
                 case "p": hero.p = value; break;
                 case "b": hero.b = value; break;
@@ -220,7 +276,6 @@ public class HeroData : EntityData
         }
         return hero;
     }
-
     private static bool IsDefaultColor(string baseReplica, string colorClass)
     {
         if (string.IsNullOrEmpty(baseReplica) || string.IsNullOrEmpty(colorClass)) return false;
@@ -252,8 +307,6 @@ public class HeroData : EntityData
         }
         return false;
     }
-
-
     public bool AddAbility(string abilityName)
     {
         if (string.IsNullOrEmpty(abilityName)) return false;
@@ -264,7 +317,6 @@ public class HeroData : EntityData
         }
         return false;
     }
-
     public bool RemoveAbility(string abilityName)
     {
         return baseAbilityData.Remove(abilityName);

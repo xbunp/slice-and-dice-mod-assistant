@@ -66,7 +66,7 @@ public abstract class AbilityData : HeroData
 
         // 3. Modifier Arrays
         foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
-        foreach (var gft in gifts.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".gift.{gft}");
+        foreach (var gft in blessings.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".gift.{gft}");
         foreach (var trt in traits.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".t.{trt}");
 
         if (baseAbilityData != null && baseAbilityData.Count > 0)
@@ -157,7 +157,7 @@ public abstract class AbilityData : HeroData
                     string joined = string.Join(".", subChunks);
                     if (key == "i") ability.items.Add(joined);
                     else if (key == "t") ability.traits.Add(joined);
-                    else if (key == "gift") ability.gifts.Add(joined);
+                    else if (key == "gift") ability.blessings.Add(joined);
                     else if (key == "abilitydata") ability.baseAbilityData.Add(joined);
                 }
                 else if (i + 1 < chunks.Count)

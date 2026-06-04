@@ -4,11 +4,9 @@ using System.Text;
 using UnityEngine;
 
 [System.Serializable]
-public abstract class EntityData
+public abstract class EntityData : SDData
 {
     [Header("Core Shared Info")]
-    public string entityName = "NewEntity";
-    public string imageOverride = "None"; // Both use 'img'
     public int hp = 7;
 
     [Header("Colors (Mutually Exclusive)")]
@@ -20,13 +18,10 @@ public abstract class EntityData
 
     [Header("Shared Extended Modifiers")] 
     public List<string> items = new List<string>();     // i
+    public List<ItemData> customItems = new List<ItemData>();     // i
     public List<string> traits = new List<string>();    // t
-    public List<string> gifts = new List<string>();     // gift.    
-    
-    //public List<string> jinxs = new List<string>();     // jinx.
-    // todo: jinxes are not actually a thing. 
-    // jinx is a monster, to give a creature 'a jinx' do this:
-    // i.t.jinx.<curse>
+    public List<string> blessings = new List<string>();     // gift.    
+    public List<string> curses = new List<string>();     // i.t.jinx.<curse>
 
     public string p;
     public string b;
@@ -160,7 +155,6 @@ public abstract class EntityData
 
     protected static string FormatName(string name)
     {
-        if (string.IsNullOrEmpty(name)) return "";
-        return name.Replace(" ", "_");
+        return name ?? "";
     }
 }

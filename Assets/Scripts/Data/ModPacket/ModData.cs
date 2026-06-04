@@ -78,17 +78,17 @@ public class ModData
         _listMap.TryGetValue(type, out var list);
         return list;
     }
-    private List<T> GetList<T>() where T : EntityData
+    private List<T> GetList<T>() where T : SDData
     {
         return GetRawList(typeof(T)) as List<T>;
     }
 
     // --- GENERIC GETTERS ---
-    public IReadOnlyList<T> GetAll<T>() where T : EntityData
+    public IReadOnlyList<T> GetAll<T>() where T : SDData
     {
         return GetList<T>();
     }
-    public T Load<T>(int index) where T : EntityData
+    public T Load<T>(int index) where T : SDData
     {
         var list = GetList<T>();
         if (list != null && index >= 0 && index < list.Count)
@@ -99,7 +99,7 @@ public class ModData
     }
 
     // --- UNTYPED SAVE & DELETE (For runtime Singleton execution) ---
-    public void SaveEntity(EntityData original, EntityData updated)
+    public void SaveEntity(SDData original, SDData updated)
     {
         if (updated == null) return;
 
@@ -118,7 +118,7 @@ public class ModData
 
         NotifyDataChanged();
     }
-    public void DeleteEntity(EntityData target)
+    public void DeleteEntity(SDData target)
     {
         if (target == null) return;
 

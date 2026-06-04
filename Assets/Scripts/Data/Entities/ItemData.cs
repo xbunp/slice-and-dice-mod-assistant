@@ -16,7 +16,7 @@ public class ItemAbility
 }
 
 [System.Serializable]
-public class ItemData
+public class ItemData : SDData
 {
     // These keys define the boundary of an item's top-level metadata.
     // Anything NOT in this list is treated as part of the mechanical effect chain.
@@ -26,9 +26,7 @@ public class ItemData
     };
 
     [Header("Core Info")]
-    public string itemName;
     public int? tier;
-    public string imageOverride;
 
     [Header("Item Effects")]
     public List<string> effects = new List<string>();
@@ -70,7 +68,7 @@ public class ItemData
         }
 
         // 2. Metadata
-        if (!string.IsNullOrEmpty(item.itemName)) sb.Append($".n.{FormatName(item.itemName)}");
+        if (!string.IsNullOrEmpty(item.entityName)) sb.Append($".n.{FormatName(item.entityName)}");
         if (item.tier.HasValue) sb.Append($".tier.{item.tier.Value}");
         if (!string.IsNullOrEmpty(item.doc)) sb.Append($".doc.{item.doc}");
         if (!string.IsNullOrEmpty(item.imageOverride)) sb.Append($".img.{item.imageOverride}");
@@ -149,7 +147,7 @@ public class ItemData
 
             switch (key)
             {
-                case "n": item.itemName = value; break;
+                case "n": item.entityName = value; break;
                 case "tier": if (int.TryParse(value, out int t)) item.tier = t; break;
                 case "img": item.imageOverride = value; break;
                 case "doc": item.doc = value; break;

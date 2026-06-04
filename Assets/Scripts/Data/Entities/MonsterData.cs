@@ -5,6 +5,8 @@ using UnityEngine;
 [System.Serializable]
 public class MonsterData : EntityData
 {
+    public static readonly string[] MonsterPropertyKeys = { "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata" };
+
     [Header("Monster Specific Info")]
     public string baseMonsterType = "rmon"; // e.g., rmon, egg, vase, orb
     public string baseMonster = "Rat";      // Counterpart to baseReplica

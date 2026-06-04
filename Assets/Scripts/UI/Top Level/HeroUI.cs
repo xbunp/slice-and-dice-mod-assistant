@@ -2,6 +2,7 @@ using SliceDiceTextMod;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -113,7 +114,6 @@ public class HeroUI : RootUI
 
         diceFaceIconPicker.OpenModal(config);
     }
-
     private void OpenFacadeModal(int faceIndex)
     {
         if (diceFaceIconPicker == null) return;
@@ -144,7 +144,6 @@ public class HeroUI : RootUI
 
         diceFaceIconPicker.OpenModal(config);
     }
-
     private void OpenHeroPortraitsModal(Action<HeroType, Sprite> onHeroSelected)
     {
         if (diceFaceIconPicker == null) return;
@@ -167,7 +166,6 @@ public class HeroUI : RootUI
 
         diceFaceIconPicker.OpenModal(config);
     }   
-
     private void OpenAllPortraitsModal(Action<bool, int, Sprite> onPortraitSelected)
     {
         if (diceFaceIconPicker == null) return;
@@ -194,7 +192,6 @@ public class HeroUI : RootUI
 
         diceFaceIconPicker.OpenModal(config);
     }
-
     private void UpdateIcon(int index)
     {
         if (portraitPreview == null)
@@ -213,7 +210,6 @@ public class HeroUI : RootUI
             face.pips
         );
     }
-
     private void OnPasteHeroString(string pastedString)
     {
         if (string.IsNullOrWhiteSpace(pastedString)) return;
@@ -239,7 +235,6 @@ public class HeroUI : RootUI
 
         UpdateUIFromData();
     }
-
     private void UpdateUIFromData()
     {
         if (statsUI == null || diceUI == null) return;
@@ -297,7 +292,6 @@ public class HeroUI : RootUI
         isDrawingUI = false;
         UpdateVisualsOnly();
     }
-
     private void UpdateVisualsOnly()
     {
         if (portraitPreview != null)
@@ -375,7 +369,6 @@ public class HeroUI : RootUI
             }
         }
     }
-
     private void SetButtonIcon(Button btn, Sprite sprite)
     {
         if (btn == null) return;
@@ -424,7 +417,6 @@ public class HeroUI : RootUI
         // Signal updates on the active clone using the Singleton facade
         ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
     }
-
     private void ResetToDefault()
     {
         // Replace active working clone with a clean template
@@ -436,12 +428,10 @@ public class HeroUI : RootUI
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
-
     private void CopyDiceFace(int index)
     {
         diceClipboard = CurrentHero.diceSides[index].Clone();
     }
-
     private void PasteDiceFace(int index)
     {
         if (diceClipboard == null) return;
@@ -449,7 +439,6 @@ public class HeroUI : RootUI
         NotifyStateChanged();
         RebuildDiceScrollView();
     }
-
     private void AddKeywordToFace(int faceIndex, int dropdownValue)
     {
         if (dropdownValue <= 0) return;
@@ -464,7 +453,6 @@ public class HeroUI : RootUI
             RebuildDiceScrollView();
         }
     }
-
     private void RemoveKeywordFromFace(int faceIndex, string keyword)
     {
         var face = CurrentHero.diceSides[faceIndex];
@@ -474,7 +462,6 @@ public class HeroUI : RootUI
             RebuildDiceScrollView();
         }
     }
-
     private void UpdateHeroHsvData(int componentIndex, int value)
     {
         if (componentIndex == 0) CurrentHero.h = value;
@@ -497,7 +484,6 @@ public class HeroUI : RootUI
 
         NotifyStateChanged();
     }
-
     private void UpdateFaceHsv(int faceIndex, int componentIndex, int value)
     {
         var face = CurrentHero.diceSides[faceIndex];
@@ -547,13 +533,11 @@ public class HeroUI : RootUI
             UpdateUIFromData();
         }
     }
-
     private void ToggleCustomImagePanel()
     {
         showCustomImagePanel = !showCustomImagePanel;
         RebuildStatsUI();
     }
-
     private void OnPoolDropdownChanged(int index)
     {
         if (isDrawingUI) return;
@@ -576,7 +560,6 @@ public class HeroUI : RootUI
         // Notify visual components to redraw
         ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
     }
-
     private void SaveToModPool()
     {
         // 1. Commit active clone back to the database (updates original or appends a new one)
@@ -704,6 +687,7 @@ public class HeroUI : RootUI
             GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentHero.doc = val; NotifyStateChanged(); })
         ));
 
+        // 1. Base Abilities
         AppendCollectionSelector<BaseAbility>(
             layout: layout,
             label: "Add Ability:",
@@ -713,7 +697,6 @@ public class HeroUI : RootUI
             getKey: (ability) => ability.name,
             getDisplay: (ability) =>
             {
-                // Format display as "Burst (2 mana): 2 damage or shield 2"
                 string cleanEffect = (ability.effect ?? "").Replace("\n", " | ");
                 return $"{ability.name} ({ability.cost}): {cleanEffect}";
             },
@@ -739,9 +722,235 @@ public class HeroUI : RootUI
             }
         );
 
+        // 2. Custom Abilities (Instantiated directly from selected name string)
+        // Available choices hook: pass your list of raw custom ability name strings here
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Custom Ability:",
+            uniqueKey: "CustomAbility",
+            availableChoices: new List<string>(), // Hook: Put your string choices here
+            currentActiveItems: CurrentHero.customAbilityData?.Select(a => a.entityName).ToList() ?? new List<string>(),
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (abilityName) =>
+            {
+                if (CurrentHero.customAbilityData == null)
+                    CurrentHero.customAbilityData = new List<AbilityData>();
+
+                if (!CurrentHero.customAbilityData.Any(a => a.entityName == abilityName))
+                {
+                    /*
+                    CurrentHero.customAbilityData.Add(new AbilityData { entityName = abilityName });
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                    */
+                }
+            },
+            onRemove: (abilityName) =>
+            {
+                if (CurrentHero.customAbilityData != null)
+                {
+                    var target = CurrentHero.customAbilityData.FirstOrDefault(a => a.entityName == abilityName);
+                    if (target != null && CurrentHero.customAbilityData.Remove(target))
+                    {
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
+                }
+            }
+        );
+
+        string[] rawNames = Enum.GetNames(typeof(BaseItems));
+        string[] formattedItemNames = rawNames.Select(name => Regex.Replace(name, "([a-z])([A-Z])", "$1 $2")).ToArray();
+
+        // 3. Items (Strings)
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Item:",
+            uniqueKey: "Item",
+            availableChoices: formattedItemNames,
+            currentActiveItems: CurrentHero.items ?? new List<string>(),
+            getKey: (itemName) => itemName,
+            getDisplay: (itemName) => itemName,
+            onAdd: (itemName) =>
+            {
+                if (CurrentHero.items == null)
+                    CurrentHero.items = new List<string>();
+
+                if (!CurrentHero.items.Contains(itemName))
+                {
+                    CurrentHero.items.Add(itemName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (itemName) =>
+            {
+                if (CurrentHero.items != null && CurrentHero.items.Remove(itemName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+
+        // 4. Custom Items (Instantiated directly from selected name string)
+        // Available choices hook: pass your list of raw custom item name strings here
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Custom Item:",
+            uniqueKey: "CustomItem",
+            availableChoices: new List<string>(), // Hook: Put your string choices here
+            currentActiveItems: CurrentHero.customItems?.Select(i => i.entityName).ToList() ?? new List<string>(), // Note: change to 'name' if ItemData uses 'name'
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (itemName) =>
+            {
+                if (CurrentHero.customItems == null)
+                    CurrentHero.customItems = new List<ItemData>();
+
+                if (!CurrentHero.customItems.Any(i => i.entityName == itemName)) // Note: change to 'name' if needed
+                {
+                    CurrentHero.customItems.Add(new ItemData { entityName = itemName }); // Note: change to 'name' if needed
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (itemName) =>
+            {
+                if (CurrentHero.customItems != null)
+                {
+                    var target = CurrentHero.customItems.FirstOrDefault(i => i.entityName == itemName); // Note: change to 'name' if needed
+                    if (target != null && CurrentHero.customItems.Remove(target))
+                    {
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
+                }
+            }
+        );
+
+        // 5. Traits (Strings)
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Traits:",
+            uniqueKey: "Trait",
+            // Use the keys of the TraitNiceNames dictionary
+            availableChoices: SDColors.TraitNiceNames.Keys.ToList(),
+            currentActiveItems: CurrentHero.traits ?? new List<string>(),
+            getKey: (traitName) => traitName,
+            // Display both the key (name) and its dictionary value (description)
+            getDisplay: (traitName) =>
+            {
+                if (SDColors.TraitNiceNames.TryGetValue(traitName, out string desc))
+                {
+                    return $"{traitName}: {desc}";
+                }
+                return traitName;
+            },
+            onAdd: (traitName) =>
+            {
+                if (CurrentHero.traits == null)
+                    CurrentHero.traits = new List<string>();
+
+                if (!CurrentHero.traits.Contains(traitName))
+                {
+                    CurrentHero.traits.Add(traitName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (traitName) =>
+            {
+                if (CurrentHero.traits != null && CurrentHero.traits.Remove(traitName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+
+        // 6. Blessings (Strings)
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Blessing:",
+            uniqueKey: "Blessing",
+            // Use the keys from BlessingDataset.Blessings
+            availableChoices: BlessingDataset.Blessings.Keys.ToList(),
+            currentActiveItems: CurrentHero.blessings ?? new List<string>(),
+            getKey: (blessingName) => blessingName,
+            // Display both the key (name) and its description
+            getDisplay: (blessingName) =>
+            {
+                if (BlessingDataset.Blessings.TryGetValue(blessingName, out string desc))
+                {
+                    return $"{blessingName}: {desc}";
+                }
+                return blessingName;
+            },
+            onAdd: (blessingName) =>
+            {
+                if (CurrentHero.blessings == null)
+                    CurrentHero.blessings = new List<string>();
+
+                if (!CurrentHero.blessings.Contains(blessingName))
+                {
+                    CurrentHero.blessings.Add(blessingName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (blessingName) =>
+            {
+                if (CurrentHero.blessings != null && CurrentHero.blessings.Remove(blessingName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+
+        // 7. Curses (Strings)
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Curse:",
+            uniqueKey: "Curse",
+            // Use the keys from CurseDataset.Curses
+            availableChoices: CurseDataset.Curses.Keys.ToList(),
+            currentActiveItems: CurrentHero.curses ?? new List<string>(),
+            getKey: (curseName) => curseName,
+            // Display both the key (name) and its description
+            getDisplay: (curseName) =>
+            {
+                if (CurseDataset.Curses.TryGetValue(curseName, out string desc))
+                {
+                    return $"{curseName}: {desc}";
+                }
+                return curseName;
+            },
+            onAdd: (curseName) =>
+            {
+                if (CurrentHero.curses == null)
+                    CurrentHero.curses = new List<string>();
+
+                if (!CurrentHero.curses.Contains(curseName))
+                {
+                    CurrentHero.curses.Add(curseName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (curseName) =>
+            {
+                if (CurrentHero.curses != null && CurrentHero.curses.Remove(curseName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
         return layout;
     }
-
     private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
     {
         var layout = new List<GridRowSpec>();
@@ -833,7 +1042,6 @@ public class HeroUI : RootUI
 
         return layout;
     }
-
     private void RebuildStatsUI()
     {
         // Safety check to ensure the scroll container exists before generating
@@ -845,8 +1053,24 @@ public class HeroUI : RootUI
         // Target the content panel of the ScrollView instead of the column panel
         statsUI = uiGenerator.RebuildGrid(statsScrollRect.content, GenerateStatsLayout());
 
+        // Account for VerticalLayoutGroup spacing and padding dynamically
+        float extraHeight = 0f;
+        var layoutGroup = statsScrollRect.content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
+        if (layoutGroup != null)
+        {
+            int childCount = statsScrollRect.content.childCount;
+            if (childCount > 1)
+            {
+                extraHeight += layoutGroup.spacing * (childCount - 1);
+            }
+            extraHeight += layoutGroup.padding.top + layoutGroup.padding.bottom;
+        }
+
         // Dynamically adjust the height of the ScrollRect content so scrolling functions properly
-        statsScrollRect.content.sizeDelta = new Vector2(0, statsUI.TotalHeight);
+        statsScrollRect.content.sizeDelta = new Vector2(0, statsUI.TotalHeight + extraHeight);
+
+        // Force Unity UI to update immediately so scrollbars adjust correctly
+        Canvas.ForceUpdateCanvases();
 
         if (showCustomImagePanel)
         {
@@ -884,15 +1108,33 @@ public class HeroUI : RootUI
         isDrawingUI = wasDrawing;
         UpdateUIFromData();
     }
-
     protected override void BuildUIAndBind()
     {
+        // 1. Calculate dynamic baseline heights based on current parent Canvas dimensions
+        float canvasHeight = 900f; // Baseline fallback
+        if (uiGenerator != null)
+        {
+            RectTransform canvasRt = uiGenerator.GetComponentInParent<Canvas>()?.GetComponent<RectTransform>();
+            if (canvasRt != null)
+            {
+                canvasHeight = canvasRt.rect.height;
+            }
+        }
+
+        // Derive initial generation heights relative to the screen size
+        float calculatedStatsHeight = canvasHeight - 60f;
+        float calculatedDiceHeight = canvasHeight - uiGenerator.rowHeight - 80f;
+
+        // Apply a safe minimum bound to prevent collapse on exceptionally small screens
+        calculatedStatsHeight = Mathf.Max(calculatedStatsHeight, 400f);
+        calculatedDiceHeight = Mathf.Max(calculatedDiceHeight, 300f);
+
         var columns = new List<ColumnSpec>
         {
             // Halved left margin (starts at 0.01f), expanded width
             new ColumnSpec("LeftStats", 0.01f, 0.35f, new List<GridRowSpec>
             {
-                new GridRowSpec(800f, GridCellSpec.CreateScrollView("StatsScrollView", 1.0f))
+                new GridRowSpec(calculatedStatsHeight, GridCellSpec.CreateScrollView("StatsScrollView", 1.0f))
             }),
             // Halved gap (starts at 0.365f)
             new ColumnSpec("MiddleDiceBase", 0.365f, 0.685f, new List<GridRowSpec>
@@ -901,7 +1143,7 @@ public class HeroUI : RootUI
                     currentDiceTab = idx;
                     RebuildDiceScrollView();
                 })),
-                new GridRowSpec(800f, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
+                new GridRowSpec(calculatedDiceHeight, GridCellSpec.CreateScrollView("DiceScrollView", 1.0f))
             }),
             // Halved gap (starts at 0.70f), halved right margin (ends at 0.99f)
             new ColumnSpec("RightOutput", 0.70f, 0.99f)
@@ -913,6 +1155,9 @@ public class HeroUI : RootUI
         statsScrollRect = generatedScreen.ColumnRefs["LeftStats"].ScrollViews["StatsScrollView"];
         diceScrollRect = generatedScreen.ColumnRefs["MiddleDiceBase"].ScrollViews["DiceScrollView"];
 
+        // Apply dynamic stretch and layouts to override the generated fixed heights
+        ApplyDynamicLayoutConstraints();
+
         if (generatedScreen.CustomPanels.TryGetValue("RightOutput", out RectTransform rightPanel))
         {
             BuildRightPanelContent(rightPanel);
@@ -922,15 +1167,29 @@ public class HeroUI : RootUI
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
-
     private void RebuildDiceScrollView()
     {
         if (diceScrollRect == null) return;
         diceUI = uiGenerator.RebuildGrid(diceScrollRect.content, GenerateDiceLayout(currentDiceTab));
-        diceScrollRect.content.sizeDelta = new Vector2(0, diceUI.TotalHeight);
+
+        // Account for VerticalLayoutGroup spacing and padding dynamically
+        float extraHeight = 0f;
+        var layoutGroup = diceScrollRect.content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
+        if (layoutGroup != null)
+        {
+            int childCount = diceScrollRect.content.childCount;
+            if (childCount > 1)
+            {
+                extraHeight += layoutGroup.spacing * (childCount - 1);
+            }
+            extraHeight += layoutGroup.padding.top + layoutGroup.padding.bottom;
+        }
+
+        diceScrollRect.content.sizeDelta = new Vector2(0, diceUI.TotalHeight + extraHeight);
+
+        Canvas.ForceUpdateCanvases();
         UpdateUIFromData();
     }
-
     private void BuildRightPanelContent(RectTransform parent)
     {
         GameObject previewContainer = new GameObject("PreviewContainer", typeof(RectTransform));
@@ -1012,7 +1271,6 @@ public class HeroUI : RootUI
         pasteBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => OnPasteHeroString(GUIUtility.systemCopyBuffer));
         FullScreenUIGenerator.SetAnchors(pasteBtnObj.GetComponent<RectTransform>(), 0.52f, 0.0f, 1.0f, 0.06f);
     }
-
     private void AddAbilityToHero(int dropdownValue)
     {
         if (dropdownValue <= 0) return;
@@ -1025,7 +1283,6 @@ public class HeroUI : RootUI
             RebuildStatsUI();
         }
     }
-
     private void RemoveAbilityFromHero(string abilityName)
     {
         if (CurrentHero.RemoveAbility(abilityName))
@@ -1033,5 +1290,65 @@ public class HeroUI : RootUI
             NotifyStateChanged();
             RebuildStatsUI();
         }
+    }
+
+    private void ApplyDynamicLayoutConstraints()
+    {
+        // 1. Stretch the Left Panel Stats ScrollView to fill 100% of its column container
+        if (statsScrollRect != null)
+        {
+            RectTransform scrollRt = statsScrollRect.GetComponent<RectTransform>();
+            RectTransform rowRt = scrollRt.parent as RectTransform;
+
+            // Make the container layout-flexible in case the column uses a VerticalLayoutGroup
+            ConfigureFlexibleLayout(rowRt);
+            ConfigureFlexibleLayout(scrollRt);
+
+            // Force dynamic anchors to stretch to 100% of the parent panel height
+            StretchToParent(rowRt, 10f, 10f);
+            StretchToParent(scrollRt, 0f, 0f);
+        }
+
+        // 2. Stretch the Middle Panel Dice ScrollView to fill everything below the navigation tabs
+        if (diceScrollRect != null)
+        {
+            RectTransform scrollRt = diceScrollRect.GetComponent<RectTransform>();
+            RectTransform rowRt = scrollRt.parent as RectTransform;
+
+            ConfigureFlexibleLayout(rowRt);
+            ConfigureFlexibleLayout(scrollRt);
+
+            // Offset the top constraint down by the height of the navigation tabs (plus 10px spacing)
+            float topOffset = uiGenerator.rowHeight + 15f;
+
+            StretchToParent(rowRt, topOffset, 10f);
+            StretchToParent(scrollRt, 0f, 0f);
+        }
+    }
+
+    private void ConfigureFlexibleLayout(RectTransform target)
+    {
+        if (target == null) return;
+
+        var layoutElement = target.GetComponent<UnityEngine.UI.LayoutElement>();
+        if (layoutElement == null)
+        {
+            layoutElement = target.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+        }
+
+        // Setting flexibleHeight to 1 instructs layout groups to stretch this element to fill unused space
+        layoutElement.preferredHeight = -1;
+        layoutElement.flexibleHeight = 1f;
+    }
+
+    private void StretchToParent(RectTransform rt, float topOffset, float bottomOffset)
+    {
+        if (rt == null) return;
+
+        // Anchors min(0,0) and max(1,1) bounds the RectTransform corners to stretch with its parent
+        rt.anchorMin = new Vector2(0f, 0f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.offsetMin = new Vector2(0f, bottomOffset);
+        rt.offsetMax = new Vector2(0f, -topOffset);
     }
 }
