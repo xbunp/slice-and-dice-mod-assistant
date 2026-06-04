@@ -66,11 +66,27 @@ public abstract class EntityData : SDData
 
     protected void AppendDiceSides(StringBuilder sb)
     {
+        bool allZero = true;
+        for (int i = 0; i < 6; i++)
+        {
+            if (diceSides[i] != null && diceSides[i].effectID != 0)
+            {
+                allZero = false;
+                break;
+            }
+        }
+
         sb.Append(".sd.");
+        if (allZero)
+        {
+            sb.Append("0");
+            return;
+        }
+
         for (int i = 0; i < 6; i++)
         {
             var side = diceSides[i];
-            if (side.effectID == 0) sb.Append("0");
+            if (side == null || side.effectID == 0) sb.Append("0");
             else sb.Append($"{side.effectID}-{side.pips}");
 
             if (i < 5) sb.Append(":");

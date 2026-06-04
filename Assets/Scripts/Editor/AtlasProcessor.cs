@@ -204,9 +204,6 @@ public class AtlasProcessor : AssetPostprocessor
                 { "reg/face/special/target/justTargetAny", 185 },
                 { "reg/face/special/target/justTargetSelf", 186 },
                 { "reg/face/special/target/justTargetSelfPips", 187 },
-                { "big/face/wolfBite", 215 },
-                { "huge/face/summonSaber", 235 },
-                { "small/face/boneStrike", 256 }
             }
         }
     };

@@ -7,10 +7,11 @@ using UnityEngine.UI;
 
 public class FullModUI : RootUI
 {
+    
     private TMP_Dropdown directiveDropdown;
     private ScrollRect directiveScrollView;
     private List<DirectiveUI> directiveUIs = new List<DirectiveUI>();
-
+    /*
     protected override void BuildUIAndBind()
     {
         var columns = new List<ColumnSpec>
@@ -39,7 +40,7 @@ public class FullModUI : RootUI
             OnStateChanged(null);
         }
     }
-
+    */
     private void OnDestroy()
     {
         if (ModPackage.Instance != null)

@@ -30,31 +30,56 @@ public class HeroData : EntityData
     {
         if (hero == null) return "()";
 
-        StringBuilder sb = new StringBuilder();
-        sb.Append("(");
+        // 1. Build the core <hero> data inside its own balanced parenthesis
+        StringBuilder heroSb = new StringBuilder();
+        heroSb.Append("(");
 
         bool hasImageOverride = !string.IsNullOrEmpty(hero.imageOverride) &&
                                 hero.imageOverride != "None" &&
                                 hero.imageOverride != hero.baseReplica;
 
-        sb.Append($"replica.{FormatName(hero.baseReplica)}");
-        if (!hasImageOverride) hero.AppendColorModifier(sb);
+        heroSb.Append($"replica.{FormatName(hero.baseReplica)}");
+        if (!hasImageOverride) hero.AppendColorModifier(heroSb);
 
-        sb.Append($".n.{FormatName(hero.entityName)}");
+        heroSb.Append($".n.{FormatName(hero.entityName)}");
 
         if (!string.IsNullOrEmpty(hero.colorClass) && !IsDefaultColor(hero.baseReplica, hero.colorClass))
         {
-            sb.Append($".col.{hero.colorClass}");
+            heroSb.Append($".col.{hero.colorClass}");
         }
 
-        sb.Append($".hp.{hero.hp}.tier.{hero.tier}");
+        heroSb.Append($".hp.{hero.hp}.tier.{hero.tier}");
+
+        if (!string.IsNullOrEmpty(hero.p)) heroSb.Append($".p.{hero.p}");
+        if (hero.adj.HasValue) heroSb.Append($".adj.{hero.adj.Value}");
+        if (!string.IsNullOrEmpty(hero.b)) heroSb.Append($".b.{hero.b}");
+        if (!string.IsNullOrEmpty(hero.rect)) heroSb.Append($".rect.{hero.rect}");
+        if (!string.IsNullOrEmpty(hero.draw)) heroSb.Append($".draw.{hero.draw}");
+        if (!string.IsNullOrEmpty(hero.thue)) heroSb.Append($".thue.{hero.thue}");
+
+        hero.AppendDiceSides(heroSb);
+        if (!string.IsNullOrEmpty(hero.speech)) heroSb.Append($".speech.{hero.speech}");
+        if (!string.IsNullOrEmpty(hero.doc)) heroSb.Append($".doc.{hero.doc}");
+
+        heroSb.Append(hero.BuildFaceModifiers(allowFacade: true));
+
+        if (hasImageOverride)
+        {
+            heroSb.Append($".img.{FormatName(hero.imageOverride)}");
+            hero.AppendColorModifier(heroSb);
+        }
+
+        heroSb.Append(")");
+
+        // 2. Build the <those> modifiers outside of the hero parenthesis
+        StringBuilder thoseSb = new StringBuilder();
 
         // Traits: t.<name>
         if (hero.traits != null)
         {
             foreach (var t in hero.traits)
             {
-                if (!string.IsNullOrEmpty(t)) sb.Append($".t.{FormatName(t)}");
+                if (!string.IsNullOrEmpty(t)) thoseSb.Append($".i.t.{FormatName(t)}");
             }
         }
 
@@ -63,7 +88,7 @@ public class HeroData : EntityData
         {
             foreach (var i in hero.items)
             {
-                if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
+                if (!string.IsNullOrEmpty(i)) thoseSb.Append($".i.{FormatName(i)}");
             }
         }
 
@@ -72,7 +97,7 @@ public class HeroData : EntityData
         {
             foreach (var ci in hero.customItems)
             {
-                if (ci != null) sb.Append($".i.({ItemData.Export(ci)})");
+                if (ci != null) thoseSb.Append($".i.({ItemData.Export(ci)})");
             }
         }
 
@@ -81,7 +106,7 @@ public class HeroData : EntityData
         {
             foreach (var b in hero.blessings)
             {
-                if (!string.IsNullOrEmpty(b)) sb.Append($".i.gift.{FormatName(b)}");
+                if (!string.IsNullOrEmpty(b)) thoseSb.Append($".gift.{FormatName(b)}");
             }
         }
 
@@ -90,7 +115,7 @@ public class HeroData : EntityData
         {
             foreach (var c in hero.curses)
             {
-                if (!string.IsNullOrEmpty(c)) sb.Append($".i.t.jinx.{FormatName(c)}");
+                if (!string.IsNullOrEmpty(c)) thoseSb.Append($".i.t.jinx.{FormatName(c)}");
             }
         }
 
@@ -99,7 +124,7 @@ public class HeroData : EntityData
         {
             foreach (var ab in hero.baseAbilityData)
             {
-                if (!string.IsNullOrEmpty(ab)) sb.Append($".i.learn.{FormatName(ab)}");
+                if (!string.IsNullOrEmpty(ab)) thoseSb.Append($".i.learn.{FormatName(ab)}");
             }
         }
 
@@ -108,32 +133,17 @@ public class HeroData : EntityData
         {
             foreach (var cab in hero.customAbilityData)
             {
-                if (cab != null) sb.Append($".abilitydata.({AbilityData.Export(cab)})");
+                if (cab != null) thoseSb.Append($".abilitydata.({AbilityData.Export(cab)})");
             }
         }
 
-        if (!string.IsNullOrEmpty(hero.p)) sb.Append($".p.{hero.p}");
-        if (hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
-        if (!string.IsNullOrEmpty(hero.b)) sb.Append($".b.{hero.b}");
-        if (!string.IsNullOrEmpty(hero.rect)) sb.Append($".rect.{hero.rect}");
-        if (!string.IsNullOrEmpty(hero.draw)) sb.Append($".draw.{hero.draw}");
-        if (!string.IsNullOrEmpty(hero.thue)) sb.Append($".thue.{hero.thue}");
-
-        hero.AppendDiceSides(sb);
-        if (!string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
-        if (!string.IsNullOrEmpty(hero.doc)) sb.Append($".doc.{hero.doc}");
-
-        sb.Append(hero.BuildFaceModifiers(allowFacade: true));
-
-        if (hasImageOverride)
+        // Combine into outer wrapper: ((<hero>)<those>)
+        if (thoseSb.Length == 0)
         {
-            sb.Append($".img.{FormatName(hero.imageOverride)}");
-            hero.AppendColorModifier(sb);
+            return heroSb.ToString();
         }
 
-        sb.Append(")");
-
-        return sb.ToString();
+        return $"({heroSb.ToString()}{thoseSb.ToString()})";
     }
 
     public static HeroData Parse(string data)
@@ -142,29 +152,47 @@ public class HeroData : EntityData
         if (string.IsNullOrEmpty(data)) return hero;
 
         data = data.Trim();
+        List<string> tokens = new List<string>();
 
-        // 1. Unwrap core abilities structured as ((<hero_data>)i.learn.<ability>) 
-        // (Kept for backwards compatibility with older versions of your exporter)
-        while (data.StartsWith("(") && data.EndsWith(")"))
+        // Safely split nested double parentheses ((<hero>)<those>) without corrupting dots
+        if (data.StartsWith("((") && data.EndsWith(")"))
         {
-            int learnIndex = data.LastIndexOf(")i.learn.", StringComparison.OrdinalIgnoreCase);
-            if (learnIndex != -1)
+            int depth = 1;
+            int innerEndIndex = -1;
+            for (int idx = 2; idx < data.Length; idx++)
             {
-                int nameStart = learnIndex + 9;
-                int nameLength = data.Length - nameStart - 1;
-
-                if (nameLength > 0)
+                if (data[idx] == '(') depth++;
+                else if (data[idx] == ')')
                 {
-                    hero.baseAbilityData.Insert(0, data.Substring(nameStart, nameLength));
-                    data = data.Substring(1, learnIndex);
-                    continue;
+                    depth--;
+                    if (depth == 0)
+                    {
+                        innerEndIndex = idx;
+                        break;
+                    }
                 }
             }
-            break;
-        }
 
-        // 2. Normal tokenization
-        List<string> tokens = TokenizeString(data);
+            if (innerEndIndex != -1 && innerEndIndex < data.Length - 1)
+            {
+                string innerHeroStr = data.Substring(1, innerEndIndex);
+                string trailingModifiersStr = data.Substring(innerEndIndex + 1, data.Length - innerEndIndex - 2);
+
+                tokens.AddRange(TokenizeString(innerHeroStr));
+                if (!string.IsNullOrEmpty(trailingModifiersStr))
+                {
+                    tokens.AddRange(TokenizeString(trailingModifiersStr));
+                }
+            }
+            else
+            {
+                tokens = TokenizeString(data);
+            }
+        }
+        else
+        {
+            tokens = TokenizeString(data);
+        }
 
         for (int i = 0; i < tokens.Count; i++)
         {
@@ -194,53 +222,44 @@ public class HeroData : EntityData
                 case "hue": if (int.TryParse(value, out int hVal)) hero.hue = hVal; break;
 
                 case "i":
-                    // Lookahead Parsing for multi-dot "i" modifiers
                     if (string.Equals(value, "t", StringComparison.OrdinalIgnoreCase) &&
                         i + 2 < tokens.Count && string.Equals(tokens[i + 2], "jinx", StringComparison.OrdinalIgnoreCase) &&
                         i + 3 < tokens.Count)
                     {
-                        // i.t.jinx.<curse>
                         hero.curses.AddRange(tokens[i + 3].Split('#'));
-                        i += 3; // Consume "t", "jinx", and "<curse>"
+                        i += 3;
                     }
                     else if (string.Equals(value, "gift", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
                     {
-                        // i.gift.<blessing>
                         hero.blessings.AddRange(tokens[i + 2].Split('#'));
-                        i += 2; // Consume "gift", and "<blessing>"
+                        i += 2;
                     }
                     else if (string.Equals(value, "learn", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
                     {
-                        // i.learn.<ability>
                         hero.baseAbilityData.AddRange(tokens[i + 2].Split('#'));
-                        i += 2; // Consume "learn", and "<ability>"
+                        i += 2;
                     }
                     else if (value.StartsWith("("))
                     {
-                        // i.(<custom item>)
                         hero.customItems.Add(ItemData.Parse(value));
                     }
                     else
                     {
-                        // i.<item>
                         hero.items.AddRange(value.Split('#'));
                     }
                     break;
 
                 case "t":
-                    // t.<trait>
                     hero.traits.AddRange(value.Split('#'));
                     break;
 
                 case "abilitydata":
                     if (value.StartsWith("("))
                     {
-                        // abilitydata.(<custom ability>)
                         hero.customAbilityData.Add(AbilityData.Parse(value));
                     }
                     else
                     {
-                        // Legacy fallback logic
                         hero.baseAbilityData.AddRange(value.Split('#'));
                     }
                     break;

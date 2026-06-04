@@ -7,7 +7,7 @@ using UnityEngine;
 /// Holding class containing logic ripped out from HeroUI.
 /// Recommended locations for each chunk are noted above their declarations.
 /// </summary>
-public static class HeroUIHelpers
+public static class EntityUIHelpers
 {
     // =====================================================================
     // PORT: ASSET CACHING AND RESOLUTION STATE

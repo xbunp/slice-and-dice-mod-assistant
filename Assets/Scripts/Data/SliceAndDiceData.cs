@@ -2295,6 +2295,9 @@ public enum MonsterType
     Wolf,
     Z0mbie,
     Zombie,
+    PainSigil,
+    DeathSigil,
+    DecaySigil
 }
 
 public static class NameFixes

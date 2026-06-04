@@ -62,7 +62,7 @@ public class HeroUI : RootUI
         if (diceFaceIconPicker == null)
             diceFaceIconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
 
-        HeroUIHelpers.Initialize();
+        EntityUIHelpers.Initialize();
         BuildUIAndBind();
 
         if (ModPackage.Instance != null)
@@ -91,10 +91,10 @@ public class HeroUI : RootUI
 
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = HeroUIHelpers.BaseActionSprites,
-            IsValid = (index, sprite) => HeroUIHelpers.IsSpriteValid(sprite),
+            Sprites = EntityUIHelpers.BaseActionSprites,
+            IsValid = (index, sprite) => EntityUIHelpers.IsSpriteValid(sprite),
             GetSearchName = (index, sprite) => sprite.name,
-            GetTooltip = (index, sprite) => HeroUIHelpers.GetBaseTooltip(sprite),
+            GetTooltip = (index, sprite) => EntityUIHelpers.GetBaseTooltip(sprite),
 
             OnSelectionMade = (index, sprite) =>
             {
@@ -120,8 +120,8 @@ public class HeroUI : RootUI
 
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = HeroUIHelpers.AllActionSprites,
-            IsValid = (index, sprite) => HeroUIHelpers.IsSpriteValid(sprite),
+            Sprites = EntityUIHelpers.AllActionSprites,
+            IsValid = (index, sprite) => EntityUIHelpers.IsSpriteValid(sprite),
             GetSearchName = (index, sprite) => sprite.name,
             GetTooltip = (index, sprite) => sprite.name,
 
@@ -150,7 +150,7 @@ public class HeroUI : RootUI
 
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = HeroUIHelpers.AllActionSprites,
+            Sprites = EntityUIHelpers.AllActionSprites,
             IsValid = (index, sprite) => sprite != null && HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name),
             GetSearchName = (index, sprite) => HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero) ? hero.ToString() : sprite.name,
             GetTooltip = (index, sprite) => HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero) ? hero.ToString() : sprite.name,
@@ -172,10 +172,10 @@ public class HeroUI : RootUI
 
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = HeroUIHelpers.AllActionSprites,
+            Sprites = EntityUIHelpers.AllActionSprites,
             IsValid = (index, sprite) => sprite != null && (HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name) || HeroSpriteDatabase.SpriteToMonsterMap.ContainsKey(sprite.name)),
-            GetSearchName = (index, sprite) => HeroUIHelpers.GetPortraitDisplayName(sprite),
-            GetTooltip = (index, sprite) => HeroUIHelpers.GetPortraitDisplayName(sprite),
+            GetSearchName = (index, sprite) => EntityUIHelpers.GetPortraitDisplayName(sprite),
+            GetTooltip = (index, sprite) => EntityUIHelpers.GetPortraitDisplayName(sprite),
 
             OnSelectionMade = (index, sprite) =>
             {
@@ -252,7 +252,7 @@ public class HeroUI : RootUI
         if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
         if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
         {
-            HeroColorOption colOpt = HeroUIHelpers.ReverseLookupColor(CurrentHero.colorClass);
+            HeroColorOption colOpt = EntityUIHelpers.ReverseLookupColor(CurrentHero.colorClass);
             colDrop.SetValueWithoutNotify((int)colOpt);
         }
 
@@ -300,7 +300,7 @@ public class HeroUI : RootUI
             portraitPreview.SetHPText(CurrentHero.hp.ToString());
             portraitPreview.SetTierText(CurrentHero.tier.ToString());
 
-            HeroColorOption colOpt = HeroUIHelpers.ReverseLookupColor(CurrentHero.colorClass);
+            HeroColorOption colOpt = EntityUIHelpers.ReverseLookupColor(CurrentHero.colorClass);
             portraitPreview.SetHeroColor(SDColors.GetColor(colOpt));
 
             bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentHero.imageOverride == _customImageString;
@@ -310,7 +310,7 @@ public class HeroUI : RootUI
             }
             else
             {
-                Sprite targetSprite = HeroUIHelpers.GetSpriteForPortrait(string.IsNullOrEmpty(CurrentHero.imageOverride) || CurrentHero.imageOverride == "None" ? CurrentHero.baseReplica : CurrentHero.imageOverride);
+                Sprite targetSprite = EntityUIHelpers.GetSpriteForPortrait(string.IsNullOrEmpty(CurrentHero.imageOverride) || CurrentHero.imageOverride == "None" ? CurrentHero.baseReplica : CurrentHero.imageOverride);
                 if (targetSprite != null && portraitPreview.portrait != null)
                 {
                     portraitPreview.portrait.sprite = targetSprite;
@@ -324,12 +324,12 @@ public class HeroUI : RootUI
         {
             if (statsUI.Buttons.TryGetValue("ReplicaBtn", out var replicaBtn))
             {
-                Sprite s = HeroUIHelpers.GetSpriteForPortrait(CurrentHero.baseReplica);
+                Sprite s = EntityUIHelpers.GetSpriteForPortrait(CurrentHero.baseReplica);
                 SetButtonIcon(replicaBtn, s);
             }
             if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
             {
-                Sprite s = HeroUIHelpers.GetSpriteForPortrait(CurrentHero.imageOverride);
+                Sprite s = EntityUIHelpers.GetSpriteForPortrait(CurrentHero.imageOverride);
                 SetButtonIcon(overrideBtn, s);
             }
         }
@@ -347,12 +347,12 @@ public class HeroUI : RootUI
 
                 if (diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
                 {
-                    Sprite s = HeroUIHelpers.GetBaseSprite(face.effectID);
+                    Sprite s = EntityUIHelpers.GetBaseSprite(face.effectID);
                     SetButtonIcon(baseBtn, s);
                 }
                 if (diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
                 {
-                    Sprite s = HeroUIHelpers.GetFacadeSprite(face.facadeID);
+                    Sprite s = EntityUIHelpers.GetFacadeSprite(face.facadeID);
                     SetButtonIcon(facBtn, s);
                 }
             }
@@ -365,7 +365,7 @@ public class HeroUI : RootUI
 
             if (syntaxHighlighterText != null)
             {
-                syntaxHighlighterText.text = HeroUIHelpers.FormatSyntaxHighlighting(exportedString);
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
             }
         }
     }
@@ -493,7 +493,7 @@ public class HeroUI : RootUI
         // Auto-assign the facade corresponding to the active base ID if empty.
         if (string.IsNullOrEmpty(face.facadeID))
         {
-            Sprite baseSprite = HeroUIHelpers.GetBaseSprite(face.effectID);
+            Sprite baseSprite = EntityUIHelpers.GetBaseSprite(face.effectID);
             if (baseSprite != null)
             {
                 string[] parts = baseSprite.name.Split('_');
@@ -954,7 +954,7 @@ public class HeroUI : RootUI
     private List<GridRowSpec> GenerateDiceLayout(int tabIndex)
     {
         var layout = new List<GridRowSpec>();
-        string[] keywordOptions = HeroUIHelpers.GetKeywordOptions();
+        string[] keywordOptions = EntityUIHelpers.GetKeywordOptions();
 
         int startIndex = (tabIndex == 0) ? 0 : tabIndex - 1;
         int endIndex = (tabIndex == 0) ? 6 : tabIndex;
@@ -1021,7 +1021,7 @@ public class HeroUI : RootUI
             foreach (var kw in face.keywords)
             {
                 string keywordString = kw;
-                string coloredLabel = HeroUIHelpers.GetColoredKeywordLabel(keywordString);
+                string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
 
                 layout.Add(new GridRowSpec(
                     GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
@@ -1352,3 +1352,368 @@ public class HeroUI : RootUI
         rt.offsetMax = new Vector2(0f, -topOffset);
     }
 }
+
+/*
+
+// =====================================================================
+// HERO SPECIFIC UI
+// =====================================================================
+public class HeroUI : EntityUI<HeroData>
+{
+    protected override void InitializeSpecifics()
+    {
+        HeroUIHelpers.Initialize();
+    }
+
+    protected override bool AllowFacades() => true;
+
+    protected override string ExportEntity(HeroData entity) => HeroData.Export(entity);
+    protected override HeroData ParseEntity(string data) => HeroData.Parse(data);
+    protected override Sprite GetBaseDiceSprite(int effectID) => HeroUIHelpers.GetBaseSprite(effectID);
+    protected override Sprite GetFacadeDiceSprite(string facadeID) => HeroUIHelpers.GetFacadeSprite(facadeID);
+
+    protected override void OpenBaseModal(int faceIndex)
+    {
+        if (diceFaceIconPicker == null) return;
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = HeroUIHelpers.BaseActionSprites,
+            IsValid = (index, sprite) => HeroUIHelpers.IsSpriteValid(sprite),
+            GetSearchName = (index, sprite) => sprite.name,
+            GetTooltip = (index, sprite) => HeroUIHelpers.GetBaseTooltip(sprite),
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (sprite != null)
+                {
+                    string[] parts = sprite.name.Split('_');
+                    if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
+                    {
+                        CurrentEntity.diceSides[faceIndex].effectID = parsedId;
+                        NotifyStateChanged();
+                        RebuildDiceScrollView();
+                    }
+                }
+            }
+        };
+        diceFaceIconPicker.OpenModal(config);
+    }
+
+    protected override void OpenFacadeModal(int faceIndex)
+    {
+        if (diceFaceIconPicker == null) return;
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = HeroUIHelpers.AllActionSprites,
+            IsValid = (index, sprite) => HeroUIHelpers.IsSpriteValid(sprite),
+            GetSearchName = (index, sprite) => sprite.name,
+            GetTooltip = (index, sprite) => sprite.name,
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (sprite != null)
+                {
+                    string[] parts = sprite.name.Split('_');
+                    if (parts.Length >= 2)
+                    {
+                        string facadeStr = $"{parts[0]}{parts[1]}";
+                        CurrentEntity.diceSides[faceIndex].facadeID = facadeStr;
+                        NotifyStateChanged();
+                        RebuildDiceScrollView();
+                    }
+                }
+            }
+        };
+        diceFaceIconPicker.OpenModal(config);
+    }
+
+    private void OpenHeroPortraitsModal(Action<HeroType, Sprite> onHeroSelected)
+    {
+        if (diceFaceIconPicker == null) return;
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = HeroUIHelpers.AllActionSprites,
+            IsValid = (index, sprite) => sprite != null && HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name),
+            GetSearchName = (index, sprite) => HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero) ? hero.ToString() : sprite.name,
+            GetTooltip = (index, sprite) => HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero) ? hero.ToString() : sprite.name,
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero))
+                    onHeroSelected?.Invoke(hero, sprite);
+            }
+        };
+        diceFaceIconPicker.OpenModal(config);
+    }
+
+    private void OpenAllPortraitsModal(Action<bool, int, Sprite> onPortraitSelected)
+    {
+        if (diceFaceIconPicker == null) return;
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = HeroUIHelpers.AllActionSprites,
+            IsValid = (index, sprite) => sprite != null && (HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name) || HeroSpriteDatabase.SpriteToMonsterMap.ContainsKey(sprite.name)),
+            GetSearchName = (index, sprite) => HeroUIHelpers.GetPortraitDisplayName(sprite),
+            GetTooltip = (index, sprite) => HeroUIHelpers.GetPortraitDisplayName(sprite),
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero))
+                    onPortraitSelected?.Invoke(true, (int)hero, sprite);
+                else if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster))
+                    onPortraitSelected?.Invoke(false, (int)monster, sprite);
+            }
+        };
+        diceFaceIconPicker.OpenModal(config);
+    }
+
+    protected override void UpdateSpecificUIFromData()
+    {
+        if (statsUI.Inputs.TryGetValue("Tier", out var tierIn)) tierIn.SetTextWithoutNotify(CurrentEntity.tier.ToString());
+        if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseReplica);
+        if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(CurrentEntity.imageOverride);
+        if (statsUI.Inputs.TryGetValue("Speech", out var speechIn)) speechIn.SetTextWithoutNotify(CurrentEntity.speech);
+
+        if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
+        {
+            HeroColorOption colOpt = HeroUIHelpers.ReverseLookupColor(CurrentEntity.colorClass);
+            colDrop.SetValueWithoutNotify((int)colOpt);
+        }
+    }
+
+    protected override void UpdateSpecificVisuals()
+    {
+        if (portraitPreview != null)
+        {
+            portraitPreview.SetTierText(CurrentEntity.tier.ToString());
+            HeroColorOption colOpt = HeroUIHelpers.ReverseLookupColor(CurrentEntity.colorClass);
+            portraitPreview.SetHeroColor(SDColors.GetColor(colOpt));
+
+            bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentEntity.imageOverride == _customImageString;
+            if (isUsingCustomImage && _customImageTexture != null && portraitPreview.portrait != null)
+            {
+                portraitPreview.portrait.sprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+            }
+            else
+            {
+                Sprite targetSprite = HeroUIHelpers.GetSpriteForPortrait(string.IsNullOrEmpty(CurrentEntity.imageOverride) || CurrentEntity.imageOverride == "None" ? CurrentEntity.baseReplica : CurrentEntity.imageOverride);
+                if (targetSprite != null && portraitPreview.portrait != null) portraitPreview.portrait.sprite = targetSprite;
+            }
+        }
+
+        if (statsUI != null && statsUI.Buttons != null)
+        {
+            if (statsUI.Buttons.TryGetValue("ReplicaBtn", out var replicaBtn))
+            {
+                Sprite s = HeroUIHelpers.GetSpriteForPortrait(CurrentEntity.baseReplica);
+                SetButtonIcon(replicaBtn, s);
+            }
+            if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
+            {
+                Sprite s = HeroUIHelpers.GetSpriteForPortrait(CurrentEntity.imageOverride);
+                SetButtonIcon(overrideBtn, s);
+            }
+        }
+    }
+
+    protected override List<GridRowSpec> GenerateStatsLayout()
+    {
+        var layout = new List<GridRowSpec>();
+
+        layout.Add(new GridRowSpec(GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)));
+
+        var heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
+        if (heroes != null)
+        {
+            List<string> poolOptions = new List<string> { "Stand Alone Hero (New)" };
+            foreach (var hero in heroes)
+                poolOptions.Add(string.IsNullOrEmpty(hero.entityName) ? "New Hero" : hero.entityName);
+
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Mod Pool:", 0.20f),
+                GridCellSpec.CreateDropdown("PoolDropdown", "", 0.50f, poolOptions.ToArray(), OnPoolDropdownChanged),
+                GridCellSpec.CreateButton("BtnSavePool", "Save to Mod", 0.30f, SaveToModPool)
+            ));
+        }
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Hero Name:", 0.35f),
+            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentEntity.entityName = val; NotifyStateChanged(); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Replica Base:", 0.35f),
+            GridCellSpec.CreateDiceButton("ReplicaBtn", "P", 0.15f, () => OpenHeroPortraitsModal((selectedHero, selectedSprite) => {
+                CurrentEntity.baseReplica = selectedHero.ToString();
+                NotifyStateChanged();
+                UpdateUIFromData();
+            })),
+            GridCellSpec.CreateInput("ReplicaName", "Statue", 0.50f, (val) => { CurrentEntity.baseReplica = val; NotifyStateChanged(); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Icon Override:", 0.30f),
+            GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () => OpenAllPortraitsModal((isHero, enumValue, selectedSprite) => {
+                CurrentEntity.imageOverride = isHero ? ((HeroType)enumValue).ToString() : ((MonsterType)enumValue).ToString();
+                NotifyStateChanged();
+                UpdateUIFromData();
+            })),
+            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => { CurrentEntity.imageOverride = val; NotifyStateChanged(); }),
+            GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
+        ));
+
+        if (showCustomImagePanel) layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("HP:", 0.2f),
+            GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) CurrentEntity.hp = hp; NotifyStateChanged(); }),
+            GridCellSpec.CreateLabel("Tier:", 0.2f),
+            GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => { if (int.TryParse(val, out int t)) CurrentEntity.tier = t; NotifyStateChanged(); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Hue:", 0.30f),
+            GridCellSpec.CreateSlider("EntitySliH", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(0, Mathf.RoundToInt(val))),
+            GridCellSpec.CreateInput("EntityFacH", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateEntityHsvData(0, h); })
+        ));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Sat:", 0.30f),
+            GridCellSpec.CreateSlider("EntitySliS", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(1, Mathf.RoundToInt(val))),
+            GridCellSpec.CreateInput("EntityFacS", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateEntityHsvData(1, s); })
+        ));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Val:", 0.30f),
+            GridCellSpec.CreateSlider("EntitySliV", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(2, Mathf.RoundToInt(val))),
+            GridCellSpec.CreateInput("EntityFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateEntityHsvData(2, v); })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Color Class:", 0.35f),
+            GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
+                CurrentEntity.colorClass = SDColors.GetColorCode((HeroColorOption)val);
+                NotifyStateChanged();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Speech:", 0.20f),
+            GridCellSpec.CreateInput("Speech", "", 0.80f, (val) => { CurrentEntity.speech = val; NotifyStateChanged(); })
+        ));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Doc:", 0.20f),
+            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val; NotifyStateChanged(); })
+        ));
+
+        AppendCollectionSelector<BaseAbility>(
+            layout: layout, label: "Add Ability:", uniqueKey: "BaseAbility",
+            availableChoices: BaseAbilityDatabase.Abilities,
+            currentActiveItems: CurrentEntity.baseAbilityData,
+            getKey: (ability) => ability.name,
+            getDisplay: (ability) => $"{ability.name} ({ability.cost}): {(ability.effect ?? "").Replace("\n", " | ")}",
+            onAdd: (abilityName) => {
+                if (CurrentEntity.AddAbility(abilityName)) { NotifyStateChanged(); RebuildStatsUI(); }
+            },
+            onRemove: (abilityName) => {
+                if (CurrentEntity.RemoveAbility(abilityName)) { NotifyStateChanged(); RebuildStatsUI(); }
+            }
+        );
+
+        AppendCollectionSelector<string>(
+            layout: layout, label: "Add Custom Ability:", uniqueKey: "CustomAbility",
+            availableChoices: new List<string>(),
+            currentActiveItems: CurrentEntity.customAbilityData?.Select(a => a.entityName).ToList() ?? new List<string>(),
+            getKey: (name) => name, getDisplay: (name) => name,
+            onAdd: (abilityName) => { Custom logic },
+            onRemove: (abilityName) => {
+                if (CurrentEntity.customAbilityData != null)
+                {
+                    var target = CurrentEntity.customAbilityData.FirstOrDefault(a => a.entityName == abilityName);
+                    if (target != null && CurrentEntity.customAbilityData.Remove(target)) { NotifyStateChanged(); RebuildStatsUI(); }
+                }
+            }
+        );
+
+string[] formattedItemNames = Enum.GetNames(typeof(BaseItems)).Select(name => Regex.Replace(name, "([a-z])([A-Z])", "$1 $2")).ToArray();
+AppendCollectionSelector<string>(
+    layout: layout, label: "Add Item:", uniqueKey: "Item",
+    availableChoices: formattedItemNames,
+    currentActiveItems: CurrentEntity.items ?? new List<string>(),
+    getKey: (itemName) => itemName, getDisplay: (itemName) => itemName,
+    onAdd: (itemName) => {
+        if (CurrentEntity.items == null) CurrentEntity.items = new List<string>();
+        if (!CurrentEntity.items.Contains(itemName)) { CurrentEntity.items.Add(itemName); NotifyStateChanged(); RebuildStatsUI(); }
+    },
+    onRemove: (itemName) => {
+        if (CurrentEntity.items != null && CurrentEntity.items.Remove(itemName)) { NotifyStateChanged(); RebuildStatsUI(); }
+    }
+);
+
+AppendCollectionSelector<string>(
+    layout: layout, label: "Add Custom Item:", uniqueKey: "CustomItem",
+    availableChoices: new List<string>(),
+    currentActiveItems: CurrentEntity.customItems?.Select(i => i.entityName).ToList() ?? new List<string>(),
+    getKey: (name) => name, getDisplay: (name) => name,
+    onAdd: (itemName) => {
+        if (CurrentEntity.customItems == null) CurrentEntity.customItems = new List<ItemData>();
+        if (!CurrentEntity.customItems.Any(i => i.entityName == itemName))
+        {
+            CurrentEntity.customItems.Add(new ItemData { entityName = itemName });
+            NotifyStateChanged(); RebuildStatsUI();
+        }
+    },
+    onRemove: (itemName) => {
+        if (CurrentEntity.customItems != null)
+        {
+            var target = CurrentEntity.customItems.FirstOrDefault(i => i.entityName == itemName);
+            if (target != null && CurrentEntity.customItems.Remove(target)) { NotifyStateChanged(); RebuildStatsUI(); }
+        }
+    }
+);
+
+AppendCollectionSelector<string>(
+    layout: layout, label: "Add Traits:", uniqueKey: "Trait",
+    availableChoices: SDColors.TraitNiceNames.Keys.ToList(),
+    currentActiveItems: CurrentEntity.traits ?? new List<string>(),
+    getKey: (traitName) => traitName,
+    getDisplay: (traitName) => SDColors.TraitNiceNames.TryGetValue(traitName, out string desc) ? $"{traitName}: {desc}" : traitName,
+    onAdd: (traitName) => {
+        if (CurrentEntity.traits == null) CurrentEntity.traits = new List<string>();
+        if (!CurrentEntity.traits.Contains(traitName)) { CurrentEntity.traits.Add(traitName); NotifyStateChanged(); RebuildStatsUI(); }
+    },
+    onRemove: (traitName) => {
+        if (CurrentEntity.traits != null && CurrentEntity.traits.Remove(traitName)) { NotifyStateChanged(); RebuildStatsUI(); }
+    }
+);
+
+AppendCollectionSelector<string>(
+    layout: layout, label: "Add Blessing:", uniqueKey: "Blessing",
+    availableChoices: BlessingDataset.Blessings.Keys.ToList(),
+    currentActiveItems: CurrentEntity.blessings ?? new List<string>(),
+    getKey: (blessingName) => blessingName,
+    getDisplay: (blessingName) => BlessingDataset.Blessings.TryGetValue(blessingName, out string desc) ? $"{blessingName}: {desc}" : blessingName,
+    onAdd: (blessingName) => {
+        if (CurrentEntity.blessings == null) CurrentEntity.blessings = new List<string>();
+        if (!CurrentEntity.blessings.Contains(blessingName)) { CurrentEntity.blessings.Add(blessingName); NotifyStateChanged(); RebuildStatsUI(); }
+    },
+    onRemove: (blessingName) => {
+        if (CurrentEntity.blessings != null && CurrentEntity.blessings.Remove(blessingName)) { NotifyStateChanged(); RebuildStatsUI(); }
+    }
+);
+
+AppendCollectionSelector<string>(
+    layout: layout, label: "Add Curse:", uniqueKey: "Curse",
+    availableChoices: CurseDataset.Curses.Keys.ToList(),
+    currentActiveItems: CurrentEntity.curses ?? new List<string>(),
+    getKey: (curseName) => curseName,
+    getDisplay: (curseName) => CurseDataset.Curses.TryGetValue(curseName, out string desc) ? $"{curseName}: {desc}" : curseName,
+    onAdd: (curseName) => {
+        if (CurrentEntity.curses == null) CurrentEntity.curses = new List<string>();
+        if (!CurrentEntity.curses.Contains(curseName)) { CurrentEntity.curses.Add(curseName); NotifyStateChanged(); RebuildStatsUI(); }
+    },
+    onRemove: (curseName) => {
+        if (CurrentEntity.curses != null && CurrentEntity.curses.Remove(curseName)) { NotifyStateChanged(); RebuildStatsUI(); }
+    }
+);
+
+return layout;
+    }
+}
+*/
