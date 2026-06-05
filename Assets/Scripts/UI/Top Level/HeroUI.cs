@@ -10,7 +10,7 @@ using UnityEngine.UI;
 public class HeroUI : RootUI
 {
     //[Header("UI Modal References")]
-    private IconPickerModal diceFaceIconPicker;
+    private IconPickerModal iconPicker;
     private PortraitPreviewUI portraitPreview;
 
     //[Header("Dynamically Generated Components")]
@@ -59,8 +59,8 @@ public class HeroUI : RootUI
     {
         uiGenerator = uiGeneratorRef;
 
-        if (diceFaceIconPicker == null)
-            diceFaceIconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
+        if (iconPicker == null)
+            iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
 
         EntityUIHelpers.Initialize();
         BuildUIAndBind();
@@ -87,7 +87,7 @@ public class HeroUI : RootUI
 
     private void OpenBaseModal(int faceIndex)
     {
-        if (diceFaceIconPicker == null) return;
+        if (iconPicker == null) return;
 
         IconPickerConfig config = new IconPickerConfig
         {
@@ -128,11 +128,11 @@ public class HeroUI : RootUI
             }
         };
 
-        diceFaceIconPicker.OpenModal(config);
+        iconPicker.OpenModal(config);
     }
     private void OpenFacadeModal(int faceIndex)
     {
-        if (diceFaceIconPicker == null) return;
+        if (iconPicker == null) return;
 
         IconPickerConfig config = new IconPickerConfig
         {
@@ -214,11 +214,11 @@ public class HeroUI : RootUI
             }
         };
 
-        diceFaceIconPicker.OpenModal(config);
+        iconPicker.OpenModal(config);
     }
     private void OpenHeroPortraitsModal(Action<HeroType, Sprite> onHeroSelected)
     {
-        if (diceFaceIconPicker == null) return;
+        if (iconPicker == null) return;
 
         IconPickerConfig config = new IconPickerConfig
         {
@@ -236,11 +236,11 @@ public class HeroUI : RootUI
             }
         };
 
-        diceFaceIconPicker.OpenModal(config);
+        iconPicker.OpenModal(config);
     }   
     private void OpenAllPortraitsModal(Action<bool, int, Sprite> onPortraitSelected)
     {
-        if (diceFaceIconPicker == null) return;
+        if (iconPicker == null) return;
 
         IconPickerConfig config = new IconPickerConfig
         {
@@ -262,7 +262,7 @@ public class HeroUI : RootUI
             }
         };
 
-        diceFaceIconPicker.OpenModal(config);
+        iconPicker.OpenModal(config);
     }
     private void UpdateIcon(int index)
     {
@@ -665,6 +665,7 @@ public class HeroUI : RootUI
             GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
         ));
 
+        /*
         var heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
         if (heroes != null)
         {
@@ -683,6 +684,13 @@ public class HeroUI : RootUI
                 GridCellSpec.CreateButton("BtnSavePool", "Save to Mod", 0.30f, SaveToModPool)
             ));
         }
+        */
+
+        string poolBtnText = _currentPoolIndex == 0 ? "Mod Pool: New Hero" : $"Mod Pool: {CurrentHero.entityName}";
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateButton("BtnOpenPool", poolBtnText, 0.70f, OpenModPoolModal),
+            GridCellSpec.CreateButton("BtnSavePool", "Save to Mod", 0.30f, SaveToModPool)
+        ));
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Hero Name:", 0.35f),
@@ -1422,5 +1430,73 @@ public class HeroUI : RootUI
         rt.anchorMax = new Vector2(1f, 1f);
         rt.offsetMin = new Vector2(0f, bottomOffset);
         rt.offsetMax = new Vector2(0f, -topOffset);
+    }
+
+    private void OpenModPoolModal()
+    {
+        if (iconPicker == null) return;
+
+        var heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
+        Sprite[] heroSprites = new Sprite[heroes.Count + 1];
+
+        heroSprites[0] = EntityUIHelpers.GetSpriteForPortrait("Statue");
+
+        for (int i = 0; i < heroes.Count; i++)
+        {
+            var h = heroes[i];
+            string imgStr = string.IsNullOrEmpty(h.imageOverride) || h.imageOverride == "None" ? h.baseReplica : h.imageOverride;
+            heroSprites[i + 1] = EntityUIHelpers.GetSpriteForPortrait(imgStr);
+        }
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = heroSprites,
+            DisableDeduplication = true,
+            AllowNullSprites = true,
+
+            IsValid = (index, sprite) => true,
+
+            CellSize = new Vector2(80,80),
+
+            GetSearchName = (index, sprite) => index == 0 ? "Stand Alone Hero (New)" : heroes[index - 1].entityName,
+            GetTooltip = (index, sprite) => index == 0 ? "Create a new blank hero" : heroes[index - 1].entityName,
+
+            GetNameText = (index, sprite) => index == 0 ? "New Hero" : heroes[index - 1].entityName,
+            GetTierText = (index, sprite) => index == 0 ? "" : heroes[index - 1].tier.ToString(),
+            GetHPText = (index, sprite) => index == 0 ? "" : heroes[index - 1].hp.ToString(),
+            GetColor = (index, sprite) => index == 0
+                ? Color.white
+                : SDColors.GetColor(EntityUIHelpers.ReverseLookupColor(heroes[index - 1].colorClass)),
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                OnPoolHeroSelected(index);
+            }
+        };
+
+        iconPicker.OpenModal(config);
+    }
+
+    private void OnPoolHeroSelected(int index)
+    {
+        if (isDrawingUI) return;
+        _currentPoolIndex = index;
+
+        var heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
+
+        if (index > 0 && (index - 1) < heroes.Count)
+        {
+            var originalHero = heroes[index - 1];
+            ModPackage.Instance.LoadEntityForEditing(originalHero);
+        }
+        else
+        {
+            ModPackage.Instance.LoadEntityForEditing(new HeroData());
+        }
+
+        ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
+
+        RebuildStatsUI();
+        RebuildDiceScrollView();
     }
 }

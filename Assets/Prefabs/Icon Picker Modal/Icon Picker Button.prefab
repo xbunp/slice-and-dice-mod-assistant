@@ -137,6 +137,7 @@ MonoBehaviour:
   button: {fileID: 8719545915658667997}
   iconImage: {fileID: 3933900107065619127}
   tooltipTrigger: {fileID: 3674633082981250498}
+  portraitUIPrefab: {fileID: 4707486279873657677, guid: 31371eb7e0d89d7479c22cd49eca87bd, type: 3}
 --- !u!114 &3674633082981250498
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -150,3 +151,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   content: 
+  holdDuration: 0.5

@@ -14,7 +14,6 @@ public class IconPickerItem : MonoBehaviour
 
     private void Awake()
     {
-        // Add listener ONCE. Zero memory allocation during runtime.
         button.onClick.AddListener(OnClick);
     }
 

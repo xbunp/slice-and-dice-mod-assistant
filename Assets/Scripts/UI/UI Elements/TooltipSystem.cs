@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class TooltipSystem : MonoBehaviour
 {
@@ -14,10 +15,11 @@ public class TooltipSystem : MonoBehaviour
     public Vector2 mobileOffset = new Vector2(0, 100);
 
     private bool isMobileDevice;
+    private Canvas parentCanvas;
+    private RectTransform parentRect;
 
     private void Awake()
     {
-        // Establish singleton instance
         if (instance != null && instance != this)
         {
             Destroy(gameObject);
@@ -25,13 +27,15 @@ public class TooltipSystem : MonoBehaviour
         }
         instance = this;
 
-        // Detect if the running device is a mobile platform
         isMobileDevice = Application.isMobilePlatform;
 
-        // Ensure the tooltip is hidden on start
         if (tooltip != null)
         {
             tooltip.gameObject.SetActive(false);
+
+            // Cache parent references for positioning calculations
+            parentRect = tooltip.RectTransform.parent as RectTransform;
+            parentCanvas = tooltip.GetComponentInParent<Canvas>();
         }
         else
         {
@@ -49,60 +53,67 @@ public class TooltipSystem : MonoBehaviour
 
     private void UpdatePosition()
     {
-        Vector2 inputPos = Input.mousePosition;
+        if (parentRect == null || parentCanvas == null) return;
 
-        // Use the appropriate offset based on the platform
+        Vector2 mousePos = Input.mousePosition;
         Vector2 currentOffset = isMobileDevice ? mobileOffset : offset;
-        Vector2 newPos = inputPos + currentOffset;
 
-        // Use the safe public RectTransform property
+        // 1. Convert screen mouse position to parent local coordinate space
+        // This handles Canvas scaling, camera settings, and screen resolutions automatically.
+        Camera uiCamera = parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : parentCanvas.worldCamera;
+
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, mousePos, uiCamera, out Vector2 localMousePos))
+        {
+            return;
+        }
+
+        Vector2 targetLocalPos = localMousePos + currentOffset;
+
+        // 2. Get tooltip dimensions in local coordinates
         float width = tooltip.RectTransform.rect.width;
         float height = tooltip.RectTransform.rect.height;
 
-        // Clamp horizontally (applies to both PC and Mobile)
-        if (newPos.x < 0)
-        {
-            newPos.x = 0;
-        }
-        else if (newPos.x + width > Screen.width)
-        {
-            newPos.x = Screen.width - width;
-        }
+        float pivotX = tooltip.RectTransform.pivot.x;
+        float pivotY = tooltip.RectTransform.pivot.y;
+
+        // 3. Define boundaries relative to the parent UI container's local Rect
+        float minX = parentRect.rect.xMin + (width * pivotX);
+        float maxX = parentRect.rect.xMax - (width * (1f - pivotX));
+        float minY = parentRect.rect.yMin + (height * pivotY);
+        float maxY = parentRect.rect.yMax - (height * (1f - pivotY));
+
+        // Clamp horizontally
+        targetLocalPos.x = Mathf.Clamp(targetLocalPos.x, minX, maxX);
 
         // Clamp vertically
         if (isMobileDevice)
         {
-            // MOBILE LOGIC: Keep it above the finger, clamp to top of screen if it goes too high
-            if (newPos.y > Screen.height)
-            {
-                newPos.y = Screen.height;
-            }
-            else if (newPos.y - height < 0)
-            {
-                newPos.y = height;
-            }
+            targetLocalPos.y = Mathf.Clamp(targetLocalPos.y, minY, maxY);
         }
         else
         {
-            // PC LOGIC: Default below-cursor logic, flip above if it hits the bottom edge
-            if (newPos.y - height < 0)
+            // Desktop flip behavior
+            float bottomEdge = targetLocalPos.y - (height * pivotY);
+
+            // If the tooltip falls below the bottom bounds of the parent container
+            if (bottomEdge < parentRect.rect.yMin)
             {
-                newPos.y = inputPos.y - offset.y; // Flip above cursor
+                // Flip vertically relative to local mouse position
+                targetLocalPos.y = localMousePos.y - currentOffset.y;
             }
-            else if (newPos.y > Screen.height)
-            {
-                newPos.y = Screen.height;
-            }
+
+            // Apply safety clamp to top/bottom limits
+            targetLocalPos.y = Mathf.Clamp(targetLocalPos.y, minY, maxY);
         }
 
-        tooltip.transform.position = newPos;
+        // Apply the resolved coordinates directly to the localPosition
+        tooltip.RectTransform.localPosition = targetLocalPos;
     }
 
     public static void Show(string content)
     {
         if (instance == null)
         {
-            // Fallback attempt to locate the system in the scene if not initialized yet
             instance = FindFirstObjectByType<TooltipSystem>();
             if (instance == null)
             {
@@ -118,7 +129,18 @@ public class TooltipSystem : MonoBehaviour
         }
 
         instance.tooltip.SetText(content);
+
+        // Force layout update so rect boundaries are immediately calculated on this frame
+        LayoutRebuilder.ForceRebuildLayoutImmediate(instance.tooltip.RectTransform);
+
         instance.tooltip.gameObject.SetActive(true);
+
+        // Re-cache references if they were lost during hierarchy changes
+        if (instance.parentRect == null || instance.parentCanvas == null)
+        {
+            instance.parentRect = instance.tooltip.RectTransform.parent as RectTransform;
+            instance.parentCanvas = instance.tooltip.GetComponentInParent<Canvas>();
+        }
     }
 
     public static void Hide()

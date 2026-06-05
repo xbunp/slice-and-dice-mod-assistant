@@ -1,9 +1,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
+
 
 /// <summary>
 /// Configuration object passed by the caller to define exactly what the modal should display.
@@ -18,6 +19,17 @@ public struct IconPickerConfig
     public Func<int, Sprite, string> GetTooltip;    // What tooltip to show on hover? (null = Sprite.name)
 
     public Action<int, Sprite> OnSelectionMade;     // Callback when the user clicks an icon
+
+    public bool DisableDeduplication;
+    public bool AllowNullSprites;
+
+    public Func<int, Sprite, string> GetNameText;
+    public Func<int, Sprite, string> GetTierText;
+    public Func<int, Sprite, string> GetHPText;
+    public Func<int, Sprite, Color> GetColor;
+
+    public Vector2? CellSize;                       // Override the grid cell size (null = use default layout size)
+    public Vector2? CellSpacing;                    // Override the grid cell spacing (null = use default layout spacing)
 }
 
 public class IconPickerModal : MonoBehaviour
@@ -25,12 +37,21 @@ public class IconPickerModal : MonoBehaviour
     [Header("UI References")]
     public GameObject modalPanel;
     public Transform gridContent;
+
+    [Tooltip("Standard item button prefab")]
     public IconPickerItem iconButtonPrefab;
+
+    [Tooltip("PortraitUIButton prefab (must also have IconPickerItem attached to it)")]
+    public IconPickerItem portraitButtonPrefab;
+
     public TMP_InputField searchInputField;
     public Button cancelButton;
 
     [Header("Performance Settings")]
     public int spawnBatchSize = 250;
+
+    private Vector2 _defaultCellSize = new Vector2(64,64);
+    private Vector2 _defaultCellSpacing = new Vector2(4, 4);
 
     [Header("Size Filter")]
     public Color selectedFilterColor = Color.gray;
@@ -47,16 +68,15 @@ public class IconPickerModal : MonoBehaviour
     private Action<int, Sprite> _onIconSelectedCallback;
     private Coroutine _populateRoutine;
 
-    // Object Pooling
+    // Separate pools to prevent standard items and portrait items from getting mixed up
     private List<IconPickerItem> _activeIcons = new List<IconPickerItem>(500);
-    private Stack<IconPickerItem> _pool = new Stack<IconPickerItem>(500);
+    private Stack<IconPickerItem> _standardPool = new Stack<IconPickerItem>(500);
+    private Stack<IconPickerItem> _portraitPool = new Stack<IconPickerItem>(500);
 
-    // Cached References
     private LayoutGroup _layoutGroup;
     private ScrollRect _scrollRect;
     private bool _isPortraitMode = false;
 
-    // Data Caching - Prevents evaluating heavy strings inside tight loops
     private struct CachedIcon
     {
         public int OriginalIndex;
@@ -64,8 +84,15 @@ public class IconPickerModal : MonoBehaviour
         public string SearchName;
         public string TooltipText;
         public int Width;
-        public MonsterSize? AssociatedMonsterSize; // Added field
+        public MonsterSize? AssociatedMonsterSize;
         public bool IsValid;
+
+        // Custom Layout Overrides
+        public bool HasCustomText;
+        public string NameText;
+        public string TierText;
+        public string HPText;
+        public Color BgColor;
     }
 
     private CachedIcon[] _cachedIcons;
@@ -78,6 +105,12 @@ public class IconPickerModal : MonoBehaviour
         cancelButton.onClick.AddListener(CloseModal);
         searchInputField.onValueChanged.AddListener(FilterIcons);
         modalPanel.SetActive(false);
+
+        if (_layoutGroup is GridLayoutGroup gridLayout)
+        {
+            _defaultCellSize = gridLayout.cellSize;
+            _defaultCellSpacing = gridLayout.spacing;
+        }
 
         InitializeSizeFilters();
     }
@@ -104,12 +137,14 @@ public class IconPickerModal : MonoBehaviour
             }
         }
     }
+
     private void OnSizeFilterClicked(Button clickedButton, int targetSize)
     {
         _activeSizeFilter = (_activeSizeFilter == targetSize) ? -1 : targetSize;
         UpdateSizeButtonVisuals();
         FilterIcons(searchInputField.text);
     }
+
     private void UpdateSizeButtonVisuals()
     {
         foreach (var kvp in _sizeButtonsMap)
@@ -123,19 +158,15 @@ public class IconPickerModal : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Opens the modal with a customized configuration.
-    /// </summary>
     public void OpenModal(IconPickerConfig config)
     {
         _onIconSelectedCallback = config.OnSelectionMade;
 
+        ApplyLayoutConfiguration(config);
         BuildCache(config);
 
         this.gameObject.SetActive(true);
         modalPanel.SetActive(true);
-
-        // FORCE TO FRONT OF CANVAS
         transform.SetAsLastSibling();
 
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);
@@ -147,7 +178,6 @@ public class IconPickerModal : MonoBehaviour
 
         _populateRoutine = StartCoroutine(PopulateGridRoutine(""));
     }
-    // Process all expensive string manipulations and filtering ONCE up front
 
     private void FilterIcons(string searchQuery)
     {
@@ -156,36 +186,73 @@ public class IconPickerModal : MonoBehaviour
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);
         _populateRoutine = StartCoroutine(PopulateGridRoutine(searchQuery));
     }
+
     private void SpawnIconUI(CachedIcon iconCache)
     {
         IconPickerItem item;
-        if (_pool.Count > 0)
+
+        if (iconCache.HasCustomText && portraitButtonPrefab != null)
         {
-            item = _pool.Pop();
-            item.gameObject.SetActive(true);
-            item.transform.SetAsLastSibling();
+            // Use the portrait pool and prefab
+            if (_portraitPool.Count > 0)
+            {
+                item = _portraitPool.Pop();
+                item.gameObject.SetActive(true);
+                item.transform.SetAsLastSibling();
+            }
+            else
+            {
+                item = Instantiate(portraitButtonPrefab, gridContent);
+            }
+
+            // Setup the unmodified IconPickerItem parts
+            item.Setup(iconCache.OriginalIndex, iconCache.Sprite, iconCache.TooltipText, OnIconClicked);
+
+            // Configure the PortraitUIButton script directly from the modal
+            PortraitUIButton portraitUI = item.GetComponent<PortraitUIButton>();
+            if (portraitUI != null)
+            {
+                if (portraitUI.portrait != null) portraitUI.portrait.sprite = iconCache.Sprite;
+                if (portraitUI.entityName != null) portraitUI.entityName.text = iconCache.NameText;
+                if (portraitUI.tier != null) portraitUI.tier.text = iconCache.TierText;
+                if (portraitUI.hp != null) portraitUI.hp.text = iconCache.HPText;
+
+                portraitUI.SetColor(iconCache.BgColor);
+            }
         }
         else
         {
-            item = Instantiate(iconButtonPrefab, gridContent);
+            // Use the standard pool and prefab
+            if (_standardPool.Count > 0)
+            {
+                item = _standardPool.Pop();
+                item.gameObject.SetActive(true);
+                item.transform.SetAsLastSibling();
+            }
+            else
+            {
+                item = Instantiate(iconButtonPrefab, gridContent);
+            }
+
+            item.Setup(iconCache.OriginalIndex, iconCache.Sprite, iconCache.TooltipText, OnIconClicked);
         }
 
-        item.Setup(iconCache.OriginalIndex, iconCache.Sprite, iconCache.TooltipText, OnIconClicked);
         _activeIcons.Add(item);
     }
+
     private void OnIconClicked(int effectIndex, Sprite selectedSprite)
     {
         _onIconSelectedCallback?.Invoke(effectIndex, selectedSprite);
         CloseModal();
     }
+
     public void CloseModal()
     {
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);
-
         ReturnAllToPool();
-
         modalPanel.SetActive(false);
     }
+
     private void ReturnAllToPool()
     {
         if (_layoutGroup != null) _layoutGroup.enabled = false;
@@ -193,20 +260,22 @@ public class IconPickerModal : MonoBehaviour
         foreach (var item in _activeIcons)
         {
             item.gameObject.SetActive(false);
-            _pool.Push(item);
+
+            // Put the item in the correct pool depending on which prefab it came from
+            if (item.GetComponent<PortraitUIButton>() != null)
+            {
+                _portraitPool.Push(item);
+            }
+            else
+            {
+                _standardPool.Push(item);
+            }
         }
 
         _activeIcons.Clear();
-
         if (_layoutGroup != null) _layoutGroup.enabled = true;
     }
 
-     // =====================================================================
-    // NEW RESOLVER METHOD
-    // =====================================================================
-    /// <summary>
-    /// Attempts to parse a portrait name and resolve its MonsterSize.
-    /// </summary>
     private MonsterSize GetExpectedMonsterSize(int filterValue)
     {
         switch (filterValue)
@@ -219,19 +288,11 @@ public class IconPickerModal : MonoBehaviour
         }
     }
 
-    // =====================================================================
-    // MODIFIED CACHE BUILDING
-    // =====================================================================
-
-    // =====================================================================
-    // MODIFIED POPULATE ROUTINE (FILTER STAGE)
-    // =====================================================================
     private IEnumerator PopulateGridRoutine(string searchQuery)
     {
         ReturnAllToPool();
 
         if (_scrollRect != null) _scrollRect.verticalNormalizedPosition = 1f;
-
         if (_layoutGroup != null) _layoutGroup.enabled = false;
 
         bool isSearchEmpty = string.IsNullOrWhiteSpace(searchQuery);
@@ -243,22 +304,18 @@ public class IconPickerModal : MonoBehaviour
 
             if (!icon.IsValid) continue;
 
-            // --- FILTER LOGIC ADJUSTMENT ---
             if (_activeSizeFilter != -1)
             {
                 if (_isPortraitMode)
                 {
-                    // Filter portrait icons by their associated MonsterSize
                     MonsterSize targetMonsterSize = GetExpectedMonsterSize(_activeSizeFilter);
                     if (icon.AssociatedMonsterSize != targetMonsterSize) continue;
                 }
                 else
                 {
-                    // Original fallback: filter by Sprite texture pixel-width
                     if (icon.Width != _activeSizeFilter) continue;
                 }
             }
-            // ---------------------------------
 
             if (!isSearchEmpty && icon.SearchName.IndexOf(searchQuery, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
@@ -268,10 +325,8 @@ public class IconPickerModal : MonoBehaviour
             if (spawnedThisFrame >= spawnBatchSize)
             {
                 if (_layoutGroup != null) _layoutGroup.enabled = true;
-
                 spawnedThisFrame = 0;
                 yield return null;
-
                 if (_layoutGroup != null) _layoutGroup.enabled = false;
             }
         }
@@ -280,33 +335,20 @@ public class IconPickerModal : MonoBehaviour
         _populateRoutine = null;
     }
 
-    //////////////////////////////////////
-    ///
-
-    // =====================================================================
-    // PORTRAIT PARSING & MATCHING HELPERS
-    // =====================================================================
     public static string GetCleanLeafName(string spriteName)
     {
         if (string.IsNullOrEmpty(spriteName)) return string.Empty;
-
         spriteName = spriteName.ToLower();
 
-        // If it starts with our processor prefix "prt_"
         if (spriteName.StartsWith("prt_"))
         {
-            // Expected format: prt_{id}_{leafName}_{width}x{height}
-            // Example: prt_45_rm_n_24x24
-
-            int firstUnderscore = spriteName.IndexOf('_'); // After 'prt'
+            int firstUnderscore = spriteName.IndexOf('_');
             if (firstUnderscore != -1)
             {
-                int secondUnderscore = spriteName.IndexOf('_', firstUnderscore + 1); // After ID
+                int secondUnderscore = spriteName.IndexOf('_', firstUnderscore + 1);
                 if (secondUnderscore != -1)
                 {
-                    int lastUnderscore = spriteName.LastIndexOf('_'); // Before dimensions
-
-                    // Ensure we don't grab an empty string and that formatting is valid
+                    int lastUnderscore = spriteName.LastIndexOf('_');
                     if (lastUnderscore > secondUnderscore)
                     {
                         return spriteName.Substring(secondUnderscore + 1, lastUnderscore - secondUnderscore - 1);
@@ -315,12 +357,8 @@ public class IconPickerModal : MonoBehaviour
             }
         }
 
-        // Fallback for paths like "portrait/Rm_n" -> "rm_n"
         int lastSlash = spriteName.LastIndexOf('/');
-        if (lastSlash != -1)
-        {
-            return spriteName.Substring(lastSlash + 1);
-        }
+        if (lastSlash != -1) return spriteName.Substring(lastSlash + 1);
 
         return spriteName;
     }
@@ -370,27 +408,10 @@ public class IconPickerModal : MonoBehaviour
     private MonsterSize? GetPortraitMonsterSize(Sprite sprite)
     {
         if (sprite == null) return null;
-
-        // If it is a monster, query its database size
-        if (TryGetMonsterType(sprite.name, out MonsterType monster))
-        {
-            return MonsterDatabase.GetMonsterSize(monster);
-        }
-
-        // If it is a playable Hero, group them under Regular (HeroSized)
-        if (TryGetHeroType(sprite.name, out HeroType _))
-        {
-            return MonsterSize.HeroSized;
-        }
-
+        if (TryGetMonsterType(sprite.name, out MonsterType monster)) return MonsterDatabase.GetMonsterSize(monster);
+        if (TryGetHeroType(sprite.name, out HeroType _)) return MonsterSize.HeroSized;
         return null;
     }
-
-    // =====================================================================
-    // UPDATED BUILD CACHE METHOD
-    // =====================================================================
-    // --- INSIDE IconPickerModal.cs ---
-    // Replace your BuildCache method with this:
 
     private void BuildCache(IconPickerConfig config)
     {
@@ -403,24 +424,29 @@ public class IconPickerModal : MonoBehaviour
         for (int i = 0; i < config.Sprites.Length; i++)
         {
             Sprite sprite = config.Sprites[i];
-            if (sprite == null) continue;
 
-            // DEDUPLICATION: Ensures exact same sprite names never draw twice
-            if (!seenNames.Add(sprite.name)) continue;
+            if (sprite == null && !config.AllowNullSprites) continue;
+
+            if (!config.DisableDeduplication && sprite != null)
+            {
+                if (!seenNames.Add(sprite.name)) continue;
+            }
 
             bool isValid = config.IsValid?.Invoke(i, sprite) ?? true;
             if (!isValid) continue;
 
-            int width = Mathf.RoundToInt(sprite.rect.width);
-            string searchName = config.GetSearchName?.Invoke(i, sprite) ?? sprite.name;
-            string tooltipText = config.GetTooltip?.Invoke(i, sprite) ?? sprite.name;
+            int width = sprite != null ? Mathf.RoundToInt(sprite.rect.width) : 0;
+            string searchName = config.GetSearchName?.Invoke(i, sprite) ?? sprite?.name ?? "Unknown";
+            string tooltipText = config.GetTooltip?.Invoke(i, sprite) ?? sprite?.name ?? "Unknown";
             MonsterSize? monsterSize = null;
 
-            if (sprite.name.StartsWith("prt_", StringComparison.OrdinalIgnoreCase))
+            if (sprite != null && sprite.name.StartsWith("prt_", StringComparison.OrdinalIgnoreCase))
             {
                 monsterSize = GetPortraitMonsterSize(sprite);
                 if (monsterSize.HasValue) _isPortraitMode = true;
             }
+
+            bool hasCustomText = config.GetNameText != null;
 
             cachedList.Add(new CachedIcon
             {
@@ -430,93 +456,24 @@ public class IconPickerModal : MonoBehaviour
                 TooltipText = tooltipText,
                 Width = width,
                 AssociatedMonsterSize = monsterSize,
-                IsValid = true
+                IsValid = true,
+                HasCustomText = hasCustomText,
+                NameText = hasCustomText ? config.GetNameText?.Invoke(i, sprite) : null,
+                TierText = config.GetTierText?.Invoke(i, sprite),
+                HPText = config.GetHPText?.Invoke(i, sprite),
+                BgColor = config.GetColor != null ? config.GetColor(i, sprite) : Color.white
             });
         }
 
         _cachedIcons = cachedList.ToArray();
     }
 
+    private void ApplyLayoutConfiguration(IconPickerConfig config)
+    {
+        if (_layoutGroup is GridLayoutGroup gridLayout)
+        {
+            gridLayout.cellSize = config.CellSize ?? _defaultCellSize;
+            gridLayout.spacing = config.CellSpacing ?? _defaultCellSpacing;
+        }
+    }
 }
-
-/*
-    private void BuildCache(IconPickerConfig config)
-    {
-        if (config.Sprites == null) return;
-
-        _cachedIcons = new CachedIcon[config.Sprites.Length];
-
-        for (int i = 0; i < config.Sprites.Length; i++)
-        {
-            Sprite sprite = config.Sprites[i];
-            bool isValid = false;
-            int width = -1;
-            string searchName = string.Empty;
-            string tooltipText = string.Empty;
-
-            if (sprite != null)
-            {
-                // Fallbacks to default behaviour if the caller didn't provide delegates
-                isValid = config.IsValid?.Invoke(i, sprite) ?? true;
-
-                if (isValid)
-                {
-                    width = Mathf.RoundToInt(sprite.rect.width);
-                    searchName = config.GetSearchName?.Invoke(i, sprite) ?? sprite.name;
-                    tooltipText = config.GetTooltip?.Invoke(i, sprite) ?? sprite.name;
-                }
-            }
-
-            _cachedIcons[i] = new CachedIcon
-            {
-                OriginalIndex = i,
-                Sprite = sprite,
-                SearchName = searchName,
-                TooltipText = tooltipText,
-                Width = width,
-                IsValid = isValid
-            };
-        }
-    }
-
-    private IEnumerator PopulateGridRoutine(string searchQuery)
-    {
-        ReturnAllToPool();
-
-        if (_scrollRect != null) _scrollRect.verticalNormalizedPosition = 1f;
-
-        // Suspend layout rebuilding to completely eliminate layout lag while pooling
-        if (_layoutGroup != null) _layoutGroup.enabled = false;
-
-        bool isSearchEmpty = string.IsNullOrWhiteSpace(searchQuery);
-        int spawnedThisFrame = 0;
-
-        for (int i = 0; i < _cachedIcons.Length; i++)
-        {
-            CachedIcon icon = _cachedIcons[i];
-
-            if (!icon.IsValid) continue;
-            if (_activeSizeFilter != -1 && icon.Width != _activeSizeFilter) continue;
-            if (!isSearchEmpty && icon.SearchName.IndexOf(searchQuery, StringComparison.OrdinalIgnoreCase) < 0) continue;
-
-            SpawnIconUI(icon);
-            spawnedThisFrame++;
-
-            if (spawnedThisFrame >= spawnBatchSize)
-            {
-                if (_layoutGroup != null) _layoutGroup.enabled = true;
-
-                spawnedThisFrame = 0;
-                yield return null;
-
-                if (_layoutGroup != null) _layoutGroup.enabled = false;
-            }
-        }
-
-        // Finalize Layout
-        if (_layoutGroup != null) _layoutGroup.enabled = true;
-        _populateRoutine = null;
-    }
-
-
-*/

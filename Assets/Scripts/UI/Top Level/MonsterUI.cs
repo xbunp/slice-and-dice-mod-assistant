@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -157,16 +158,14 @@ public class MonsterUI : EntityUI<MonsterData>
         var monsters = ModPackage.Instance.loadedMod.GetAll<MonsterData>();
         if (monsters != null)
         {
-            List<string> poolOptions = new List<string> { "Stand Alone Monster (New)" };
-            foreach (var monster in monsters)
-                poolOptions.Add(string.IsNullOrEmpty(monster.entityName) ? "New Monster" : monster.entityName);
-
+            string poolBtnText = _currentPoolIndex == 0 ? "Mod Pool: New Monster" : $"Mod Pool: {CurrentEntity.entityName}";
             layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Mod Pool:", 0.20f),
-                GridCellSpec.CreateDropdown("PoolDropdown", "", 0.50f, poolOptions.ToArray(), OnPoolDropdownChanged),
+                GridCellSpec.CreateButton("BtnOpenPool", poolBtnText, 0.70f, OpenModPoolModal),
                 GridCellSpec.CreateButton("BtnSavePool", "Save to Mod", 0.30f, SaveToModPool)
             ));
         }
+
+
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Monster Name:", 0.35f),
@@ -691,4 +690,78 @@ public class MonsterUI : EntityUI<MonsterData>
         return null;
     }
 
+
+
+    private void OpenModPoolModal()
+    {
+        if (iconPicker == null) return;
+
+        var monsters = ModPackage.Instance.loadedMod.GetAll<MonsterData>();
+        Sprite[] monsterSprites = new Sprite[monsters.Count + 1];
+
+        monsterSprites[0] = EntityUIHelpers.GetSpriteForPortrait("Statue");
+
+        for (int i = 0; i < monsters.Count; i++)
+        {
+            var h = monsters[i];
+
+            // Check if we have a valid custom override image; otherwise, fall back to the base monster name
+            bool hasOverride = !string.IsNullOrEmpty(h.imageOverride) &&
+                               !h.imageOverride.Equals("None", StringComparison.OrdinalIgnoreCase);
+
+            string targetImageName = hasOverride ? h.imageOverride : h.baseMonster;
+
+            // Use the specific GetPortraitSprite method to resolve the correct custom/base sprite
+            monsterSprites[i + 1] = GetPortraitSprite(targetImageName);
+        }
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = monsterSprites,
+            DisableDeduplication = true,
+            AllowNullSprites = true,
+
+            IsValid = (index, sprite) => true,
+
+            CellSize = new Vector2(80, 80),
+
+            GetSearchName = (index, sprite) => index == 0 ? "Stand Alone Monster (New)" : monsters[index - 1].entityName,
+            GetTooltip = (index, sprite) => index == 0 ? "Create a new blank Monster" : monsters[index - 1].entityName,
+
+            GetNameText = (index, sprite) => index == 0 ? "New Monster" : monsters[index - 1].entityName,
+            GetTierText = (index, sprite) => "",
+            GetHPText = (index, sprite) => index == 0 ? "-" : monsters[index - 1].hp.ToString(),
+            GetColor = (index, sprite) => EffectKeywordColors.Purple,
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                OnPoolMonsterSelected(index);
+            }
+        };
+
+        iconPicker.OpenModal(config);
+    }
+
+    private void OnPoolMonsterSelected(int index)
+    {
+        if (isDrawingUI) return;
+        _currentPoolIndex = index;
+
+        var monsters = ModPackage.Instance.loadedMod.GetAll<MonsterData>();
+
+        if (index > 0 && (index - 1) < monsters.Count)
+        {
+            var originalMonster = monsters[index - 1];
+            ModPackage.Instance.LoadEntityForEditing(originalMonster);
+        }
+        else
+        {
+            ModPackage.Instance.LoadEntityForEditing(new MonsterData());
+        }
+
+        ModPackage.Instance.NotifyActiveEntityChanged<MonsterData>(this);
+
+        RebuildStatsUI();
+        RebuildDiceScrollView();
+    }
 }

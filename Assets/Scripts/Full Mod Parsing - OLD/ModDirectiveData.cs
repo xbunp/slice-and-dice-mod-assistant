@@ -12,6 +12,10 @@ namespace SliceDiceTextMod
         public int SortIndex { get; set; }
         public bool IsHidden { get; set; }
         public string FloorSelectorRaw { get; set; }
+        public string ModName { get; set; } //.ms
+        public string Doc{ get; set; } //.doc
+        public int Part{ get; set; } //part.#
+        public int Modtier{ get; set; } //modtier.#
 
         public abstract string ToModString();
 
@@ -44,11 +48,6 @@ namespace SliceDiceTextMod
     // =========================================================
     // 1. POOLS & INJECTIONS (Uses '+' delimited lists)
     // =========================================================
-    public class HeroPoolData : PoolDirectiveData
-    {
-        protected override string Prefix => ReplaceBaseHeroes ? "replace.heropool" : "heropool";
-        public bool ReplaceBaseHeroes { get; set; }
-    }
     public class MonsterPoolData : PoolDirectiveData { protected override string Prefix => "monsterpool"; }
     public class ItemPoolData : PoolDirectiveData { protected override string Prefix => "itempool"; }
 
