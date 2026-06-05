@@ -15,7 +15,7 @@ public static class HeroSpriteDatabaseGenerator
 
     // Split raw filename into "Nice Name" and "Suffix" (e.g., "aceR2U1" -> "ace" and "R2U1")
     private static readonly Regex FileNameRegex = new Regex(
-        @"^([a-z0-9\-]+)((?:[A-Z]\d+)*)$",
+        @"^([a-z0-9\-_]+)((?:[A-Z]\d+)*)$",
         RegexOptions.Compiled
     );
 
@@ -91,6 +91,10 @@ public static class HeroSpriteDatabaseGenerator
                     string niceName = match.Groups[1].Value;
                     string suffix = match.Groups[2].Value;
 
+                    // Explicitly fix DragonEgg without stripping numbers from other sprites (which caused the 273 errors)
+                    if (niceName == "dragon-egg1") niceName = "dragon-egg";
+                    else if (niceName == "dragonegg1") niceName = "dragonegg";
+
                     // Match against Unity's sanitized asset naming scheme (prefixed with "prt_")
                     string targetSearchName = $"prt_{fileName}".ToLowerInvariant();
                     string matchedSpriteName = null;
@@ -111,6 +115,17 @@ public static class HeroSpriteDatabaseGenerator
 
                     if (!string.IsNullOrEmpty(matchedSpriteName))
                     {
+                        string enumIdentifier = ToPascalCase(niceName);
+
+                        // Explicitly map "rm" to its correct subtype enum based on sprite dimensions
+                        if (niceName.Equals("rm", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (matchedSpriteName.EndsWith("38x61")) enumIdentifier = "Rm_h";
+                            else if (matchedSpriteName.EndsWith("26x28")) enumIdentifier = "Rm_b";
+                            else if (matchedSpriteName.EndsWith("26x22")) enumIdentifier = "Rm_n";
+                            else if (matchedSpriteName.EndsWith("17x14")) enumIdentifier = "Rm_t";
+                        }
+
                         parsedSprites.Add(new SpriteMetadata
                         {
                             AtlasPath = spritePath,
@@ -118,7 +133,7 @@ public static class HeroSpriteDatabaseGenerator
                             Category = category,
                             NiceName = niceName,
                             Suffix = suffix,
-                            EnumIdentifier = ToPascalCase(niceName)
+                            EnumIdentifier = enumIdentifier
                         });
                     }
                 }

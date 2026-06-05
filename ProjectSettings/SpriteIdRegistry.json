@@ -2216,6 +2216,11 @@
             "id": 0
         },
         {
+            "prefix": "Atm",
+            "path": "r1u1",
+            "id": 1
+        },
+        {
             "prefix": "Can",
             "path": "cancelion/damageallexert",
             "id": 0
@@ -17313,12 +17318,27 @@
         {
             "prefix": "hug",
             "path": "combateffects/bite/hugechomp/bot",
-            "id": 0
+            "id": 31
         },
         {
             "prefix": "hug",
             "path": "combateffects/bite/hugechomp/top",
-            "id": 1
+            "id": 32
+        },
+        {
+            "prefix": "hug",
+            "path": "huge/face/placeholder",
+            "id": 28
+        },
+        {
+            "prefix": "hug",
+            "path": "huge/face/special/missize",
+            "id": 29
+        },
+        {
+            "prefix": "hug",
+            "path": "huge/face/summonmosquito",
+            "id": 30
         },
         {
             "prefix": "poi",
@@ -20759,6 +20779,76 @@
             "prefix": "ui_",
             "path": "ui/zoom2",
             "id": 112
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/arcanebolt",
+            "id": 32
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/boar_bite",
+            "id": 33
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/placeholder",
+            "id": 34
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/poisoncloud",
+            "id": 35
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/special/missize",
+            "id": 36
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/summonspider",
+            "id": 37
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/gore",
+            "id": 38
+        },
+        {
+            "prefix": "big",
+            "path": "big/face/icebolt",
+            "id": 39
+        },
+        {
+            "prefix": "tin",
+            "path": "small/face/blankexerted",
+            "id": 18
+        },
+        {
+            "prefix": "tin",
+            "path": "small/face/placeholder",
+            "id": 19
+        },
+        {
+            "prefix": "tin",
+            "path": "small/face/protec",
+            "id": 20
+        },
+        {
+            "prefix": "tin",
+            "path": "small/face/spark",
+            "id": 21
+        },
+        {
+            "prefix": "tin",
+            "path": "small/face/special/missize",
+            "id": 22
+        },
+        {
+            "prefix": "tin",
+            "path": "small/face/summonimp",
+            "id": 23
         }
     ]
 }

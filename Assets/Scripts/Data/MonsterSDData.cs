@@ -45,6 +45,8 @@ public static class MonsterDatabase
         { MonsterType.Shade, MonsterSize.Tiny },
         { MonsterType.Egg, MonsterSize.Tiny },
         { MonsterType.Vase, MonsterSize.Tiny },
+        { MonsterType.Rm_t, MonsterSize.Tiny },    
+
 
         // Hero-Sized
         { MonsterType.Quartz, MonsterSize.HeroSized },
@@ -70,6 +72,8 @@ public static class MonsterDatabase
         { MonsterType.PainSigil, MonsterSize.HeroSized },
         { MonsterType.DecaySigil, MonsterSize.HeroSized },
         { MonsterType.DeathSigil, MonsterSize.HeroSized },
+        { MonsterType.Rm_n, MonsterSize.HeroSized },
+
 
         // Big
         { MonsterType.Boar, MonsterSize.Big },
@@ -93,6 +97,7 @@ public static class MonsterDatabase
         { MonsterType.Gytha, MonsterSize.Big },
         { MonsterType.Magrat, MonsterSize.Big },
         { MonsterType.Jinx, MonsterSize.Big },
+        { MonsterType.Rm_b, MonsterSize.Big },
 
         // Huge
         { MonsterType.SlimeQueen, MonsterSize.Huge },
@@ -108,7 +113,9 @@ public static class MonsterDatabase
         { MonsterType.Dragon, MonsterSize.Huge },
         { MonsterType.Hexia, MonsterSize.Huge },
         { MonsterType.TheHand, MonsterSize.Huge },
-        { MonsterType.Inevitable, MonsterSize.Huge }
+        { MonsterType.Inevitable, MonsterSize.Huge },
+        { MonsterType.Rm_h, MonsterSize.Huge }
+
     };
 
     // Tiny faces mapping

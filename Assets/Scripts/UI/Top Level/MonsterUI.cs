@@ -24,16 +24,6 @@ public class MonsterUI : EntityUI<MonsterData>
     }
 
     // Helper to extract the ID from the normalized sprite name (e.g. "big_10_bats_22x22" -> 10)
-    private int ExtractIdFromSpriteName(string spriteName)
-    {
-        if (string.IsNullOrEmpty(spriteName)) return -1;
-        string[] parts = spriteName.Split('_');
-        if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
-        {
-            return parsedId;
-        }
-        return -1;
-    }
 
     // Dynamically fetch the correct sprite based on the monster's size
     protected override Sprite GetBaseDiceSprite(int effectID)
@@ -54,7 +44,7 @@ public class MonsterUI : EntityUI<MonsterData>
     }
 
     protected override Sprite GetFacadeDiceSprite(string facadeID) => EntityUIHelpers.GetFacadeSprite(facadeID);
-    protected override bool AllowFacades() => false;
+    protected override bool AllowFacades() => true;
     protected override string ExportEntity(MonsterData entity) => MonsterData.Export(entity);
     protected override MonsterData ParseEntity(string data) => MonsterData.Parse(data);
 
@@ -122,18 +112,56 @@ public class MonsterUI : EntityUI<MonsterData>
         iconPicker.OpenModal(config);
     }
 
-    protected override void OpenFacadeModal(int faceIndex) { /* Intentionally left blank as monsters don't use facades */ }
 
+    ////////////////////////////////////////////
+    ///
+
+    private void OpenAllPortraitsModal(Action<bool, object, Sprite> onPortraitSelected)
+    {
+        if (iconPicker == null) return;
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = EntityUIHelpers.AllActionSprites,
+            IsValid = (index, sprite) => sprite != null && (HeroSpriteDatabase.SpriteToMonsterMap.ContainsKey(sprite.name) || HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name)),
+            GetSearchName = (index, sprite) =>
+            {
+                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero)) return hero.ToString();
+                if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster)) return monster.ToString();
+                return sprite.name;
+            },
+            GetTooltip = (index, sprite) =>
+            {
+                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero)) return hero.ToString();
+                if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster)) return monster.ToString();
+                return sprite.name;
+            },
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero))
+                {
+                    onPortraitSelected?.Invoke(true, hero, sprite);
+                }
+                else if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster))
+                {
+                    onPortraitSelected?.Invoke(false, monster, sprite);
+                }
+            }
+        };
+        iconPicker.OpenModal(config);
+    }
     protected override void UpdateSpecificUIFromData()
     {
         if (statsUI.Inputs.TryGetValue("BaseMonster", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseMonster);
         if (statsUI.Inputs.TryGetValue("Bal", out var balIn)) balIn.SetTextWithoutNotify(CurrentEntity.bal);
+        if (statsUI.Inputs.TryGetValue("OverrideName", out var overIn)) overIn.SetTextWithoutNotify(CurrentEntity.imageOverride);
     }
-
     protected override void UpdateSpecificVisuals()
     {
         if (portraitPreview != null)
         {
+            portraitPreview.GetBasePrefixDelegate = () => GetPrefixForSize(CurrentEntity.size);
+
             portraitPreview.SetTierText(""); // Hide Tier visualization for Monsters
             portraitPreview.SetHeroColor(EffectKeywordColors.Purple); // Default background tinting for monsters
 
@@ -141,29 +169,45 @@ public class MonsterUI : EntityUI<MonsterData>
             if (isUsingCustomImage && _customImageTexture != null && portraitPreview.portrait != null)
             {
                 portraitPreview.portrait.sprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+                portraitPreview.portrait.enabled = true;
             }
             else
             {
-                // Bind strictly to baseMonster
-                Sprite targetSprite = EntityUIHelpers.GetSpriteForPortrait(CurrentEntity.baseMonster);
+                // Check for both Null/Empty AND "None" before determining if we have an override
+                bool hasOverride = !string.IsNullOrEmpty(CurrentEntity.imageOverride) &&
+                                   !CurrentEntity.imageOverride.Equals("None", StringComparison.OrdinalIgnoreCase);
+
+                string targetImageName = hasOverride ? CurrentEntity.imageOverride : CurrentEntity.baseMonster;
+                Sprite targetSprite = GetPortraitSprite(targetImageName);
+
                 if (targetSprite != null && portraitPreview.portrait != null)
                 {
                     portraitPreview.portrait.sprite = targetSprite;
+                    portraitPreview.portrait.enabled = true; // Ensure renderer is active
+                }
+                else if (portraitPreview.portrait != null)
+                {
+                    portraitPreview.portrait.sprite = null;
+                    portraitPreview.portrait.enabled = false; // Disable renderer to prevent Unity's white block fallback
                 }
             }
         }
 
         if (statsUI != null && statsUI.Buttons != null)
         {
-            // Update only the single monster selection button icon
             if (statsUI.Buttons.TryGetValue("MonsterBtn", out var monsterBtn))
             {
-                Sprite s = EntityUIHelpers.GetSpriteForPortrait(CurrentEntity.baseMonster);
+                Sprite s = GetPortraitSprite(CurrentEntity.baseMonster);
                 SetButtonIcon(monsterBtn, s);
+            }
+
+            if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
+            {
+                Sprite s = GetPortraitSprite(CurrentEntity.imageOverride);
+                SetButtonIcon(overrideBtn, s);
             }
         }
     }
-
     protected override List<GridRowSpec> GenerateStatsLayout()
     {
         var layout = new List<GridRowSpec>();
@@ -192,8 +236,10 @@ public class MonsterUI : EntityUI<MonsterData>
         // The Monster selection triggers now dynamically track the Monster Size.
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Base:", 0.15f),
-            GridCellSpec.CreateDiceButton("MonsterBtn", "P", 0.15f, () => {
-                OpenMonsterPortraitsModal((selectedMonster, selectedSprite) => {
+            GridCellSpec.CreateDiceButton("MonsterBtn", "P", 0.15f, () =>
+            {
+                OpenMonsterPortraitsModal((selectedMonster, selectedSprite) =>
+                {
                     CurrentEntity.baseMonster = selectedMonster.ToString();
                     CurrentEntity.size = MonsterDatabase.GetMonsterSize(selectedMonster); // Set Size Based on Database
 
@@ -202,7 +248,8 @@ public class MonsterUI : EntityUI<MonsterData>
                     RebuildDiceScrollView(); // Force rebuild dice so faces update to match the new size category
                 });
             }),
-            GridCellSpec.CreateInput("BaseMonster", "Wolf", 0.15f, (val) => {
+            GridCellSpec.CreateInput("BaseMonster", "Wolf", 0.70f, (val) =>
+            {
                 CurrentEntity.baseMonster = val;
                 if (Enum.TryParse(val, true, out MonsterType parsedType))
                 {
@@ -210,8 +257,19 @@ public class MonsterUI : EntityUI<MonsterData>
                 }
                 NotifyStateChanged();
                 RebuildDiceScrollView(); // Force rebuild dice so faces update to match the new size category
-            }),
-            GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.15f, ToggleCustomImagePanel)
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Icon Override:", 0.30f),
+            GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () => OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
+            {
+                CurrentEntity.imageOverride = isHero ? ((HeroType)enumValue).ToString() : ((MonsterType)enumValue).ToString();
+                NotifyStateChanged();
+                UpdateUIFromData();
+            })),
+            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => { CurrentEntity.imageOverride = val; NotifyStateChanged(); }),
+            GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
         ));
 
         if (showCustomImagePanel) layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
@@ -251,11 +309,13 @@ public class MonsterUI : EntityUI<MonsterData>
             availableChoices: formattedItemNames,
             currentActiveItems: CurrentEntity.items ?? new List<string>(),
             getKey: (itemName) => itemName, getDisplay: (itemName) => itemName,
-            onAdd: (itemName) => {
+            onAdd: (itemName) =>
+            {
                 if (CurrentEntity.items == null) CurrentEntity.items = new List<string>();
                 if (!CurrentEntity.items.Contains(itemName)) { CurrentEntity.items.Add(itemName); NotifyStateChanged(); RebuildStatsUI(); }
             },
-            onRemove: (itemName) => {
+            onRemove: (itemName) =>
+            {
                 if (CurrentEntity.items != null && CurrentEntity.items.Remove(itemName)) { NotifyStateChanged(); RebuildStatsUI(); }
             }
         );
@@ -266,11 +326,13 @@ public class MonsterUI : EntityUI<MonsterData>
             currentActiveItems: CurrentEntity.traits ?? new List<string>(),
             getKey: (traitName) => traitName,
             getDisplay: (traitName) => SDColors.TraitNiceNames.TryGetValue(traitName, out string desc) ? $"{traitName}: {desc}" : traitName,
-            onAdd: (traitName) => {
+            onAdd: (traitName) =>
+            {
                 if (CurrentEntity.traits == null) CurrentEntity.traits = new List<string>();
                 if (!CurrentEntity.traits.Contains(traitName)) { CurrentEntity.traits.Add(traitName); NotifyStateChanged(); RebuildStatsUI(); }
             },
-            onRemove: (traitName) => {
+            onRemove: (traitName) =>
+            {
                 if (CurrentEntity.traits != null && CurrentEntity.traits.Remove(traitName)) { NotifyStateChanged(); RebuildStatsUI(); }
             }
         );
@@ -281,15 +343,140 @@ public class MonsterUI : EntityUI<MonsterData>
             currentActiveItems: CurrentEntity.curses ?? new List<string>(),
             getKey: (curseName) => curseName,
             getDisplay: (curseName) => CurseDataset.Curses.TryGetValue(curseName, out string desc) ? $"{curseName}: {desc}" : curseName,
-            onAdd: (curseName) => {
+            onAdd: (curseName) =>
+            {
                 if (CurrentEntity.curses == null) CurrentEntity.curses = new List<string>();
                 if (!CurrentEntity.curses.Contains(curseName)) { CurrentEntity.curses.Add(curseName); NotifyStateChanged(); RebuildStatsUI(); }
             },
-            onRemove: (curseName) => {
+            onRemove: (curseName) =>
+            {
                 if (CurrentEntity.curses != null && CurrentEntity.curses.Remove(curseName)) { NotifyStateChanged(); RebuildStatsUI(); }
             }
         );
 
         return layout;
+    }
+
+    //////////////////
+    ///
+
+    // =====================================================================
+    // SIZE SUFFIX HELPERS
+    // =====================================================================
+    private string GetSizeSuffix(MonsterSize size)
+    {
+        switch (size)
+        {
+            case MonsterSize.Tiny: return "_12x12";
+            case MonsterSize.Big: return "_22x22";
+            case MonsterSize.Huge: return "_28x28";
+            case MonsterSize.HeroSized:
+            default: return "_16x16";
+        }
+    }
+
+    private int ExtractIdFromSpriteName(string spriteName)
+    {
+        if (string.IsNullOrEmpty(spriteName)) return -1;
+        string[] parts = spriteName.Split('_');
+        if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
+        {
+            return parsedId;
+        }
+        return -1;
+    }
+
+    // =====================================================================
+    // OPEN BASE DICE FACE MODAL (SIZE CONSTRAINED)
+    // =====================================================================
+
+    // =====================================================================
+    // OPEN FACADE DICE FACE MODAL (SIZE CONSTRAINED)
+    // =====================================================================
+    protected override void OpenFacadeModal(int faceIndex)
+    {
+        if (iconPicker == null) return;
+
+        MonsterSize currentSize = CurrentEntity.size;
+        string sizeSuffix = GetSizeSuffix(currentSize);
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = EntityUIHelpers.AllActionSprites,
+
+            // Re-use same rules as Base Modal: constrain selection to matching pixel sizes
+            IsValid = (index, sprite) =>
+            {
+                if (sprite == null) return false;
+                string name = sprite.name;
+
+                if (name.StartsWith("prt_") || name.StartsWith("trg_") || name.StartsWith("ui_"))
+                    return false;
+
+                return name.Contains(sizeSuffix);
+            },
+
+            GetSearchName = (index, sprite) =>
+            {
+                if (sprite.name.StartsWith("bas_") || sprite.name.StartsWith("tin_") || sprite.name.StartsWith("big_") || sprite.name.StartsWith("hug_"))
+                {
+                    int id = ExtractIdFromSpriteName(sprite.name);
+                    return MonsterDatabase.GetFaceName(currentSize, id);
+                }
+                return IconPickerModal.GetCleanLeafName(sprite.name);
+            },
+
+            GetTooltip = (index, sprite) =>
+            {
+                if (sprite.name.StartsWith("bas_") || sprite.name.StartsWith("tin_") || sprite.name.StartsWith("big_") || sprite.name.StartsWith("hug_"))
+                {
+                    int id = ExtractIdFromSpriteName(sprite.name);
+                    return $"Base ID {id}: {MonsterDatabase.GetFaceName(currentSize, id)}";
+                }
+                return $"Community Facade [{IconPickerModal.GetCleanLeafName(sprite.name)}]";
+            },
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (sprite != null)
+                {
+                    // For Facades, we map the exact Sprite Name string to the facadeID
+                    CurrentEntity.diceSides[faceIndex].facadeID = sprite.name;
+                    NotifyStateChanged();
+                    RebuildDiceScrollView();
+                }
+            }
+        };
+        iconPicker.OpenModal(config);
+    }
+
+    // =====================================================================
+    // PORTRAIT SPRITE RESOLVER FALLBACK
+    // =====================================================================
+    private Sprite GetPortraitSprite(string baseMonsterName)
+    {
+        if (string.IsNullOrEmpty(baseMonsterName) || baseMonsterName.Equals("None", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (EntityUIHelpers.AllActionSprites == null)
+            return null;
+
+        string targetLeaf = baseMonsterName.ToLower();
+
+        // Search action sprites for our custom "prt_" prefix matching this monster leaf name
+        foreach (var sprite in EntityUIHelpers.AllActionSprites)
+        {
+            if (sprite != null && sprite.name.StartsWith("prt_"))
+            {
+                string leafName = IconPickerModal.GetCleanLeafName(sprite.name);
+                if (leafName == targetLeaf)
+                {
+                    return sprite;
+                }
+            }
+        }
+
+        // Standard lookup fallback
+        return EntityUIHelpers.GetSpriteForPortrait(baseMonsterName);
     }
 }

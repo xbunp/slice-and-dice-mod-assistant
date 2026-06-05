@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -33,6 +35,9 @@ public class PortraitPreviewUI : MonoBehaviour
     public event Action<int> OnFaceSelected;
     private Dictionary<string, List<Sprite>> _spriteGroups;
     [SerializeField] private Sprite[] pipsprites;
+    public string DefaultBasePrefix { get; set; } = "bas";
+    public Func<string> GetBasePrefixDelegate { get; set; }
+
 
     private void Awake()
     {
@@ -92,34 +97,51 @@ public class PortraitPreviewUI : MonoBehaviour
     }
 
     // NEW UNIFIED METHOD: Handles the switch selections, string parsing, and verification
-    public void SetSlotIcon(int index, string facadeID, int effectID, string facadeColor, int pips)
+    // CHANGED: Added optional basePrefix parameter (defaults to null)
+    public void SetSlotIcon(int index, string facadeID, int effectID, string facadeColor, int pips, string basePrefix = null)
     {
-        // 1. Replaces the two switch blocks from your original code
         SlotUI slot = GetSlotByIndex(index);
         if (slot.background == null) return;
 
-        // 2. Replaces the HSV string splitting and parsing
         int h = 0, s = 0, v = 0;
         string[] hsv = (facadeColor ?? "").Split(':');
         if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
         if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
         if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
 
-        // 3. Replaces the facadeID check and parsing logic
-        if (!string.IsNullOrWhiteSpace(facadeID) && facadeID.Length >= 4)
+        if (!string.IsNullOrWhiteSpace(facadeID))
         {
-            string prefix = facadeID.Substring(0, 3);
-            string idString = facadeID.Substring(3);
-
-            if (int.TryParse(idString, out int parsedFacadeId))
+            var match = Regex.Match(facadeID, @"^([a-zA-Z]{3})_(\d+)");
+            if (match.Success)
             {
-                SetIcon(slot.background, slot.pips, prefix, parsedFacadeId, h, s, v, pips);
-                return;
+                string prefix = match.Groups[1].Value;
+                if (int.TryParse(match.Groups[2].Value, out int parsedFacadeId))
+                {
+                    SetIcon(slot.background, slot.pips, prefix, parsedFacadeId, h, s, v, pips);
+                    return;
+                }
+            }
+            else if (facadeID.Length >= 4)
+            {
+                string prefix = facadeID.Substring(0, 3);
+                string idString = facadeID.Substring(3);
+
+                if (int.TryParse(idString, out int parsedFacadeId))
+                {
+                    SetIcon(slot.background, slot.pips, prefix, parsedFacadeId, h, s, v, pips);
+                    return;
+                }
             }
         }
 
-        // 4. Fallback execution
-        SetIcon(slot.background, slot.pips, "bas", effectID, h, s, v, pips);
+        // CHANGED: Resolves the prefix using the delegate first, then falls back to static DefaultBasePrefix
+        string resolvedPrefix = basePrefix;
+        if (resolvedPrefix == null)
+        {
+            resolvedPrefix = (GetBasePrefixDelegate != null) ? GetBasePrefixDelegate() : DefaultBasePrefix;
+        }
+
+        SetIcon(slot.background, slot.pips, resolvedPrefix, effectID, h, s, v, pips);
     }
 
     private SlotUI GetSlotByIndex(int index)
@@ -146,20 +168,43 @@ public class PortraitPreviewUI : MonoBehaviour
             uiImage.material.SetFloat("_Value", v);
         }
 
-        if (_spriteGroups.TryGetValue(prefix, out List<Sprite> sprites))
+        Sprite targetSprite = null;
+        string searchPattern = $"{prefix}_{index}_";
+
+        // 1. PERFECT PARITY: Search the exact same master list that MonsterUI uses.
+        // Using StringComparison.OrdinalIgnoreCase ensures capitalizations never cause a miss.
+        if (EntityUIHelpers.AllActionSprites != null)
         {
-            if (index >= 0 && index < sprites.Count)
+            targetSprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(s =>
+                s != null && s.name.StartsWith(searchPattern, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // 2. CACHE & LEGACY FALLBACK
+        if (targetSprite == null)
+        {
+            if (_spriteGroups.TryGetValue(prefix, out List<Sprite> sprites))
             {
-                uiImage.sprite = sprites[index];
+                // Try searching the local group cache just in case
+                targetSprite = sprites.FirstOrDefault(s =>
+                    s != null && s.name.StartsWith(searchPattern, StringComparison.OrdinalIgnoreCase));
+
+                // ONLY fall back to raw list index for "bas" context (legacy standard heroes).
+                // Allowing this fallback for monsters caused the "Alphabetical Index = Wrong Sprite" bug.
+                if (targetSprite == null && prefix == "bas" && index >= 0 && index < sprites.Count)
+                {
+                    targetSprite = sprites[index];
+                }
             }
-            else
-            {
-                Debug.LogWarning($"Index {index} out of bounds for prefix {prefix}");
-            }
+        }
+
+        if (targetSprite != null)
+        {
+            uiImage.sprite = targetSprite;
         }
         else
         {
-            Debug.LogError($"Prefix {prefix} not found in sprite atlas.");
+            uiImage.sprite = null; // Clear so we don't show a misleading leftover sprite
+            Debug.LogWarning($"[PortraitPreviewUI] Sprite with pattern {searchPattern} not found in master lists!");
         }
 
         if (pipImage != null)
