@@ -124,7 +124,7 @@ public class IDEUI : RootUI
 
                 phasesIdeController.Initialize(preserveConfig);
 
-                phasesIdeController.TextPreprocessor = PreprocessPastedText;
+                // REMOVED: phasesIdeController.TextPreprocessor = PreprocessPastedText;
                 phasesIdeController.OnLinkActivated = HandleOverviewLinkClicked;
             }
         }

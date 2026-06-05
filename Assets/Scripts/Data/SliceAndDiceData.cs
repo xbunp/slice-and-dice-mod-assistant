@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using static SDColors;
-using static UnityEditor.Progress;
 
 public static class RandomSDData
 {

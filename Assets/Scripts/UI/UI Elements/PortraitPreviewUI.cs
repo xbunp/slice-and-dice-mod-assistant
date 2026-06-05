@@ -98,51 +98,6 @@ public class PortraitPreviewUI : MonoBehaviour
 
     // NEW UNIFIED METHOD: Handles the switch selections, string parsing, and verification
     // CHANGED: Added optional basePrefix parameter (defaults to null)
-    public void SetSlotIcon(int index, string facadeID, int effectID, string facadeColor, int pips, string basePrefix = null)
-    {
-        SlotUI slot = GetSlotByIndex(index);
-        if (slot.background == null) return;
-
-        int h = 0, s = 0, v = 0;
-        string[] hsv = (facadeColor ?? "").Split(':');
-        if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
-        if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
-        if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
-
-        if (!string.IsNullOrWhiteSpace(facadeID))
-        {
-            var match = Regex.Match(facadeID, @"^([a-zA-Z]{3})_(\d+)");
-            if (match.Success)
-            {
-                string prefix = match.Groups[1].Value;
-                if (int.TryParse(match.Groups[2].Value, out int parsedFacadeId))
-                {
-                    SetIcon(slot.background, slot.pips, prefix, parsedFacadeId, h, s, v, pips);
-                    return;
-                }
-            }
-            else if (facadeID.Length >= 4)
-            {
-                string prefix = facadeID.Substring(0, 3);
-                string idString = facadeID.Substring(3);
-
-                if (int.TryParse(idString, out int parsedFacadeId))
-                {
-                    SetIcon(slot.background, slot.pips, prefix, parsedFacadeId, h, s, v, pips);
-                    return;
-                }
-            }
-        }
-
-        // CHANGED: Resolves the prefix using the delegate first, then falls back to static DefaultBasePrefix
-        string resolvedPrefix = basePrefix;
-        if (resolvedPrefix == null)
-        {
-            resolvedPrefix = (GetBasePrefixDelegate != null) ? GetBasePrefixDelegate() : DefaultBasePrefix;
-        }
-
-        SetIcon(slot.background, slot.pips, resolvedPrefix, effectID, h, s, v, pips);
-    }
 
     private SlotUI GetSlotByIndex(int index)
     {
@@ -155,62 +110,6 @@ public class PortraitPreviewUI : MonoBehaviour
             4 => right,
             _ => rightmost
         };
-    }
-
-    public void SetIcon(Image uiImage, Image pipImage, string prefix, int index, int h = 0, int s = 0, int v = 0, int pips = 0)
-    {
-        if (uiImage == null) return;
-
-        if (uiImage.material != null)
-        {
-            uiImage.material.SetFloat("_Hue", h);
-            uiImage.material.SetFloat("_Saturation", s);
-            uiImage.material.SetFloat("_Value", v);
-        }
-
-        Sprite targetSprite = null;
-        string searchPattern = $"{prefix}_{index}_";
-
-        // 1. PERFECT PARITY: Search the exact same master list that MonsterUI uses.
-        // Using StringComparison.OrdinalIgnoreCase ensures capitalizations never cause a miss.
-        if (EntityUIHelpers.AllActionSprites != null)
-        {
-            targetSprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(s =>
-                s != null && s.name.StartsWith(searchPattern, StringComparison.OrdinalIgnoreCase));
-        }
-
-        // 2. CACHE & LEGACY FALLBACK
-        if (targetSprite == null)
-        {
-            if (_spriteGroups.TryGetValue(prefix, out List<Sprite> sprites))
-            {
-                // Try searching the local group cache just in case
-                targetSprite = sprites.FirstOrDefault(s =>
-                    s != null && s.name.StartsWith(searchPattern, StringComparison.OrdinalIgnoreCase));
-
-                // ONLY fall back to raw list index for "bas" context (legacy standard heroes).
-                // Allowing this fallback for monsters caused the "Alphabetical Index = Wrong Sprite" bug.
-                if (targetSprite == null && prefix == "bas" && index >= 0 && index < sprites.Count)
-                {
-                    targetSprite = sprites[index];
-                }
-            }
-        }
-
-        if (targetSprite != null)
-        {
-            uiImage.sprite = targetSprite;
-        }
-        else
-        {
-            uiImage.sprite = null; // Clear so we don't show a misleading leftover sprite
-            Debug.LogWarning($"[PortraitPreviewUI] Sprite with pattern {searchPattern} not found in master lists!");
-        }
-
-        if (pipImage != null)
-        {
-            SetPipSprite(pipImage, pips);
-        }
     }
 
     private void SetPipSprite(Image pipImage, int pips)
@@ -262,6 +161,125 @@ public class PortraitPreviewUI : MonoBehaviour
             portrait.material.SetFloat("_Hue", h);
             portrait.material.SetFloat("_Saturation", s);
             portrait.material.SetFloat("_Value", v);
+        }
+    }
+
+    // NEW UNIFIED METHOD: Handles the switch selections, string parsing, and verification
+    // CHANGED: Falls back to the base effect icon if the parsed facade sprite is missing.
+    // NEW UNIFIED METHOD: Handles the switch selections, string parsing, and verification
+    public void SetSlotIcon(int index, string facadeID, int effectID, string facadeColor, int pips, string basePrefix = null)
+    {
+        Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Entered for slot {index}. params -> facadeID: '{facadeID}' | effectID: {effectID} | basePrefix: '{basePrefix}'");
+
+        SlotUI slot = GetSlotByIndex(index);
+        if (slot.background == null)
+        {
+            Debug.LogError($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Slot background Image component is NULL at index {index}!");
+            return;
+        }
+
+        int h = 0, s = 0, v = 0;
+        string[] hsv = (facadeColor ?? "").Split(':');
+        if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
+        if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
+        if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
+
+        Sprite targetSprite = null;
+
+        // 1. Resolve facade
+        if (!string.IsNullOrWhiteSpace(facadeID))
+        {
+            targetSprite = EntityUIHelpers.GetFacadeSprite(facadeID);
+            Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Facade resolution result for '{facadeID}': " + (targetSprite != null ? $"'{targetSprite.name}'" : "NULL"));
+        }
+
+        // 2. Fall back to base
+        if (targetSprite == null)
+        {
+            Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Facade was empty or unresolved. Proceeding with base fallback.");
+            h = 0; s = 0; v = 0;
+
+            string resolvedPrefix = basePrefix ?? ((GetBasePrefixDelegate != null) ? GetBasePrefixDelegate() : DefaultBasePrefix);
+            string baseShorthand = $"{resolvedPrefix}{effectID}";
+
+            targetSprite = EntityUIHelpers.GetFacadeSprite(baseShorthand);
+            Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Base Shorthand '{baseShorthand}' resolution result: " + (targetSprite != null ? $"'{targetSprite.name}'" : "NULL"));
+
+            if (targetSprite == null && resolvedPrefix.Equals("bas", StringComparison.OrdinalIgnoreCase))
+            {
+                targetSprite = EntityUIHelpers.GetBaseSprite(effectID);
+                Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Hard Base fallback result for ID {effectID}: " + (targetSprite != null ? $"'{targetSprite.name}'" : "NULL"));
+            }
+        }
+
+        // 3. Render
+        if (targetSprite != null)
+        {
+            slot.background.sprite = targetSprite;
+            slot.background.enabled = true;
+            Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Successfully assigned sprite '{targetSprite.name}' to slot {index}. Image.enabled = true.");
+
+            if (slot.background.material != null)
+            {
+                slot.background.material.SetFloat("_Hue", h);
+                slot.background.material.SetFloat("_Saturation", s);
+                slot.background.material.SetFloat("_Value", v);
+            }
+
+            if (slot.pips != null)
+            {
+                SetPipSprite(slot.pips, pips);
+            }
+        }
+        else
+        {
+            slot.background.sprite = null;
+            slot.background.enabled = false;
+            Debug.LogWarning($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] No sprite resolved. Slot {index} cleared. Image.enabled = false.");
+        }
+    }
+
+    // Rewrite legacy method to act as a wrapper for backwards compatibility
+    public bool SetIcon(Image uiImage, Image pipImage, string prefix, int index, int h = 0, int s = 0, int v = 0, int pips = 0)
+    {
+        if (uiImage == null) return false;
+
+        string shorthandKey = $"{prefix}{index}";
+        Sprite targetSprite = EntityUIHelpers.GetFacadeSprite(shorthandKey);
+
+        if (targetSprite == null && prefix.Equals("bas", StringComparison.OrdinalIgnoreCase))
+        {
+            targetSprite = EntityUIHelpers.GetBaseSprite(index);
+        }
+
+        if (targetSprite != null)
+        {
+            uiImage.sprite = targetSprite;
+            uiImage.enabled = true;
+
+            if (uiImage.material != null)
+            {
+                uiImage.material.SetFloat("_Hue", h);
+                uiImage.material.SetFloat("_Saturation", s);
+                uiImage.material.SetFloat("_Value", v);
+            }
+
+            if (pipImage != null)
+            {
+                SetPipSprite(pipImage, pips);
+            }
+            return true;
+        }
+        else
+        {
+            uiImage.sprite = null;
+            uiImage.enabled = false;
+
+            if (pipImage != null)
+            {
+                pipImage.enabled = false;
+            }
+            return false;
         }
     }
 }

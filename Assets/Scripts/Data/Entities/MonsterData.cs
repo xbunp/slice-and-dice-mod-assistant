@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 [System.Serializable]
@@ -10,7 +11,7 @@ public class MonsterData : EntityData
     public static readonly string[] MonsterPropertyKeys = { "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata" };
 
     [Header("Monster Specific Info")]
-    public string baseMonster = "Wolf";     
+    public string baseMonster = "Wolf";
     public MonsterSize size = MonsterSize.HeroSized;
 
     [Header("Monster Modifiers")]
@@ -18,75 +19,60 @@ public class MonsterData : EntityData
 
     public static string Export(MonsterData monster)
     {
-        if (monster == null) return "()";
+        if (monster == null) return string.Empty;
 
-        // 1. Build the core <monster> data inside its own balanced parenthesis
-        StringBuilder monsterSb = new StringBuilder();
-        monsterSb.Append("(");
+        StringBuilder sb = new StringBuilder();
 
         bool hasImageOverride = !string.IsNullOrEmpty(monster.imageOverride) &&
                                 monster.imageOverride != "None" &&
                                 monster.imageOverride != monster.baseMonster;
 
-        /*
-        // Monsters start directly with their name, or their type prefix followed by name
-        if (!string.IsNullOrEmpty(monster.baseMonsterType) &&
-            monster.baseMonsterType.ToLower() != "rmon" &&
-            monster.baseMonsterType.ToLower() != "none")
-        {
-            monsterSb.Append($"{monster.baseMonsterType.ToLower()}.{FormatName(monster.baseMonster)}");
-        }
-        else
-        {
-            // Standard monster, e.g., "Wolf.hp.4.n.Biyomon"
-            monsterSb.Append($"{FormatName(monster.baseMonster)}");
-        }
-        */
+        sb.Append($"{FormatName(monster.baseMonster)}");
 
-        // Standard monster, e.g., "Wolf.hp.4.n.Biyomon"
-        monsterSb.Append($"{FormatName(monster.baseMonster)}");
-
-        if (!hasImageOverride) monster.AppendColorModifier(monsterSb);
+        if (!hasImageOverride) monster.AppendColorModifier(sb);
 
         if (!string.IsNullOrEmpty(monster.entityName))
         {
-            monsterSb.Append($".n.{FormatName(monster.entityName)}");
+            sb.Append($".n.{FormatName(monster.entityName)}");
         }
 
-        monsterSb.Append($".hp.{monster.hp}");
+        sb.Append($".hp.{monster.hp}");
 
-        if (!string.IsNullOrEmpty(monster.bal)) monsterSb.Append($".bal.{FormatName(monster.bal)}");
-        if (!string.IsNullOrEmpty(monster.p)) monsterSb.Append($".p.{monster.p}");
-        if (!string.IsNullOrEmpty(monster.b)) monsterSb.Append($".b.{monster.b}");
-        if (!string.IsNullOrEmpty(monster.rect)) monsterSb.Append($".rect.{monster.rect}");
-        if (!string.IsNullOrEmpty(monster.draw)) monsterSb.Append($".draw.{monster.draw}");
-        if (!string.IsNullOrEmpty(monster.thue)) monsterSb.Append($".thue.{monster.thue}");
+        if (!string.IsNullOrEmpty(monster.p)) sb.Append($".p.{monster.p}");
+        if (!string.IsNullOrEmpty(monster.b)) sb.Append($".b.{monster.b}");
+        if (!string.IsNullOrEmpty(monster.rect)) sb.Append($".rect.{monster.rect}");
+        if (!string.IsNullOrEmpty(monster.draw)) sb.Append($".draw.{monster.draw}");
+        if (!string.IsNullOrEmpty(monster.thue)) sb.Append($".thue.{monster.thue}");
 
-        monster.AppendDiceSides(monsterSb);
+        monster.AppendDiceSides(sb);
 
-        if (!string.IsNullOrEmpty(monster.doc)) monsterSb.Append($".doc.{monster.doc}");
+        // Retrieve face modifiers and enforce the ":0" suffix on the facade key if no HSV values are present
+        string faceModifiers = monster.BuildFaceModifiers(allowFacade: true);
+        if (!string.IsNullOrEmpty(faceModifiers))
+        {
+            faceModifiers = Regex.Replace(
+                faceModifiers,
+                @"(\.facade\.[^.:\s]+)(?=\.|$)",
+                "$1:0"
+            );
+            sb.Append(faceModifiers);
+        }
 
-        // Face Modifiers (Monsters strictly do NOT use 'facade' keywords)
-        monsterSb.Append(monster.BuildFaceModifiers(allowFacade: false));
+        if (!string.IsNullOrEmpty(monster.doc)) sb.Append($".doc.{monster.doc}");
 
         // Image Override
         if (hasImageOverride)
         {
-            monsterSb.Append($".img.{FormatName(monster.imageOverride)}");
-            monster.AppendColorModifier(monsterSb);
+            sb.Append($".img.{FormatName(monster.imageOverride)}");
+            monster.AppendColorModifier(sb);
         }
-
-        monsterSb.Append(")");
-
-        // 2. Build the <those> modifiers outside of the monster parenthesis
-        StringBuilder thoseSb = new StringBuilder();
 
         // Traits: t.<name>
         if (monster.traits != null)
         {
             foreach (var t in monster.traits)
             {
-                if (!string.IsNullOrEmpty(t)) thoseSb.Append($".i.t.{FormatName(t)}");
+                if (!string.IsNullOrEmpty(t)) sb.Append($".t.{FormatName(t)}");
             }
         }
 
@@ -95,25 +81,16 @@ public class MonsterData : EntityData
         {
             foreach (var i in monster.items)
             {
-                if (!string.IsNullOrEmpty(i)) thoseSb.Append($".i.{FormatName(i)}");
+                if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
             }
         }
 
-        // Custom Items: i.(<custom item>)
+        // Custom Items: i.<custom item>
         if (monster.customItems != null)
         {
             foreach (var ci in monster.customItems)
             {
-                if (ci != null) thoseSb.Append($".i.({ItemData.Export(ci)})");
-            }
-        }
-
-        // Blessings: gift.<name>
-        if (monster.blessings != null)
-        {
-            foreach (var b in monster.blessings)
-            {
-                if (!string.IsNullOrEmpty(b)) thoseSb.Append($".gift.{FormatName(b)}");
+                if (ci != null) sb.Append($".i.{ItemData.Export(ci)}");
             }
         }
 
@@ -122,17 +99,17 @@ public class MonsterData : EntityData
         {
             foreach (var c in monster.curses)
             {
-                if (!string.IsNullOrEmpty(c)) thoseSb.Append($".i.t.jinx.{FormatName(c)}");
+                if (!string.IsNullOrEmpty(c)) sb.Append($".t.jinx.{FormatName(c)}");
             }
         }
 
-        // Combine into outer wrapper: ((<monster>)<those>)
-        if (thoseSb.Length == 0)
+        // Balance modifier is appended last after all other modifiers
+        if (!string.IsNullOrEmpty(monster.bal))
         {
-            return monsterSb.ToString();
+            sb.Append($".bal.{FormatName(monster.bal)}");
         }
 
-        return $"({monsterSb.ToString()}{thoseSb.ToString()})";
+        return sb.ToString();
     }
 
     public static MonsterData Parse(string data)
@@ -184,16 +161,13 @@ public class MonsterData : EntityData
         }
 
         // 1. Identify Base Monster / Type Prefix gracefully
-        // Unlike heroes, monsters don't use a "replica." tag. It's normally the very first token.
         if (tokens.Count > 0)
         {
             string firstToken = tokens[0].ToLower();
             if (firstToken == "rmon" || firstToken == "egg" || firstToken == "vase" || firstToken == "orb")
             {
-                //monster.baseMonsterType = firstToken;
                 tokens.RemoveAt(0); // consume the type
 
-                // If the next token isn't a recognized property key, it's the specific monster name
                 if (tokens.Count > 0 && !MonsterPropertyKeys.Contains(tokens[0].ToLower()))
                 {
                     monster.baseMonster = tokens[0];
@@ -202,9 +176,7 @@ public class MonsterData : EntityData
             }
             else if (!MonsterPropertyKeys.Contains(firstToken))
             {
-                // No explicit type modifier, the very first token is just the name (e.g., "Wolf")
                 monster.baseMonster = tokens[0];
-                //monster.baseMonsterType = "rmon"; // Default fallback type
                 tokens.RemoveAt(0); // consume the name
             }
         }
@@ -241,11 +213,6 @@ public class MonsterData : EntityData
                     {
                         monster.curses.AddRange(tokens[i + 3].Split('#'));
                         i += 3;
-                    }
-                    else if (string.Equals(value, "gift", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
-                    {
-                        monster.blessings.AddRange(tokens[i + 2].Split('#'));
-                        i += 2;
                     }
                     else if (value.StartsWith("("))
                     {

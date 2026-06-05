@@ -26,22 +26,6 @@ public class MonsterUI : EntityUI<MonsterData>
     // Helper to extract the ID from the normalized sprite name (e.g. "big_10_bats_22x22" -> 10)
 
     // Dynamically fetch the correct sprite based on the monster's size
-    protected override Sprite GetBaseDiceSprite(int effectID)
-    {
-        if (EntityUIHelpers.AllActionSprites == null) return null;
-
-        string expectedPrefix = GetPrefixForSize(CurrentEntity.size);
-        string searchString = $"{expectedPrefix}_{effectID}_";
-
-        foreach (var sprite in EntityUIHelpers.AllActionSprites)
-        {
-            if (sprite != null && sprite.name.StartsWith(searchString))
-            {
-                return sprite;
-            }
-        }
-        return null; // Fallback if no matching sprite is found
-    }
 
     protected override Sprite GetFacadeDiceSprite(string facadeID) => EntityUIHelpers.GetFacadeSprite(facadeID);
     protected override bool AllowFacades() => true;
@@ -68,50 +52,6 @@ public class MonsterUI : EntityUI<MonsterData>
         };
         iconPicker.OpenModal(config);
     }
-
-    protected override void OpenBaseModal(int faceIndex)
-    {
-        if (iconPicker == null) return;
-
-        MonsterSize currentSize = CurrentEntity.size;
-        string expectedPrefix = GetPrefixForSize(currentSize);
-
-        IconPickerConfig config = new IconPickerConfig
-        {
-            Sprites = EntityUIHelpers.AllActionSprites,
-
-            // Filter to ONLY show face sprites belonging to this monster's size category
-            IsValid = (index, sprite) => sprite != null && sprite.name.StartsWith($"{expectedPrefix}_"),
-
-            // Fetch the human-readable tooltip from our mapped MonsterDatabase definitions
-            GetSearchName = (index, sprite) =>
-            {
-                int id = ExtractIdFromSpriteName(sprite.name);
-                return MonsterDatabase.GetFaceName(currentSize, id);
-            },
-            GetTooltip = (index, sprite) =>
-            {
-                int id = ExtractIdFromSpriteName(sprite.name);
-                return $"ID {id}: {MonsterDatabase.GetFaceName(currentSize, id)}";
-            },
-
-            OnSelectionMade = (index, sprite) =>
-            {
-                if (sprite != null)
-                {
-                    int parsedId = ExtractIdFromSpriteName(sprite.name);
-                    if (parsedId >= 0)
-                    {
-                        CurrentEntity.diceSides[faceIndex].effectID = parsedId;
-                        NotifyStateChanged();
-                        RebuildDiceScrollView();
-                    }
-                }
-            }
-        };
-        iconPicker.OpenModal(config);
-    }
-
 
     ////////////////////////////////////////////
     ///
@@ -302,55 +242,193 @@ public class MonsterUI : EntityUI<MonsterData>
             GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val; NotifyStateChanged(); })
         ));
 
-        // Shared Lists
-        string[] formattedItemNames = Enum.GetNames(typeof(BaseItems)).Select(name => Regex.Replace(name, "([a-z])([A-Z])", "$1 $2")).ToArray();
+        string[] rawNames = Enum.GetNames(typeof(BaseItems));
+        string[] formattedItemNames = rawNames.Select(name => Regex.Replace(name, "([a-z])([A-Z])", "$1 $2")).ToArray();
+
+        // 3. Items (Strings)
         AppendCollectionSelector<string>(
-            layout: layout, label: "Add Item:", uniqueKey: "Item",
+            layout: layout,
+            label: "Add Item:",
+            uniqueKey: "Item",
             availableChoices: formattedItemNames,
             currentActiveItems: CurrentEntity.items ?? new List<string>(),
-            getKey: (itemName) => itemName, getDisplay: (itemName) => itemName,
+            getKey: (itemName) => itemName,
+            getDisplay: (itemName) => itemName,
             onAdd: (itemName) =>
             {
-                if (CurrentEntity.items == null) CurrentEntity.items = new List<string>();
-                if (!CurrentEntity.items.Contains(itemName)) { CurrentEntity.items.Add(itemName); NotifyStateChanged(); RebuildStatsUI(); }
+                if (CurrentEntity.items == null)
+                    CurrentEntity.items = new List<string>();
+
+                if (!CurrentEntity.items.Contains(itemName))
+                {
+                    CurrentEntity.items.Add(itemName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
             },
             onRemove: (itemName) =>
             {
-                if (CurrentEntity.items != null && CurrentEntity.items.Remove(itemName)) { NotifyStateChanged(); RebuildStatsUI(); }
+                if (CurrentEntity.items != null && CurrentEntity.items.Remove(itemName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
             }
         );
 
+        // 4. Custom Items (Instantiated directly from selected name string)
+        // Available choices hook: pass your list of raw custom item name strings here
         AppendCollectionSelector<string>(
-            layout: layout, label: "Add Traits:", uniqueKey: "Trait",
+            layout: layout,
+            label: "Add Custom Item:",
+            uniqueKey: "CustomItem",
+            availableChoices: new List<string>(), // Hook: Put your string choices here
+            currentActiveItems: CurrentEntity.customItems?.Select(i => i.entityName).ToList() ?? new List<string>(), // Note: change to 'name' if ItemData uses 'name'
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (itemName) =>
+            {
+                if (CurrentEntity.customItems == null)
+                    CurrentEntity.customItems = new List<ItemData>();
+
+                if (!CurrentEntity.customItems.Any(i => i.entityName == itemName)) // Note: change to 'name' if needed
+                {
+                    CurrentEntity.customItems.Add(new ItemData { entityName = itemName }); // Note: change to 'name' if needed
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (itemName) =>
+            {
+                if (CurrentEntity.customItems != null)
+                {
+                    var target = CurrentEntity.customItems.FirstOrDefault(i => i.entityName == itemName); // Note: change to 'name' if needed
+                    if (target != null && CurrentEntity.customItems.Remove(target))
+                    {
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
+                }
+            }
+        );
+
+        // 5. Traits (Strings)
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Traits:",
+            uniqueKey: "Trait",
+            // Use the keys of the TraitNiceNames dictionary
             availableChoices: SDColors.TraitNiceNames.Keys.ToList(),
             currentActiveItems: CurrentEntity.traits ?? new List<string>(),
             getKey: (traitName) => traitName,
-            getDisplay: (traitName) => SDColors.TraitNiceNames.TryGetValue(traitName, out string desc) ? $"{traitName}: {desc}" : traitName,
+            // Display both the key (name) and its dictionary value (description)
+            getDisplay: (traitName) =>
+            {
+                if (SDColors.TraitNiceNames.TryGetValue(traitName, out string desc))
+                {
+                    return $"{traitName}: {desc}";
+                }
+                return traitName;
+            },
             onAdd: (traitName) =>
             {
-                if (CurrentEntity.traits == null) CurrentEntity.traits = new List<string>();
-                if (!CurrentEntity.traits.Contains(traitName)) { CurrentEntity.traits.Add(traitName); NotifyStateChanged(); RebuildStatsUI(); }
+                if (CurrentEntity.traits == null)
+                    CurrentEntity.traits = new List<string>();
+
+                if (!CurrentEntity.traits.Contains(traitName))
+                {
+                    CurrentEntity.traits.Add(traitName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
             },
             onRemove: (traitName) =>
             {
-                if (CurrentEntity.traits != null && CurrentEntity.traits.Remove(traitName)) { NotifyStateChanged(); RebuildStatsUI(); }
+                if (CurrentEntity.traits != null && CurrentEntity.traits.Remove(traitName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
             }
         );
 
+        // 6. Blessings (Strings)
         AppendCollectionSelector<string>(
-            layout: layout, label: "Add Curse:", uniqueKey: "Curse",
+            layout: layout,
+            label: "Add Blessing:",
+            uniqueKey: "Blessing",
+            // Use the keys from BlessingDataset.Blessings
+            availableChoices: BlessingDataset.Blessings.Keys.ToList(),
+            currentActiveItems: CurrentEntity.blessings ?? new List<string>(),
+            getKey: (blessingName) => blessingName,
+            // Display both the key (name) and its description
+            getDisplay: (blessingName) =>
+            {
+                if (BlessingDataset.Blessings.TryGetValue(blessingName, out string desc))
+                {
+                    return $"{blessingName}: {desc}";
+                }
+                return blessingName;
+            },
+            onAdd: (blessingName) =>
+            {
+                if (CurrentEntity.blessings == null)
+                    CurrentEntity.blessings = new List<string>();
+
+                if (!CurrentEntity.blessings.Contains(blessingName))
+                {
+                    CurrentEntity.blessings.Add(blessingName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (blessingName) =>
+            {
+                if (CurrentEntity.blessings != null && CurrentEntity.blessings.Remove(blessingName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+
+        // 7. Curses (Strings)
+        AppendCollectionSelector<string>(
+            layout: layout,
+            label: "Add Curse:",
+            uniqueKey: "Curse",
+            // Use the keys from CurseDataset.Curses
             availableChoices: CurseDataset.Curses.Keys.ToList(),
             currentActiveItems: CurrentEntity.curses ?? new List<string>(),
             getKey: (curseName) => curseName,
-            getDisplay: (curseName) => CurseDataset.Curses.TryGetValue(curseName, out string desc) ? $"{curseName}: {desc}" : curseName,
+            // Display both the key (name) and its description
+            getDisplay: (curseName) =>
+            {
+                if (CurseDataset.Curses.TryGetValue(curseName, out string desc))
+                {
+                    return $"{curseName}: {desc}";
+                }
+                return curseName;
+            },
             onAdd: (curseName) =>
             {
-                if (CurrentEntity.curses == null) CurrentEntity.curses = new List<string>();
-                if (!CurrentEntity.curses.Contains(curseName)) { CurrentEntity.curses.Add(curseName); NotifyStateChanged(); RebuildStatsUI(); }
+                if (CurrentEntity.curses == null)
+                    CurrentEntity.curses = new List<string>();
+
+                if (!CurrentEntity.curses.Contains(curseName))
+                {
+                    CurrentEntity.curses.Add(curseName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
             },
             onRemove: (curseName) =>
             {
-                if (CurrentEntity.curses != null && CurrentEntity.curses.Remove(curseName)) { NotifyStateChanged(); RebuildStatsUI(); }
+                if (CurrentEntity.curses != null && CurrentEntity.curses.Remove(curseName))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
             }
         );
 
@@ -393,62 +471,6 @@ public class MonsterUI : EntityUI<MonsterData>
     // =====================================================================
     // OPEN FACADE DICE FACE MODAL (SIZE CONSTRAINED)
     // =====================================================================
-    protected override void OpenFacadeModal(int faceIndex)
-    {
-        if (iconPicker == null) return;
-
-        MonsterSize currentSize = CurrentEntity.size;
-        string sizeSuffix = GetSizeSuffix(currentSize);
-
-        IconPickerConfig config = new IconPickerConfig
-        {
-            Sprites = EntityUIHelpers.AllActionSprites,
-
-            // Re-use same rules as Base Modal: constrain selection to matching pixel sizes
-            IsValid = (index, sprite) =>
-            {
-                if (sprite == null) return false;
-                string name = sprite.name;
-
-                if (name.StartsWith("prt_") || name.StartsWith("trg_") || name.StartsWith("ui_"))
-                    return false;
-
-                return name.Contains(sizeSuffix);
-            },
-
-            GetSearchName = (index, sprite) =>
-            {
-                if (sprite.name.StartsWith("bas_") || sprite.name.StartsWith("tin_") || sprite.name.StartsWith("big_") || sprite.name.StartsWith("hug_"))
-                {
-                    int id = ExtractIdFromSpriteName(sprite.name);
-                    return MonsterDatabase.GetFaceName(currentSize, id);
-                }
-                return IconPickerModal.GetCleanLeafName(sprite.name);
-            },
-
-            GetTooltip = (index, sprite) =>
-            {
-                if (sprite.name.StartsWith("bas_") || sprite.name.StartsWith("tin_") || sprite.name.StartsWith("big_") || sprite.name.StartsWith("hug_"))
-                {
-                    int id = ExtractIdFromSpriteName(sprite.name);
-                    return $"Base ID {id}: {MonsterDatabase.GetFaceName(currentSize, id)}";
-                }
-                return $"Community Facade [{IconPickerModal.GetCleanLeafName(sprite.name)}]";
-            },
-
-            OnSelectionMade = (index, sprite) =>
-            {
-                if (sprite != null)
-                {
-                    // For Facades, we map the exact Sprite Name string to the facadeID
-                    CurrentEntity.diceSides[faceIndex].facadeID = sprite.name;
-                    NotifyStateChanged();
-                    RebuildDiceScrollView();
-                }
-            }
-        };
-        iconPicker.OpenModal(config);
-    }
 
     // =====================================================================
     // PORTRAIT SPRITE RESOLVER FALLBACK
@@ -479,4 +501,194 @@ public class MonsterUI : EntityUI<MonsterData>
         // Standard lookup fallback
         return EntityUIHelpers.GetSpriteForPortrait(baseMonsterName);
     }
+
+    ///////////////////////////////////////////////
+    ///
+
+
+    // --- INSIDE MonsterUI.cs ---
+    // Add this helper method inside the class:
+
+    private int GetMaxBaseIdForSize(MonsterSize size)
+    {
+        switch (size)
+        {
+            case MonsterSize.Tiny: return 17;
+            case MonsterSize.Big: return 31;
+            case MonsterSize.Huge: return 27;
+            case MonsterSize.HeroSized:
+            default: return 187;
+        }
+    }
+
+    // Then update OpenBaseModal, OpenFacadeModal, and GetBaseDiceSprite:
+
+    protected override void OpenBaseModal(int faceIndex)
+    {
+        if (iconPicker == null) return;
+
+        MonsterSize currentSize = CurrentEntity.size;
+        string expectedPrefix = GetPrefixForSize(currentSize);
+        int maxAllowedId = GetMaxBaseIdForSize(currentSize);
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = EntityUIHelpers.AllActionSprites,
+
+            // STRICT FILTER: Must start with prefix AND be within the official ID boundaries
+            IsValid = (index, sprite) =>
+            {
+                if (sprite == null || !sprite.name.StartsWith($"{expectedPrefix}_", StringComparison.OrdinalIgnoreCase)) return false;
+                int id = ExtractIdFromSpriteName(sprite.name);
+                return id >= 0 && id <= maxAllowedId;
+            },
+
+            GetSearchName = (index, sprite) =>
+            {
+                int id = ExtractIdFromSpriteName(sprite.name);
+                return MonsterDatabase.GetFaceName(currentSize, id);
+            },
+            GetTooltip = (index, sprite) =>
+            {
+                int id = ExtractIdFromSpriteName(sprite.name);
+                return $"ID {id}: {MonsterDatabase.GetFaceName(currentSize, id)}";
+            },
+
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (sprite != null)
+                {
+                    int parsedId = ExtractIdFromSpriteName(sprite.name);
+                    if (parsedId >= 0)
+                    {
+                        CurrentEntity.diceSides[faceIndex].effectID = parsedId;
+                        NotifyStateChanged();
+                        RebuildDiceScrollView();
+                    }
+                }
+            }
+        };
+        iconPicker.OpenModal(config);
+    }
+    protected override void OpenFacadeModal(int faceIndex)
+    {
+        if (iconPicker == null) return;
+
+        MonsterSize currentSize = CurrentEntity.size;
+        string sizeSuffix = GetSizeSuffix(currentSize);
+        int maxAllowedId = GetMaxBaseIdForSize(currentSize);
+
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = EntityUIHelpers.AllActionSprites,
+
+            IsValid = (index, sprite) =>
+            {
+                if (sprite == null) return false;
+                string name = sprite.name;
+
+                if (name.StartsWith("prt_") || name.StartsWith("trg_") || name.StartsWith("ui_"))
+                    return false;
+
+                return name.Contains(sizeSuffix);
+            },
+
+            GetSearchName = (index, sprite) =>
+            {
+                if (sprite.name.StartsWith("bas_", StringComparison.OrdinalIgnoreCase) ||
+                    sprite.name.StartsWith("tin_", StringComparison.OrdinalIgnoreCase) ||
+                    sprite.name.StartsWith("big_", StringComparison.OrdinalIgnoreCase) ||
+                    sprite.name.StartsWith("hug_", StringComparison.OrdinalIgnoreCase))
+                {
+                    int id = ExtractIdFromSpriteName(sprite.name);
+
+                    if (id > maxAllowedId) return IconPickerModal.GetCleanLeafName(sprite.name);
+
+                    return MonsterDatabase.GetFaceName(currentSize, id);
+                }
+                return IconPickerModal.GetCleanLeafName(sprite.name);
+            },
+
+            GetTooltip = (index, sprite) =>
+            {
+                if (sprite.name.StartsWith("bas_", StringComparison.OrdinalIgnoreCase) ||
+                    sprite.name.StartsWith("tin_", StringComparison.OrdinalIgnoreCase) ||
+                    sprite.name.StartsWith("big_", StringComparison.OrdinalIgnoreCase) ||
+                    sprite.name.StartsWith("hug_", StringComparison.OrdinalIgnoreCase))
+                {
+                    int id = ExtractIdFromSpriteName(sprite.name);
+
+                    if (id > maxAllowedId) return $"Community Facade [{IconPickerModal.GetCleanLeafName(sprite.name)}]";
+
+                    return $"Base ID {id}: {MonsterDatabase.GetFaceName(currentSize, id)}";
+                }
+                return $"Community Facade [{IconPickerModal.GetCleanLeafName(sprite.name)}]";
+            },
+
+            // =====================================================================
+            // UPDATE THIS CALLBACK BELOW
+            // =====================================================================
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (sprite != null)
+                {
+                    string filename = sprite.name;
+                    string[] parts = filename.Split('_');
+
+                    if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
+                    {
+                        string prefix = parts[0].ToLower();
+                        string facadeStr;
+
+                        // TRANSLATION LAYER: Sequential bas offsets for base game monster faces
+                        if (prefix == "big" && parsedId >= 0 && parsedId <= 31)
+                        {
+                            facadeStr = $"bas{188 + parsedId}";
+                        }
+                        else if (prefix == "hug" && parsedId >= 0 && parsedId <= 27)
+                        {
+                            facadeStr = $"bas{220 + parsedId}";
+                        }
+                        else if (prefix == "tin" && parsedId >= 0 && parsedId <= 17)
+                        {
+                            facadeStr = $"bas{248 + parsedId}";
+                        }
+                        else
+                        {
+                            // Community sprites (and standard 'bas' sprites) format normally as prefix + ID
+                            facadeStr = $"{parts[0]}{parts[1]}";
+                        }
+
+                        CurrentEntity.diceSides[faceIndex].facadeID = facadeStr;
+                    }
+                    else
+                    {
+                        // Fallback case for non-standard community structures
+                        CurrentEntity.diceSides[faceIndex].facadeID = filename;
+                    }
+
+                    NotifyStateChanged();
+                    RebuildDiceScrollView();
+                }
+            }
+        };
+        iconPicker.OpenModal(config);
+    }
+    protected override Sprite GetBaseDiceSprite(int effectID)
+    {
+        if (EntityUIHelpers.AllActionSprites == null) return null;
+
+        string expectedPrefix = GetPrefixForSize(CurrentEntity.size);
+        string searchString = $"{expectedPrefix}_{effectID}_";
+
+        foreach (var sprite in EntityUIHelpers.AllActionSprites)
+        {
+            if (sprite != null && sprite.name.StartsWith(searchString, StringComparison.OrdinalIgnoreCase))
+            {
+                return sprite;
+            }
+        }
+        return null;
+    }
+
 }

@@ -389,45 +389,40 @@ public class IconPickerModal : MonoBehaviour
     // =====================================================================
     // UPDATED BUILD CACHE METHOD
     // =====================================================================
+    // --- INSIDE IconPickerModal.cs ---
+    // Replace your BuildCache method with this:
+
     private void BuildCache(IconPickerConfig config)
     {
         if (config.Sprites == null) return;
 
-        _cachedIcons = new CachedIcon[config.Sprites.Length];
+        var cachedList = new List<CachedIcon>(config.Sprites.Length);
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         _isPortraitMode = false;
 
         for (int i = 0; i < config.Sprites.Length; i++)
         {
             Sprite sprite = config.Sprites[i];
-            bool isValid = false;
-            int width = -1;
-            string searchName = string.Empty;
-            string tooltipText = string.Empty;
+            if (sprite == null) continue;
+
+            // DEDUPLICATION: Ensures exact same sprite names never draw twice
+            if (!seenNames.Add(sprite.name)) continue;
+
+            bool isValid = config.IsValid?.Invoke(i, sprite) ?? true;
+            if (!isValid) continue;
+
+            int width = Mathf.RoundToInt(sprite.rect.width);
+            string searchName = config.GetSearchName?.Invoke(i, sprite) ?? sprite.name;
+            string tooltipText = config.GetTooltip?.Invoke(i, sprite) ?? sprite.name;
             MonsterSize? monsterSize = null;
 
-            if (sprite != null)
+            if (sprite.name.StartsWith("prt_", StringComparison.OrdinalIgnoreCase))
             {
-                isValid = config.IsValid?.Invoke(i, sprite) ?? true;
-
-                if (isValid)
-                {
-                    width = Mathf.RoundToInt(sprite.rect.width);
-                    searchName = config.GetSearchName?.Invoke(i, sprite) ?? sprite.name;
-                    tooltipText = config.GetTooltip?.Invoke(i, sprite) ?? sprite.name;
-
-                    // Portrains check (Starts with "prt_")
-                    if (sprite.name.StartsWith("prt_"))
-                    {
-                        monsterSize = GetPortraitMonsterSize(sprite);
-                        if (monsterSize.HasValue)
-                        {
-                            _isPortraitMode = true;
-                        }
-                    }
-                }
+                monsterSize = GetPortraitMonsterSize(sprite);
+                if (monsterSize.HasValue) _isPortraitMode = true;
             }
 
-            _cachedIcons[i] = new CachedIcon
+            cachedList.Add(new CachedIcon
             {
                 OriginalIndex = i,
                 Sprite = sprite,
@@ -435,9 +430,11 @@ public class IconPickerModal : MonoBehaviour
                 TooltipText = tooltipText,
                 Width = width,
                 AssociatedMonsterSize = monsterSize,
-                IsValid = isValid
-            };
+                IsValid = true
+            });
         }
+
+        _cachedIcons = cachedList.ToArray();
     }
 
 }

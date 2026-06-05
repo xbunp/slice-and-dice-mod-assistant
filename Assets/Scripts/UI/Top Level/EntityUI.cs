@@ -57,6 +57,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (iconPicker == null)
             iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
 
+        EntityUIHelpers.Initialize();
         InitializeSpecifics();
         BuildUIAndBind();
 
@@ -216,7 +217,16 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
                 if (AllowFacades() && diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
                 {
-                    Sprite s = GetFacadeDiceSprite(face.facadeID);
+                    // THE FIX: Directly query the static helper. This guarantees that if the 
+                    // PortraitPreview found it, the UI button will also find it, completely 
+                    // bypassing any broken overrides inside MonsterUI.
+                    Sprite s = EntityUIHelpers.GetFacadeSprite(face.facadeID);
+
+                    if (s == null)
+                    {
+                        s = GetFacadeDiceSprite(face.facadeID); // Absolute last resort fallback
+                    }
+
                     SetButtonIcon(facBtn, s);
                 }
             }
@@ -762,6 +772,32 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         Func<U, string> getKey, Func<U, string> getDisplay,
         Action<U> onAdd, Action<U> onRemove)
     {
-        // Internal method inherited from original codebase RootUI or extensions
+        // 1. Create selection dropdown row with a blank default option
+        List<string> dropdownOptions = new List<string> { "" };
+        dropdownOptions.AddRange(availableChoices.Select(getDisplay));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel(label, 0.30f),
+            GridCellSpec.CreateFilteredDropdown($"Selector_{uniqueKey}", "", 0.70f, dropdownOptions.ToArray(), (idx) =>
+            {
+                if (idx > 0 && (idx - 1) < availableChoices.Count)
+                {
+                    onAdd?.Invoke(availableChoices[idx - 1]);
+                }
+            })
+        ));
+
+        // 2. Generate rows with delete buttons for all currently active items in the list
+        for (int i = 0; i < currentActiveItems.Count; i++)
+        {
+            U item = currentActiveItems[i];
+            string key = getKey(item);
+            string display = getDisplay(item);
+
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"Active_{uniqueKey}_{i}_{key}", display, 0.80f),
+                GridCellSpec.CreateButton($"Del_{uniqueKey}_{i}_{key}", "[X]", 0.20f, () => onRemove?.Invoke(item))
+            ));
+        }
     }
 }

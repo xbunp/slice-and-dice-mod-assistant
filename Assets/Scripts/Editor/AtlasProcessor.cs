@@ -437,6 +437,9 @@ public class AtlasProcessor : AssetPostprocessor
         }
     }
 
+    // --- INSIDE AtlasProcessor.cs ---
+    // Replace the OnPreprocessTexture and ProcessAtlas methods with this:
+
     void OnPreprocessTexture()
     {
         string fileName = Path.GetFileName(assetPath);
@@ -445,7 +448,7 @@ public class AtlasProcessor : AssetPostprocessor
         {
             if (fileName == target)
             {
-                ProcessAtlas(assetImporter);
+                ProcessAtlas(assetImporter, fileName);
                 break;
             }
         }
@@ -460,13 +463,13 @@ public class AtlasProcessor : AssetPostprocessor
         return 4;
     }
 
-    private void ProcessAtlas(AssetImporter importer)
+    private void ProcessAtlas(AssetImporter importer, string fileName)
     {
         TextureImporter textureImporter = (TextureImporter)importer;
         textureImporter.textureType = TextureImporterType.Sprite;
         textureImporter.spriteImportMode = SpriteImportMode.Multiple;
 
-        var factory = new SpriteDataProviderFactories();
+        var factory = new UnityEditor.U2D.Sprites.SpriteDataProviderFactories();
         factory.Init();
         var dataProvider = factory.GetSpriteEditorDataProviderFromObject(textureImporter);
         dataProvider.InitSpriteEditorDataProvider();
@@ -503,41 +506,18 @@ public class AtlasProcessor : AssetPostprocessor
             string[] pathParts = originalPath.Split('/');
             string spriteSubName = pathParts[pathParts.Length - 1];
 
-            // Resolve prefix based on folder groupings
             string prefix = "Atm";
-            if (originalPath.StartsWith("reg/face/"))
-            {
-                prefix = "bas";
-            }
-            else if (originalPath.StartsWith("small/face/"))
-            {
-                prefix = "tin"; // Separated prefix for Tiny Monsters
-            }
-            else if (originalPath.StartsWith("big/face/"))
-            {
-                prefix = "big"; // Separated prefix for Big Monsters
-            }
-            else if (originalPath.StartsWith("huge/face/"))
-            {
-                prefix = "hug"; // Separated prefix for Huge Monsters
-            }
-            else if (originalPath.StartsWith("portrait/"))
-            {
-                prefix = "prt";
-            }
-            else if (originalPath.StartsWith("trigger/"))
-            {
-                prefix = "trg";
-            }
-            else if (originalPath.StartsWith("ui/"))
-            {
-                prefix = "ui_";
-            }
+            if (originalPath.StartsWith("reg/face/")) prefix = "bas";
+            else if (originalPath.StartsWith("small/face/")) prefix = "tin";
+            else if (originalPath.StartsWith("big/face/")) prefix = "big";
+            else if (originalPath.StartsWith("huge/face/")) prefix = "hug";
+            else if (originalPath.StartsWith("portrait/")) prefix = "prt";
+            else if (originalPath.StartsWith("trigger/")) prefix = "trg";
+            else if (originalPath.StartsWith("ui/")) prefix = "ui_";
             else if (pathParts.Length >= 2)
             {
                 string folderName = pathParts[pathParts.Length - 2].Trim();
-                if (folderName.Length < 3)
-                    folderName = folderName.PadRight(3, '_');
+                if (folderName.Length < 3) folderName = folderName.PadRight(3, '_');
                 prefix = folderName.Substring(0, 3);
             }
 
@@ -588,10 +568,7 @@ public class AtlasProcessor : AssetPostprocessor
         {
             int orderA = GetGroupOrder(a.originalPath);
             int orderB = GetGroupOrder(b.originalPath);
-            if (orderA != orderB)
-            {
-                return orderA.CompareTo(orderB);
-            }
+            if (orderA != orderB) return orderA.CompareTo(orderB);
             return a.normalizedPath.CompareTo(b.normalizedPath);
         });
 
@@ -601,9 +578,8 @@ public class AtlasProcessor : AssetPostprocessor
         foreach (var sprite in parsedSprites)
         {
             if (!prefixGroups.ContainsKey(sprite.prefix))
-            {
                 prefixGroups[sprite.prefix] = new List<ParsedSprite>();
-            }
+
             prefixGroups[sprite.prefix].Add(sprite);
         }
 
@@ -615,32 +591,42 @@ public class AtlasProcessor : AssetPostprocessor
             var list = group.Value;
             var reservedIds = new HashSet<int>();
 
-            if (PrefixCustomIds.TryGetValue(prefix, out var customMappings))
+            bool hasCustomMapping = PrefixCustomIds.TryGetValue(prefix, out var customMappings);
+            if (hasCustomMapping)
             {
-                foreach (var id in customMappings.Values)
-                {
-                    reservedIds.Add(id);
-                }
+                foreach (var id in customMappings.Values) reservedIds.Add(id);
             }
 
-            // Step 1: Assign strict defined database overrides
-            if (customMappings != null)
+            var validList = new List<ParsedSprite>();
+
+            foreach (var sprite in list)
             {
-                foreach (var sprite in list)
+                bool matchedHardcode = false;
+                if (hasCustomMapping)
                 {
                     foreach (var kvp in customMappings)
                     {
                         if (NormalizePath(kvp.Key) == sprite.normalizedPath)
                         {
                             sprite.assignedId = kvp.Value;
+                            matchedHardcode = true;
                             break;
                         }
                     }
                 }
+
+                // If this is the Base Atlas, and it's a known game face,
+                // but wasn't explicitly defined in the dictionary, it's Dev Garbage. Burn it.
+                if (fileName == "base_atlas_image.png" && hasCustomMapping && !matchedHardcode)
+                {
+                    continue; // Discard completely
+                }
+
+                validList.Add(sprite);
             }
 
-            // Step 2: Dynamically query/assign sequentially stable IDs from the persistent project settings db
-            foreach (var sprite in list)
+            // Step 2: Dynamically query/assign sequentially stable IDs from project settings
+            foreach (var sprite in validList)
             {
                 if (sprite.assignedId == -1)
                 {
@@ -648,11 +634,10 @@ public class AtlasProcessor : AssetPostprocessor
                 }
             }
 
-            foreach (var sprite in list)
+            foreach (var sprite in validList)
             {
                 int width = Mathf.RoundToInt(sprite.rect.width);
                 int height = Mathf.RoundToInt(sprite.rect.height);
-
                 string finalName = $"{sprite.prefix}_{sprite.assignedId}_{sprite.leafName}_{width}x{height}";
 
                 spriteRects.Add(new SpriteRect
@@ -666,20 +651,8 @@ public class AtlasProcessor : AssetPostprocessor
         }
 
         SpriteRegistry.Save();
-
         dataProvider.SetSpriteRects(spriteRects.ToArray());
         dataProvider.Apply();
     }
 
-    private static void ScreamError(string message)
-    {
-        string bar = "====================================================================";
-        string scream = $"\n<color=red><b><size=18>{bar}\n!!! CRITICAL ATLAS ERROR !!!\n{bar}</size></b></color>\n\n" +
-                        $"<color=yellow><size=16>{message}</size></color>\n\n" +
-                        $"<color=red><b><size=18>{bar}\nFIX THIS IMMEDIATELY OR SPRITES WILL BE CORRUPT!\n{bar}</size></b></color>\n";
-
-        Debug.LogError(scream);
-        //Debug.LogError(scream);
-        //Debug.LogError(scream);
-    }
 }
