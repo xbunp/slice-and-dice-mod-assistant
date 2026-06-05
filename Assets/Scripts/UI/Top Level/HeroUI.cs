@@ -694,7 +694,7 @@ public class HeroUI : RootUI
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Hero Name:", 0.35f),
-            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentHero.entityName = val; NotifyStateChanged(); })
+            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentHero.entityName = val.SanitizeInput(); NotifyStateChanged(); })
         ));
 
         layout.Add(new GridRowSpec(
@@ -759,12 +759,16 @@ public class HeroUI : RootUI
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Speech:", 0.20f),
-            GridCellSpec.CreateInput("Speech", "", 0.80f, (val) => { CurrentHero.speech = val; NotifyStateChanged(); })
+            GridCellSpec.CreateInput("Speech", "", 0.80f, (val) =>
+            {
+                CurrentHero.speech = val.SanitizeInput();
+                NotifyStateChanged();
+            })
         ));
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Doc:", 0.20f),
-            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentHero.doc = val; NotifyStateChanged(); })
+            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentHero.doc = val.SanitizeInput(); NotifyStateChanged(); })
         ));
 
         // 1. Base Abilities

@@ -13,25 +13,32 @@ public class FullModUI : RootUI
 
     protected override void BuildUIAndBind()
     {
-        var columns = new List<ColumnSpec>
-        {
-            new ColumnSpec("Left_Column", 0.0f, 0.49f, new List<GridRowSpec>
-            {
-                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateButton("LoadModBtn", "Load Mod from Clipboard", 1.0f, OnLoadModClicked)),
-                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateDropdown("ModDropdown", "", 1.0f, GetDropdownOptions(), OnDropdownSelected))
-            }),
-            new ColumnSpec("Right_Column", 0.51f, 1.0f, new List<GridRowSpec>
-            {
-                new GridRowSpec(750f, GridCellSpec.CreateScrollView("ModScrollView", 1.0f)),
-                
-                // Expose settings for automated Hero Pool exports
-                new GridRowSpec(uiGenerator.rowHeight,
-                    GridCellSpec.CreateToggle("AutoReplaceBase", "Replace Base Heroes (Auto-Pool)", 0.5f, (v) => ModPackage.Instance.loadedMod.AutoExport_ReplaceBaseHeroes = v),
-                    GridCellSpec.CreateToggle("AutoHidePool", "Hide Auto-Pool", 0.5f, (v) => ModPackage.Instance.loadedMod.AutoExport_HideHeroPool = v)),
+        // Retrieve the exact dynamic height of the content canvas container
+        float totalHeight = uiGenerator.canvas.GetComponent<RectTransform>().rect.height;
 
-                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateButton("CopyModBtn", "Copy Mod to Clipboard", 1.0f, OnCopyModClicked))
-            })
-        };
+        // Perfect math using the generator's public layout properties.
+        // This perfectly accounts for the manual rowSpacing used inside BuildGrid.
+        float dynamicScrollViewHeight = totalHeight - uiGenerator.rowHeight - uiGenerator.rowSpacing;
+
+        var columns = new List<ColumnSpec>
+    {
+        new ColumnSpec("Left_Column", 0.0f, 0.49f, new List<GridRowSpec>
+        {
+            new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateButton("LoadModBtn", "Load Mod from Clipboard", 1.0f, OnLoadModClicked)),
+            new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateDropdown("ModDropdown", "", 1.0f, GetDropdownOptions(), OnDropdownSelected)),
+            
+            // Checkboxes situated in the Left Column
+            new GridRowSpec(uiGenerator.rowHeight,
+                GridCellSpec.CreateToggle("AutoReplaceBase", "Replace Base Heroes (Auto-Pool)", 0.5f, (v) => ModPackage.Instance.loadedMod.AutoExport_ReplaceBaseHeroes = v),
+                GridCellSpec.CreateToggle("AutoHidePool", "Hide Auto-Pool", 0.5f, (v) => ModPackage.Instance.loadedMod.AutoExport_HideHeroPool = v))
+        }),
+        new ColumnSpec("Right_Column", 0.51f, 1.0f, new List<GridRowSpec>
+        {
+            // Dynamically sized to fill all space down to the bottom button perfectly
+            new GridRowSpec(dynamicScrollViewHeight, GridCellSpec.CreateScrollView("ModScrollView", 1.0f)),
+            new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateButton("CopyModBtn", "Copy Mod to Clipboard", 1.0f, OnCopyModClicked))
+        })
+    };
 
         generatedScreen = uiGenerator.SetupScreen(columns, false);
 
@@ -45,6 +52,53 @@ public class FullModUI : RootUI
         }
     }
 
+    /// <summary>
+    /// Retrieves the real, scaled height of the active UI canvas or container, 
+    /// avoiding DPI/resolution scaling mismatch issues.
+    /// </summary>
+    private float GetScaleIndependentHeight()
+    {
+        // Try to get the height of the UI Generator's own RectTransform
+        if (uiGenerator != null)
+        {
+            RectTransform uiGenRect = uiGenerator.GetComponent<RectTransform>();
+            if (uiGenRect != null && uiGenRect.rect.height > 100f)
+            {
+                return uiGenRect.rect.height;
+            }
+        }
+
+        // Try to locate the main UI Canvas to read its scaled dimensions
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas == null && uiGenerator != null)
+        {
+            canvas = uiGenerator.GetComponentInParent<Canvas>();
+        }
+        if (canvas == null)
+        {
+            canvas = UnityEngine.Object.FindObjectOfType<Canvas>();
+        }
+
+        if (canvas != null && canvas.transform is RectTransform canvasRect)
+        {
+            return canvasRect.rect.height;
+        }
+
+        // Fallback if UI is initialized before the canvas scales
+        return Screen.height;
+    }
+
+    /// <summary>
+    /// Helper method to determine the available height. 
+    /// Adjust this to match your UI framework's way of retrieving screen or window dimensions.
+    /// </summary>
+    private float GetAvailableHeight()
+    {
+        // Example fallback: If uiGenerator exposes a height limit, use it.
+        // Otherwise, you might use Unity's Screen.height, or a parent container's height.
+        return 900f;
+    }
+
     private void OnDestroy()
     {
         if (ModPackage.Instance != null) ModPackage.Instance.OnModDataChanged -= OnStateChanged;
@@ -54,10 +108,10 @@ public class FullModUI : RootUI
     {
         if (object.ReferenceEquals(sender, this)) return;
 
-        // Restore settings state
-        if (generatedScreen.ColumnRefs["Right_Column"].Toggles.TryGetValue("AutoReplaceBase", out var rToggle))
+        // Restore settings state from the Left_Column
+        if (generatedScreen.ColumnRefs["Left_Column"].Toggles.TryGetValue("AutoReplaceBase", out var rToggle))
             rToggle.SetIsOnWithoutNotify(ModPackage.Instance.loadedMod.AutoExport_ReplaceBaseHeroes);
-        if (generatedScreen.ColumnRefs["Right_Column"].Toggles.TryGetValue("AutoHidePool", out var hToggle))
+        if (generatedScreen.ColumnRefs["Left_Column"].Toggles.TryGetValue("AutoHidePool", out var hToggle))
             hToggle.SetIsOnWithoutNotify(ModPackage.Instance.loadedMod.AutoExport_HideHeroPool);
 
         directiveUIs.Clear();

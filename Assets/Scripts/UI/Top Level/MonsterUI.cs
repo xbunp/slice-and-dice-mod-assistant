@@ -169,7 +169,7 @@ public class MonsterUI : EntityUI<MonsterData>
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Monster Name:", 0.35f),
-            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentEntity.entityName = val; NotifyStateChanged(); })
+            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentEntity.entityName = val.SanitizeInput(); NotifyStateChanged(); })
         ));
 
         // The Monster selection triggers now dynamically track the Monster Size.
@@ -238,7 +238,7 @@ public class MonsterUI : EntityUI<MonsterData>
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Doc:", 0.20f),
-            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val; NotifyStateChanged(); })
+            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val.SanitizeInput(); NotifyStateChanged(); })
         ));
 
         string[] rawNames = Enum.GetNames(typeof(BaseItems));

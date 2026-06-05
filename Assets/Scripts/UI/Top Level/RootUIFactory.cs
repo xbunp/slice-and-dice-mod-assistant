@@ -106,7 +106,7 @@ public class RootUIFactory : MonoBehaviour
     /// </summary>
     private T CreateTabInstance<T>(string gameObjectName, string displayName) where T : RootUI
     {
-        GameObject obj = new GameObject(gameObjectName);
+        GameObject obj = new GameObject(gameObjectName, typeof(RectTransform));
         obj.transform.SetParent(contentContainer, false);
         T component = obj.AddComponent<T>();
 
@@ -131,7 +131,7 @@ public class RootUIFactory : MonoBehaviour
     /// </summary>
     private T CreateInstanceOnly<T>(string gameObjectName) where T : MonoBehaviour
     {
-        GameObject obj = new GameObject(gameObjectName);
+        GameObject obj = new GameObject(gameObjectName, typeof(RectTransform));
         obj.transform.SetParent(contentContainer, false);
         return obj.AddComponent<T>();
     }
