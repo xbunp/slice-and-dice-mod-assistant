@@ -30,15 +30,15 @@ Material:
     m_Ints: []
     m_Floats:
     - _ColorMask: 15
-    - _Hue: 71
-    - _Saturation: 64
+    - _Hue: 0
+    - _Saturation: 0
     - _Stencil: 0
     - _StencilComp: 8
     - _StencilOp: 0
     - _StencilReadMask: 255
     - _StencilWriteMask: 255
     - _UseUIAlphaClip: 0
-    - _Value: 60
+    - _Value: 0
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

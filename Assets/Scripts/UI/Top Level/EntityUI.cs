@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -473,8 +473,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Pips:", 0.25f),
                 GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => { if (int.TryParse(val, out int p)) { face.pips = p; NotifyStateChanged(); } }),
-                GridCellSpec.CreateButton($"BtnPipDown_{index}", "V", 0.20f, () => { face.pips = Mathf.Max(0, face.pips - 1); NotifyStateChanged(); }),
-                GridCellSpec.CreateButton($"BtnPipUp_{index}", "^", 0.20f, () => { face.pips++; NotifyStateChanged(); })
+                GridCellSpec.CreateButton($"BtnPipDown_{index}", "🡇", 0.20f, () => { face.pips = Mathf.Max(0, face.pips - 1); NotifyStateChanged(); }),
+                GridCellSpec.CreateButton($"BtnPipUp_{index}", "🡅", 0.20f, () => { face.pips++; NotifyStateChanged(); })
             ));
 
             if (AllowFacades())
@@ -492,7 +492,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 layout.Add(new GridRowSpec(
                     GridCellSpec.CreateLabel("Val:", 0.30f),
                     GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 2, Mathf.RoundToInt(val))),
-                    GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateFaceHsv(index, 2, v); })
+                    GridCellSpec.CreateInput($"FacV_{index}", "🡇", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateFaceHsv(index, 2, v); })
                 ));
             }
 

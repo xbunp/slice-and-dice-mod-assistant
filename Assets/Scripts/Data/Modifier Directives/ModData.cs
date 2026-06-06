@@ -160,6 +160,22 @@ public class ModData
         if (_directives.Remove(target)) NotifyDataChanged();
     }
 
+    public void MoveDirective(SliceDiceTextMod.ModDirectiveData directive, int direction)
+    {
+        if (directive == null) return;
+
+        int index = _directives.IndexOf(directive);
+        if (index < 0) return;
+
+        int newIndex = index + direction;
+        if (newIndex >= 0 && newIndex < _directives.Count)
+        {
+            _directives.RemoveAt(index);
+            _directives.Insert(newIndex, directive);
+            NotifyDataChanged();
+        }
+    }
+
     // --- SERIALIZATION & AUTOMATION ---
     public static string Export(ModData modData)
     {

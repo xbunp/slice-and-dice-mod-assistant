@@ -25,7 +25,7 @@ public class ModPackage : MonoBehaviour
     private readonly Dictionary<Type, EditingSession> _activeSessions = new Dictionary<Type, EditingSession>();
 
     // --- MULTI-SESSION TRACKING (DIRECTIVES) ---
-    // Key: Original Directive reference | Value: Editable Clone reference
+    // Key: Original Directive reference | Value: Active Directive reference (direct reference, no clone)
     private readonly Dictionary<SliceDiceTextMod.ModDirectiveData, SliceDiceTextMod.ModDirectiveData> _activeDirectiveSessions =
         new Dictionary<SliceDiceTextMod.ModDirectiveData, SliceDiceTextMod.ModDirectiveData>();
 
@@ -142,27 +142,24 @@ public class ModPackage : MonoBehaviour
     {
         if (original == null) return null;
 
-        if (_activeDirectiveSessions.TryGetValue(original, out var clone))
+        if (_activeDirectiveSessions.TryGetValue(original, out var activeInstance))
         {
-            return clone;
+            return activeInstance;
         }
 
-        var newClone = Clone(original);
-        _activeDirectiveSessions[original] = newClone;
-        return newClone;
+        // We use the direct reference instead of cloning
+        _activeDirectiveSessions[original] = original;
+        return original;
     }
 
-    /// <summary>
-    /// Saves the edited clone of a directive back to the ModData configuration.
-    /// </summary>
     public void SaveDirective(SliceDiceTextMod.ModDirectiveData original)
     {
         if (original == null) return;
 
-        if (_activeDirectiveSessions.TryGetValue(original, out var clone))
+        if (_activeDirectiveSessions.TryGetValue(original, out var activeInstance))
         {
-            loadedMod.SaveDirective(original, clone);
-            _activeDirectiveSessions.Remove(original); // Close editing session after a successful save
+            loadedMod.SaveDirective(original, activeInstance);
+            _activeDirectiveSessions.Remove(original); // Close editing session after saving
             OnDirectivesChanged?.Invoke();
         }
     }
@@ -186,6 +183,11 @@ public class ModPackage : MonoBehaviour
         loadedMod.DeleteDirective(original);
         _activeDirectiveSessions.Remove(original);
         OnDirectivesChanged?.Invoke();
+    }
+
+    public void MoveDirective(SliceDiceTextMod.ModDirectiveData directive, int direction)
+    {
+        loadedMod.MoveDirective(directive, direction);
     }
 
     // =========================================================================

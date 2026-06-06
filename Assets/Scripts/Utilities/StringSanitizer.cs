@@ -1,6 +1,6 @@
 public static class StringExtensions
 {
-    public static string SanitizeInput(this string value)
+    public static string SanitizeRichInput(this string value)
     {
         if (string.IsNullOrEmpty(value))
         {
@@ -9,7 +9,20 @@ public static class StringExtensions
 
         return value
             .Replace(".", "[dot]")
-            .Replace("&", "[272000DGF0x3w1w3x3w0w0w1w1w3x0w1][h]")
+            .Replace("&", "[amp]/[and]")
             .Replace(",", "[comma]");
+    }
+
+    public static string SanitizePlainInput(this string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        return value
+            .Replace(".", "")
+            .Replace("&", "")
+            .Replace(",", "");
     }
 }

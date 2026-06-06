@@ -47,21 +47,21 @@ namespace SliceDiceTextMod
             {
                 DropdownName = "Forced Fight",
                 CreateData = () => new ForcedFightData(),
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new ForcedFight((ForcedFightData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => TryParseList(core, isHidden, floor, "fight", false, () => new ForcedFightData())
             });
             Entries.Add(new Entry
             {
                 DropdownName = "Spawn Injection",
                 CreateData = () => new SpawnInjectionData(),
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new SpawnInjection((SpawnInjectionData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => TryParseList(core, isHidden, floor, "add", false, () => new SpawnInjectionData())
             });
             Entries.Add(new Entry
             {
                 DropdownName = "Starting Party",
                 CreateData = () => new PartyConfigData(),
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new PartyConfig((PartyConfigData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => TryParseList(core, isHidden, floor, "party", false, () => new PartyConfigData())
             });
 
@@ -70,21 +70,21 @@ namespace SliceDiceTextMod
             {
                 DropdownName = "Difficulty Config",
                 CreateData = () => new ConfigDirectiveData { Prefix = "diff" },
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new ConfigDirective((ConfigDirectiveData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => TryParseConfig(core, isHidden, floor, "diff")
             });
             Entries.Add(new Entry
             {
                 DropdownName = "Zone Config",
                 CreateData = () => new ConfigDirectiveData { Prefix = "zone" },
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new ConfigDirective((ConfigDirectiveData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => TryParseConfig(core, isHidden, floor, "zone")
             });
             Entries.Add(new Entry
             {
                 DropdownName = "Item Replacement",
                 CreateData = () => new ConfigDirectiveData { Prefix = "ritemx" },
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new ConfigDirective((ConfigDirectiveData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => {
                     var match = Regex.Match(core, @"^(?:i\.)?(ritemx)\.(.*)", RegexOptions.IgnoreCase);
                     if (!match.Success) return null;
@@ -97,7 +97,7 @@ namespace SliceDiceTextMod
             {
                 DropdownName = "Game Toggle",
                 CreateData = () => new ToggleDirectiveData(),
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new ToggleDirective((ToggleDirectiveData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => {
                     var match = Regex.Match(core, @"^tog([a-zA-Z0-9_]+)", RegexOptions.IgnoreCase);
                     if (!match.Success) return null;
@@ -108,7 +108,7 @@ namespace SliceDiceTextMod
             {
                 DropdownName = "Global Command",
                 CreateData = () => new CommandDirectiveData(),
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new CommandDirective((CommandDirectiveData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => {
                     if (Regex.IsMatch(core, @"^(?i)(Delevel|Level Up|No Flee|skip(?: all)?|temporary|Wish|Clear Party|Missing|Hidden|Add(?: 10| 100)? Fights?|Minus Fight|Cursemode Loopdiff)$"))
                         return new CommandDirectiveData { Command = core, IsHidden = isHidden, FloorSelectorRaw = floor };
@@ -121,7 +121,7 @@ namespace SliceDiceTextMod
             {
                 DropdownName = "Custom Entity / Modifier",
                 CreateData = () => new CustomEntityData(),
-                CreateUI = null, // TODO: Bind to HeroModManager!
+                CreateUI = (d, ui, reb, rem) => new CustomEntityUI((CustomEntityData)d, ui, reb, rem),
                 TryParse = (core, isHidden, floor) => {
                     // If it's a standalone entity definition like "replica.Fighter..." or a keyword definition
                     if (Regex.IsMatch(core, @"^(?i)(replica\.|k\.|allitem\.)"))
@@ -137,14 +137,14 @@ namespace SliceDiceTextMod
             {
                 DropdownName = "Phase Event",
                 CreateData = () => new PhaseEventData(),
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new PhaseEvent((PhaseEventData)d, ui, reb, rem),
                 TryParse = TryParsePhase
             });
             Entries.Add(new Entry
             {
                 DropdownName = "Reward Option (Choosable)",
                 CreateData = () => new RewardOptionData(),
-                CreateUI = null,
+                CreateUI = (d, ui, reb, rem) => new RewardOption((RewardOptionData)d, ui, reb, rem),
                 TryParse = TryParseChoosable
             });
         }
