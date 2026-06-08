@@ -26,8 +26,8 @@ public class ModPackage : MonoBehaviour
 
     // --- MULTI-SESSION TRACKING (DIRECTIVES) ---
     // Key: Original Directive reference | Value: Active Directive reference (direct reference, no clone)
-    private readonly Dictionary<SliceDiceTextMod.ModDirectiveData, SliceDiceTextMod.ModDirectiveData> _activeDirectiveSessions =
-        new Dictionary<SliceDiceTextMod.ModDirectiveData, SliceDiceTextMod.ModDirectiveData>();
+    private readonly Dictionary<SliceDiceTextMod.TextModBlock, SliceDiceTextMod.TextModBlock> _activeDirectiveSessions =
+        new Dictionary<SliceDiceTextMod.TextModBlock, SliceDiceTextMod.TextModBlock>();
 
     // --- EVENTS ---
     public event Action<Type, EntityData> OnActiveEntityChanged;
@@ -138,7 +138,7 @@ public class ModPackage : MonoBehaviour
     /// Gets the unique editable clone for a specific directive. 
     /// If no editing session exists for this directive instance, one is created automatically.
     /// </summary>
-    public SliceDiceTextMod.ModDirectiveData GetOrCreateDirectiveSession(SliceDiceTextMod.ModDirectiveData original)
+    public SliceDiceTextMod.TextModBlock GetOrCreateDirectiveSession(SliceDiceTextMod.TextModBlock original)
     {
         if (original == null) return null;
 
@@ -152,7 +152,7 @@ public class ModPackage : MonoBehaviour
         return original;
     }
 
-    public void SaveDirective(SliceDiceTextMod.ModDirectiveData original)
+    public void SaveDirective(SliceDiceTextMod.TextModBlock original)
     {
         if (original == null) return;
 
@@ -167,7 +167,7 @@ public class ModPackage : MonoBehaviour
     /// <summary>
     /// Discards any pending local edits made to a directive instance.
     /// </summary>
-    public void CancelDirectiveEdit(SliceDiceTextMod.ModDirectiveData original)
+    public void CancelDirectiveEdit(SliceDiceTextMod.TextModBlock original)
     {
         if (original == null) return;
         _activeDirectiveSessions.Remove(original);
@@ -176,7 +176,7 @@ public class ModPackage : MonoBehaviour
     /// <summary>
     /// Deletes a directive configuration completely.
     /// </summary>
-    public void DeleteDirective(SliceDiceTextMod.ModDirectiveData original)
+    public void DeleteDirective(SliceDiceTextMod.TextModBlock original)
     {
         if (original == null) return;
 
@@ -185,7 +185,7 @@ public class ModPackage : MonoBehaviour
         OnDirectivesChanged?.Invoke();
     }
 
-    public void MoveDirective(SliceDiceTextMod.ModDirectiveData directive, int direction)
+    public void MoveDirective(SliceDiceTextMod.TextModBlock directive, int direction)
     {
         loadedMod.MoveDirective(directive, direction);
     }

@@ -3828,7 +3828,7 @@ public static class BlessingDataset
         { "Zombie.spirit", "All monsters: i die if i take 4 or more damage in a single attack" },
         { "Baron.spirit", "All monsters: Every 2nd hp: +1 mana" },
         { "Carrier.spirit", "All monsters: Start poisoned for 2" },
-
+        /*
         // Add hero blessings
         { "add.[Tier 1 hero]", "Add a [Tier 1 hero] to your party" },
         { "add.[Tier 2 hero]", "Add a [Tier 2 hero] to your party" },
@@ -3851,5 +3851,6 @@ public static class BlessingDataset
         { "i.[Tier 15 item]", "Gain the [Tier 15 item]" },
         { "i.[Tier 16 item]", "Gain the [Tier 16 item]" },
         { "i.[Tier 17 item]", "Gain the [Tier 17 item]" }
+        */
     };
 }

@@ -8,7 +8,7 @@ public class ModData
 {
     public event Action OnDataChanged;
 
-    [SerializeField] private List<SliceDiceTextMod.ModDirectiveData> _directives = new List<SliceDiceTextMod.ModDirectiveData>();
+    [SerializeField] private List<SliceDiceTextMod.TextModBlock> _directives = new List<SliceDiceTextMod.TextModBlock>();
     [SerializeField] private List<HeroData> _heroes = new List<HeroData>();
     [SerializeField] private List<MonsterData> _monsters = new List<MonsterData>();
     [SerializeField] private List<AbilityData> _abilities = new List<AbilityData>();
@@ -135,15 +135,15 @@ public class ModData
         NotifyDataChanged();
     }
 
-    public IReadOnlyList<SliceDiceTextMod.ModDirectiveData> GetDirectives() => _directives;
+    public IReadOnlyList<SliceDiceTextMod.TextModBlock> GetDirectives() => _directives;
 
-    public SliceDiceTextMod.ModDirectiveData LoadDirective(int index)
+    public SliceDiceTextMod.TextModBlock LoadDirective(int index)
     {
         if (index >= 0 && index < _directives.Count) return _directives[index];
         return null;
     }
 
-    public void SaveDirective(SliceDiceTextMod.ModDirectiveData original, SliceDiceTextMod.ModDirectiveData updated)
+    public void SaveDirective(SliceDiceTextMod.TextModBlock original, SliceDiceTextMod.TextModBlock updated)
     {
         if (updated == null) return;
 
@@ -154,13 +154,13 @@ public class ModData
         NotifyDataChanged();
     }
 
-    public void DeleteDirective(SliceDiceTextMod.ModDirectiveData target)
+    public void DeleteDirective(SliceDiceTextMod.TextModBlock target)
     {
         if (target == null) return;
         if (_directives.Remove(target)) NotifyDataChanged();
     }
 
-    public void MoveDirective(SliceDiceTextMod.ModDirectiveData directive, int direction)
+    public void MoveDirective(SliceDiceTextMod.TextModBlock directive, int direction)
     {
         if (directive == null) return;
 

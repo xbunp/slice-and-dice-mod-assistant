@@ -57,6 +57,7 @@ namespace SliceDiceTextMod
     ///     - Targets = left, mid, self, all, topbot, left2, rightmost, right, bot, top, mid, left.
     ///     - Supports inherent item/hero modifications and tags using target codes "k" (keywords) and "t" (tags).
     ///     - Payloads are '#' separated: "k.acidic#facade.bas1"
+    ///     - Payloads are '#' separated: "k.acidic#facade.bas1"
     /// 11. Formatting, Color, & Animation Tags: Automatically classifies and handles non-syntactic aesthetic markup.
     ///     - Supports structural color rules (including pink, ultragrey, and hsl/hsv settings), bold formatting tags, 
     ///       icons, keyword containers, and animation/style tags.

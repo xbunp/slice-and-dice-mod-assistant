@@ -1,27 +1,50 @@
 using System.Collections.Generic;
 using System.Linq;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
+using SliceDiceTextMod;
 
 public class FullModUI : RootUI
 {
     private TMP_Dropdown directiveDropdown;
     private ScrollRect directiveScrollView;
-    private List<DirectiveUI> directiveUIs = new List<DirectiveUI>();
+    private List<BlockUIPanel> blockUIs = new List<BlockUIPanel>();
+
+    // No registry. Just hardcoded templates that instantiate TextModBlocks.
+    private readonly Dictionary<string, TextModBlock> blockTemplates = new Dictionary<string, TextModBlock>
+    {
+        { "Hero Pool", new TextModBlock { Title = "Hero Pool", Type = BlockType.PoolList, Prefix = "heropool" } },
+        { "Monster Pool", new TextModBlock { Title = "Monster Pool", Type = BlockType.PoolList, Prefix = "monsterpool" } },
+        { "Item Pool", new TextModBlock { Title = "Item Pool", Type = BlockType.PoolList, Prefix = "itempool" } },
+        { "Forced Fight / Add Monster", new TextModBlock { Title = "Forced Fight / Add", Type = BlockType.PoolList, Prefix = "fight" } },
+        { "Starting Party", new TextModBlock { Title = "Starting Party", Type = BlockType.PoolList, Prefix = "party" } },
+        { "Modifier Choosable (ch.m)", new TextModBlock { Title = "Modifier Reward", Type = BlockType.PrefixPayload, Prefix = "ch.m" } },
+        { "Item Choosable (ch.i)", new TextModBlock { Title = "Item Reward", Type = BlockType.PrefixPayload, Prefix = "ch.i" } },
+        { "Random Tag (ch.r)", new TextModBlock { Title = "Random Reward", Type = BlockType.PrefixPayload, Prefix = "ch.r", P1 = "1~1~m" } },
+        { "Or Tag List (ch.o)", new TextModBlock { Title = "Or List (Random 1 of List)", Type = BlockType.ChoiceList, Prefix = "ch.o", Delimiter = "@4" } },
+        { "SCPhase List (ph.!)", new TextModBlock { Title = "Simple Choice Phase", Type = BlockType.ChoiceList, Prefix = "ph.!", Delimiter = "@3" } },
+        { "Message Phase (ph.4)", new TextModBlock { Title = "Message Phase", Type = BlockType.MessagePhase, P2 = "ok" } },
+        { "Boolean Phase (ph.b)", new TextModBlock { Title = "Boolean Logic Phase", Type = BlockType.BooleanPhase } },
+        { "Reset Phase (ph.6)", new TextModBlock { Title = "Reset Phase", Type = BlockType.Raw, P1 = "ph.6" } },
+        { "Run End Phase (ph.e)", new TextModBlock { Title = "Run End Phase", Type = BlockType.Raw, P1 = "ph.e" } },
+        { "Custom / Raw Code", new TextModBlock { Title = "Raw Textmod Code", Type = BlockType.Raw } }
+    };
 
     protected override void BuildUIAndBind()
     {
         float totalHeight = uiGenerator.canvas.GetComponent<RectTransform>().rect.height;
         float dynamicScrollViewHeight = totalHeight - uiGenerator.rowHeight - uiGenerator.rowSpacing;
 
+        List<string> dropdownOptions = new List<string> { "Add TextMod Block..." };
+        dropdownOptions.AddRange(blockTemplates.Keys);
+
         var columns = new List<ColumnSpec>
         {
             new ColumnSpec("Left_Column", 0.0f, 0.49f, new List<GridRowSpec>
             {
-                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateButton("LoadModBtn", "Load Mod from Clipboard", 1.0f, OnLoadModClicked)),
-                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateDropdown("ModDropdown", "", 1.0f, GetDropdownOptions(), OnDropdownSelected))
-                // Global "Auto-Pool" toggles removed. These are now handled natively inside the HeroPool directive UI.
+                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateButton("LoadModBtn", "Load Mod from Clipboard", 1.0f, null)),
+                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateDropdown("ModDropdown", "", 1.0f, dropdownOptions.ToArray(), OnDropdownSelected))
             }),
             new ColumnSpec("Right_Column", 0.51f, 1.0f, new List<GridRowSpec>
             {
@@ -31,7 +54,6 @@ public class FullModUI : RootUI
         };
 
         generatedScreen = uiGenerator.SetupScreen(columns, false);
-
         directiveDropdown = generatedScreen.ColumnRefs["Left_Column"].Dropdowns["ModDropdown"];
         directiveScrollView = generatedScreen.ColumnRefs["Right_Column"].ScrollViews["ModScrollView"];
 
@@ -42,55 +64,30 @@ public class FullModUI : RootUI
         }
     }
 
-    private void OnDestroy()
-    {
-        if (ModPackage.Instance != null) ModPackage.Instance.OnModDataChanged -= OnStateChanged;
-    }
-
     private void OnStateChanged(object sender)
     {
         if (object.ReferenceEquals(sender, this)) return;
 
-        var directives = ModPackage.Instance.loadedMod.GetDirectives();
-        var existingUIs = directiveUIs.ToDictionary(ui => ui.DataModel);
-        directiveUIs.Clear();
+        IReadOnlyList<TextModBlock> blocks = ModPackage.Instance.loadedMod.GetDirectives();
+        Dictionary<TextModBlock, BlockUIPanel> existingUIs = blockUIs.ToDictionary(ui => ui.Block);
+        blockUIs.Clear();
 
-        foreach (var directive in directives)
+        foreach (var block in blocks)
         {
-            if (existingUIs.TryGetValue(directive, out var existingUI))
+            if (existingUIs.TryGetValue(block, out var existingUI))
             {
-                directiveUIs.Add(existingUI); // Reuses the existing UI instance
+                blockUIs.Add(existingUI);
             }
             else
             {
-                var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => directive.GetType() == e.CreateData().GetType());
-                if (entry != null)
-                {
-                    // --- SAFETY CHECK ---
-                    // Detects if the registry entry forgot to populate the UI delegate
-                    if (entry.CreateUI == null)
-                    {
-                        Debug.LogError($"[FullModUI] Registry entry for '{entry.DropdownName}' is missing its 'CreateUI' delegate assignment!");
-                        continue;
-                    }
+                var sessionBlock = ModPackage.Instance.GetOrCreateDirectiveSession(block);
+                var newUI = new BlockUIPanel(sessionBlock, uiGenerator,
+                    () => RebuildScrollView(),
+                    () => ModPackage.Instance.DeleteDirective(block)
+                );
 
-                    var workingReference = ModPackage.Instance.GetOrCreateDirectiveSession(directive);
-
-                    var newUI = entry.CreateUI(workingReference, uiGenerator,
-                        () => RebuildScrollView(),
-                        () => ModPackage.Instance.DeleteDirective(directive)
-                    );
-
-                    if (newUI != null)
-                    {
-                        newUI.onMoveRequested = (dir) => ModPackage.Instance.MoveDirective(directive, dir);
-                        directiveUIs.Add(newUI);
-                    }
-                }
-                else
-                {
-                    Debug.LogWarning($"[FullModUI] No registry entry found for directive type: {directive.GetType().Name}");
-                }
+                newUI.onMoveRequested = (dir) => ModPackage.Instance.MoveDirective(block, dir);
+                blockUIs.Add(newUI);
             }
         }
         RebuildScrollView();
@@ -101,44 +98,12 @@ public class FullModUI : RootUI
         if (directiveScrollView == null || directiveScrollView.content == null) return;
 
         List<GridRowSpec> masterRows = new List<GridRowSpec>();
-        foreach (var ui in directiveUIs) masterRows.AddRange(ui.GetRowSpecs());
+        foreach (var ui in blockUIs) masterRows.AddRange(ui.GetRowSpecs());
 
         var refs = uiGenerator.RebuildGrid(directiveScrollView.content, masterRows, true);
         directiveScrollView.content.sizeDelta = new Vector2(0f, refs.TotalHeight);
 
-        foreach (var ui in directiveUIs) ui.RestoreState(refs);
-    }
-
-    private void OnLoadModClicked()
-    {
-        string clipboard = GUIUtility.systemCopyBuffer;
-        if (string.IsNullOrWhiteSpace(clipboard)) return;
-
-        // ModParser.ParseIntoContainer(clipboard, ModPackage.Instance.loadedMod);
-        ModPackage.Instance.NotifyDirectiveSessionChanged(this);
-    }
-
-    private void OnCopyModClicked()
-    {
-        // 1. Run export prep (e.g. cleaning empty fields) and commit directives
-        foreach (var d in directiveUIs)
-        {
-            d.PrepareForExport();
-            ModPackage.Instance.SaveDirective(d.DataModel);
-        }
-
-        // 2. Perform the export
-        string output = ModPackage.Instance.ExportModToTextModString();
-        if (string.IsNullOrEmpty(output))
-        {
-            Debug.LogError("No TextMod loaded to export!");
-            return;
-        }
-
-        // string rawText = ImageUtility.RestoreImages(output);
-        GUIUtility.systemCopyBuffer = output;
-        // uiGenerator.CreatePopup("Mod copied to clipboard!", true, null);
-        Debug.Log("Copied to clipboard!");
+        foreach (var ui in blockUIs) ui.RestoreState(refs);
     }
 
     private void OnDropdownSelected(int index)
@@ -147,18 +112,33 @@ public class FullModUI : RootUI
         string option = directiveDropdown.options[index].text;
         directiveDropdown.value = 0;
 
-        var entry = SliceDiceTextMod.DirectiveRegistry.Entries.FirstOrDefault(e => e.DropdownName == option);
-        if (entry != null)
+        if (blockTemplates.TryGetValue(option, out var template))
         {
-            ModPackage.Instance.loadedMod.SaveDirective(null, entry.CreateData());
+            // Clone the template parameters to create a fresh block
+            var newBlock = new TextModBlock
+            {
+                Title = template.Title,
+                Type = template.Type,
+                Prefix = template.Prefix,
+                Delimiter = template.Delimiter,
+                P1 = template.P1,
+                P2 = template.P2
+            };
+
+            ModPackage.Instance.loadedMod.SaveDirective(null, newBlock);
             ModPackage.Instance.NotifyDirectiveSessionChanged(this);
         }
     }
 
-    private string[] GetDropdownOptions()
+    private void OnCopyModClicked()
     {
-        var opts = new List<string> { "Add Directive..." };
-        opts.AddRange(SliceDiceTextMod.DirectiveRegistry.Entries.Select(e => e.DropdownName));
-        return opts.ToArray();
+        foreach (var ui in blockUIs) ModPackage.Instance.SaveDirective(ui.Block);
+
+        string output = ModPackage.Instance.ExportModToTextModString();
+        if (!string.IsNullOrEmpty(output))
+        {
+            GUIUtility.systemCopyBuffer = output;
+            Debug.Log("Copied to clipboard!");
+        }
     }
 }

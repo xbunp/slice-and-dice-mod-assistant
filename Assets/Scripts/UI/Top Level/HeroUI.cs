@@ -1310,7 +1310,7 @@ public class HeroUI : RootUI
         rawTextOutput.pointSize = 16;
         rawTextOutput.textComponent.autoSizeTextContainer = false;
 
-        GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
+                GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
         highlighterObj.name = "SyntaxHighlighter";
         syntaxHighlighterText = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
 
@@ -1342,6 +1342,33 @@ public class HeroUI : RootUI
         syntaxHighlighterText.enableWordWrapping = rawTextOutput.textComponent.enableWordWrapping;
         syntaxHighlighterText.autoSizeTextContainer = false;
         syntaxHighlighterText.richText = true;
+
+        rawTextOutput.onValueChanged.AddListener((val) =>
+        {
+            if (syntaxHighlighterText != null)
+            {
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(val);
+            }
+        });
+
+        rawTextOutput.onEndEdit.AddListener((val) =>
+        {
+            if (string.IsNullOrWhiteSpace(val)) return;
+            try
+            {
+                HeroData importedHero = TextModLexerParser.ParseHero(val);
+                if (importedHero != null)
+                {
+                    ModPackage.Instance.UpdateActiveEntityClone<HeroData>(importedHero);
+                    ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);
+                    UpdateUIFromData();
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"Could not parse manual edits to hero string: {ex.Message}");
+            }
+        });
 
         FullScreenUIGenerator.SetAnchors(inputObj.GetComponent<RectTransform>(), 0.0f, 0.08f, 1.0f, 0.58f);
 
