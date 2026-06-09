@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using ModEditor;
 
 public class RootUIFactory : MonoBehaviour
 {
@@ -22,7 +23,7 @@ public class RootUIFactory : MonoBehaviour
 
     // Direct, strongly-typed references to each instantiated class
     public IDEUI IDEUI { get; private set; }
-    public FullModUI FullModUI { get; private set; } // Added ModFactory reference
+    public ScratchModUI ScratchModUI { get; private set; }
     public HeroUI HeroUI { get; private set; }
     public MonsterUI MonsterUI { get; private set; }
     public ItemUI ItemUI { get; private set; }
@@ -92,7 +93,7 @@ public class RootUIFactory : MonoBehaviour
 
         // Instantiate classes directly, assign references, and register them as tabs
         IDEUI = CreateTabInstance<IDEUI>("IDEUI", "IDE");
-        FullModUI = CreateTabInstance<FullModUI>("FullModUI", "Modifiers");
+        ScratchModUI = CreateTabInstance<ScratchModUI>("ScratchModUI", "Modifiers");
         HeroUI = CreateTabInstance<HeroUI>("HeroUI", "Heroes");
         MonsterUI = CreateTabInstance<MonsterUI>("MonsterUI", "Monsters");
         ItemUI = CreateTabInstance<ItemUI>("ItemUI", "Items");

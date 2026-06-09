@@ -89,6 +89,8 @@ public class VirtualizedIdeController : MonoBehaviour
 
     public Func<string, string> TextPreprocessor;
     public Action<string> OnLinkActivated;
+    public Action<string> OnSelectionChanged; // <-- ADD THIS LINE
+    private string _lastSelectionEventValue = null; // <-- ADD THIS TO PREVENT DUPLICATE CALLS
 
     // =========================================================================
     // Proactive Initialization Sanity Pass
@@ -139,12 +141,10 @@ public class VirtualizedIdeController : MonoBehaviour
         //        if (!isWatchPaste) return;
         PasteClipboardOverSelection(clipboardText);
     }
-
     public void ReplaceIDEContent(string clipboardText, bool preProccessText)
     {
         PasteClipboardOverSelection(clipboardText, true, preProccessText);
     }
-
     private void PerformStrictInitializationSanityPass()
     {
         // 1. Lock down ScrollRect physics
@@ -442,6 +442,15 @@ public class VirtualizedIdeController : MonoBehaviour
     // Virtualization Rendering Core
     // =========================================================================
 
+    private void TriggerSelectionChanged(string selectedText)
+    {
+        if (_lastSelectionEventValue != selectedText)
+        {
+            _lastSelectionEventValue = selectedText;
+            OnSelectionChanged?.Invoke(selectedText);
+        }
+    }
+
     private void OnScrollPositionChanged(Vector2 scrollPosition)
     {
         UpdateVirtualViewport(false);
@@ -581,6 +590,9 @@ public class VirtualizedIdeController : MonoBehaviour
             // Triple click: Open edit directly selecting the entire line
             string lineText = _rawLines[lineIndex];
             RequestLineEdit(lineIndex, lineText.Length, 0);
+
+            // Direct event trigger for the full line selection
+            TriggerSelectionChanged(lineText);
             return;
         }
         else if (clickCount == 2)
@@ -593,6 +605,13 @@ public class VirtualizedIdeController : MonoBehaviour
             GetWordBoundaries(_rawLines[lineIndex], charIndex, out int start, out int end);
 
             RequestLineEdit(lineIndex, end, start);
+
+            // Direct event trigger for the targeted word selection
+            if (end > start)
+            {
+                string selectedWord = _rawLines[lineIndex].Substring(start, end - start);
+                TriggerSelectionChanged(selectedWord);
+            }
             return;
         }
 
@@ -799,6 +818,18 @@ public class VirtualizedIdeController : MonoBehaviour
 
         sharedInputField.Select();
         sharedInputField.ActivateInputField();
+
+        if (targetCaret != targetAnchor)
+        {
+            int s = Mathf.Min(targetCaret, targetAnchor);
+            int e = Mathf.Max(targetCaret, targetAnchor);
+            string selectedText = _rawLines[lineIndex].Substring(s, e - s);
+            TriggerSelectionChanged(selectedText);
+        }
+        else
+        {
+            TriggerSelectionChanged(string.Empty);
+        }
 
         UpdateVirtualViewport(true);
         _isSwitchingLine = false;
@@ -1394,6 +1425,9 @@ public class VirtualizedIdeController : MonoBehaviour
     // 3. Dynamic Cache Updater (Only runs on Drag in WebGL to satisfy browser security)
     private void UpdateSelectionCache()
     {
+        // TRIGGER EVENT FOR SELECTION UPDATES
+        TriggerSelectionChanged(GetSelectedText());
+
 #if UNITY_WEBGL && !UNITY_EDITOR
         if (!_isMultiSelecting)
         {

@@ -907,7 +907,7 @@ public static class TextmodTranslator
         List<string> items = SplitRespectingParens(data, "@3", 2);
         if (items.Count >= 2)
             return $"Cursed Chest Trade: Accept BOTH [{ParseRewardTag(items[0])}] AND [{ParseRewardTag(items[1])}] or decline.";
-        return $"Trade Phase ({data})";
+        return $"Trade Phase offering: {ParseRewardTag(data)}";
     }
 
     // --- Hardcoded Pre-defined Modifiers --- //

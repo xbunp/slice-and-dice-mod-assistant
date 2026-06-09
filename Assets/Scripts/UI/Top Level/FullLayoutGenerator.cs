@@ -1,3 +1,4 @@
+using ModEditor.UI;
 using System;
 using System.Collections.Generic;
 using TMPro;
@@ -335,6 +336,12 @@ public class FullScreenUIGenerator : MonoBehaviour
                     ConfigureToggleCell(cell, cellObj, refs);
                 }
                 break;
+            case CellType.DropZone:
+                // Programmatically generate a clean RectTransform panel to avoid prefab dependencies
+                cellObj = new GameObject(cell.key ?? "DropZonePanel", typeof(RectTransform));
+                cellObj.transform.SetParent(rowRt, false);
+                ConfigureDropZoneCell(cell, cellObj, refs);
+                break;
             case CellType.FilteredDropdown:
                 if (filteredDropdown != null)
                 {
@@ -589,6 +596,38 @@ public class FullScreenUIGenerator : MonoBehaviour
             {
                 drop.onValueChanged.AddListener((val) => cell.onIntChanged(val));
             }
+        }
+    }
+
+    private void ConfigureDropZoneCell(GridCellSpec cell, GameObject cellObj, GridReferences refs)
+    {
+        // Dark translucent inset track to visually represent a slot/groove
+        Image bg = cellObj.GetComponent<Image>();
+        if (bg == null) bg = cellObj.AddComponent<Image>();
+        bg.color = new Color(0.08f, 0.08f, 0.08f, 0.5f);
+
+        VerticalLayoutGroup layout = cellObj.GetComponent<VerticalLayoutGroup>();
+        if (layout == null) layout = cellObj.AddComponent<VerticalLayoutGroup>();
+
+        layout.spacing = 6f;
+        // 24px Left Padding creates the "C-Spine" indent track
+        layout.padding = new RectOffset(24, 6, 6, 6);
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlHeight = true;
+        layout.childControlWidth = true;
+        layout.childForceExpandHeight = false;
+        layout.childForceExpandWidth = true;
+
+        ContentSizeFitter fitter = cellObj.GetComponent<ContentSizeFitter>();
+        if (fitter == null) fitter = cellObj.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        BlockDropZone dropZone = cellObj.GetComponent<BlockDropZone>();
+        if (dropZone == null) dropZone = cellObj.AddComponent<BlockDropZone>();
+
+        if (!string.IsNullOrEmpty(cell.key))
+        {
+            refs.DropZones[cell.key] = dropZone;
         }
     }
 

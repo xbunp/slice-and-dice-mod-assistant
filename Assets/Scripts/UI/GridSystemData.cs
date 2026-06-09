@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter, IDEInterface, Toggle, FilteredDropdown }
+public enum CellType { Input, Dropdown, Label, Button, DiceButton, Slider, ScrollView, NavigationTabs, ImagePanel, PortraitPanel, CustomImgImporter, IDEInterface, Toggle, FilteredDropdown, DropZone }
 
 public class GridReferences
 {
@@ -21,6 +21,7 @@ public class GridReferences
     public Dictionary<string, VirtualizedIdeController> IDEInterfaces = new Dictionary<string, VirtualizedIdeController>();
     public Dictionary<string, Toggle> Toggles = new Dictionary<string, Toggle>();
     public Dictionary<string, FilteredDropdown> FilteredDropdowns = new Dictionary<string, FilteredDropdown>();
+    public Dictionary<string, ModEditor.UI.BlockDropZone> DropZones = new Dictionary<string, ModEditor.UI.BlockDropZone>();
 
 }
 
@@ -214,6 +215,15 @@ public class GridCellSpec
         };
     }
 
+    public static GridCellSpec CreateDropZone(string key, float ratio)
+    {
+        return new GridCellSpec
+        {
+            type = CellType.DropZone,
+            key = key,
+            widthRatio = ratio
+        };
+    }
 }
 
 public class ColumnSpec

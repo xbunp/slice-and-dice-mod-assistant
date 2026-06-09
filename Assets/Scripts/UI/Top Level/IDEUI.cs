@@ -16,6 +16,7 @@ public class IDEUI : RootUI
 
     [Header("Formatting State")]
     public bool IDEFormatString = true;
+    private TextMeshProUGUI translationDisplay;
 
     // =========================================================================
     // Image Compression Cache
@@ -100,6 +101,8 @@ public class IDEUI : RootUI
                 IDEconfig = new SDTextmodSyntaxConfig { watchPaste = true, scrollHorizontal = true };
                 mainIdeController.Initialize(IDEconfig);
                 mainIdeController.TextPreprocessor = PreprocessPastedText;
+
+                mainIdeController.OnSelectionChanged = HandleIdeSelectionChanged;
             }
         }
 
@@ -123,16 +126,69 @@ public class IDEUI : RootUI
                 };
 
                 phasesIdeController.Initialize(preserveConfig);
-
-                // REMOVED: phasesIdeController.TextPreprocessor = PreprocessPastedText;
                 phasesIdeController.OnLinkActivated = HandleOverviewLinkClicked;
             }
         }
 
         UpdateToggleButtonText();
 
-        // Populate demo controls on the consolidated Right Column
-        PopulateDemoScrollView("Right_Column", "RightBottomScrollView", "Right Bottom Demo Button");
+        // Replace old demo button setup with translation setup
+        SetupTranslationScrollView("Right_Column", "RightBottomScrollView");
+    }
+
+    private void SetupTranslationScrollView(string columnName, string scrollViewKey)
+    {
+        if (generatedScreen.ColumnRefs.TryGetValue(columnName, out GridReferences refs))
+        {
+            if (refs.ScrollViews.TryGetValue(scrollViewKey, out ScrollRect scrollRect))
+            {
+                if (scrollRect.content != null)
+                {
+                    // Clear out default demo items
+                    foreach (Transform child in scrollRect.content) Destroy(child.gameObject);
+
+                    // Create text component dynamically
+                    GameObject textObj = new GameObject("TranslationTextDisplay", typeof(RectTransform), typeof(TextMeshProUGUI));
+                    textObj.transform.SetParent(scrollRect.content, false);
+
+                    translationDisplay = textObj.GetComponent<TextMeshProUGUI>();
+                    if (translationDisplay != null)
+                    {
+                        translationDisplay.fontSize = 14;
+                        translationDisplay.color = Color.white;
+                        translationDisplay.text = "Select code in the left panel to translate...";
+
+                        // Span to fit the container
+                        RectTransform rt = translationDisplay.rectTransform;
+                        rt.anchorMin = Vector2.zero;
+                        rt.anchorMax = Vector2.one;
+                        rt.sizeDelta = Vector2.zero;
+                    }
+                }
+            }
+        }
+    }
+
+    private void HandleIdeSelectionChanged(string selectedText)
+    {
+        if (translationDisplay == null) return;
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            translationDisplay.text = "Select code in the left panel to translate...";
+            return;
+        }
+
+        try
+        {
+            string translatedText = TextmodTranslator.Translate(selectedText);
+            translationDisplay.text = translatedText;
+        }
+        catch (System.Exception ex)
+        {
+            UnityEngine.Debug.LogError($"Translation failed: {ex.Message}");
+            translationDisplay.text = "Error translating selected code.";
+        }
     }
 
     private void HandleOverviewLinkClicked(string linkId)
@@ -447,7 +503,9 @@ public class IDEUI : RootUI
         lastAnalyzedOverview = ModAnalyzer.Analyze(compressed);
         DisplayModOverview(lastAnalyzedOverview);
 
-        return IDEFormatString ? AutoFormatModStringSync(compressed) : MinifyModString(compressed);
+        return IDEFormatString
+            ? AutoFormatModStringSync(compressed)
+            : InsertLinebreaksAfterCommas(MinifyModString(compressed));
     }
     private void DisplayModOverview(List<ModBlockOverview> content)
     {
