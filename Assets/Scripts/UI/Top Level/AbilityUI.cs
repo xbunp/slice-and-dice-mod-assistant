@@ -217,13 +217,22 @@ public class AbilityUI : RootUI
 
     private void OnStateChanged(object sender)
     {
-        /*
+        // 1. We are the ones typing/editing -> Update our own visuals (Zero Lag)
         if (object.ReferenceEquals(sender, this))
         {
             UpdateVisualsOnly();
             return;
         }
-        */
+
+        // 2. A true database change occurred (Ability Saved, Mod Loaded)
+        // We MUST rebuild the UI here to pull the newly saved Custom Abilities into the dropdown!
+        if (sender == null)
+        {
+            RebuildStatsUI();
+            return;
+        }
+
+        // 3. Another tab (like AbilityUI) is actively typing -> Just sync text fields (Zero Lag)
         UpdateUIFromData();
     }
 

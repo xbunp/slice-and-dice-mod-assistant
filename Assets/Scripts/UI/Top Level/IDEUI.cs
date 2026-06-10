@@ -41,22 +41,34 @@ public class IDEUI : RootUI
 
         if (generatedScreen == null || generatedScreen.RootWrapper == null) return;
 
+        // 1. Get the safe canvas height (Matches HeroUI)
+        float canvasHeight = 900f; // Baseline fallback
+        if (uiGenerator != null)
+        {
+            RectTransform canvasRt = uiGenerator.GetComponentInParent<Canvas>()?.GetComponent<RectTransform>();
+            if (canvasRt != null) canvasHeight = canvasRt.rect.height;
+        }
+
         Canvas.ForceUpdateCanvases();
 
-        float totalHeight = generatedScreen.RootWrapper.rect.height;
         float spacing = uiGenerator.rowSpacing;
-
-        // Distribute height cleanly without manual spacer calculations
-        float rightPanelHeight = (totalHeight - (spacing * 3f)) / 2f;
-        float leftPanelHeight = totalHeight - (spacing * 2f);
-
         float buttonRowHeight = uiGenerator.rowHeight;
+
+        // 2. Distribute initial height using the canvas dimensions
+        float leftPanelHeight = canvasHeight - (spacing * 2f);
+        float rightPanelHeight = (canvasHeight - (spacing * 3f)) / 2f;
+
         float leftIdeHeight = leftPanelHeight - buttonRowHeight - spacing;
         float rightTopIdeHeight = rightPanelHeight + spacing - buttonRowHeight;
 
+        // Apply minimum safety bounds to prevent collapsing
+        leftIdeHeight = Mathf.Max(leftIdeHeight, 400f);
+        rightTopIdeHeight = Mathf.Max(rightTopIdeHeight, 200f);
+        rightPanelHeight = Mathf.Max(rightPanelHeight, 200f);
+
         List<ColumnSpec> columns = new List<ColumnSpec>();
 
-        // LEFT COLUMN (No manual top spacer needed; layout group handles outer margins if enabled)
+        // LEFT COLUMN (Pass calculated heights back in)
         List<GridRowSpec> leftRows = new List<GridRowSpec>
     {
         new GridRowSpec(buttonRowHeight,
@@ -68,7 +80,7 @@ public class IDEUI : RootUI
     };
         columns.Add(new ColumnSpec("Left_Column", 0.0f, 0.66f, leftRows));
 
-        // CONSOLIDATED RIGHT COLUMN (No overlapping columns, no fake image spacers)
+        // RIGHT COLUMN (Pass calculated heights back in)
         List<GridRowSpec> rightRows = new List<GridRowSpec>
     {
         new GridRowSpec(buttonRowHeight, GridCellSpec.CreateButton("ToggleDetailsBtn", "Collapse Details", 1.0f, () => ToggleOverviewDetails())),
@@ -134,6 +146,8 @@ public class IDEUI : RootUI
 
         // Replace old demo button setup with translation setup
         SetupTranslationScrollView("Right_Column", "RightBottomScrollView");
+
+        ApplyDynamicLayoutConstraints();
     }
 
     private void SetupTranslationScrollView(string columnName, string scrollViewKey)
@@ -588,5 +602,85 @@ public class IDEUI : RootUI
         }
 
         return sb.ToString();
+    }
+
+    private void ConfigureFlexibleLayout(RectTransform target)
+    {
+        if (target == null) return;
+
+        var layoutElement = target.GetComponent<UnityEngine.UI.LayoutElement>();
+        if (layoutElement == null)
+        {
+            layoutElement = target.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+        }
+
+        // Setting flexibleHeight to 1 instructs layout groups to stretch this element to fill unused space
+        layoutElement.preferredHeight = -1;
+        layoutElement.flexibleHeight = 1f;
+    }
+
+    private void StretchToParent(RectTransform rt, float topOffset, float bottomOffset)
+    {
+        if (rt == null) return;
+
+        // Anchors min(0,0) and max(1,1) bounds the RectTransform corners to stretch with its parent
+        rt.anchorMin = new Vector2(0f, 0f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.offsetMin = new Vector2(0f, bottomOffset);
+        rt.offsetMax = new Vector2(0f, -topOffset);
+    }
+
+    private void ApplyDynamicLayoutConstraints()
+    {
+        float canvasHeight = 900f;
+        if (uiGenerator != null)
+        {
+            RectTransform canvasRt = uiGenerator.GetComponentInParent<Canvas>()?.GetComponent<RectTransform>();
+            if (canvasRt != null) canvasHeight = canvasRt.rect.height;
+        }
+
+        float spacing = uiGenerator.rowSpacing;
+        float buttonRowHeight = uiGenerator.rowHeight;
+
+        // 1. LEFT PANEL: Stretch the IDE from below the buttons to the bottom of the screen
+        if (generatedScreen.ColumnRefs.TryGetValue("Left_Column", out GridReferences leftRefs))
+        {
+            if (leftRefs.IDEInterfaces.TryGetValue("LeftPanelIDE", out VirtualizedIdeController ide))
+            {
+                RectTransform ideRt = ide.GetComponent<RectTransform>();
+                RectTransform rowContainerRt = ideRt.parent as RectTransform;
+
+                // Start right below the button row
+                float leftTopOffset = buttonRowHeight + spacing;
+
+                // Stretch row container from below the buttons to the bottom
+                StretchToParent(rowContainerRt, leftTopOffset, 0f);
+                StretchToParent(ideRt, 0f, 0f);
+            }
+        }
+
+        // 2. RIGHT PANEL: Only stretch the bottom edge of the Lower ScrollView
+        if (generatedScreen.ColumnRefs.TryGetValue("Right_Column", out GridReferences rightRefs))
+        {
+            // NOTE: We leave RightTopIDE untouched so it keeps its fixed height and positioning.
+
+            if (rightRefs.ScrollViews.TryGetValue("RightBottomScrollView", out ScrollRect scrollView))
+            {
+                RectTransform scrollRt = scrollView.GetComponent<RectTransform>();
+                RectTransform rowContainerRt = scrollRt.parent as RectTransform;
+
+                // Re-calculate the height of the top IDE exactly as done in BuildUIAndBind
+                float rightPanelHeight = (canvasHeight - (spacing * 3f)) / 2f;
+                float rightTopIdeHeight = rightPanelHeight + spacing - buttonRowHeight;
+                rightTopIdeHeight = Mathf.Max(rightTopIdeHeight, 200f);
+
+                // Calculate where the lower panel starts (Buttons height + Top IDE height + spacing)
+                float rightTopOffset = buttonRowHeight + rightTopIdeHeight + (spacing * 2f);
+
+                // Stretch the lower row container from that offset point all the way to the bottom
+                StretchToParent(rowContainerRt, rightTopOffset, 0f);
+                StretchToParent(scrollRt, 0f, 0f);
+            }
+        }
     }
 }

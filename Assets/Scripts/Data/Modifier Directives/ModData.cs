@@ -11,7 +11,11 @@ public class ModData
     [SerializeField] private List<SliceDiceTextMod.TextModBlock> _directives = new List<SliceDiceTextMod.TextModBlock>();
     [SerializeField] private List<HeroData> _heroes = new List<HeroData>();
     [SerializeField] private List<MonsterData> _monsters = new List<MonsterData>();
-    [SerializeField] private List<AbilityData> _abilities = new List<AbilityData>();
+
+    // Split concrete lists for Unity Serialization
+    [SerializeField] private List<SpellData> _spells = new List<SpellData>();
+    [SerializeField] private List<TacticData> _tactics = new List<TacticData>();
+
     [SerializeField] private List<ItemData> _items = new List<ItemData>();
 
     // --- AUTOMATION SETTINGS ---
@@ -20,8 +24,6 @@ public class ModData
 
     private bool _suppressNotifications = false;
     private bool _notificationWasSuppressed = false;
-
-    private Dictionary<Type, System.Collections.IList> _listMap;
 
     public bool SuppressNotifications
     {
@@ -42,7 +44,8 @@ public class ModData
         _directives.Clear();
         _heroes.Clear();
         _monsters.Clear();
-        _abilities.Clear();
+        _spells.Clear();
+        _tactics.Clear();
         _items.Clear();
 
         // Reset defaults
@@ -69,30 +72,39 @@ public class ModData
         OnDataChanged?.Invoke();
     }
 
+    // Resolves strictly to the concrete lists
     private System.Collections.IList GetRawList(Type type)
     {
-        if (_listMap == null)
-        {
-            _listMap = new Dictionary<Type, System.Collections.IList>
-        {
-            { typeof(HeroData), _heroes },
-            { typeof(MonsterData), _monsters },
-            { typeof(AbilityData), _abilities },
-            { typeof(ItemData), _items }
-        };
-        }
+        if (type == null) return null;
 
-        _listMap.TryGetValue(type, out var list);
-        return list;
+        if (typeof(SpellData).IsAssignableFrom(type)) return _spells;
+        if (typeof(TacticData).IsAssignableFrom(type)) return _tactics;
+        if (typeof(HeroData).IsAssignableFrom(type)) return _heroes;
+        if (typeof(MonsterData).IsAssignableFrom(type)) return _monsters;
+        if (typeof(ItemData).IsAssignableFrom(type)) return _items;
+
+        return null;
     }
 
     private List<T> GetList<T>() where T : SDData => GetRawList(typeof(T)) as List<T>;
 
-    public IReadOnlyList<T> GetAll<T>() where T : SDData => GetList<T>();
+    public IReadOnlyList<T> GetAll<T>() where T : SDData
+    {
+        // If the API asks for AbilityData, dynamically combine Spells and Tactics to serve the UI
+        if (typeof(T) == typeof(AbilityData))
+        {
+            var combinedAbilities = new List<AbilityData>();
+            combinedAbilities.AddRange(_spells);
+            combinedAbilities.AddRange(_tactics);
+            return combinedAbilities as IReadOnlyList<T>;
+        }
+
+        return GetList<T>();
+    }
 
     public T Load<T>(int index) where T : SDData
     {
-        var list = GetList<T>();
+        var list = GetAll<T>(); // Route through GetAll to support combined AbilityData resolution safely
         if (list != null && index >= 0 && index < list.Count) return list[index];
         return null;
     }
@@ -101,17 +113,28 @@ public class ModData
     {
         if (updated == null) return;
 
-        System.Collections.IList list = GetRawList(updated.GetType());
-        if (list == null) return;
+        System.Collections.IList oldList = original != null ? GetRawList(original.GetType()) : null;
+        System.Collections.IList newList = GetRawList(updated.GetType());
 
-        int index = list.IndexOf(original);
-        if (index >= 0)
+        if (newList == null) return;
+
+        // Safely handle when a user Toggles a Spell into a Tactic (or vice versa)
+        if (oldList != null && oldList != newList)
         {
-            list[index] = updated; // Replace existing
+            oldList.Remove(original);
+            newList.Add(updated);
         }
         else
         {
-            list.Add(updated); // Add new
+            int index = newList.IndexOf(original);
+            if (index >= 0)
+            {
+                newList[index] = updated; // Replace existing
+            }
+            else
+            {
+                newList.Add(updated); // Add new
+            }
         }
 
         NotifyDataChanged();
@@ -122,7 +145,7 @@ public class ModData
         if (target == null) return;
 
         System.Collections.IList list = GetRawList(target.GetType());
-        if (list != null)
+        if (list != null && list.Contains(target))
         {
             list.Remove(target);
             NotifyDataChanged();

@@ -299,12 +299,23 @@ public class HeroUI : RootUI
 
     private void OnStateChanged(object sender)
     {
+        // 1. We are the ones typing/editing -> Update our own visuals (Zero Lag)
         if (object.ReferenceEquals(sender, this))
         {
             UpdateVisualsOnly();
             return;
         }
 
+        // 2. A true database change occurred (Ability Saved, Mod Loaded)
+        // We MUST rebuild the UI here to pull the newly saved Custom Abilities into the dropdown!
+        if (sender == null)
+        {
+            RebuildStatsUI();
+            RebuildDiceScrollView();
+            return;
+        }
+
+        // 3. Another tab (like AbilityUI) is actively typing -> Just sync text fields (Zero Lag)
         UpdateUIFromData();
     }
     private void UpdateUIFromData()
@@ -812,7 +823,8 @@ public class HeroUI : RootUI
             layout: layout,
             label: "Add Custom Ability:",
             uniqueKey: "CustomAbility",
-            availableChoices: new List<string>(), // Hook: Put your string choices here
+            // Dynamically retrieve all custom ability names registered in the active mod pool
+            availableChoices: ModPackage.Instance.CustomAbilities.Select(a => a.entityName).ToList(),
             currentActiveItems: CurrentHero.customAbilityData?.Select(a => a.entityName).ToList() ?? new List<string>(),
             getKey: (name) => name,
             getDisplay: (name) => name,
@@ -823,11 +835,18 @@ public class HeroUI : RootUI
 
                 if (!CurrentHero.customAbilityData.Any(a => a.entityName == abilityName))
                 {
-                    /*
-                    CurrentHero.customAbilityData.Add(new AbilityData { entityName = abilityName });
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                    */
+                    // Retrieve the concrete template (SpellData or TacticData) from the pool
+                    var template = ModPackage.Instance.CustomAbilities.FirstOrDefault(a => a.entityName == abilityName);
+                    if (template != null)
+                    {
+                        // Clone the concrete subclass safely using its actual runtime type
+                        string json = JsonUtility.ToJson(template);
+                        AbilityData clonedAbility = JsonUtility.FromJson(json, template.GetType()) as AbilityData;
+
+                        CurrentHero.customAbilityData.Add(clonedAbility);
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
                 }
             },
             onRemove: (abilityName) =>
