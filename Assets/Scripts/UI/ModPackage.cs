@@ -209,11 +209,14 @@ public class ModPackage : MonoBehaviour
         _activeDirectiveSessions.Clear();
         OnDirectivesChanged?.Invoke();
     }
+
     private T Clone<T>(T source) where T : class
     {
         if (source == null) return null;
+
         string json = JsonUtility.ToJson(source);
-        return JsonUtility.FromJson<T>(json);
+        // Deserialize using the concrete runtime type rather than the generic compile-time parameter
+        return JsonUtility.FromJson(json, source.GetType()) as T;
     }
 
     public void NotifyActiveEntityChanged<T>(object sender) where T : EntityData

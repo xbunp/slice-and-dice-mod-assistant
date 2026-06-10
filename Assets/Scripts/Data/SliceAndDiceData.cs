@@ -1023,7 +1023,7 @@ public static class SpecialAbilityKeywords
     public const string Channel = "ritemx.302ea5e.part.0";
     public const string Cooldown = "Ritemx.161bf";
     public const string Deplete = "ritemx.539ce9a";
-    public const string Future = "Unpack.ritemx.644d";
+    public const string Future = "unpack.ritemx.644f";
     public const string SpellRescue = "Ritemx.62e8";
     public const string SingleCast = "Ritemx.132fb.part.1";
 }

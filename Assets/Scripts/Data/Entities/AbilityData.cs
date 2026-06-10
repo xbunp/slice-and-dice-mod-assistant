@@ -85,12 +85,7 @@ public abstract class AbilityData : HeroData
 
         sb.Append(BuildFaceModifiers(allowFacade: true));
 
-        // 4. Ability Name & Icon Override
-        if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity")
-        {
-            sb.Append($".n.{FormatName(entityName)}");
-        }
-
+        // 4. Icon Override (img is compiled BEFORE name)
         if (hasImageOverride)
         {
             sb.Append($".img.{FormatName(imageOverride)}");
@@ -106,6 +101,12 @@ public abstract class AbilityData : HeroData
         if (!string.IsNullOrEmpty(thue)) sb.Append($".thue.{thue}");
         if (!string.IsNullOrEmpty(speech)) sb.Append($".speech.{speech}");
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");
+
+        // 6. Name is strictly appended at the absolute end
+        if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity")
+        {
+            sb.Append($".n.{FormatName(entityName)}");
+        }
 
         return sb.ToString();
     }
@@ -201,6 +202,13 @@ public abstract class AbilityData : HeroData
             }
             else i++;
         }
+
+        if (ability is SpellData spell)
+        {
+            // Sync the explicit manaCost property with the parsed right-side (Index 4) dice pips
+            spell.manaCost = spell.diceSides[4].pips;
+        }
+
         return ability;
     }
 }

@@ -164,9 +164,6 @@ public class PortraitPreviewUI : MonoBehaviour
         }
     }
 
-    // NEW UNIFIED METHOD: Handles the switch selections, string parsing, and verification
-    // CHANGED: Falls back to the base effect icon if the parsed facade sprite is missing.
-    // NEW UNIFIED METHOD: Handles the switch selections, string parsing, and verification
     public void SetSlotIcon(int index, string facadeID, int effectID, string facadeColor, int pips, string basePrefix = null)
     {
         Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Entered for slot {index}. params -> facadeID: '{facadeID}' | effectID: {effectID} | basePrefix: '{basePrefix}'");

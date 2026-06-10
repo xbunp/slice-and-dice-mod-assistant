@@ -48,19 +48,33 @@ public class FilteredDropdown : TMP_Dropdown
         _scrollRect = dropdownList.GetComponentInChildren<ScrollRect>();
         _filterInput = dropdownList.GetComponentInChildren<TMP_InputField>();
 
+        // FIX: Force the ScrollRect content to auto-size dynamically 
+        // to prevent spacing/padding clipping on the last element.
+        if (_scrollRect != null && _scrollRect.content != null)
+        {
+            var contentRt = _scrollRect.content;
+            var fitter = contentRt.GetComponent<ContentSizeFitter>();
+            if (fitter == null)
+            {
+                fitter = contentRt.gameObject.AddComponent<ContentSizeFitter>();
+            }
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            // Force immediate layout recalculation
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
+        }
+
         if (_filterInput != null)
         {
             _filterInput.text = string.Empty;
             _filterInput.onValueChanged.AddListener(OnFilterChanged);
             _filterInput.ActivateInputField();
 
-            // Safety cleanup: If the prefab has an unwanted search placeholder text, replace it.
             if (_filterInput.placeholder != null)
             {
                 TMP_Text placeholderText = _filterInput.placeholder.GetComponent<TMP_Text>();
                 if (placeholderText != null)
                 {
-                    // If placeholder matches the unwanted prompt, overwrite it with a generic search label
                     if (placeholderText.text.IndexOf("select keyword to add", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         placeholderText.text = "Search...";
@@ -70,18 +84,6 @@ public class FilteredDropdown : TMP_Dropdown
         }
 
         return dropdownList;
-    }
-
-    protected override void DestroyDropdownList(GameObject dropdownList)
-    {
-        if (_filterInput != null)
-        {
-            _filterInput.onValueChanged.RemoveListener(OnFilterChanged);
-            _filterInput = null;
-        }
-
-        _scrollRect = null;
-        base.DestroyDropdownList(dropdownList);
     }
 
     private void OnFilterChanged(string filterText)
@@ -97,8 +99,6 @@ public class FilteredDropdown : TMP_Dropdown
             Transform itemTrans = content.GetChild(i);
             if (itemTrans == null) continue;
 
-            // FIX: Skip the inactive original template item container! 
-            // This prevents the blank row from being enabled when the filter is empty.
             if (itemTrans.name == "Item" || itemTrans.name.Contains("Template"))
                 continue;
 
@@ -110,9 +110,24 @@ public class FilteredDropdown : TMP_Dropdown
             }
         }
 
+        // FIX: Rebuild layout boundaries instantly when elements are toggled active/inactive
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollRect.content);
+
         if (_scrollRect != null)
         {
             _scrollRect.verticalNormalizedPosition = 1f;
         }
+    }
+
+    protected override void DestroyDropdownList(GameObject dropdownList)
+    {
+        if (_filterInput != null)
+        {
+            _filterInput.onValueChanged.RemoveListener(OnFilterChanged);
+            _filterInput = null;
+        }
+
+        _scrollRect = null;
+        base.DestroyDropdownList(dropdownList);
     }
 }

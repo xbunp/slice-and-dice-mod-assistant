@@ -625,12 +625,20 @@ public class AtlasProcessor : AssetPostprocessor
                 validList.Add(sprite);
             }
 
-            // Step 2: Dynamically query/assign sequentially stable IDs from project settings
-            foreach (var sprite in validList)
+            for (int i = 0; i < validList.Count; i++)
             {
+                var sprite = validList[i];
                 if (sprite.assignedId == -1)
                 {
-                    sprite.assignedId = SpriteRegistry.GetOrAssignId(sprite.prefix, sprite.normalizedPath, reservedIds);
+                    // Spells strictly use alphabetical indexing and bypass the chronological registry
+                    if (sprite.prefix == "spe")
+                    {
+                        sprite.assignedId = i;
+                    }
+                    else
+                    {
+                        sprite.assignedId = SpriteRegistry.GetOrAssignId(sprite.prefix, sprite.normalizedPath, reservedIds);
+                    }
                 }
             }
 
