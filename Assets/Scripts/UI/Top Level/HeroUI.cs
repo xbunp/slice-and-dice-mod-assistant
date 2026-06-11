@@ -35,6 +35,8 @@ public class HeroUI : RootUI
     private Texture2D _customImageTexture;
     private ImageReceiver _persistentCustomImageReceiver;
 
+    private Sprite _customImageCachedSprite;
+
     private HeroData CurrentHero
     {
         get
@@ -306,17 +308,17 @@ public class HeroUI : RootUI
             return;
         }
 
-        // 2. A true database change occurred (Ability Saved, Mod Loaded)
-        // We MUST rebuild the UI here to pull the newly saved Custom Abilities into the dropdown!
-        if (sender == null)
+        // 2. An external UI tab (like AbilityUI) is typing.
+        // We completely ignore their keystrokes to prevent cross-tab layout lag!
+        if (sender != null)
         {
-            RebuildStatsUI();
-            RebuildDiceScrollView();
             return;
         }
 
-        // 3. Another tab (like AbilityUI) is actively typing -> Just sync text fields (Zero Lag)
-        UpdateUIFromData();
+        // 3. sender is null -> A true database change (Save/Load/Delete) occurred.
+        // Rebuild our layout to get the newly saved abilities into the dropdown!
+        RebuildStatsUI();
+        RebuildDiceScrollView();
     }
     private void UpdateUIFromData()
     {
@@ -396,7 +398,7 @@ public class HeroUI : RootUI
                 Sprite targetSprite = EntityUIHelpers.GetSpriteForPortrait(string.IsNullOrEmpty(CurrentHero.imageOverride) || CurrentHero.imageOverride == "None" ? CurrentHero.baseReplica : CurrentHero.imageOverride);
                 if (targetSprite != null && portraitPreview.portrait != null)
                 {
-                    portraitPreview.portrait.sprite = targetSprite;
+                    portraitPreview.portrait.sprite = _customImageCachedSprite;
                 }
             }
 
@@ -759,9 +761,12 @@ public class HeroUI : RootUI
             GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateHeroHsvData(2, v); })
         ));
 
+        HeroColorOption currentOption = SDColors.GetOptionFromColorCode(CurrentHero.colorClass);
+        string currentFormattedName = SDColors.GetFormattedColorName(currentOption);
+
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Color Class:", 0.35f),
-            GridCellSpec.CreateDropdown("Color", "", 0.65f, SDColors.GetFormattedColorNames(), (val) => {
+            GridCellSpec.CreateFilteredDropdown("Color", currentFormattedName, 0.65f, SDColors.GetFormattedColorNames(), (val) => {
                 HeroColorOption selectedColor = (HeroColorOption)val;
                 CurrentHero.colorClass = SDColors.GetColorCode(selectedColor);
                 NotifyStateChanged();
@@ -1184,9 +1189,15 @@ public class HeroUI : RootUI
                     _persistentCustomImageReceiver = dummyReceiver;
                     _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
                     {
-                        CurrentHero.imageOverride = encodedStr;
+                        // Assign data
+                        CurrentHero.imageOverride = encodedStr; // Use CurrentHero for HeroUI
                         _customImageString = encodedStr;
                         _customImageTexture = tex;
+
+                        // CACHE the sprite allocation exactly once here!
+                        if (_customImageCachedSprite != null) Destroy(_customImageCachedSprite);
+                        _customImageCachedSprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+
                         NotifyStateChanged();
                     };
                 }
@@ -1548,5 +1559,17 @@ public class HeroUI : RootUI
 
         RebuildStatsUI();
         RebuildDiceScrollView();
+    }
+
+    private string[] GetColorDropdownNames()
+    {
+        var options = (HeroColorOption[])Enum.GetValues(typeof(HeroColorOption));
+        string[] formattedNames = new string[options.Length];
+        for (int i = 0; i < options.Length; i++)
+        {
+            string hex = SDColors.GetColorHexForOption(options[i]);
+            formattedNames[i] = $"<color=#{hex}>{options[i]}</color>";
+        }
+        return formattedNames;
     }
 }

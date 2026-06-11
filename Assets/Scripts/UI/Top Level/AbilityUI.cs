@@ -32,6 +32,8 @@ public class AbilityUI : RootUI
     private Texture2D _customImageTexture;
     private ImageReceiver _persistentCustomImageReceiver;
 
+    private Sprite _customImageCachedSprite;
+
     // Tactic Cost Definition Array
     private readonly string[] TacticCostOptions = new string[]
     {
@@ -48,7 +50,7 @@ public class AbilityUI : RootUI
             var ability = ModPackage.Instance.GetActiveEntity<AbilityData>();
             if (ability == null)
             {
-                ModPackage.Instance.LoadEntityForEditing(CreateNewSpell());
+                ModPackage.Instance.LoadEntityForEditing<AbilityData>(CreateNewSpell());
                 ability = ModPackage.Instance.GetActiveEntity<AbilityData>();
             }
             return ability;
@@ -224,16 +226,16 @@ public class AbilityUI : RootUI
             return;
         }
 
-        // 2. A true database change occurred (Ability Saved, Mod Loaded)
-        // We MUST rebuild the UI here to pull the newly saved Custom Abilities into the dropdown!
-        if (sender == null)
+        // 2. An external UI tab (like HeroUI) is typing.
+        // We completely ignore their keystrokes to prevent cross-tab layout lag!
+        if (sender != null)
         {
-            RebuildStatsUI();
             return;
         }
 
-        // 3. Another tab (like AbilityUI) is actively typing -> Just sync text fields (Zero Lag)
-        UpdateUIFromData();
+        // 3. sender is null -> A true database change (Save/Load/Delete) occurred.
+        RebuildStatsUI();
+        RebuildAbilityScrollView();
     }
 
     private void UpdateUIFromData()
@@ -290,9 +292,9 @@ public class AbilityUI : RootUI
         if (previewIcon != null)
         {
             bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentAbility.imageOverride == _customImageString;
-            if (isUsingCustomImage && _customImageTexture != null)
+            if (isUsingCustomImage && _customImageCachedSprite != null)
             {
-                previewIcon.sprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+                previewIcon.sprite = _customImageCachedSprite;
             }
             else
             {
@@ -708,9 +710,15 @@ public class AbilityUI : RootUI
                 _persistentCustomImageReceiver = dummyReceiver;
                 _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
                 {
-                    CurrentAbility.imageOverride = encodedStr;
+                    // Assign data
+                    CurrentAbility.imageOverride = encodedStr; // Use CurrentHero for HeroUI
                     _customImageString = encodedStr;
                     _customImageTexture = tex;
+
+                    // CACHE the sprite allocation exactly once here!
+                    if (_customImageCachedSprite != null) Destroy(_customImageCachedSprite);
+                    _customImageCachedSprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+
                     NotifyStateChanged();
                 };
             }
@@ -976,8 +984,12 @@ public class AbilityUI : RootUI
             {
                 if (isDrawingUI) return;
                 _currentPoolIndex = index;
-                if (index > 0 && (index - 1) < abilities.Count) ModPackage.Instance.LoadEntityForEditing(abilities[index - 1]);
-                else ModPackage.Instance.LoadEntityForEditing(CreateNewSpell());
+
+                // FORCE the session key to be registered as AbilityData
+                if (index > 0 && (index - 1) < abilities.Count)
+                    ModPackage.Instance.LoadEntityForEditing<AbilityData>(abilities[index - 1]);
+                else
+                    ModPackage.Instance.LoadEntityForEditing<AbilityData>(CreateNewSpell());
 
                 ModPackage.Instance.NotifyActiveEntityChanged<AbilityData>(this);
                 RebuildStatsUI();

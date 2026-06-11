@@ -1038,101 +1038,102 @@ public enum HeroColorOption
     Green,
     Purple,
     Cyan,
-    Sea,          // Changed from DarkBlue
-    Euish,        // Changed from Black (uses code "e", hex "000000")
+    Sea,   
+    Dark,   
+    Euish,       
     White,
-    Kuish,        // Changed from Magenta
-    Uuish,        // Changed from Pink
+    Kuish,        
+    Uuish,        
     Violet,
-    Huish,        // Changed from Brown
-    Mahogany,     // Changed from DarkBrown
+    Huish,        
+    Mahogany,    
     Lime,
-    Tuish,        // Changed from DarkGreen
-    Zuish,        // Changed from StrongOrange
-    Amber,        // Changed from StrongYellow
-    Iuish,        // Changed from LightGrey
-    Quish,        // Changed from StrongRed
-    Xuish,        // Changed from StrongGreen
-    Fuish,        // Changed from WeakGreen
-    Juish         // Changed from WeakBlue
+    Tuish,       
+    Zuish,      
+    Amber,       
+    Iuish,       
+    Quish,       
+    Xuish,       
+    Fuish,       
+    Juish      
 }
 
 public static class SDColors
 {
     private static readonly Dictionary<string, Color> DirectColorMap;
-    private static readonly Dictionary<string, string> RichTextFormatMap;
-    private static readonly Dictionary<string, string> HeroHexMap;
+
+    private static string[] GetColorDropdownNames()
+    {
+        var options = (HeroColorOption[])Enum.GetValues(typeof(HeroColorOption));
+        string[] formattedNames = new string[options.Length];
+        for (int i = 0; i < options.Length; i++)
+        {
+            formattedNames[i] = SDColors.GetFormattedColorName(options[i]);
+        }
+        return formattedNames;
+    }
 
     static SDColors()
     {
-        HeroHexMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Populate DirectColorMap at startup
+        DirectColorMap = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (HeroType heroType in Enum.GetValues(typeof(HeroType)))
+        foreach (HeroColorOption option in Enum.GetValues(typeof(HeroColorOption)))
         {
-            if (HeroColorMap.TryGetValue(heroType, out HeroColorOption option))
-            {
-                string code = GetColorCode(option);
-                if (HeroColorHexMap.TryGetValue(code, out Color color))
-                {
-                    // Convert Color to Hex string once at startup
-                    string hex = ColorUtility.ToHtmlStringRGB(color);
+            string code = GetColorCode(option);
+            string hex = GetColorHexForOption(option);
 
-                    // Map both the enum name (e.g., "Ace") 
-                    HeroHexMap[heroType.ToString()] = hex;
-                }
+            if (ColorUtility.TryParseHtmlString("#" + hex, out Color color))
+            {
+                DirectColorMap[code] = color;
+            }
+            else
+            {
+                DirectColorMap[code] = Color.white;
             }
         }
     }
 
-    public static bool TryGetHeroHex(string key, out string hexColor)
+    // Returns the formatted rich text string for a specific option
+    public static string GetFormattedColorName(HeroColorOption option)
     {
-        return HeroHexMap.TryGetValue(key, out hexColor);
+        string hex = GetColorHexForOption(option);
+        return $"<color=#{hex}>{option}</color>";
     }
 
-    public static Color GetHeroColorFast(string input)
+    // Converts a short color code back to the HeroColorOption enum
+    public static HeroColorOption GetOptionFromColorCode(string code)
     {
-        if (string.IsNullOrEmpty(input)) return Color.white;
-
-        // Convert to Span for allocation-free slicing
-        ReadOnlySpan<char> span = input.AsSpan();
-
-        // Slice off "col." prefix without creating a new string
-        if (span.StartsWith("col.", StringComparison.OrdinalIgnoreCase))
+        return code switch
         {
-            span = span.Slice(4);
-        }
-
-        // Lookup using the sliced span
-        // Note: If you are on .NET 9/C# 13, you can look up directly using a span.
-        // On older versions of .NET, you convert to string once here, which is still faster than Replace + ToLower.
-        string key = span.ToString();
-
-        if (DirectColorMap.TryGetValue(key, out Color color))
-        {
-            return color;
-        }
-
-        return Color.white;
-    }
-
-    public static string GetColoredHeroName(string heroName)
-    {
-        // If the parser passes "col.Ace", clean it up
-        ReadOnlySpan<char> span = heroName.AsSpan();
-        if (span.StartsWith("col.", StringComparison.OrdinalIgnoreCase))
-        {
-            span = span.Slice(4);
-        }
-
-        string key = span.ToString();
-
-        // Instant O(1) retrieval of the fully formatted string
-        if (RichTextFormatMap.TryGetValue(key, out string coloredString))
-        {
-            return coloredString;
-        }
-
-        return heroName; // Fallback to original if not found
+            "o" => HeroColorOption.Orange,
+            "y" => HeroColorOption.Yellow,
+            "g" => HeroColorOption.Grey,
+            "r" => HeroColorOption.Red,
+            "b" => HeroColorOption.Blue,
+            "n" => HeroColorOption.Green,
+            "p" => HeroColorOption.Purple,
+            "c" => HeroColorOption.Cyan,
+            "s" => HeroColorOption.Sea,
+            "d" => HeroColorOption.Dark,
+            "e" => HeroColorOption.Euish,
+            "w" => HeroColorOption.White,
+            "k" => HeroColorOption.Kuish,
+            "u" => HeroColorOption.Uuish,
+            "v" => HeroColorOption.Violet,
+            "h" => HeroColorOption.Huish,
+            "m" => HeroColorOption.Mahogany,
+            "l" => HeroColorOption.Lime,
+            "t" => HeroColorOption.Tuish,
+            "z" => HeroColorOption.Zuish,
+            "a" => HeroColorOption.Amber,
+            "i" => HeroColorOption.Iuish,
+            "q" => HeroColorOption.Quish,
+            "x" => HeroColorOption.Xuish,
+            "f" => HeroColorOption.Fuish,
+            "j" => HeroColorOption.Juish,
+            _ => HeroColorOption.White
+        };
     }
 
     public static string[] GetFormattedColorNames()
@@ -1141,17 +1142,14 @@ public static class SDColors
         // matches the order defined in ColorOption
         return Enum.GetValues(typeof(HeroColorOption))
                    .Cast<HeroColorOption>()
-                   .Select(option => HeroColorNames[GetColorCode(option)])
+                   .Select(option =>
+                   {
+                       string code = GetColorCode(option);
+                       string hex = GetColorHexForOption(option);
+                       string niceName = HeroColorNames[code];
+                       return $"<color=#{hex}>{niceName}</color>";
+                   })
                    .ToArray();
-    }
-
-    // Helper to check if a substring (without allocating a new string) matches a hero
-    public static bool TryGetHeroHexSpan(ReadOnlySpan<char> span, out string hexColor)
-    {
-        // For compatibility across older Unity/C# runtimes, we convert the span to a string here.
-        // This only allocates a string *if* we are evaluating a potential match.
-        string key = span.ToString();
-        return HeroHexMap.TryGetValue(key, out hexColor);
     }
 
     // Maps Enum to the "code" letter
@@ -1168,6 +1166,7 @@ public static class SDColors
             HeroColorOption.Purple => "p",
             HeroColorOption.Cyan => "c",
             HeroColorOption.Sea => "s",
+            HeroColorOption.Dark => "d",
             HeroColorOption.Euish => "e",
             HeroColorOption.White => "w",
             HeroColorOption.Kuish => "k",
@@ -1185,6 +1184,40 @@ public static class SDColors
             HeroColorOption.Fuish => "f",
             HeroColorOption.Juish => "j",
             _ => "w"
+        };
+    }
+
+    public static string GetColorHexForOption(HeroColorOption option)
+    {
+        return option switch
+        {
+            HeroColorOption.Orange => "c45e16",
+            HeroColorOption.Yellow => "b59e09",
+            HeroColorOption.Grey => "5a6670",
+            HeroColorOption.Red => "ad1f1f",
+            HeroColorOption.Blue => "217b91",
+            HeroColorOption.Green => "388044",
+            HeroColorOption.Purple => "6a4484",
+            HeroColorOption.Cyan => "4ed6ec",
+            HeroColorOption.Sea => "14397d",
+            HeroColorOption.Dark => "160d16",
+            HeroColorOption.Euish => "000000",
+            HeroColorOption.White => "f1e5b5",
+            HeroColorOption.Kuish => "9e78cf",
+            HeroColorOption.Uuish => "ffc4fc",
+            HeroColorOption.Violet => "d32be3",
+            HeroColorOption.Huish => "a67060",
+            HeroColorOption.Mahogany => "5e1602",
+            HeroColorOption.Lime => "08d008",
+            HeroColorOption.Tuish => "233f23",
+            HeroColorOption.Zuish => "f55c0b",
+            HeroColorOption.Amber => "ffbf00",
+            HeroColorOption.Iuish => "a8a8a8",
+            HeroColorOption.Quish => "ff4343",
+            HeroColorOption.Xuish => "e8f123",
+            HeroColorOption.Fuish => "c8eca1",
+            HeroColorOption.Juish => "def8ff",
+            _ => "ffffff"
         };
     }
 
@@ -1208,6 +1241,7 @@ public static class SDColors
         { "p", "P: Purple" },
         { "c", "C: Cyan" },
         { "s", "S: Sea" },
+        { "d", "D: Dark" },
         { "e", "E: Euish" },
         { "w", "W: White" },
         { "k", "K: Kuish" },
@@ -1287,35 +1321,6 @@ public static class SDColors
     { "DecaySigil", "All heroes: Add decay to all sides" },
     { "DeathSigil", "All heroes: Add death to all sides" }
 };
-
-    private static readonly Dictionary<string, Color> HeroColorHexMap = new Dictionary<string, Color>
-    {
-        { "o", FromHex("c45e16") },    // Orange
-        { "y", FromHex("b59e09") },    // Yellow
-        { "g", FromHex("5a6670") },    // Grey
-        { "r", FromHex("ad1f1f") },    // Red
-        { "b", FromHex("217b91") },    // Blue
-        { "n", FromHex("388044") },    // Green
-        { "p", FromHex("6a4484") },    // Purple
-        { "c", FromHex("4ed6ec") },    // Cyan
-        { "s", FromHex("14397d") },    // Dark Blue (Sea)
-        { "d", FromHex("120f17") },    // Black (Dark)
-        { "w", FromHex("f1e5b5") },    // White (Light)
-        { "k", FromHex("9e78cf") },    // Magenta (Kuish)
-        { "u", FromHex("ffc4fc") },    // Pink (Uuish)
-        { "v", FromHex("d32be3") },    // Violet (Pink hex)
-        { "h", FromHex("a67060") },    // Brown (Huish)
-        { "m", FromHex("5e1602") },    // Dark Brown (Mahogany)
-        { "l", FromHex("08d008") },    // Lime
-        { "t", FromHex("233f23") },    // Dark Green (Tuish)
-        { "z", FromHex("f55c0b") },    // Strong Orange (Zuish)
-        { "a", FromHex("ffbf00") },    // Strong Yellow (Amber)
-        { "i", FromHex("a8a8a8") },    // Light Grey (Iuish)
-        { "q", FromHex("ff4343") },    // Strong Red (Quish)
-        { "x", FromHex("e8f123") },    // Strong Green (Xuish)
-        { "f", FromHex("c8eca1") },    // Weak Green (Fuish)
-        { "j", FromHex("def8ff") }     // Weak Blue (Juish)
-    };
 
 
     public static readonly Dictionary<HeroType, HeroColorOption> HeroColorMap = new Dictionary<HeroType, HeroColorOption>
@@ -1485,7 +1490,7 @@ public static class SDColors
     public static Color GetHeroColor(string code)
     {
         string key = code.Replace("col.", "").ToLower();
-        if (HeroColorHexMap.TryGetValue(key, out Color color))
+        if (DirectColorMap.TryGetValue(key, out Color color))
         {
             return color;
         }
