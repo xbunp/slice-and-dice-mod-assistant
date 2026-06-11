@@ -42,6 +42,11 @@ public abstract class AbilityData : HeroData
         hp = 0;
     }
 
+    public override string Export()
+    {
+        return ExportWrapped();
+    }
+
     public abstract string ExportWrapped();
 
     protected string ExportInner()
@@ -58,16 +63,16 @@ public abstract class AbilityData : HeroData
         if (!hasImageOverride) AppendColorModifier(sb);
 
         // 2. Metadata (only outputting non-default parameters)
-        if (!string.IsNullOrEmpty(colorClass) && colorClass != "y") sb.Append($".col.{colorClass}");
-        if (hp > 0) sb.Append($".hp.{hp}");
-        if (tier > 1) sb.Append($".tier.{tier}");
+        //if (!string.IsNullOrEmpty(colorClass) && colorClass != "y") sb.Append($".col.{colorClass}");
+        //if (hp > 0) sb.Append($".hp.{hp}");
+        //if (tier > 1) sb.Append($".tier.{tier}");
 
         AppendDiceSides(sb);
 
         // 3. Modifier Arrays
         foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
-        foreach (var gft in blessings.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".gift.{gft}");
-        foreach (var trt in traits.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".t.{trt}");
+        //foreach (var gft in blessings.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".gift.{gft}");
+        //foreach (var trt in traits.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".t.{trt}");
 
         if (baseAbilityData != null && baseAbilityData.Count > 0)
         {
@@ -93,13 +98,13 @@ public abstract class AbilityData : HeroData
         }
 
         // 5. Aesthetic Modifiers
-        if (!string.IsNullOrEmpty(p)) sb.Append($".p.{p}");
-        if (adj.HasValue) sb.Append($".adj.{adj.Value}");
-        if (!string.IsNullOrEmpty(b)) sb.Append($".b.{b}");
-        if (!string.IsNullOrEmpty(rect)) sb.Append($".rect.{rect}");
-        if (!string.IsNullOrEmpty(draw)) sb.Append($".draw.{draw}");
+        //if (!string.IsNullOrEmpty(p)) sb.Append($".p.{p}");
+        //if (adj.HasValue) sb.Append($".adj.{adj.Value}");
+        //if (!string.IsNullOrEmpty(b)) sb.Append($".b.{b}");
+        //if (!string.IsNullOrEmpty(rect)) sb.Append($".rect.{rect}");
+        //if (!string.IsNullOrEmpty(draw)) sb.Append($".draw.{draw}");
         if (!string.IsNullOrEmpty(thue)) sb.Append($".thue.{thue}");
-        if (!string.IsNullOrEmpty(speech)) sb.Append($".speech.{speech}");
+        //if (!string.IsNullOrEmpty(speech)) sb.Append($".speech.{speech}");
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");
 
         // 6. Name is strictly appended at the absolute end

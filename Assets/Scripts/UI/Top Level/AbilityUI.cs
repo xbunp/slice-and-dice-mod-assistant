@@ -34,6 +34,8 @@ public class AbilityUI : RootUI
 
     private Sprite _customImageCachedSprite;
 
+    private bool _needsRebuild = false;
+
     // Tactic Cost Definition Array
     private readonly string[] TacticCostOptions = new string[]
     {
@@ -219,23 +221,34 @@ public class AbilityUI : RootUI
 
     private void OnStateChanged(object sender)
     {
-        // 1. We are the ones typing/editing -> Update our own visuals (Zero Lag)
+        // 1. We are the ones typing -> Visuals only
         if (object.ReferenceEquals(sender, this))
         {
             UpdateVisualsOnly();
             return;
         }
 
-        // 2. An external UI tab (like HeroUI) is typing.
-        // We completely ignore their keystrokes to prevent cross-tab layout lag!
-        if (sender != null)
+        // 2. The other tab is typing -> Ignore completely
+        if (sender != null) return;
+
+        // 3. A true save occurred. If we are hidden, defer the rebuild until we are opened!
+        if (!gameObject.activeInHierarchy)
         {
+            _needsRebuild = true;
             return;
         }
 
-        // 3. sender is null -> A true database change (Save/Load/Delete) occurred.
         RebuildStatsUI();
-        RebuildAbilityScrollView();
+    }
+
+    // Hook into Unity's OnEnable to rebuild safely when the tab is clicked
+    private void OnEnable()
+    {
+        if (_needsRebuild)
+        {
+            _needsRebuild = false;
+            RebuildStatsUI();
+        }
     }
 
     private void UpdateUIFromData()

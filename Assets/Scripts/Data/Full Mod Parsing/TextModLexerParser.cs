@@ -25,6 +25,13 @@ namespace SliceDiceTextMod
         // PUBLIC STRING-BASED API (The easy-to-use overloads)
         // =========================================================================
 
+        private static bool IsEntityKeyword(string word)
+        {
+            string[] keys = { "replica", "img", "n", "col", "hp", "tier", "sd", "speech", "doc", "i", "k", "hsv", "facade", "abilitydata", "gift", "t" };
+            foreach (var k in keys) if (word.Equals(k, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
         /// <summary>
         /// Parses a raw, clipboard-pasted Hero string directly into a HeroData object.
         /// </summary>
@@ -343,7 +350,96 @@ namespace SliceDiceTextMod
                     if (key == "i" && Peek(tokens, pos, 1).Type == TokenType.Dot)
                     {
                         pos += 2;
-                        ParseDiceModifiers(hero, tokens, ref pos);
+                        if (tokens[pos].Type == TokenType.OpenParen)
+                        {
+                            // Custom Item nested handling
+                            string itemStr = ExtractBalancedBlock(tokens, ref pos);
+                            hero.customItems.Add(ItemData.Parse(itemStr));
+                        }
+                        else
+                        {
+                            // Check if the word is a face name to determine if this is a Dice Modifier
+                            string[] faceNames = { "left", "mid", "top", "bot", "right", "rightmost" };
+                            bool isDiceModifier = tokens[pos].Type == TokenType.Word &&
+                                                  Array.IndexOf(faceNames, tokens[pos].Value.ToLower()) >= 0;
+
+                            if (isDiceModifier)
+                            {
+                                ParseDiceModifiers(hero, tokens, ref pos);
+                            }
+                            else
+                            {
+                                // Plain Item handling: Consume everything up until the next dot as the item name
+                                StringBuilder itemSb = new StringBuilder();
+                                bool lastWasWordOrNum = false;
+
+                                while (pos < tokens.Count)
+                                {
+                                    if (tokens[pos].Type == TokenType.Dot || tokens[pos].Type == TokenType.CloseParen || tokens[pos].Type == TokenType.EOF)
+                                        break;
+
+                                    // Reconstruct spaces stripped by the Lexer
+                                    if (lastWasWordOrNum && (tokens[pos].Type == TokenType.Word || tokens[pos].Type == TokenType.Number))
+                                    {
+                                        itemSb.Append(" ");
+                                    }
+
+                                    itemSb.Append(tokens[pos].Value);
+                                    lastWasWordOrNum = (tokens[pos].Type == TokenType.Word || tokens[pos].Type == TokenType.Number);
+                                    pos++;
+                                }
+
+                                string itemName = itemSb.ToString().Replace("_", " ");
+                                hero.items.Add(itemName);
+                            }
+                        }
+                        continue;
+                    }
+                    if (key == "abilitydata" && Peek(tokens, pos, 1).Type == TokenType.Dot)
+                    {
+                        pos += 2;
+                        if (tokens[pos].Type == TokenType.OpenParen)
+                        {
+                            // Safely extract the custom ability string and pass it to AbilityData.Parse
+                            string cabString = ExtractBalancedBlock(tokens, ref pos);
+                            hero.AddCustomAbility(AbilityData.Parse(cabString));
+                        }
+                        else
+                        {
+                            // Handle standard base abilities
+                            string baseAbs = ConsumeStringValue(tokens, ref pos);
+                            hero.baseAbilityData.AddRange(baseAbs.Split('#'));
+                        }
+                        continue;
+                    }
+
+                    if (key == "i" && Peek(tokens, pos, 1).Type == TokenType.Dot)
+                    {
+                        pos += 2;
+                        if (tokens[pos].Type == TokenType.OpenParen)
+                        {
+                            // Safely extract custom item block so it doesn't break the dice modifier parser
+                            string itemStr = ExtractBalancedBlock(tokens, ref pos);
+                            hero.customItems.Add(ItemData.Parse(itemStr));
+                        }
+                        else
+                        {
+                            ParseDiceModifiers(hero, tokens, ref pos);
+                        }
+                        continue;
+                    }
+
+                    if (key == "gift" && Peek(tokens, pos, 1).Type == TokenType.Dot)
+                    {
+                        pos += 2;
+                        hero.blessings.AddRange(ConsumeStringValue(tokens, ref pos).Split('#'));
+                        continue;
+                    }
+
+                    if (key == "t" && Peek(tokens, pos, 1).Type == TokenType.Dot)
+                    {
+                        pos += 2;
+                        hero.traits.AddRange(ConsumeStringValue(tokens, ref pos).Split('#'));
                         continue;
                     }
                 }
@@ -494,11 +590,23 @@ namespace SliceDiceTextMod
             return sb.ToString();
         }
 
-        private static bool IsEntityKeyword(string word)
+        private static string ExtractBalancedBlock(List<Token> tokens, ref int pos)
         {
-            string[] keys = { "replica", "img", "n", "col", "hp", "tier", "sd", "speech", "doc", "i", "k", "hsv", "facade" };
-            foreach (var k in keys) if (word.Equals(k, StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
+            int depth = 0;
+            StringBuilder sb = new StringBuilder();
+
+            while (pos < tokens.Count)
+            {
+                var t = tokens[pos];
+                if (t.Type == TokenType.OpenParen) depth++;
+                else if (t.Type == TokenType.CloseParen) depth--;
+
+                sb.Append(t.Value);
+                pos++;
+
+                if (depth == 0) break;
+            }
+            return sb.ToString();
         }
     }
 }

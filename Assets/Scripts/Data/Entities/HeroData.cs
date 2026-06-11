@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using System.Linq;
 
 [System.Serializable]
 public class HeroData : EntityData
@@ -20,53 +21,67 @@ public class HeroData : EntityData
 
     [Header("Hero Modifiers")]
     public List<string> baseAbilityData = new List<string>();
-    public List<AbilityData> customAbilityData = new List<AbilityData>();
+    //public List<AbilityData> customAbilityData = new List<AbilityData>();
+
+    [SerializeField] public List<SpellData> customSpells = new List<SpellData>();
+    [SerializeField] public List<TacticData> customTactics = new List<TacticData>();
+    public IReadOnlyList<AbilityData> customAbilityData
+    {
+        get
+        {
+            var combined = new List<AbilityData>();
+            if (customSpells != null) combined.AddRange(customSpells);
+            if (customTactics != null) combined.AddRange(customTactics);
+            return combined;
+        }
+    }
+
     public int? adj;
 
     [Header("Post-Dice Info")]
     public string speech;
 
-    public static string Export(HeroData hero)
+    public virtual string Export()
     {
-        if (hero == null) return "()";
+        //if (hero == null) return "()";
 
         // 1. Build the core <hero> data inside its own balanced parenthesis
         StringBuilder heroSb = new StringBuilder();
         heroSb.Append("(");
 
-        bool hasImageOverride = !string.IsNullOrEmpty(hero.imageOverride) &&
-                                hero.imageOverride != "None" &&
-                                hero.imageOverride != hero.baseReplica;
+        bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) &&
+                                imageOverride != "None" &&
+                                imageOverride != baseReplica;
 
-        heroSb.Append($"replica.{FormatName(hero.baseReplica)}");
-        if (!hasImageOverride) hero.AppendColorModifier(heroSb);
+        heroSb.Append($"replica.{FormatName(baseReplica)}");
+        if (!hasImageOverride) AppendColorModifier(heroSb);
 
-        heroSb.Append($".n.{FormatName(hero.entityName)}");
+        heroSb.Append($".n.{FormatName(entityName)}");
 
-        if (!string.IsNullOrEmpty(hero.colorClass) && !IsDefaultColor(hero.baseReplica, hero.colorClass))
+        if (!string.IsNullOrEmpty(colorClass) && !IsDefaultColor(baseReplica, colorClass))
         {
-            heroSb.Append($".col.{hero.colorClass}");
+            heroSb.Append($".col.{colorClass}");
         }
 
-        heroSb.Append($".hp.{hero.hp}.tier.{hero.tier}");
+        heroSb.Append($".hp.{hp}.tier.{tier}");
 
-        if (!string.IsNullOrEmpty(hero.p)) heroSb.Append($".p.{hero.p}");
-        if (hero.adj.HasValue) heroSb.Append($".adj.{hero.adj.Value}");
-        if (!string.IsNullOrEmpty(hero.b)) heroSb.Append($".b.{hero.b}");
-        if (!string.IsNullOrEmpty(hero.rect)) heroSb.Append($".rect.{hero.rect}");
-        if (!string.IsNullOrEmpty(hero.draw)) heroSb.Append($".draw.{hero.draw}");
-        if (!string.IsNullOrEmpty(hero.thue)) heroSb.Append($".thue.{hero.thue}");
+        if (!string.IsNullOrEmpty(p)) heroSb.Append($".p.{p}");
+        if (adj.HasValue) heroSb.Append($".adj.{adj.Value}");
+        if (!string.IsNullOrEmpty(b)) heroSb.Append($".b.{b}");
+        if (!string.IsNullOrEmpty(rect)) heroSb.Append($".rect.{rect}");
+        if (!string.IsNullOrEmpty(draw)) heroSb.Append($".draw.{draw}");
+        if (!string.IsNullOrEmpty(thue)) heroSb.Append($".thue.{thue}");
 
-        hero.AppendDiceSides(heroSb);
-        if (!string.IsNullOrEmpty(hero.speech)) heroSb.Append($".speech.{hero.speech}");
-        if (!string.IsNullOrEmpty(hero.doc)) heroSb.Append($".doc.{hero.doc}");
+        AppendDiceSides(heroSb);
+        if (!string.IsNullOrEmpty(speech)) heroSb.Append($".speech.{speech}");
+        if (!string.IsNullOrEmpty(doc)) heroSb.Append($".doc.{doc}");
 
-        heroSb.Append(hero.BuildFaceModifiers(allowFacade: true));
+        heroSb.Append(BuildFaceModifiers(allowFacade: true));
 
         if (hasImageOverride)
         {
-            heroSb.Append($".img.{FormatName(hero.imageOverride)}");
-            hero.AppendColorModifier(heroSb);
+            heroSb.Append($".img.{FormatName(imageOverride)}");
+            AppendColorModifier(heroSb);
         }
 
         heroSb.Append(")");
@@ -75,65 +90,65 @@ public class HeroData : EntityData
         StringBuilder thoseSb = new StringBuilder();
 
         // Traits: t.<name>
-        if (hero.traits != null)
+        if (traits != null)
         {
-            foreach (var t in hero.traits)
+            foreach (var t in traits)
             {
                 if (!string.IsNullOrEmpty(t)) thoseSb.Append($".i.t.{FormatName(t)}");
             }
         }
 
         // Items: i.<name>
-        if (hero.items != null)
+        if (items != null)
         {
-            foreach (var i in hero.items)
+            foreach (var i in items)
             {
                 if (!string.IsNullOrEmpty(i)) thoseSb.Append($".i.{FormatName(i)}");
             }
         }
 
         // Custom Items: i.(<custom item>)
-        if (hero.customItems != null)
+        if (customItems != null)
         {
-            foreach (var ci in hero.customItems)
+            foreach (var ci in customItems)
             {
                 if (ci != null) thoseSb.Append($".i.({ItemData.Export(ci)})");
             }
         }
 
         // Blessings: i.gift.<name>
-        if (hero.blessings != null)
+        if (blessings != null)
         {
-            foreach (var b in hero.blessings)
+            foreach (var b in blessings)
             {
                 if (!string.IsNullOrEmpty(b)) thoseSb.Append($".gift.{FormatName(b)}");
             }
         }
 
         // Curses: i.t.jinx.<curse>
-        if (hero.curses != null)
+        if (curses != null)
         {
-            foreach (var c in hero.curses)
+            foreach (var c in curses)
             {
                 if (!string.IsNullOrEmpty(c)) thoseSb.Append($".i.t.jinx.{FormatName(c)}");
             }
         }
 
         // Base Abilities: i.learn.<ability>
-        if (hero.baseAbilityData != null)
+        if (baseAbilityData != null)
         {
-            foreach (var ab in hero.baseAbilityData)
+            foreach (var ab in baseAbilityData)
             {
                 if (!string.IsNullOrEmpty(ab)) thoseSb.Append($".i.learn.{FormatName(ab)}");
             }
         }
 
         // Custom Abilities: abilitydata.(<custom ability>)
-        if (hero.customAbilityData != null)
+        if (customAbilityData != null)
         {
-            foreach (var cab in hero.customAbilityData)
+            foreach (var cab in customAbilityData)
             {
-                if (cab != null) thoseSb.Append($".abilitydata.({AbilityData.Export(cab)})");
+                if (cab != null) thoseSb.Append($".abilitydata.({cab.Export()})");
             }
         }
 
@@ -256,7 +271,7 @@ public class HeroData : EntityData
                 case "abilitydata":
                     if (value.StartsWith("("))
                     {
-                        hero.customAbilityData.Add(AbilityData.Parse(value));
+                        hero.AddCustomAbility(AbilityData.Parse(value));
                     }
                     else
                     {
@@ -339,5 +354,49 @@ public class HeroData : EntityData
     public bool RemoveAbility(string abilityName)
     {
         return baseAbilityData.Remove(abilityName);
+    }
+
+    // 3. Helper to automatically sort and add incoming custom abilities
+    public void AddCustomAbility(AbilityData ability)
+    {
+        if (ability == null) return;
+
+        if (customSpells == null) customSpells = new List<SpellData>();
+        if (customTactics == null) customTactics = new List<TacticData>();
+
+        if (ability is SpellData spell)
+        {
+            if (!customSpells.Any(s => s.entityName == spell.entityName))
+            {
+                customSpells.Add(spell);
+            }
+        }
+        else if (ability is TacticData tactic)
+        {
+            if (!customTactics.Any(t => t.entityName == tactic.entityName))
+            {
+                customTactics.Add(tactic);
+            }
+        }
+    }
+
+    // 4. Helper to find and remove an ability from whichever underlying list it belongs to
+    public bool RemoveCustomAbility(string abilityName)
+    {
+        bool removed = false;
+
+        if (customSpells != null)
+        {
+            var target = customSpells.FirstOrDefault(s => s.entityName == abilityName);
+            if (target != null) removed = customSpells.Remove(target);
+        }
+
+        if (!removed && customTactics != null)
+        {
+            var target = customTactics.FirstOrDefault(t => t.entityName == abilityName);
+            if (target != null) removed = customTactics.Remove(target);
+        }
+
+        return removed;
     }
 }

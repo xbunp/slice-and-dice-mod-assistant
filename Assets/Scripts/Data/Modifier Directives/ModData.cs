@@ -109,6 +109,7 @@ public class ModData
         return null;
     }
 
+    /*
     public void SaveEntity(SDData original, SDData updated)
     {
         if (updated == null) return;
@@ -137,6 +138,34 @@ public class ModData
             }
         }
 
+        NotifyDataChanged();
+    }
+    */
+
+    public void SaveEntity(SDData original, SDData updated)
+    {
+        if (updated == null) return;
+
+        System.Collections.IList oldList = original != null ? GetRawList(original.GetType()) : null;
+        System.Collections.IList newList = GetRawList(updated.GetType());
+
+        Debug.Log($"[DEBUG ModData] Saving Entity: {updated.entityName}. Type: {updated.GetType()}. Found List? {newList != null}");
+
+        if (newList == null) return;
+
+        if (oldList != null && oldList != newList)
+        {
+            oldList.Remove(original);
+            newList.Add(updated);
+        }
+        else
+        {
+            int index = newList.IndexOf(original);
+            if (index >= 0) newList[index] = updated;
+            else newList.Add(updated);
+        }
+
+        Debug.Log($"[DEBUG ModData] Save Complete. Current Spell Count: {_spells.Count} | Current Tactic Count: {_tactics.Count}");
         NotifyDataChanged();
     }
 
@@ -228,7 +257,7 @@ public class ModData
 
             foreach (var hero in heroes)
             {
-                string heroSyntax = HeroData.Export(hero);
+                string heroSyntax = hero.Export();
                 if (!string.IsNullOrWhiteSpace(heroSyntax))
                 {
                     autoHeroPool.Elements.Add(heroSyntax);

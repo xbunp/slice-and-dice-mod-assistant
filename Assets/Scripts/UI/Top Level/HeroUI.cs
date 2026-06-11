@@ -37,6 +37,8 @@ public class HeroUI : RootUI
 
     private Sprite _customImageCachedSprite;
 
+    private bool _needsRebuild = false;
+
     private HeroData CurrentHero
     {
         get
@@ -299,27 +301,76 @@ public class HeroUI : RootUI
     // STATE TO VIEW (PRESENTATION UPDATES)
     // =====================================================================
 
+    /*
     private void OnStateChanged(object sender)
     {
-        // 1. We are the ones typing/editing -> Update our own visuals (Zero Lag)
+        // 1. We are the ones typing -> Visuals only
         if (object.ReferenceEquals(sender, this))
         {
             UpdateVisualsOnly();
             return;
         }
 
-        // 2. An external UI tab (like AbilityUI) is typing.
-        // We completely ignore their keystrokes to prevent cross-tab layout lag!
-        if (sender != null)
+        // 2. The other tab is typing -> Ignore completely
+        if (sender != null) return;
+
+        // 3. A true save occurred. If we are hidden, defer the rebuild until we are opened!
+        if (!gameObject.activeInHierarchy)
         {
+            _needsRebuild = true;
             return;
         }
 
-        // 3. sender is null -> A true database change (Save/Load/Delete) occurred.
-        // Rebuild our layout to get the newly saved abilities into the dropdown!
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
+    */
+
+    private void OnStateChanged(object sender)
+    {
+        if (object.ReferenceEquals(sender, this))
+        {
+            UpdateVisualsOnly();
+            return;
+        }
+
+        if (sender != null) return;
+
+        bool isVisible = IsTabVisible();
+        Debug.Log($"[DEBUG HeroUI] OnStateChanged received (Null Sender / Database change). IsTabVisible? {isVisible}");
+
+        if (!isVisible)
+        {
+            _needsRebuild = true;
+            return;
+        }
+
+        RebuildStatsUI();
+        RebuildDiceScrollView();
+    }
+
+    private void Update()
+    {
+        if (_needsRebuild && IsTabVisible())
+        {
+            Debug.Log("[DEBUG HeroUI] Deferred rebuild firing! Tab is now visible.");
+            _needsRebuild = false;
+            RebuildStatsUI();
+            RebuildDiceScrollView();
+        }
+    }
+
+    // Hook into Unity's OnEnable to rebuild safely when the tab is clicked
+    private void OnEnable()
+    {
+        if (_needsRebuild)
+        {
+            _needsRebuild = false;
+            RebuildStatsUI();
+            RebuildDiceScrollView();
+        }
+    }
+
     private void UpdateUIFromData()
     {
         if (statsUI == null || diceUI == null) return;
@@ -391,14 +442,19 @@ public class HeroUI : RootUI
             bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentHero.imageOverride == _customImageString;
             if (isUsingCustomImage && _customImageTexture != null && portraitPreview.portrait != null)
             {
-                portraitPreview.portrait.sprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+                // Fix the lag: Only create the sprite once, don't recreate it every frame
+                if (_customImageCachedSprite == null)
+                {
+                    _customImageCachedSprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
+                }
+                portraitPreview.portrait.sprite = _customImageCachedSprite;
             }
             else
             {
                 Sprite targetSprite = EntityUIHelpers.GetSpriteForPortrait(string.IsNullOrEmpty(CurrentHero.imageOverride) || CurrentHero.imageOverride == "None" ? CurrentHero.baseReplica : CurrentHero.imageOverride);
                 if (targetSprite != null && portraitPreview.portrait != null)
                 {
-                    portraitPreview.portrait.sprite = _customImageCachedSprite;
+                    portraitPreview.portrait.sprite = targetSprite;
                 }
             }
 
@@ -445,7 +501,7 @@ public class HeroUI : RootUI
 
         if (rawTextOutput != null)
         {
-            string exportedString = HeroData.Export(CurrentHero);
+            string exportedString = CurrentHero.Export();
             rawTextOutput.SetTextWithoutNotify(exportedString);
 
             if (syntaxHighlighterText != null)
@@ -822,23 +878,37 @@ public class HeroUI : RootUI
             }
         );
 
+        var customAbilitiesList = ModPackage.Instance.CustomAbilities;
+        Debug.Log($"[DEBUG HeroUI] Building Layout. ModPackage.Instance.CustomAbilities count: {(customAbilitiesList != null ? customAbilitiesList.Count : -1)}");
+
+        if (customAbilitiesList != null)
+        {
+            for (int i = 0; i < customAbilitiesList.Count; i++)
+            {
+                var a = customAbilitiesList[i];
+                Debug.Log($"[DEBUG HeroUI] Pool Ability [{i}]: Name='{a?.entityName}'");
+            }
+        }
+
+        var customAbilityNames = customAbilitiesList?.Select(a => a.entityName).ToList() ?? new List<string>();
+        Debug.Log($"[DEBUG HeroUI] Names passed to Dropdown: {string.Join(", ", customAbilityNames)}");
+
         // 2. Custom Abilities (Instantiated directly from selected name string)
-        // Available choices hook: pass your list of raw custom ability name strings here
         AppendCollectionSelector<string>(
             layout: layout,
             label: "Add Custom Ability:",
             uniqueKey: "CustomAbility",
-            // Dynamically retrieve all custom ability names registered in the active mod pool
-            availableChoices: ModPackage.Instance.CustomAbilities.Select(a => a.entityName).ToList(),
+            availableChoices: customAbilityNames,
+            // Reading remains simple using the read-only property
             currentActiveItems: CurrentHero.customAbilityData?.Select(a => a.entityName).ToList() ?? new List<string>(),
             getKey: (name) => name,
             getDisplay: (name) => name,
             onAdd: (abilityName) =>
             {
-                if (CurrentHero.customAbilityData == null)
-                    CurrentHero.customAbilityData = new List<AbilityData>();
+                // Safely check if already present in our combined read-only property
+                bool alreadyExists = CurrentHero.customAbilityData?.Any(a => a.entityName == abilityName) ?? false;
 
-                if (!CurrentHero.customAbilityData.Any(a => a.entityName == abilityName))
+                if (!alreadyExists)
                 {
                     // Retrieve the concrete template (SpellData or TacticData) from the pool
                     var template = ModPackage.Instance.CustomAbilities.FirstOrDefault(a => a.entityName == abilityName);
@@ -848,7 +918,8 @@ public class HeroUI : RootUI
                         string json = JsonUtility.ToJson(template);
                         AbilityData clonedAbility = JsonUtility.FromJson(json, template.GetType()) as AbilityData;
 
-                        CurrentHero.customAbilityData.Add(clonedAbility);
+                        // Add using our new helper method
+                        CurrentHero.AddCustomAbility(clonedAbility);
                         NotifyStateChanged();
                         RebuildStatsUI();
                     }
@@ -856,14 +927,11 @@ public class HeroUI : RootUI
             },
             onRemove: (abilityName) =>
             {
-                if (CurrentHero.customAbilityData != null)
+                // Safely remove using our helper method
+                if (CurrentHero.RemoveCustomAbility(abilityName))
                 {
-                    var target = CurrentHero.customAbilityData.FirstOrDefault(a => a.entityName == abilityName);
-                    if (target != null && CurrentHero.customAbilityData.Remove(target))
-                    {
-                        NotifyStateChanged();
-                        RebuildStatsUI();
-                    }
+                    NotifyStateChanged();
+                    RebuildStatsUI();
                 }
             }
         );
@@ -1404,7 +1472,7 @@ public class HeroUI : RootUI
 
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         copyBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Copy Hero String";
-        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = HeroData.Export(CurrentHero));
+        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = CurrentHero.Export());
         FullScreenUIGenerator.SetAnchors(copyBtnObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 0.48f, 0.06f);
 
         GameObject pasteBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
@@ -1572,4 +1640,11 @@ public class HeroUI : RootUI
         }
         return formattedNames;
     }
+
+    private bool IsTabVisible()
+    {
+        RectTransform rootWrapper = GetRootWrapper();
+        return rootWrapper != null && rootWrapper.gameObject.activeInHierarchy;
+    }
+
 }
