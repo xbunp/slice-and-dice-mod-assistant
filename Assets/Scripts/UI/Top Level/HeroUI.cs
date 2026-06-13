@@ -1,4 +1,4 @@
-using SliceDiceTextMod;
+﻿using SliceDiceTextMod;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -1163,11 +1163,29 @@ public class HeroUI : RootUI
             ));
 
             layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Pips:", 0.25f),
-                GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => { if (int.TryParse(val, out int p)) { face.pips = p; NotifyStateChanged(); } }),
-                GridCellSpec.CreateButton($"BtnPipDown_{index}", "V", 0.20f, () => { face.pips = Mathf.Max(0, face.pips - 1); NotifyStateChanged(); }),
-                GridCellSpec.CreateButton($"BtnPipUp_{index}", "^", 0.20f, () => { face.pips++; NotifyStateChanged(); })
-            ));
+                            GridCellSpec.CreateLabel("Pips:", 0.25f),
+                            GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => { if (int.TryParse(val, out int p)) { face.pips = p; NotifyStateChanged(); } }),
+                            GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => {
+                                face.pips--; // Removed Mathf.Max restriction to allow negative values
+
+                                // Retrieve the input field from diceUI to update the displayed text
+                                if (diceUI != null && diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                                {
+                                    input.SetTextWithoutNotify(face.pips.ToString());
+                                }
+                                NotifyStateChanged();
+                            }),
+                            GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => {
+                                face.pips++;
+
+                                // Retrieve the input field from diceUI to update the displayed text
+                                if (diceUI != null && diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                                {
+                                    input.SetTextWithoutNotify(face.pips.ToString());
+                                }
+                                NotifyStateChanged();
+                            })
+                        ));
 
             layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Hue:", 0.30f),

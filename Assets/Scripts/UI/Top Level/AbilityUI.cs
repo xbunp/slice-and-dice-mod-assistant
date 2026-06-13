@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
@@ -604,8 +604,8 @@ public class AbilityUI : RootUI
             GridCellSpec.CreateInput($"ID_0", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { pFace.effectID = id; NotifyStateChanged(); } }),
             GridCellSpec.CreateLabel("Pips:", 0.20f),
             GridCellSpec.CreateInput($"Pips_0", "Pips", 0.20f, (val) => { if (int.TryParse(val, out int p)) { pFace.pips = p; NotifyStateChanged(); } }),
-            GridCellSpec.CreateButton($"BtnPUp_0", "^", 0.15f, () => { pFace.pips++; NotifyStateChanged(); }),
-            GridCellSpec.CreateButton($"BtnPDn_0", "v", 0.15f, () => { pFace.pips = Mathf.Max(0, pFace.pips - 1); NotifyStateChanged(); })
+            GridCellSpec.CreateButton($"BtnPUp_0", "▲", 0.15f, () => { pFace.pips++; NotifyStateChanged(); }),
+            GridCellSpec.CreateButton($"BtnPDn_0", "▼", 0.15f, () => { pFace.pips = Mathf.Max(0, pFace.pips - 1); NotifyStateChanged(); })
         ));
 
         layout.Add(new GridRowSpec(
@@ -633,8 +633,8 @@ public class AbilityUI : RootUI
             GridCellSpec.CreateInput($"ID_1", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { sFace.effectID = id; NotifyStateChanged(); } }),
             GridCellSpec.CreateLabel("Pips:", 0.20f),
             GridCellSpec.CreateInput($"Pips_1", "Pips", 0.20f, (val) => { if (int.TryParse(val, out int p)) { sFace.pips = p; NotifyStateChanged(); } }),
-            GridCellSpec.CreateButton($"BtnPUp_1", "^", 0.15f, () => { sFace.pips++; NotifyStateChanged(); }),
-            GridCellSpec.CreateButton($"BtnPDn_1", "v", 0.15f, () => { sFace.pips = Mathf.Max(0, sFace.pips - 1); NotifyStateChanged(); })
+            GridCellSpec.CreateButton($"BtnPUp_1", "▲", 0.15f, () => { sFace.pips++; NotifyStateChanged(); }),
+            GridCellSpec.CreateButton($"BtnPDn_1", "▼", 0.15f, () => { sFace.pips = Mathf.Max(0, sFace.pips - 1); NotifyStateChanged(); })
         ));
 
         layout.Add(new GridRowSpec(
@@ -662,8 +662,8 @@ public class AbilityUI : RootUI
             layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Cost:", 0.30f),
                 GridCellSpec.CreateInput("ManaPips", spell.manaCost.ToString(), 0.30f, (val) => { if (int.TryParse(val, out int p)) { spell.manaCost = p; NotifyStateChanged(); } }),
-                GridCellSpec.CreateButton($"BtnCostUp", "^", 0.20f, () => { spell.manaCost++; NotifyStateChanged(); }),
-                GridCellSpec.CreateButton($"BtnCostDn", "v", 0.20f, () => { spell.manaCost = Mathf.Max(0, spell.manaCost - 1); NotifyStateChanged(); })
+                GridCellSpec.CreateButton($"BtnCostUp", "▲", 0.20f, () => { spell.manaCost++; NotifyStateChanged(); }),
+                GridCellSpec.CreateButton($"BtnCostDn", "▼", 0.20f, () => { spell.manaCost = Mathf.Max(0, spell.manaCost - 1); NotifyStateChanged(); })
             ));
         }
         else

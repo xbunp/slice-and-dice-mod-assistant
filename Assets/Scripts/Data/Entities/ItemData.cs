@@ -4,16 +4,21 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using ModEditor;
+
+// ==========================================
+// BASE DATA & STUBS
+// ==========================================
 
 [System.Serializable]
 public class ItemAbility
 {
-    public string Prefix; // e.g., "learn.sThief" or "t.jinx.allitem"
+    public string Prefix; // Safely catches deep chains like "self.ea.sstatue"
     public AbilityData Ability; // Assuming AbilityData is implemented elsewhere
 }
 
 // ==========================================
-// THE MECHANIC ENGINE (Core Logic Parser)
+// THE MECHANIC ENGINE (Upgraded Core AST)
 // ==========================================
 
 [System.Serializable]
@@ -21,15 +26,19 @@ public class ItemMechanic
 {
     [Header("Raw Engine Data")]
     public string RawString;
-    public bool IsWrapped; // Tracks if this was enclosed in ()
+    public bool IsWrapped;
 
     [Header("Parsed Components")]
-    public List<string> Positions = new List<string>(); // left, topbot, rightmost, etc.
-    public string Operation; // hat, sticker, splice, k, togres, etc.
-    public string BaseItem; // Used for standard items or the left side of a splice
-    public string Payload; // The target entity, item, or keyword
+    public List<string> Positions = new List<string>();
 
-    // Known dictionary sets for intelligent parsing
+    // Upgraded from a single string to a List to support Operator Chaining
+    // Example: "t", "jinx", "allitem", "learn"
+    public List<string> Operations = new List<string>();
+
+    public string BaseItem;
+    public string Payload;
+
+    // --- Parser Dictionaries ---
     private static readonly HashSet<string> ValidPositions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "all", "mid", "left", "right", "top", "bot", "rightmost", "row", "col",
@@ -41,6 +50,13 @@ public class ItemMechanic
         "togtime", "togtarg", "togfri", "togvis", "togeft", "togpip", "togkey",
         "togorf", "togunt", "togres", "togresm", "togresa", "togreso", "togresx",
         "togress", "togresn"
+    };
+
+    private static readonly HashSet<string> KnownUnaryOps = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "hat", "sticker", "cast", "triggerhpdata", "onhitdata", "k", "self",
+        "pertier", "peritem", "allitem", "alliteme", "unpack", "ea", "learn",
+        "t", "replica", "egg", "facade"
     };
 
     public static ItemMechanic Parse(string rawData)
@@ -60,59 +76,68 @@ public class ItemMechanic
 
         int i = 0;
 
-        // 1. Extract Positional Prefixes (e.g., "left.right.hat.ogre")
+        // 1. Extract Positional Prefixes (e.g., "right2.mid.hat...")
         while (i < tokens.Count && ValidPositions.Contains(tokens[i].ToLower()))
         {
             mech.Positions.Add(tokens[i].ToLower());
             i++;
         }
 
-        // 2. Identify the Core Operation
-        if (i < tokens.Count)
+        // 2. Extract Operator Chains (e.g., "t.jinx.alliteme.learn...")
+        while (i < tokens.Count)
         {
-            string token = tokens[i].ToLower();
-
-            // Handle "splice" (which appears in the middle: BaseItem.splice.Payload)
-            int spliceIndex = tokens.FindIndex(t => t.Equals("splice", StringComparison.OrdinalIgnoreCase));
-            if (spliceIndex != -1)
+            string t = tokens[i].ToLower();
+            if (KnownUnaryOps.Contains(t) || Regex.IsMatch(t, @"^x\d+$") || Regex.IsMatch(t, @"^et\d+$"))
             {
-                mech.Operation = "splice";
-                mech.BaseItem = string.Join(".", tokens.Skip(i).Take(spliceIndex - i));
-                mech.Payload = string.Join(".", tokens.Skip(spliceIndex + 1));
-                return mech;
+                mech.Operations.Add(tokens[i]); // Preserve original case
+                i++;
             }
-
-            // Handle Standard Operators
-            if (token == "hat" || token == "sticker" || token == "cast" || token == "triggerhpdata" ||
-                token == "k" || token == "self" || token == "pertier" || token == "unpack")
-            {
-                mech.Operation = token;
-                mech.Payload = string.Join(".", tokens.Skip(i + 1));
-            }
-            // Handle Multipliers (e.g., x3.chainmail)
-            else if (Regex.IsMatch(token, @"^x\d+$"))
-            {
-                mech.Operation = token;
-                mech.Payload = string.Join(".", tokens.Skip(i + 1));
-            }
-            // Handle Tog Items (Tog items are often operations with no payload, acting on the scratchpad)
-            else if (TogItems.Contains(token))
-            {
-                mech.Operation = token;
-                mech.Payload = string.Join(".", tokens.Skip(i + 1)); // Usually empty unless chained
-            }
-            // Handle Base Item Modifications (e.g., ghost shield.m.3, shortsword.part.1)
-            else if (i + 1 < tokens.Count && (tokens[i + 1].ToLower() == "m" || tokens[i + 1].ToLower() == "part"))
-            {
-                mech.BaseItem = string.Join(".", tokens.Take(i + 1)); // Includes positions if they were part of the name mistakenly
-                mech.Operation = tokens[i + 1].ToLower();
-                mech.Payload = string.Join(".", tokens.Skip(i + 2));
-            }
-            // Default: It's just a standard item or custom entity injection
             else
             {
-                mech.Operation = "item";
-                mech.BaseItem = string.Join(".", tokens.Skip(i));
+                break;
+            }
+        }
+
+        // 3. Scan remaining tokens for Binary Engine Operators
+        int binaryOpIdx = -1;
+        string foundBinaryOp = null;
+        for (int j = i; j < tokens.Count; j++)
+        {
+            string t = tokens[j].ToLower();
+            if (t == "splice" || t == "mrg" || t == "adj" || t == "m" || t == "part")
+            {
+                binaryOpIdx = j;
+                foundBinaryOp = tokens[j]; // Preserve case
+                break;
+            }
+        }
+
+        if (binaryOpIdx != -1)
+        {
+            // Binary Operator Found: Splits BaseItem and Payload
+            mech.Operations.Add(foundBinaryOp);
+            mech.BaseItem = string.Join(".", tokens.Skip(i).Take(binaryOpIdx - i));
+            mech.Payload = string.Join(".", tokens.Skip(binaryOpIdx + 1));
+        }
+        else
+        {
+            // No Binary Operator. It's either a Tog Scratchpad action or a simple entity/item Payload.
+            if (i < tokens.Count && TogItems.Contains(tokens[i].ToLower()))
+            {
+                mech.Operations.Add(tokens[i]);
+                mech.Payload = string.Join(".", tokens.Skip(i + 1)); // Usually empty, unless highly customized
+            }
+            else
+            {
+                // Unary operators wrap a BaseItem/Entity payload
+                if (mech.Operations.Count > 0)
+                {
+                    mech.Payload = string.Join(".", tokens.Skip(i));
+                }
+                else
+                {
+                    mech.BaseItem = string.Join(".", tokens.Skip(i));
+                }
             }
         }
 
@@ -123,28 +148,41 @@ public class ItemMechanic
     {
         StringBuilder sb = new StringBuilder();
 
-        // Reconstruct Prefix Positions
+        // 1. Positions
         if (Positions.Count > 0)
         {
             sb.Append(string.Join(".", Positions));
             sb.Append(".");
         }
 
-        // Reconstruct Operations
-        if (Operation == "splice")
-            sb.Append($"{BaseItem}.splice.{Payload}");
-        else if (Operation == "item")
-            sb.Append(BaseItem);
-        else if (Operation == "m" || Operation == "part")
-            sb.Append($"{BaseItem}.{Operation}.{Payload}");
-        else if (!string.IsNullOrEmpty(Operation))
+        // 2. Unary Operators
+        List<string> unaryOps = Operations.Where(op => !IsBinaryOp(op)).ToList();
+        if (unaryOps.Count > 0)
         {
-            sb.Append(Operation);
-            if (!string.IsNullOrEmpty(Payload)) sb.Append($".{Payload}");
+            sb.Append(string.Join(".", unaryOps));
+            sb.Append(".");
         }
 
-        string result = sb.ToString();
+        // 3. Binary Structure OR Payload Output
+        string binaryOp = Operations.FirstOrDefault(op => IsBinaryOp(op));
+        if (binaryOp != null)
+        {
+            sb.Append($"{BaseItem}.{binaryOp}.{Payload}");
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(BaseItem)) sb.Append(BaseItem);
+            else if (!string.IsNullOrEmpty(Payload)) sb.Append(Payload);
+        }
+
+        string result = sb.ToString().TrimEnd('.');
         return IsWrapped ? $"({result})" : result;
+    }
+
+    private bool IsBinaryOp(string op)
+    {
+        string t = op.ToLower();
+        return t == "splice" || t == "mrg" || t == "adj" || t == "m" || t == "part";
     }
 }
 
@@ -162,6 +200,11 @@ public class ItemData : SDData
 
     [Header("Core Info")]
     public int? tier;
+
+    [Header("Mod-Level System Tags")]
+    public bool isHidden = false;
+    public string modName;
+    public string modDoc;
 
     [Header("Item Mechanics")]
     public List<ItemMechanic> Mechanics = new List<ItemMechanic>();
@@ -182,16 +225,13 @@ public class ItemData : SDData
         // 1. Compile Effects & Abilities
         List<string> allMechanics = new List<string>();
 
-        if (item.Mechanics != null)
-        {
-            allMechanics.AddRange(item.Mechanics.Select(m => m.Export()));
-        }
+        if (item.Mechanics != null) allMechanics.AddRange(item.Mechanics.Select(m => m.Export()));
+
         if (item.GrantedAbilities != null)
         {
             foreach (var ability in item.GrantedAbilities)
             {
                 string prefixStr = string.IsNullOrEmpty(ability.Prefix) ? "" : $"{ability.Prefix}.";
-                // Assuming ExportWrapped exists on AbilityData
                 allMechanics.Add($"{prefixStr}abilitydata.{ability.Ability.ExportWrapped()}");
             }
         }
@@ -199,12 +239,11 @@ public class ItemData : SDData
         if (allMechanics.Count > 0)
         {
             string joinedEffects = string.Join("#", allMechanics);
-            // Wrap if multiple mechanics to prevent bleeding into metadata
             if (allMechanics.Count > 1) sb.Append($"({joinedEffects})");
             else sb.Append(joinedEffects);
         }
 
-        // 2. Metadata (Added backwards-compatible metadata keys like sidesc)
+        // 2. Trailing Local Metadata
         if (!string.IsNullOrEmpty(item.entityName)) sb.Append($".n.{FormatName(item.entityName)}");
         if (item.tier.HasValue) sb.Append($".tier.{item.tier.Value}");
         if (!string.IsNullOrEmpty(item.doc)) sb.Append($".doc.{item.doc}");
@@ -222,6 +261,11 @@ public class ItemData : SDData
         if (!string.IsNullOrEmpty(item.draw)) sb.Append($".draw.{item.draw}");
         if (!string.IsNullOrEmpty(item.thue)) sb.Append($".thue.{item.thue}");
 
+        // 4. Mod-Level Global Metadata Tags (&)
+        if (item.isHidden) sb.Append("&Hidden");
+        if (!string.IsNullOrEmpty(item.modName)) sb.Append($".mn.{item.modName}");
+        if (!string.IsNullOrEmpty(item.modDoc)) sb.Append($".doc.{item.modDoc}");
+
         return sb.ToString();
     }
 
@@ -230,9 +274,38 @@ public class ItemData : SDData
         ItemData item = new ItemData();
         if (string.IsNullOrWhiteSpace(data)) return item;
 
-        List<string> tokens = SafeSplit(data.Trim(), '.');
+        // 1. Intercept Mod-Level '&' Triggers First
+        List<string> fileChunks = SafeSplit(data.Trim(), '&');
+        string itemCore = fileChunks[0];
 
-        // Backwards scan for Metadata
+        // Parse global mod-flags (e.g. &Hidden.mn.CommunityItems.doc.Q1)
+        for (int c = 1; c < fileChunks.Count; c++)
+        {
+            string chunk = fileChunks[c];
+            if (chunk.StartsWith("Hidden", StringComparison.OrdinalIgnoreCase))
+            {
+                item.isHidden = true;
+                List<string> hiddenTokens = SafeSplit(chunk, '.');
+                for (int j = 1; j < hiddenTokens.Count; j++)
+                {
+                    if (hiddenTokens[j].ToLower() == "mn" && j + 1 < hiddenTokens.Count)
+                    {
+                        item.modName = hiddenTokens[j + 1];
+                        j++;
+                    }
+                    else if (hiddenTokens[j].ToLower() == "doc" && j + 1 < hiddenTokens.Count)
+                    {
+                        item.modDoc = hiddenTokens[j + 1];
+                        j++;
+                    }
+                }
+            }
+        }
+
+        // 2. Parse Standard Dot-Tokens from the Core Item String
+        List<string> tokens = SafeSplit(itemCore, '.');
+
+        // Backwards scan for Local Metadata
         int metaIdx = tokens.Count;
         while (metaIdx >= 2)
         {
@@ -240,17 +313,17 @@ public class ItemData : SDData
             else break;
         }
 
-        // Parse Mechanical Effects & Abilities
+        // 3. Parse Mechanical Effects & Deep Operator Chains
         if (metaIdx > 0)
         {
             string rawEffects = string.Join(".", tokens.Take(metaIdx));
 
-            // Clean global wrapping
             while (IsFullyWrapped(rawEffects)) rawEffects = rawEffects.Substring(1, rawEffects.Length - 2);
 
             List<string> effectChunks = SafeSplit(rawEffects, '#');
             foreach (var effect in effectChunks)
             {
+                // Isolate inline Ability definitions before AST processing
                 int abIdx = effect.IndexOf("abilitydata.", StringComparison.OrdinalIgnoreCase);
                 if (abIdx != -1)
                 {
@@ -262,18 +335,17 @@ public class ItemData : SDData
                     item.GrantedAbilities.Add(new ItemAbility
                     {
                         Prefix = prefix,
-                        Ability = AbilityData.Parse(abilityStr) // Ensure AbilityData has a standard Parse
+                        Ability = AbilityData.Parse(abilityStr)
                     });
                 }
                 else
                 {
-                    // Generate rich AST Mechanic instead of raw string
                     item.Mechanics.Add(ItemMechanic.Parse(effect));
                 }
             }
         }
 
-        // Parse Metadata
+        // 4. Parse Extracted Local Metadata
         for (int i = metaIdx; i < tokens.Count; i += 2)
         {
             string key = tokens[i].ToLower();
@@ -285,7 +357,7 @@ public class ItemData : SDData
                 case "tier": if (int.TryParse(value, out int t)) item.tier = t; break;
                 case "img": item.imageOverride = value; break;
                 case "doc": item.doc = value; break;
-                case "sidesc": item.sidesc = value; break; // Custom Side Description Override
+                case "sidesc": item.sidesc = value; break;
                 case "hsv":
                     string[] hsv = value.Split(':');
                     if (hsv.Length == 3) { int.TryParse(hsv[0], out item.h); int.TryParse(hsv[1], out item.s); int.TryParse(hsv[2], out item.v); }
@@ -303,7 +375,7 @@ public class ItemData : SDData
         return item;
     }
 
-    // --- Utilites ---
+    // --- Utilities ---
     private static string FormatName(string name) => string.IsNullOrEmpty(name) ? "" : name.Replace(" ", "_");
 
     public static List<string> SafeSplit(string input, char separator)
