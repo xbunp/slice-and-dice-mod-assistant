@@ -90,7 +90,7 @@ public class MonsterData : EntityData
         {
             foreach (var ci in monster.customItems)
             {
-                if (ci != null) sb.Append($".i.{ItemData.Export(ci)}");
+                if (ci != null) sb.Append($".i.{ci.Export()}");
             }
         }
 

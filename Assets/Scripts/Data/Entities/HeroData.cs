@@ -112,7 +112,7 @@ public class HeroData : EntityData
         {
             foreach (var ci in customItems)
             {
-                if (ci != null) thoseSb.Append($".i.({ItemData.Export(ci)})");
+                if (ci != null) thoseSb.Append($".i.({ci.Export()})");
             }
         }
 

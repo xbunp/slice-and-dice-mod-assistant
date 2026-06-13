@@ -309,7 +309,7 @@ public class ItemUI : RootUI
             }
         }
 
-        string rawExport = ItemData.Export(currentItem);
+        string rawExport = currentItem.Export();
         string englishOutput = $"Item '{currentItem.entityName ?? "New Item"}' ";
 
         if (currentItem.tier.HasValue) englishOutput += $"[Tier {currentItem.tier.Value}] ";

@@ -120,15 +120,32 @@ public abstract class AbilityData : HeroData
     {
         if (string.IsNullOrWhiteSpace(data)) return new SpellData();
 
-        while (ItemData.IsFullyWrapped(data)) data = data.Substring(1, data.Length - 2);
+        // 1. Parse via AST to handle structural unwrapping
+        ASTNode root = new ASTParser(data).Parse();
 
-        List<string> chunks = ItemData.SafeSplit(data, '.');
+        // Unwrap any structural outer parentheses (replaces IsFullyWrapped)
+        while (root is ScopeNode scope)
+        {
+            root = scope.Content;
+        }
+
+        // 2. Convert top-level chain elements into flat string chunks (replaces SafeSplit)
+        List<string> chunks = new List<string>();
+        if (root is ChainNode chain)
+        {
+            chunks.AddRange(chain.Elements.Select(e => e.Export()));
+        }
+        else if (root != null)
+        {
+            chunks.Add(root.Export());
+        }
+
         if (chunks.Count == 0) return new SpellData();
 
-        // Peek ahead to detect spell vs tactic. Spells MUST have an cost registered in
+        // 3. Peek ahead to detect spell vs tactic. Spells MUST have a cost registered in
         // their right slot (Index 4) to compile as spells in-game.
         bool isSpell = false;
-        int sdIdx = chunks.FindIndex(x => x.ToLower() == "sd");
+        int sdIdx = chunks.FindIndex(x => x.Equals("sd", StringComparison.OrdinalIgnoreCase));
         if (sdIdx != -1 && sdIdx + 1 < chunks.Count)
         {
             string[] faces = chunks[sdIdx + 1].Split(':');
