@@ -354,7 +354,7 @@ namespace SliceDiceTextMod
                         {
                             // Custom Item nested handling
                             string itemStr = ExtractBalancedBlock(tokens, ref pos);
-                            hero.customItems.Add(ItemData.Parse(itemStr));
+                            hero.customItems.Add(SDData.Parse<ItemData>(itemStr));
                         }
                         else
                         {
@@ -420,7 +420,7 @@ namespace SliceDiceTextMod
                         {
                             // Safely extract custom item block so it doesn't break the dice modifier parser
                             string itemStr = ExtractBalancedBlock(tokens, ref pos);
-                            hero.customItems.Add(ItemData.Parse(itemStr));
+                            hero.customItems.Add(SDData.Parse<ItemData>(itemStr));
                         }
                         else
                         {

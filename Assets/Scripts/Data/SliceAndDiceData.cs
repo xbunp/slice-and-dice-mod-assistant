@@ -2507,6 +2507,11 @@ public class BaseAbility
 
 public static class BaseAbilityDatabase
 {
+    public static readonly HashSet<string> ValidAbilities = new(
+    BaseAbilityDatabase.Abilities.Select(a => a.name), // Change '.Name' to your actual property if different
+    StringComparer.OrdinalIgnoreCase
+);
+
     public static readonly List<BaseAbility> Abilities = new List<BaseAbility>()
     {
         // === SPELLS ===
@@ -3858,4 +3863,79 @@ public static class BlessingDataset
         { "i.[Tier 17 item]", "Gain the [Tier 17 item]" }
         */
     };
+}
+
+public static class HpPipMapper
+{
+    // Dictionary containing the static mappings from the table
+    private static readonly Dictionary<int, string> HpToPipsMap = new Dictionary<int, string>
+    {
+        { 1, "All HP" },
+        { 2, "Every 2" },
+        { 3, "Every 3" },
+        { 4, "Every 4" },
+        { 5, "Every 5" },
+        { 6, "Every 10" },
+        { 7, "Every 10, starting with 5" },
+        { 8, "Every 2, starting with 1" },
+        { 9, "Every 3, starting with 1" },
+        { 10, "Inner 1" },
+        { 11, "Inner 2" },
+        { 12, "Inner 3" },
+        { 13, "Inner 5" },
+        { 14, "Outer 1" },
+        { 15, "Outer 2" },
+        { 16, "Outer 3" },
+        { 17, "Outer 5" },
+        { 18, "Middle HP" },
+        { 19, "2 Evenly Spaced HP" },
+        { 20, "3 Evenly Spaced HP" },
+        { 21, "4 Evenly Spaced HP" }
+    };
+
+    /// <summary>
+    /// Retrieves the pips affected string based on the HP value.
+    /// </summary>
+    /// <param name="hp">The HP integer.</param>
+    /// <returns>The string description of pips affected.</returns>
+    public static string GetPipsAffected(int hp)
+    {
+        // First check if the exact HP value exists in the dictionary
+        if (HpToPipsMap.TryGetValue(hp, out string effect))
+        {
+            return effect;
+        }
+
+        // Fallback for N > 21 based on the "The N-20th" rule
+        if (hp > 21)
+        {
+            int calculatedValue = hp - 20;
+            return $"The {calculatedValue}{GetOrdinalSuffix(calculatedValue)}";
+        }
+
+        return "Unknown";
+    }
+
+    /// <summary>
+    /// Helper to generate the correct grammatical suffix (st, nd, rd, th) for ordinal numbers.
+    /// </summary>
+    private static string GetOrdinalSuffix(int num)
+    {
+        if (num <= 0) return "";
+
+        // Handle exceptions like 11th, 12th, 13th
+        int hundredRemainder = num % 100;
+        if (hundredRemainder >= 11 && hundredRemainder <= 13)
+        {
+            return "th";
+        }
+
+        switch (num % 10)
+        {
+            case 1: return "st";
+            case 2: return "nd";
+            case 3: return "rd";
+            default: return "th";
+        }
+    }
 }

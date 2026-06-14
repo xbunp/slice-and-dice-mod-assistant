@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
-using UnityEngine;
 using System.Linq;
+using System.Text;
+using System.Threading;
+using UnityEngine;
 
 [System.Serializable]
 public class HeroData : EntityData
@@ -256,7 +257,7 @@ public class HeroData : EntityData
                     }
                     else if (value.StartsWith("("))
                     {
-                        hero.customItems.Add(ItemData.Parse(value));
+                        hero.customItems.Add(SDData.Parse<ItemData>(value));
                     }
                     else
                     {

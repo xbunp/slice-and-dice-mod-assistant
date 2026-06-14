@@ -173,4 +173,9 @@ public abstract class EntityData : SDData
     {
         return name ?? "";
     }
+
+    internal static ISyntaxPayload Create(string payloadString)
+    {
+        throw new NotImplementedException();
+    }
 }

@@ -233,4 +233,9 @@ public abstract class AbilityData : HeroData
 
         return ability;
     }
+
+    internal static ISyntaxPayload Create(string payloadString)
+    {
+        throw new NotImplementedException();
+    }
 }

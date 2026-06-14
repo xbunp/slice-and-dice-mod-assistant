@@ -216,7 +216,7 @@ public class MonsterData : EntityData
                     }
                     else if (value.StartsWith("("))
                     {
-                        monster.customItems.Add(ItemData.Parse(value));
+                        monster.customItems.Add(SDData.Parse<ItemData>(value));
                     }
                     else
                     {

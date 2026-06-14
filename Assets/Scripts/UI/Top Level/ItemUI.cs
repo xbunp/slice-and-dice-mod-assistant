@@ -8,6 +8,7 @@ using ModEditor;
 
 public class ItemUI : RootUI
 {
+    /*
     private class WorkspaceItem : ReorderableItem
     {
         public string OptionName;
@@ -1045,6 +1046,7 @@ public class ItemUI : RootUI
     }
 
     #endregion
+    */
 }
 
 /*
@@ -1331,6 +1333,7 @@ private void AddBlockWithMechanic(ItemMechanic mechanic)
 
     _rootWorkspaceZone.AddEntrant(workspaceItem);
 }
+    
 }
 
 */
