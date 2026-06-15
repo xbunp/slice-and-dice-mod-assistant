@@ -378,7 +378,8 @@ public class HeroUI : RootUI
         isDrawingUI = true;
 
         if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentHero.entityName);
-        if (statsUI.Inputs.TryGetValue("HP", out var hpIn)) hpIn.SetTextWithoutNotify(CurrentHero.hp.ToString());
+        if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
+            hpIn.SetTextWithoutNotify(CurrentHero.hp > 0 ? CurrentHero.hp.ToString() : "");
         if (statsUI.Inputs.TryGetValue("Tier", out var tierIn)) tierIn.SetTextWithoutNotify(CurrentHero.tier.ToString());
         if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentHero.baseReplica);
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(CurrentHero.imageOverride);
@@ -433,7 +434,8 @@ public class HeroUI : RootUI
         if (portraitPreview != null)
         {
             portraitPreview.SetNameText(CurrentHero.entityName);
-            portraitPreview.SetHPText(CurrentHero.hp.ToString());
+            portraitPreview.SetHPText(CurrentHero.hp > 0 ? CurrentHero.hp.ToString() : "");
+
             portraitPreview.SetTierText(CurrentHero.tier.ToString());
 
             HeroColorOption colOpt = EntityUIHelpers.ReverseLookupColor(CurrentHero.colorClass);
@@ -793,7 +795,10 @@ public class HeroUI : RootUI
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP:", 0.2f),
-            GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) CurrentHero.hp = hp; NotifyStateChanged(); }),
+            GridCellSpec.CreateInput("HP", "", 0.3f, (val) => {
+                CurrentHero.hp = (string.IsNullOrWhiteSpace(val) || !int.TryParse(val, out int parsedHp)) ? 0 : parsedHp;
+                NotifyStateChanged();
+            }),
             GridCellSpec.CreateLabel("Tier:", 0.2f),
             GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => { if (int.TryParse(val, out int t)) CurrentHero.tier = t; NotifyStateChanged(); })
         ));
@@ -1610,7 +1615,7 @@ public class HeroUI : RootUI
 
             GetNameText = (index, sprite) => index == 0 ? "New Hero" : heroes[index - 1].entityName,
             GetTierText = (index, sprite) => index == 0 ? "" : heroes[index - 1].tier.ToString(),
-            GetHPText = (index, sprite) => index == 0 ? "" : heroes[index - 1].hp.ToString(),
+            GetHPText = (index, sprite) => index == 0 ? "" : (heroes[index - 1].hp > 0 ? heroes[index - 1].hp.ToString() : ""),
             GetColor = (index, sprite) => index == 0
                 ? Color.white
                 : SDColors.GetColor(EntityUIHelpers.ReverseLookupColor(heroes[index - 1].colorClass)),

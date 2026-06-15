@@ -13,7 +13,7 @@ public abstract class EntityData : SDData
     public int h = 0;
     public int s = 0;
     public int v = 0;
-    public int? hue;
+    public int hue = 0;
     public string hsl;
 
     [Header("Shared Extended Modifiers")] 
@@ -46,7 +46,7 @@ public abstract class EntityData : SDData
     {
         bool hasHsv = h != 0 || s != 0 || v != 0;
         if (hasHsv) sb.Append($".hsv.{h}:{s}:{v}");
-        else if (hue.HasValue) sb.Append($".hue.{hue.Value}");
+        else if (hue != 0) sb.Append($".hue.{hue}");
         else if (!string.IsNullOrEmpty(hsl)) sb.Append($".hsl.{hsl}");
     }
 

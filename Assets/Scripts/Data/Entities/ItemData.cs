@@ -897,7 +897,7 @@ public class ItemData : SDData
 
                 // Note: If you add a similar DebugContentsToConsole(indent) method to HeroData, 
                 // you could cast it here and call it to print the entire multi-domain tree!
-                if (m.PayloadData is HeroData hd) hd.DebugContentsToConsole(indent + "        ");
+                if (m.PayloadData is HeroData hd) hd.DebugContentsToConsoleCompact(indent + "        ");
             }
 
             if (m.Multiplier != 1 || !string.IsNullOrEmpty(m.MergedItem) || !string.IsNullOrEmpty(m.SplicedItem) || m.PartIndex.HasValue)

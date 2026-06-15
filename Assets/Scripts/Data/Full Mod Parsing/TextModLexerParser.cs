@@ -304,7 +304,10 @@ namespace SliceDiceTextMod
                     }
                     if (key == "hp" && Peek(tokens, pos, 1).Type == TokenType.Dot)
                     {
-                        if (int.TryParse(Peek(tokens, pos, 2).Value, out int hp)) hero.hp = hp;
+                        if (int.TryParse(Peek(tokens, pos, 2).Value, out int parsedHp))
+                        {
+                            if (parsedHp > 0) hero.hp = parsedHp;
+                        }
                         pos += 3; continue;
                     }
                     if (key == "tier" && Peek(tokens, pos, 1).Type == TokenType.Dot)

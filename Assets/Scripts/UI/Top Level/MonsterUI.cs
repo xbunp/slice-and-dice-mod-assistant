@@ -215,8 +215,10 @@ public class MonsterUI : EntityUI<MonsterData>
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP:", 0.2f),
-            GridCellSpec.CreateInput("HP", "", 0.3f, (val) => { if (int.TryParse(val, out int hp)) CurrentEntity.hp = hp; NotifyStateChanged(); }),
-            GridCellSpec.CreateLabel("Bal:", 0.2f),
+            GridCellSpec.CreateInput("HP", "", 0.3f, (val) => {
+                CurrentEntity.hp = (string.IsNullOrWhiteSpace(val) || !int.TryParse(val, out int parsedHp)) ? 0 : parsedHp;
+                NotifyStateChanged();
+            }), GridCellSpec.CreateLabel("Bal:", 0.2f),
             GridCellSpec.CreateInput("Bal", "", 0.3f, (val) => { CurrentEntity.bal = val; NotifyStateChanged(); })
         ));
 
@@ -730,7 +732,7 @@ public class MonsterUI : EntityUI<MonsterData>
 
             GetNameText = (index, sprite) => index == 0 ? "New Monster" : monsters[index - 1].entityName,
             GetTierText = (index, sprite) => "",
-            GetHPText = (index, sprite) => index == 0 ? "-" : monsters[index - 1].hp.ToString(),
+            GetHPText = (index, sprite) => index == 0 ? "-" : (monsters[index - 1].hp > 0 ? monsters[index - 1].hp.ToString() : ""),
             GetColor = (index, sprite) => EffectKeywordColors.Purple,
 
             OnSelectionMade = (index, sprite) =>

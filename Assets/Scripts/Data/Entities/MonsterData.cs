@@ -36,7 +36,10 @@ public class MonsterData : EntityData
             sb.Append($".n.{FormatName(monster.entityName)}");
         }
 
-        sb.Append($".hp.{monster.hp}");
+        if (monster.hp > 0)
+        {
+            sb.Append($".hp.{monster.hp}");
+        }
 
         if (!string.IsNullOrEmpty(monster.p)) sb.Append($".p.{monster.p}");
         if (!string.IsNullOrEmpty(monster.b)) sb.Append($".b.{monster.b}");
@@ -198,7 +201,9 @@ public class MonsterData : EntityData
             {
                 case "n": monster.entityName = value; break;
                 case "img": monster.imageOverride = value; break;
-                case "hp": if (int.TryParse(value, out int hp)) monster.hp = hp; break;
+                case "hp":
+                    monster.hp = (string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out int parsedHp)) ? 0 : parsedHp;
+                    break;
 
                 case "hsv":
                     string[] hsvParts = value.Split(':');

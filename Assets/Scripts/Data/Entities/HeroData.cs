@@ -99,8 +99,8 @@ public class HeroData : EntityData
         s = 0;
         v = 0;
         tier = 0;
+        hue = 0;
 
-        hue = null;
         hsl = null;
         p = null;
         b = null;
@@ -199,7 +199,9 @@ public class HeroData : EntityData
                 case "n": this.entityName = value; break;
                 case "img": this.imageOverride = value; break;
                 case "col": this.colorClass = value; break;
-                case "hp": if (int.TryParse(value, out int hpVal)) this.hp = hpVal; break;
+                case "hp":
+                    this.hp = (string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out int hpVal)) ? 0 : hpVal;
+                    break;
                 case "tier": if (int.TryParse(value, out int t)) this.tier = t; break;
                 case "hsv":
                     string[] hsvParts = value.Split(':');
@@ -528,6 +530,159 @@ public class HeroData : EntityData
         else
         {
             UnityEngine.Debug.Log(sb.ToString());
+        }
+    }
+
+    public void DebugContentsToConsoleCompact(string indent = "")
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+        // Core Hero Data (Only show if non-null, non-empty, or non-default)
+        if (!string.IsNullOrEmpty(entityName))
+            sb.AppendLine($"{indent}Name: {entityName}");
+
+        if (baseReplica != null && !string.IsNullOrEmpty(baseReplica.ToString()))
+            sb.AppendLine($"{indent}Base Replica: {baseReplica}");
+
+        if (!string.IsNullOrEmpty(colorClass))
+            sb.AppendLine($"{indent}Color Class: {colorClass}");
+
+        if (tier != 0)
+            sb.AppendLine($"{indent}Tier: {tier}");
+
+        if (hp != 0)
+            sb.AppendLine($"{indent}HP: {hp}");
+
+        if (!string.IsNullOrEmpty(imageOverride))
+            sb.AppendLine($"{indent}Image Override: {imageOverride}");
+
+        // HSV/Hue/HSL values
+        if (h != 0) sb.AppendLine($"{indent}h: {h}");
+        if (s != 0) sb.AppendLine($"{indent}s: {s}");
+        if (v != 0) sb.AppendLine($"{indent}v: {v}");
+        if (hue != 0) sb.AppendLine($"{indent}Hue: {hue}");
+        if (!string.IsNullOrEmpty(hsl)) sb.AppendLine($"{indent}HSL: {hsl}");
+
+        // Layout/Visuals
+        if (adj.HasValue) sb.AppendLine($"{indent}adj: {adj.Value}");
+        if (!string.IsNullOrEmpty(p)) sb.AppendLine($"{indent}p: {p}");
+        if (!string.IsNullOrEmpty(b)) sb.AppendLine($"{indent}b: {b}");
+        if (!string.IsNullOrEmpty(rect)) sb.AppendLine($"{indent}rect: {rect}");
+        if (!string.IsNullOrEmpty(draw)) sb.AppendLine($"{indent}draw: {draw}");
+        if (!string.IsNullOrEmpty(thue)) sb.AppendLine($"{indent}thue: {thue}");
+
+        // Narrative
+        if (!string.IsNullOrEmpty(speech)) sb.AppendLine($"{indent}Speech: '{speech}'");
+        if (!string.IsNullOrEmpty(doc)) sb.AppendLine($"{indent}Doc: '{doc}'");
+
+        // Dice Sides (effectID is treated as an int)
+        if (diceSides != null && diceSides.Length > 0)
+        {
+            bool headerPrinted = false;
+            for (int i = 0; i < diceSides.Length; i++)
+            {
+                var side = diceSides[i];
+                if (side != null)
+                {
+                    bool hasEffect = side.effectID != 0;
+                    bool hasPips = side.pips != 0;
+
+                    if (hasEffect || hasPips)
+                    {
+                        if (!headerPrinted)
+                        {
+                            sb.AppendLine($"{indent}Dice Sides:");
+                            headerPrinted = true;
+                        }
+                        sb.AppendLine($"{indent}  [{i}] EffectID: {side.effectID} | Pips: {side.pips}");
+                    }
+                }
+            }
+        }
+
+        // Standard Lists
+        if (traits != null && traits.Count > 0)
+            sb.AppendLine($"{indent}Traits: {string.Join(", ", traits)}");
+
+        if (blessings != null && blessings.Count > 0)
+            sb.AppendLine($"{indent}Blessings: {string.Join(", ", blessings)}");
+
+        if (curses != null && curses.Count > 0)
+            sb.AppendLine($"{indent}Curses: {string.Join(", ", curses)}");
+
+        if (baseAbilityData != null && baseAbilityData.Count > 0)
+            sb.AppendLine($"{indent}Base Abilities: {string.Join(", ", baseAbilityData)}");
+
+        if (items != null && items.Count > 0)
+            sb.AppendLine($"{indent}Items (Stock): {string.Join(", ", items)}");
+
+        // Custom Items (Calls the existing DebugContentsToConsole method)
+        if (customItems != null && customItems.Count > 0)
+        {
+            bool headerPrinted = false;
+            for (int i = 0; i < customItems.Count; i++)
+            {
+                var ci = customItems[i];
+                if (ci != null)
+                {
+                    if (!headerPrinted)
+                    {
+                        sb.AppendLine($"{indent}Custom Items ({customItems.Count}):");
+                        headerPrinted = true;
+                    }
+                    sb.AppendLine($"{indent}  [{i}] [✓ Unpacked ItemData]");
+                    ci.DebugContentsToConsole(indent + "        ");
+                }
+            }
+        }
+
+        // Custom Spells
+        if (customSpells != null && customSpells.Count > 0)
+        {
+            bool headerPrinted = false;
+            for (int i = 0; i < customSpells.Count; i++)
+            {
+                var spell = customSpells[i];
+                if (spell != null)
+                {
+                    if (!headerPrinted)
+                    {
+                        sb.AppendLine($"{indent}Custom Spells ({customSpells.Count}):");
+                        headerPrinted = true;
+                    }
+                    sb.AppendLine($"{indent}  [{i}] Spell Name: {spell.entityName}");
+                    // If SpellData/AbilityData implements DebugContentsToConsole, call it:
+                    spell.DebugContentsToConsoleCompact(indent + "        ");
+                }
+            }
+        }
+
+        // Custom Tactics
+        if (customTactics != null && customTactics.Count > 0)
+        {
+            bool headerPrinted = false;
+            for (int i = 0; i < customTactics.Count; i++)
+            {
+                var tactic = customTactics[i];
+                if (tactic != null)
+                {
+                    if (!headerPrinted)
+                    {
+                        sb.AppendLine($"{indent}Custom Tactics ({customTactics.Count}):");
+                        headerPrinted = true;
+                    }
+                    sb.AppendLine($"{indent}  [{i}] Tactic Name: {tactic.entityName}");
+                    // If TacticData/AbilityData implements DebugContentsToConsole, call it:
+                    tactic.DebugContentsToConsoleCompact(indent + "        ");
+                }
+            }
+        }
+
+        // Only print if there is actual data inside the body
+        if (sb.Length > 0)
+        {
+            string header = $"{indent}--- HERO DATA DEBUG (COMPACT) ---\n";
+            UnityEngine.Debug.Log(header + sb.ToString());
         }
     }
 }

@@ -139,7 +139,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         isDrawingUI = true;
 
         if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentEntity.entityName);
-        if (statsUI.Inputs.TryGetValue("HP", out var hpIn)) hpIn.SetTextWithoutNotify(CurrentEntity.hp.ToString());
+        if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
+            hpIn.SetTextWithoutNotify(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
         if (statsUI.Inputs.TryGetValue("Doc", out var docIn)) docIn.SetTextWithoutNotify(CurrentEntity.doc);
 
         if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
@@ -192,7 +193,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (portraitPreview != null)
         {
             portraitPreview.SetNameText(CurrentEntity.entityName);
-            portraitPreview.SetHPText(CurrentEntity.hp.ToString());
+            portraitPreview.SetHPText(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
 
             UpdateSpecificVisuals();
             portraitPreview.SetPortraitHSV(CurrentEntity.h, CurrentEntity.s, CurrentEntity.v);
