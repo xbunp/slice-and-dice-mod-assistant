@@ -7,21 +7,17 @@ using UnityEngine;
 [System.Serializable]
 public abstract class AbilityData : HeroData
 {
-    // Defines top-level metadata tags used within entities.
-    // Differentiates actual parameters from raw dot-separated text strings.
     private static readonly HashSet<string> AbilityKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "sd", "i", "t", "gift", "abilitydata", "n", "img", "hp", "col", "tier", "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "doc", "adj", "speech"
     };
 
-    // Maps baseReplica natively to your old dummy base property
     public string baseDummyType
     {
         get => baseReplica;
         set => baseReplica = value;
     }
 
-    // Map primary and secondary active visual effects to Left and Middle sides on our dummy hero
     public DiceSideData PrimaryEffect
     {
         get => diceSides[0];
@@ -34,9 +30,154 @@ public abstract class AbilityData : HeroData
         set => diceSides[1] = value;
     }
 
-    public AbilityData() : base(Hero.Blank)
+    // ==========================================
+    // CONSTRUCTORS 
+    // ==========================================
+
+    // The base constructor guarantees baseReplica and entityName are safely initialized to "Fey".
+    public AbilityData() : base(Hero.Spell) { }
+
+    // Memory is allocated, defaults ("Fey") are set, and the instance parses itself perfectly.
+    public AbilityData(string data) : base(Hero.Spell)
     {
-        // clear all default values
+        ParseInstance(data);
+    }
+
+    // Factory creates the exact object needed and tells it to parse itself.
+    public static new AbilityData Parse(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data)) return new SpellData();
+
+        // 1. AST Peek to determine Spell vs Tactic instantiated type
+        ASTNode root = new ASTParser(data).Parse();
+        while (root is ScopeNode scope) root = scope.Content;
+
+        List<string> chunks = new List<string>();
+        if (root is ChainNode chain) chunks.AddRange(chain.Elements.Select(e => e.Export()));
+        else if (root != null) chunks.Add(root.Export());
+
+        bool isSpell = false;
+        int sdIdx = chunks.FindIndex(x => x.Equals("sd", StringComparison.OrdinalIgnoreCase));
+        if (sdIdx != -1 && sdIdx + 1 < chunks.Count)
+        {
+            string[] faces = chunks[sdIdx + 1].Split(':');
+            if (faces.Length > 4 && faces[4] != "0" && faces[4] != "0-0")
+            {
+                isSpell = true;
+            }
+        }
+
+        // 2. Allocate the exact subclass required and parse directly into it
+        AbilityData ability = isSpell ? (AbilityData)new SpellData() : new TacticData();
+        ability.ParseInstance(data);
+        return ability;
+    }
+
+    // ==========================================
+    // PARSING & EXPORTING
+    // ==========================================
+
+    public override void ParseInstance(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data)) return;
+
+        ASTNode root = new ASTParser(data).Parse();
+
+        while (root is ScopeNode scope)
+        {
+            root = scope.Content;
+        }
+
+        List<string> chunks = new List<string>();
+        if (root is ChainNode chain)
+        {
+            chunks.AddRange(chain.Elements.Select(e => e.Export()));
+        }
+        else if (root != null)
+        {
+            chunks.Add(root.Export());
+        }
+
+        if (chunks.Count == 0) return;
+
+        int i = 0;
+        string firstKey = chunks[0].ToLower();
+
+        // INTELLIGENT REPLICA DETECTION:
+        // Ability strings can omit the base replica. If the first chunk is a known key (like "sd"),
+        // leave the constructor's default "Fey" baseReplica alone and start parsing keys immediately.
+        if (!AbilityKeys.Contains(firstKey))
+        {
+            this.baseReplica = chunks[0];
+            i = 1;
+        }
+
+        while (i < chunks.Count)
+        {
+            string key = chunks[i].ToLower();
+            if (AbilityKeys.Contains(key))
+            {
+                if ((key == "i" || key == "t" || key == "gift" || key == "abilitydata") && i + 1 < chunks.Count)
+                {
+                    i++;
+                    List<string> subChunks = new List<string>();
+                    while (i < chunks.Count && !AbilityKeys.Contains(chunks[i].ToLower()))
+                    {
+                        subChunks.Add(chunks[i]);
+                        i++;
+                    }
+                    string joined = string.Join(".", subChunks);
+                    if (key == "i") this.items.Add(joined);
+                    else if (key == "t") this.traits.Add(joined);
+                    else if (key == "gift") this.blessings.Add(joined);
+                    else if (key == "abilitydata") this.baseAbilityData.Add(joined);
+                }
+                else if (i + 1 < chunks.Count)
+                {
+                    string val = chunks[i + 1];
+                    switch (key)
+                    {
+                        case "n": this.entityName = val; break;
+                        case "img": this.imageOverride = val; break;
+                        case "doc": this.doc = val; break;
+                        case "col": this.colorClass = val; break;
+                        case "hp": if (int.TryParse(val, out int hVal)) this.hp = hVal; break;
+                        case "tier": if (int.TryParse(val, out int tVal)) this.tier = tVal; break;
+                        case "adj": if (int.TryParse(val, out int aVal)) this.adj = aVal; break;
+                        case "speech": this.speech = val; break;
+                        case "hsv":
+                            string[] hsv = val.Split(':');
+                            if (hsv.Length == 3) { int.TryParse(hsv[0], out this.h); int.TryParse(hsv[1], out this.s); int.TryParse(hsv[2], out this.v); }
+                            break;
+                        case "hsl": this.hsl = val; break;
+                        case "hue": if (int.TryParse(val, out int hueVal)) this.hue = hueVal; break;
+                        case "p": this.p = val; break;
+                        case "b": this.b = val; break;
+                        case "rect": this.rect = val; break;
+                        case "draw": this.draw = val; break;
+                        case "thue": this.thue = val; break;
+                        case "sd":
+                            string[] faces = val.Split(':');
+                            for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
+                            {
+                                if (faces[f] == "0" || faces[f] == "0-0") continue;
+                                string[] faceParts = faces[f].Split('-');
+                                int.TryParse(faceParts[0], out this.diceSides[f].effectID);
+                                if (faceParts.Length > 1) int.TryParse(faceParts[1], out this.diceSides[f].pips);
+                            }
+                            break;
+                    }
+                    i += 2;
+                }
+                else i++;
+            }
+            else i++;
+        }
+
+        if (this is SpellData spell)
+        {
+            spell.manaCost = spell.diceSides[4].pips;
+        }
     }
 
     public override string Export()
@@ -54,22 +195,15 @@ public abstract class AbilityData : HeroData
                                 imageOverride != "None" &&
                                 imageOverride != baseReplica;
 
-        // 1. Base Replica (Abilities do not use the 'replica.' prefix at the start)
-        sb.Append(FormatName(baseReplica));
+        if (!string.IsNullOrEmpty(baseReplica))
+            sb.Append(FormatName(baseReplica));
 
         if (!hasImageOverride) AppendColorModifier(sb);
 
-        // 2. Metadata (only outputting non-default parameters)
-        //if (!string.IsNullOrEmpty(colorClass) && colorClass != "y") sb.Append($".col.{colorClass}");
-        //if (hp > 0) sb.Append($".hp.{hp}");
-        //if (tier > 1) sb.Append($".tier.{tier}");
-
         AppendDiceSides(sb);
 
-        // 3. Modifier Arrays
-        foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
-        //foreach (var gft in blessings.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".gift.{gft}");
-        //foreach (var trt in traits.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".t.{trt}");
+        if (items != null)
+            foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
 
         if (baseAbilityData != null && baseAbilityData.Count > 0)
         {
@@ -87,153 +221,21 @@ public abstract class AbilityData : HeroData
 
         sb.Append(BuildFaceModifiers(allowFacade: true));
 
-        // 4. Icon Override (img is compiled BEFORE name)
         if (hasImageOverride)
         {
             sb.Append($".img.{FormatName(imageOverride)}");
             AppendColorModifier(sb);
         }
 
-        // 5. Aesthetic Modifiers
-        //if (!string.IsNullOrEmpty(p)) sb.Append($".p.{p}");
-        //if (adj.HasValue) sb.Append($".adj.{adj.Value}");
-        //if (!string.IsNullOrEmpty(b)) sb.Append($".b.{b}");
-        //if (!string.IsNullOrEmpty(rect)) sb.Append($".rect.{rect}");
-        //if (!string.IsNullOrEmpty(draw)) sb.Append($".draw.{draw}");
         if (!string.IsNullOrEmpty(thue)) sb.Append($".thue.{thue}");
-        //if (!string.IsNullOrEmpty(speech)) sb.Append($".speech.{speech}");
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");
 
-        // 6. Name is strictly appended at the absolute end
-        if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity")
+        if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity" && entityName != "Fey")
         {
             sb.Append($".n.{FormatName(entityName)}");
         }
 
         return sb.ToString();
-    }
-
-    public AbilityData(string data) : base(Hero.Blank)
-    {
-        Parse(data);
-    }
-
-    public static new AbilityData Parse(string data)
-    {
-        if (string.IsNullOrWhiteSpace(data)) return new SpellData();
-
-        // 1. Parse via AST to handle structural unwrapping
-        ASTNode root = new ASTParser(data).Parse();
-
-        // Unwrap any structural outer parentheses (replaces IsFullyWrapped)
-        while (root is ScopeNode scope)
-        {
-            root = scope.Content;
-        }
-
-        // 2. Convert top-level chain elements into flat string chunks (replaces SafeSplit)
-        List<string> chunks = new List<string>();
-        if (root is ChainNode chain)
-        {
-            chunks.AddRange(chain.Elements.Select(e => e.Export()));
-        }
-        else if (root != null)
-        {
-            chunks.Add(root.Export());
-        }
-
-        if (chunks.Count == 0) return new SpellData();
-
-        // 3. Peek ahead to detect spell vs tactic. Spells MUST have a cost registered in
-        // their right slot (Index 4) to compile as spells in-game.
-        bool isSpell = false;
-        int sdIdx = chunks.FindIndex(x => x.Equals("sd", StringComparison.OrdinalIgnoreCase));
-        if (sdIdx != -1 && sdIdx + 1 < chunks.Count)
-        {
-            string[] faces = chunks[sdIdx + 1].Split(':');
-            if (faces.Length > 4 && faces[4] != "0" && faces[4] != "0-0")
-            {
-                isSpell = true;
-            }
-        }
-
-        AbilityData ability = isSpell ? (AbilityData)new SpellData() : new TacticData();
-        ability.baseReplica = chunks[0];
-
-        int i = 1;
-        while (i < chunks.Count)
-        {
-            string key = chunks[i].ToLower();
-            if (AbilityKeys.Contains(key))
-            {
-                // List variables (i, t, gift, abilitydata) are highly unpredictable and can 
-                // contain nested dots. We dynamically consume all chunks up until the next 
-                // recognized metadata parameter to avoid breaking the parser.
-                if ((key == "i" || key == "t" || key == "gift" || key == "abilitydata") && i + 1 < chunks.Count)
-                {
-                    i++;
-                    List<string> subChunks = new List<string>();
-                    // Grab everything up until the next structural keyword to preserve nested strings safely
-                    while (i < chunks.Count && !AbilityKeys.Contains(chunks[i].ToLower()))
-                    {
-                        subChunks.Add(chunks[i]);
-                        i++;
-                    }
-                    string joined = string.Join(".", subChunks);
-                    if (key == "i") ability.items.Add(joined);
-                    else if (key == "t") ability.traits.Add(joined);
-                    else if (key == "gift") ability.blessings.Add(joined);
-                    else if (key == "abilitydata") ability.baseAbilityData.Add(joined);
-                }
-                else if (i + 1 < chunks.Count)
-                {
-                    string val = chunks[i + 1];
-                    switch (key)
-                    {
-                        case "n": ability.entityName = val; break;
-                        case "img": ability.imageOverride = val; break;
-                        case "doc": ability.doc = val; break;
-                        case "col": ability.colorClass = val; break;
-                        case "hp": if (int.TryParse(val, out int hVal)) ability.hp = hVal; break;
-                        case "tier": if (int.TryParse(val, out int tVal)) ability.tier = tVal; break;
-                        case "adj": if (int.TryParse(val, out int aVal)) ability.adj = aVal; break;
-                        case "speech": ability.speech = val; break;
-                        case "hsv":
-                            string[] hsv = val.Split(':');
-                            if (hsv.Length == 3) { int.TryParse(hsv[0], out ability.h); int.TryParse(hsv[1], out ability.s); int.TryParse(hsv[2], out ability.v); }
-                            break;
-                        case "hsl": ability.hsl = val; break;
-                        case "hue": if (int.TryParse(val, out int hueVal)) ability.hue = hueVal; break;
-                        case "p": ability.p = val; break;
-                        case "b": ability.b = val; break;
-                        case "rect": ability.rect = val; break;
-                        case "draw": ability.draw = val; break;
-                        case "thue": ability.thue = val; break;
-                        case "sd":
-                            string[] faces = val.Split(':');
-                            for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
-                            {
-                                if (faces[f] == "0" || faces[f] == "0-0") continue;
-                                string[] faceParts = faces[f].Split('-');
-                                int.TryParse(faceParts[0], out ability.diceSides[f].effectID);
-                                if (faceParts.Length > 1) int.TryParse(faceParts[1], out ability.diceSides[f].pips);
-                            }
-                            break;
-                    }
-                    i += 2;
-                }
-                else i++;
-            }
-            else i++;
-        }
-
-        if (ability is SpellData spell)
-        {
-            // Sync the explicit manaCost property with the parsed right-side (Index 4) dice pips
-            spell.manaCost = spell.diceSides[4].pips;
-        }
-
-        return ability;
     }
 
     internal static ISyntaxPayload Create(string payloadString)

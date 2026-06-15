@@ -878,9 +878,21 @@ public class AbilityUI : RootUI
         rawTextOutput.onEndEdit.AddListener((val) =>
         {
             if (string.IsNullOrWhiteSpace(val)) return;
+
+            // UI SAFETY LOCK: Stop Unity from triggering a destructive re-parse on focus loss
+            string currentExport = $"abilitydata.{CurrentAbility.ExportWrapped()}";
+            if (val == currentExport) return;
+
             try
             {
-                AbilityData imported = AbilityData.Parse(val);
+                // STRIP WRAPPER: Remove the "abilitydata." prefix so it doesn't swallow itself
+                string cleanVal = val.Trim();
+                if (cleanVal.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleanVal = cleanVal.Substring(12).Trim();
+                }
+
+                AbilityData imported = AbilityData.Parse(cleanVal);
                 if (imported != null)
                 {
                     ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(imported);
@@ -896,7 +908,7 @@ public class AbilityUI : RootUI
 
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         copyBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Copy Ability String";
-        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = GUIUtility.systemCopyBuffer = $"abilitydata.{CurrentAbility.ExportWrapped()}");
+        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = $"abilitydata.{CurrentAbility.ExportWrapped()}");
         FullScreenUIGenerator.SetAnchors(copyBtnObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 0.48f, 0.06f);
 
         GameObject pasteBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
@@ -905,9 +917,17 @@ public class AbilityUI : RootUI
         {
             string cb = GUIUtility.systemCopyBuffer;
             if (string.IsNullOrWhiteSpace(cb)) return;
+
+            // STRIP WRAPPER: Remove the "abilitydata." prefix so it doesn't swallow itself
+            string cleanVal = cb.Trim();
+            if (cleanVal.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanVal = cleanVal.Substring(12).Trim();
+            }
+
             try
             {
-                AbilityData imported = AbilityData.Parse(cb);
+                AbilityData imported = AbilityData.Parse(cleanVal);
                 if (imported != null)
                 {
                     ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(imported);
