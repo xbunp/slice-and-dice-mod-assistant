@@ -282,7 +282,7 @@ namespace SliceDiceTextMod
 
         private static HeroData ParseHero(List<Token> tokens, ref int pos)
         {
-            HeroData hero = new HeroData();
+            HeroData hero = new HeroData(HeroData.Hero.Blank);
 
             while (pos < tokens.Count && tokens[pos].Type != TokenType.EOF && tokens[pos].Type != TokenType.Ampersand && tokens[pos].Type != TokenType.Comma)
             {

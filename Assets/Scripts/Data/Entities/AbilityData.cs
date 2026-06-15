@@ -34,12 +34,9 @@ public abstract class AbilityData : HeroData
         set => diceSides[1] = value;
     }
 
-    public AbilityData() : base()
+    public AbilityData() : base(Hero.Blank)
     {
-        // Abilities share HeroData structures, but heroes natively default to 7 HP.
-        // We override and force HP to 0 here on construction so our exported ability data string 
-        // doesn't export with a raw `.hp.7` parameter unless it is actually a defined summon.
-        hp = 0;
+        // clear all default values
     }
 
     public override string Export()
@@ -114,6 +111,11 @@ public abstract class AbilityData : HeroData
         }
 
         return sb.ToString();
+    }
+
+    public AbilityData(string data) : base(Hero.Blank)
+    {
+        Parse(data);
     }
 
     public static new AbilityData Parse(string data)

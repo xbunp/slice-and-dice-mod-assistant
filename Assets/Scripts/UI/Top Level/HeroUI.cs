@@ -50,7 +50,7 @@ public class HeroUI : RootUI
             // If no active editing session exists yet, auto-provision a clean template
             if (hero == null)
             {
-                ModPackage.Instance.LoadEntityForEditing(new HeroData());
+                ModPackage.Instance.LoadEntityForEditing(new HeroData(HeroData.Hero.Defaults));
                 hero = ModPackage.Instance.GetActiveEntity<HeroData>();
             }
 
@@ -561,7 +561,7 @@ public class HeroUI : RootUI
     private void ResetToDefault()
     {
         // Replace active working clone with a clean template
-        ModPackage.Instance.UpdateActiveEntityClone<HeroData>(new HeroData());
+        ModPackage.Instance.UpdateActiveEntityClone<HeroData>(new HeroData(HeroData.Hero.Defaults));
         showCustomImagePanel = false;
         _currentPoolIndex = 0;
 
@@ -695,7 +695,7 @@ public class HeroUI : RootUI
         else
         {
             // Load a fresh, clean hero template into the editing session
-            ModPackage.Instance.LoadEntityForEditing(new HeroData());
+            ModPackage.Instance.LoadEntityForEditing(new HeroData(HeroData.Hero.Defaults));
         }
 
         // Notify visual components to redraw
@@ -763,8 +763,7 @@ public class HeroUI : RootUI
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Hero Name:", 0.35f),
-            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentHero.entityName = val.SanitizePlainInput(); NotifyStateChanged(); })
-        ));
+            GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { if (isDrawingUI) return; CurrentHero.entityName = val.SanitizePlainInput(); NotifyStateChanged(); })));
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Replica Base:", 0.35f),
@@ -1470,6 +1469,7 @@ public class HeroUI : RootUI
         rawTextOutput.onEndEdit.AddListener((val) =>
         {
             if (string.IsNullOrWhiteSpace(val)) return;
+            if (val == CurrentHero.Export()) return;
             try
             {
                 HeroData importedHero = TextModLexerParser.ParseHero(val);
@@ -1638,7 +1638,7 @@ public class HeroUI : RootUI
         }
         else
         {
-            ModPackage.Instance.LoadEntityForEditing(new HeroData());
+            ModPackage.Instance.LoadEntityForEditing(new HeroData(HeroData.Hero.Defaults));
         }
 
         ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);

@@ -112,7 +112,13 @@ public class MonsterData : EntityData
         return sb.ToString();
     }
 
-    public static MonsterData Parse(string data)
+    public MonsterData() { }
+    public MonsterData (string data)
+    {
+        Parse(data);
+    }
+
+    public static new MonsterData Parse(string data)
     {
         MonsterData monster = new MonsterData();
         if (string.IsNullOrEmpty(data)) return monster;

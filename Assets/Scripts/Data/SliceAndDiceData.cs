@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using static SDColors;
 
@@ -2040,6 +2041,27 @@ public static class DiceTargetHelper
             _ => new List<int>()
         };
     }
+
+
+}
+
+public static class MonsterHelper
+{
+    public static readonly List<string> FormattedMonsterNames = InitializeMonsterNames();
+
+    /// <summary>
+    /// Evaluates the entity payload to determine if it is structurally a Monster or a Hero.
+    /// </summary>
+    private static List<string> InitializeMonsterNames()
+    {
+        var names = new List<string>();
+        foreach (string enumName in Enum.GetNames(typeof(MonsterType)))
+        {
+            string spacedName = Regex.Replace(enumName, "([a-z])([A-Z])", "$1 $2");
+            names.Add(spacedName);
+        }
+        return names;
+    }
 }
 
 public enum TargetType
@@ -2211,6 +2233,7 @@ public enum HeroType
     Y2,
     Y3,
 }
+
 public enum MonsterType
 {
     None = 0,
@@ -2507,11 +2530,6 @@ public class BaseAbility
 
 public static class BaseAbilityDatabase
 {
-    public static readonly HashSet<string> ValidAbilities = new(
-    BaseAbilityDatabase.Abilities.Select(a => a.name), // Change '.Name' to your actual property if different
-    StringComparer.OrdinalIgnoreCase
-);
-
     public static readonly List<BaseAbility> Abilities = new List<BaseAbility>()
     {
         // === SPELLS ===
@@ -2639,6 +2657,11 @@ public static class BaseAbilityDatabase
         new BaseAbility("DTcomb", AbilityType.Tactic, "1x heal pip & 1x shield pip", "Heal and shield 1 to all allies"),
         new BaseAbility("DToiwennn", AbilityType.Tactic, "4x shield pips", "Target hero can use their dice again")
     };
+
+    public static readonly HashSet<string> ValidAbilities = new(
+    BaseAbilityDatabase.Abilities.Select(a => a.name), // Change '.Name' to your actual property if different
+    StringComparer.OrdinalIgnoreCase
+    );
 }
 
 

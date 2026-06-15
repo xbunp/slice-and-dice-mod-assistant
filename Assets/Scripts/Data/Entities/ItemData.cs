@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using UnityEngine;
 
 // ==========================================
 // INTERNAL AST (Strictly for parsing string structure)
@@ -268,6 +269,7 @@ public class ItemMechanic
     public List<string> Targets = new List<string>(); // e.g., left, topbot, mid
     public string Prefix = ""; // e.g., i, sd, k, t
     public string PayloadString = ""; // Raw nested string (e.g., facade.bas1)
+    public object PayloadData { get; set; } = null;
 
     /// <summary> (.m#) Numerical effect multiplier. Multiplies the item's numerical output by this value (can be negative). Default is 1. </summary>
     public int Multiplier { get; set; } = 1;
@@ -431,7 +433,7 @@ public class ItemData : SDData
     // (Only populated if the item functions as an inventory/equippable object)
 
     /// <summary> (.n) Plaintext name for the item. </summary>
-    public string Name { get; set; } = string.Empty;
+    //public string Name { get; set; } = string.Empty; // use base class entityName
 
     /// <summary> (.tier) Rarity reward pool index. Valid range: -5 to 20. </summary>
     public int? Tier { get; set; }
@@ -440,7 +442,7 @@ public class ItemData : SDData
     public string DocumentedDescription { get; set; } = string.Empty;
 
     /// <summary> (.img) Reference to a game atlas sprite, or a base64.png string. </summary>
-    public string ImageReference { get; set; } = string.Empty;
+    //public string ImageReference { get; set; } = string.Empty; // use base class imageOverride instead.
 
     /// <summary> (.hsv) Direct Hue, Saturation, and Value shifting values (-99 to 99). </summary>
     public ItemHsvShift? HsvShift { get; set; }
@@ -466,11 +468,12 @@ public class ItemData : SDData
     /// <summary> (learn.) Base game spells or tactics given to the player. </summary>
     public List<string> LearnedAbilities { get; set; } = new List<string>();
 
+    // now handled through item mechanics. 
+    /*
     /// <summary> 
     /// (abilitydata.) Custom tactical/spell data payloads. 
     /// These are raw strings that should be handed off to SpellData or TacticData parsers.
     /// </summary>
-
     public List<string> CustomAbilities { get; set; } = new List<string>();
 
     /// <summary> 
@@ -485,6 +488,7 @@ public class ItemData : SDData
     /// Payload can be a basic name or a fully nested (ModifierData) scope.
     /// </summary>
     public List<string> SelfModifiers { get; set; } = new List<string>();
+    */
 
     /// <summary> (cleardesc) item Suppresses the game's auto-generated description of an item's effect. </summary>
     public bool ClearDescription { get; set; }
@@ -499,7 +503,7 @@ public class ItemData : SDData
     /// <summary>
     /// Evaluates whether this item is a true equippable inventory item or simply a mechanical payload (e.g., 'i.k.cleave').
     /// </summary>
-    public bool IsEquippable => !string.IsNullOrEmpty(Name) || Tier.HasValue;
+    public bool IsEquippable => !string.IsNullOrEmpty(entityName) || Tier.HasValue;
 
     public override void Parse(string data)
     {
@@ -532,15 +536,15 @@ public class ItemData : SDData
         ASTNode root = new ASTParser(itemCore).Parse();
         ExtractKnowledge(ref root, this);
 
-        UnityEngine.Debug.Log($"[ItemData] Parse Complete! Name: '{Name}', Tier: '{Tier}', Mechanics: {Mechanics.Count}");
+        UnityEngine.Debug.Log($"[ItemData] Parse Complete! Name: '{entityName}', Tier: '{Tier}', Mechanics: {Mechanics.Count}");
     }
 
     private void PropertiesClear()
     {
-        Name = string.Empty;
+        entityName = string.Empty;
+        imageOverride = string.Empty;
         Tier = null;
         DocumentedDescription = string.Empty;
-        ImageReference = string.Empty;
         HsvShift = null;
         SimpleHue = null;
         TargetedHue = string.Empty;
@@ -564,7 +568,7 @@ public class ItemData : SDData
                 switch (token)
                 {
                     case "n":
-                        if (i + 1 < chain.Elements.Count) item.Name = chain.Elements[++i].Export();
+                        if (i + 1 < chain.Elements.Count) item.entityName = chain.Elements[++i].Export();
                         break;
                     case "tier":
                         if (i + 1 < chain.Elements.Count && int.TryParse(chain.Elements[i + 1].Export(), out int t))
@@ -578,7 +582,7 @@ public class ItemData : SDData
                         if (i + 1 < chain.Elements.Count) item.DocumentedDescription = chain.Elements[++i].Export();
                         break;
                     case "img":
-                        if (i + 1 < chain.Elements.Count) item.ImageReference = chain.Elements[++i].Export();
+                        if (i + 1 < chain.Elements.Count) item.imageOverride = chain.Elements[++i].Export();
                         break;
                     case "hsv":
                         if (i + 1 < chain.Elements.Count)
@@ -618,6 +622,8 @@ public class ItemData : SDData
                     case "learn":
                         if (i + 1 < chain.Elements.Count) item.LearnedAbilities.Add(chain.Elements[++i].Export());
                         break;
+
+                        /*
                     case "abilitydata":
                         if (i + 1 < chain.Elements.Count) item.CustomAbilities.Add(chain.Elements[++i].Export());
                         break;
@@ -636,6 +642,7 @@ public class ItemData : SDData
                     case "self":
                         if (i + 1 < chain.Elements.Count) item.SelfModifiers.Add(chain.Elements[++i].Export());
                         break;
+                        */
 
                     case "cleardesc":
                         item.ClearDescription = true;
@@ -770,6 +777,7 @@ public class ItemData : SDData
             else break; // Suffix parsing complete
         }
 
+        AssignDomainPayload(mech);
         Mechanics.Add(mech);
     }
 
@@ -778,10 +786,10 @@ public class ItemData : SDData
         List<string> chainParts = new List<string>();
 
         // Reconstruct metadata
-        if (!string.IsNullOrEmpty(Name)) chainParts.Add($"n.{Name}");
+        if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
         if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
         if (!string.IsNullOrEmpty(DocumentedDescription)) chainParts.Add($"doc.{DocumentedDescription}");
-        if (!string.IsNullOrEmpty(ImageReference)) chainParts.Add($"img.{ImageReference}");
+        if (!string.IsNullOrEmpty(imageOverride)) chainParts.Add($"img.{imageOverride}");
         if (HsvShift.HasValue) chainParts.Add($"hsv.{HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
         if (SimpleHue.HasValue) chainParts.Add($"hue.{SimpleHue.Value}");
         if (!string.IsNullOrEmpty(TargetedHue)) chainParts.Add($"thue.{TargetedHue}");
@@ -855,5 +863,184 @@ public class ItemData : SDData
                ItemDomainRules.ValidTargets.Contains(token) ||
                ItemDomainRules.IsItemIdentifier(token) ||
                ItemDomainRules.IsRepeatPrefix(token, out _);
+    }
+
+    public void DebugContentsToConsole(string indent = "")
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{indent}--- ITEM DATA DEBUG ---");
+
+        sb.AppendLine($"{indent}Name: {entityName}");
+        sb.AppendLine($"{indent}Tier: {Tier}");
+        sb.AppendLine($"{indent}ImageRef: {imageOverride}");
+
+        if (HsvShift.HasValue)
+            sb.AppendLine($"{indent}HsvShift: {HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
+
+        sb.AppendLine($"{indent}\n{indent}Mechanics ({Mechanics.Count}):");
+        for (int i = 0; i < Mechanics.Count; i++)
+        {
+            var m = Mechanics[i];
+            sb.AppendLine($"{indent}  [{i}] Targets: [{string.Join(", ", m.Targets)}] | Prefix: '{m.Prefix}'");
+            sb.AppendLine($"{indent}      Payload: '{m.PayloadString}'");
+
+            // Recursively print nested ItemData
+            if (m.PayloadData is ItemData nestedItem)
+            {
+                sb.AppendLine($"{indent}      [✓ Recursively Unpacked ItemData!]");
+                // Create a deeper indent for the nested printout
+                nestedItem.DebugContentsToConsole(indent + "        ");
+            }
+            else if (m.PayloadData != null)
+            {
+                sb.AppendLine($"{indent}      [✓ Unpacked {m.PayloadData.GetType().Name}!]");
+
+                // Note: If you add a similar DebugContentsToConsole(indent) method to HeroData, 
+                // you could cast it here and call it to print the entire multi-domain tree!
+                if (m.PayloadData is HeroData hd) hd.DebugContentsToConsole(indent + "        ");
+            }
+
+            if (m.Multiplier != 1 || !string.IsNullOrEmpty(m.MergedItem) || !string.IsNullOrEmpty(m.SplicedItem) || m.PartIndex.HasValue)
+            {
+                sb.AppendLine($"{indent}      Suffixes -> m:{m.Multiplier}, mrg:{m.MergedItem}, splice:{m.SplicedItem}, part:{m.PartIndex}");
+            }
+        }
+
+        sb.AppendLine($"{indent}\n{indent}Containers ({Containers.Count}):");
+        foreach (var c in Containers) sb.AppendLine($"{indent}  {c.Key}: {c.Value}");
+
+        // Only log at the root level so Unity's console doesn't split the nested logs
+        if (indent == "")
+        {
+            UnityEngine.Debug.Log(sb.ToString());
+        }
+        else
+        {
+            // If it's nested, we just print directly using standard logging so it stacks linearly
+            UnityEngine.Debug.Log(sb.ToString());
+        }
+    }
+
+    /// <summary>
+    /// Evaluates the mechanic's prefix and hands the payload string off to the correct 
+    /// domain parser (EntityData, ModifierData, etc.) to be recursively unpacked.
+    /// </summary>
+    private void AssignDomainPayload(ItemMechanic mech)
+    {
+        if (string.IsNullOrEmpty(mech.PayloadString)) return;
+
+        // Clean any outermost wrapping parentheses from the string so the target class parses correctly.
+        string core = StripOuterParens(mech.PayloadString);
+
+        if (mech.Prefix == "hat")
+        {
+            // === EXTERNAL DOMAIN HANDOFF ===
+            if (IsMonsterEntity(core))
+            {
+                // USER TODO: Link to your Monster class
+                mech.PayloadData = new MonsterData(core);
+            }
+            else
+            {
+                // USER TODO: Link to your Hero class
+                mech.PayloadData = new HeroData(core);
+            }
+        }
+        else if (mech.Prefix == "onhitdata" || mech.Prefix == "triggerhpdata")
+        {
+            // === EXTERNAL DOMAIN HANDOFF ===
+            // USER TODO: Uncomment this to pass the payload to your Modifier parser!
+            mech.PayloadData = new HeroData(core);
+        }
+        else if (mech.Prefix == "enchant" || mech.Prefix == "self")
+        {
+            // === EXTERNAL DOMAIN HANDOFF ===
+            // USER TODO: Uncomment this to pass the payload to your Modifier parser!
+            mech.PayloadData = new ModifierData(core);
+        }
+        else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata")
+        {
+            // === EXTERNAL DOMAIN HANDOFF ===
+            // USER TODO: Uncomment this to pass the payload to your Ability parser!
+            mech.PayloadData = AbilityData.Parse(core);
+        }
+        else if (mech.Prefix == "sticker")
+        {
+            // Sticker payloads are Items. We can recursively unpack this natively!
+            mech.PayloadData = new ItemData(core);
+        }
+        else if (mech.Prefix == "t")
+        {
+            // === EXTERNAL DOMAIN HANDOFF ===
+            // If the trait is jinx, the remainder of the payload is a ModifierData string
+            if (core.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+            {
+                string modifierCore = core.Substring(5).Trim();
+                modifierCore = StripOuterParens(modifierCore);
+                mech.PayloadData = new ModifierData(modifierCore);
+            }
+        }
+        else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
+        {
+            // If an inherent mechanic has a massive wrapped payload, unpack it as a nested item
+            if (mech.PayloadString.StartsWith("("))
+            {
+                mech.PayloadData = new ItemData(core);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Strips balanced outer parentheses from a string.
+    /// E.g., "(((Statue.hp.2)))" -> "Statue.hp.2"
+    /// </summary>
+    private string StripOuterParens(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        string t = text.Trim();
+
+        while (t.StartsWith("(") && t.EndsWith(")"))
+        {
+            int depth = 0;
+            bool matching = true;
+            for (int k = 0; k < t.Length - 1; k++)
+            {
+                if (t[k] == '(') depth++;
+                else if (t[k] == ')') depth--;
+
+                if (depth == 0) { matching = false; break; } // Hit 0 before the end, parens don't wrap the whole string
+            }
+            if (matching) t = t.Substring(1, t.Length - 2).Trim();
+            else break;
+        }
+        return t;
+    }
+
+    private bool IsMonsterEntity(string core)
+    {
+        if (string.IsNullOrEmpty(core)) return false;
+
+        if (core.Contains("replica", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string firstToken = core.Split('.')[0].ToLower();
+
+        if (firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx")
+            return true;
+
+        if (core.Contains(".jinx.", StringComparison.OrdinalIgnoreCase) ||
+            core.Contains(".vase.", StringComparison.OrdinalIgnoreCase) ||
+            core.Contains(".orb.", StringComparison.OrdinalIgnoreCase) ||
+            core.Contains(".rmon.", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Use the cached list for faster lookups
+        foreach (string monsterName in MonsterHelper.FormattedMonsterNames)
+        {
+            if (core.Contains(monsterName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 }

@@ -11,5 +11,6 @@ public class ItemTester : MonoBehaviour
     public void ParseItem()
     {
         item = new ItemData(syntax);
+        item.DebugContentsToConsole();
     }
 }
