@@ -1,15 +1,23 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Unity.VisualScripting;
 using UnityEngine;
+
+public static class MonsterDomainRules
+{
+    public static readonly HashSet<string> MonsterPropertyKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata"
+    };
+}
 
 [System.Serializable]
 public class MonsterData : EntityData
 {
-    public static readonly string[] MonsterPropertyKeys = { "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata" };
+    [Header("Monster Semantic Payload")]
+    public object payloadData; // Holds parsed Modifiers, Spells, or Nested Monsters safely
 
     [Header("Monster Specific Info")]
     public string baseMonster = "Wolf";
@@ -116,151 +124,270 @@ public class MonsterData : EntityData
         return sb.ToString();
     }
 
+    // ==========================================
+    // KNOWLEDGE EXTRACTION (The Perfect Linear Parser)
+    // ==========================================
+
+    private string StripOuterParens(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        string t = text.Trim();
+        while (t.StartsWith("(") && t.EndsWith(")"))
+        {
+            int depth = 0; bool matching = true;
+            for (int k = 0; k < t.Length - 1; k++)
+            {
+                if (t[k] == '(') depth++; else if (t[k] == ')') depth--;
+                if (depth == 0) { matching = false; break; }
+            }
+            if (matching) t = t.Substring(1, t.Length - 2).Trim();
+            else break;
+        }
+        return t;
+    }
+
+    // ==========================================
+    // KNOWLEDGE EXTRACTION (The Perfect Linear Parser)
+    // ==========================================
+
     public override void Parse(string data)
     {
-        if (string.IsNullOrEmpty(data)) return;
+        if (string.IsNullOrWhiteSpace(data)) return;
 
-        data = data.Trim();
-        List<string> tokens = new List<string>();
+        List<string> chunks = ItemData.TopLevelSplit(data.Trim(), '&');
+        string core = chunks[0];
 
-        // Safely split nested double parentheses ((<monster>)<those>) without corrupting dots
-        if (data.StartsWith("((") && data.EndsWith(")"))
-        {
-            int depth = 1;
-            int innerEndIndex = -1;
-            for (int idx = 2; idx < data.Length; idx++)
-            {
-                if (data[idx] == '(') depth++;
-                else if (data[idx] == ')')
-                {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        innerEndIndex = idx;
-                        break;
-                    }
-                }
-            }
+        core = StripOuterParens(core);
 
-            if (innerEndIndex != -1 && innerEndIndex < data.Length - 1)
-            {
-                string innerMonsterStr = data.Substring(1, innerEndIndex);
-                string trailingModifiersStr = data.Substring(innerEndIndex + 1, data.Length - innerEndIndex - 2);
+        List<string> tokens = ItemData.TopLevelSplit(core, '.');
 
-                tokens.AddRange(TokenizeString(innerMonsterStr));
-                if (!string.IsNullOrEmpty(trailingModifiersStr))
-                {
-                    tokens.AddRange(TokenizeString(trailingModifiersStr));
-                }
-            }
-            else
-            {
-                tokens = TokenizeString(data);
-            }
-        }
-        else
-        {
-            tokens = TokenizeString(data);
-        }
+        bool isFirstToken = true;
+        ExtractKnowledge(tokens, this, ref isFirstToken);
+    }
+
+    private void ExtractKnowledge(List<string> tokens, MonsterData monster, ref bool isFirstToken)
+    {
+        int i = 0;
 
         // 1. Identify Base Monster / Type Prefix gracefully
-        if (tokens.Count > 0)
+        if (isFirstToken && tokens.Count > 0)
         {
-            string firstToken = tokens[0].ToLower();
-            if (firstToken == "rmon" || firstToken == "egg" || firstToken == "vase" || firstToken == "orb")
+            isFirstToken = false;
+            string firstToken = tokens[i].ToLower();
+            if (firstToken == "rmon" || firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx")
             {
-                tokens.RemoveAt(0); // consume the type
+                monster.baseMonster = tokens[i];
+                i++;
 
-                if (tokens.Count > 0 && !MonsterPropertyKeys.Contains(tokens[0].ToLower()))
+                // Look ahead. If the next token isn't a property key, it's the payload (e.g. "((ea.sthief...))")
+                if (i < tokens.Count && !MonsterDomainRules.MonsterPropertyKeys.Contains(tokens[i].ToLower()))
                 {
-                    baseMonster = tokens[0];
-                    tokens.RemoveAt(0); // consume the name
+                    string rawPayload = tokens[i];
+                    monster.baseMonster += "." + rawPayload; // Preserve raw string for perfect export symmetry
+
+                    // --- DEEP SEMANTIC COMPREHENSION ---
+                    // We parse the payload internally so the compiler fully understands it
+                    string corePayload = StripOuterParens(rawPayload);
+                    if (firstToken == "jinx" || firstToken == "vase")
+                    {
+                        ModifierData mod = new ModifierData();
+                        mod.Parse(corePayload);
+                        monster.payloadData = mod;
+                    }
+                    else if (firstToken == "orb")
+                    {
+                        monster.payloadData = AbilityData.CreateSpellOrTactic(corePayload);
+                    }
+                    else if (firstToken == "egg")
+                    {
+                        if (monster.IsMonsterEntity(corePayload))
+                        {
+                            MonsterData nestedMonster = new MonsterData();
+                            nestedMonster.Parse(corePayload);
+                            monster.payloadData = nestedMonster;
+                        }
+                        else
+                        {
+                            HeroData nestedHero = new HeroData();
+                            nestedHero.Parse(corePayload);
+                            monster.payloadData = nestedHero;
+                        }
+                    }
+                    i++;
                 }
             }
-            else if (!MonsterPropertyKeys.Contains(firstToken))
+            else if (!MonsterDomainRules.MonsterPropertyKeys.Contains(firstToken))
             {
-                baseMonster = tokens[0];
-                tokens.RemoveAt(0); // consume the name
+                monster.baseMonster = tokens[i];
+                i++;
             }
         }
 
         // 2. Parse remaining properties
-        for (int i = 0; i < tokens.Count; i++)
+        for (; i < tokens.Count; i++)
         {
-            string key = tokens[i].ToLower();
-            string value = (i + 1 < tokens.Count) ? tokens[i + 1] : "";
-            bool consumeValue = true;
+            string tokenLower = tokens[i].ToLower();
+            string originalToken = tokens[i];
 
-            switch (key)
+            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
-                case "n": entityName = value; break;
-                case "img": imageOverride = value; break;
-                case "hp":
-                    hp = (string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out int parsedHp)) ? 0 : parsedHp;
-                    break;
+                string inner = originalToken.Substring(1, originalToken.Length - 2);
+                List<string> innerTokens = ItemData.TopLevelSplit(inner, '.');
+                ExtractKnowledge(innerTokens, monster, ref isFirstToken);
+                continue;
+            }
 
+            switch (tokenLower)
+            {
+                case "n": if (i + 1 < tokens.Count) monster.entityName = tokens[++i]; break;
+                case "img": if (i + 1 < tokens.Count) monster.imageOverride = tokens[++i]; break;
+                case "doc": if (i + 1 < tokens.Count) monster.doc = tokens[++i]; break;
+                case "bal": if (i + 1 < tokens.Count) monster.bal = tokens[++i]; break;
+                case "hp": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hVal)) monster.hp = hVal; break;
                 case "hsv":
-                    string[] hsvParts = value.Split(':');
-                    if (hsvParts.Length == 3)
+                    if (i + 1 < tokens.Count)
                     {
-                        int.TryParse(hsvParts[0], out h);
-                        int.TryParse(hsvParts[1], out s);
-                        int.TryParse(hsvParts[2], out v);
+                        string[] hsv = tokens[++i].Split(':');
+                        if (hsv.Length == 3 && int.TryParse(hsv[0], out monster.h) && int.TryParse(hsv[1], out monster.s) && int.TryParse(hsv[2], out monster.v)) { }
                     }
                     break;
-                case "hsl": hsl = value; break;
-                case "hue": if (int.TryParse(value, out int hVal)) hue = hVal; break;
-
-                case "i":
-                    if (string.Equals(value, "t", StringComparison.OrdinalIgnoreCase) &&
-                        i + 2 < tokens.Count && string.Equals(tokens[i + 2], "jinx", StringComparison.OrdinalIgnoreCase) &&
-                        i + 3 < tokens.Count)
-                    {
-                        curses.AddRange(tokens[i + 3].Split('#'));
-                        i += 3;
-                    }
-                    else if (value.StartsWith("("))
-                    {
-                        ItemData item = new ItemData();
-                        item.Parse(value);
-                        customItems.Add(item);
-                    }
-                    else
-                    {
-                        items.AddRange(value.Split('#'));
-                    }
-                    break;
-
-                case "t":
-                    traits.AddRange(value.Split('#'));
-                    break;
-
-                case "bal": bal = value; break;
-
-                case "p": p = value; break;
-                case "b": b = value; break;
-                case "rect": rect = value; break;
-                case "draw": draw = value; break;
-                case "thue": thue = value; break;
-                case "doc": doc = value; break;
-
+                case "hsl": if (i + 1 < tokens.Count) monster.hsl = tokens[++i]; break;
+                case "hue": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hueVal)) monster.hue = hueVal; break;
+                case "p": if (i + 1 < tokens.Count) monster.p = tokens[++i]; break;
+                case "b": if (i + 1 < tokens.Count) monster.b = tokens[++i]; break;
+                case "rect": if (i + 1 < tokens.Count) monster.rect = tokens[++i]; break;
+                case "draw": if (i + 1 < tokens.Count) monster.draw = tokens[++i]; break;
+                case "thue": if (i + 1 < tokens.Count) monster.thue = tokens[++i]; break;
                 case "sd":
-                    string[] faces = value.Split(':');
-                    for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
+                    if (i + 1 < tokens.Count)
                     {
-                        if (faces[f] == "0") continue;
-                        string[] faceParts = faces[f].Split('-');
-                        if (faceParts.Length == 2)
+                        string[] faces = tokens[++i].Split(':');
+                        for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
                         {
-                            int.TryParse(faceParts[0], out diceSides[f].effectID);
-                            int.TryParse(faceParts[1], out diceSides[f].pips);
+                            if (faces[f] == "0" || faces[f] == "0-0") continue;
+                            string[] faceParts = faces[f].Split('-');
+                            int.TryParse(faceParts[0], out monster.diceSides[f].effectID);
+                            if (faceParts.Length > 1) int.TryParse(faceParts[1], out monster.diceSides[f].pips);
                         }
                     }
                     break;
-
-                default: consumeValue = false; break;
+                case "t":
+                    if (i + 1 < tokens.Count)
+                    {
+                        monster.traits.AddRange(ItemData.TopLevelSplit(tokens[++i], '#'));
+                    }
+                    break;
+                case "i":
+                    ProcessItemProperty(tokens, ref i, monster);
+                    break;
             }
-            if (consumeValue) i++;
         }
+    }
+
+    private void ProcessItemProperty(List<string> tokens, ref int i, MonsterData monster)
+    {
+        int startIndex = i + 1;
+        if (startIndex >= tokens.Count) return;
+
+        int endIndex = startIndex;
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+            if (endIndex == startIndex && (peek == "t" || peek == "gift" || peek == "learn"))
+            {
+                endIndex++; continue;
+            }
+            if (MonsterDomainRules.MonsterPropertyKeys.Contains(peek))
+            {
+                break;
+            }
+            endIndex++;
+        }
+
+        int count = endIndex - startIndex;
+        if (count == 0) return;
+
+        List<string> itemTokens = tokens.GetRange(startIndex, count);
+        string payload = string.Join(".", itemTokens);
+        i = endIndex - 1;
+
+        string propKey = itemTokens[0].ToLower();
+        if (propKey == "t" && itemTokens.Count > 1)
+        {
+            if (itemTokens[1].ToLower() == "jinx" && itemTokens.Count > 2)
+            {
+                monster.curses.AddRange(ItemData.TopLevelSplit(string.Join(".", itemTokens.Skip(2)), '#'));
+                return;
+            }
+            monster.traits.AddRange(ItemData.TopLevelSplit(string.Join(".", itemTokens.Skip(1)), '#'));
+            return;
+        }
+
+        bool isComplexItemData = false;
+        if (payload.StartsWith("(")) isComplexItemData = true;
+        else if (payload.Contains("(") || ItemData.TopLevelSplit(payload, '#').Any(p => p.Contains(".")))
+        {
+            string firstPart = ItemData.TopLevelSplit(payload, '.')[0].ToLower();
+            if (firstPart == "k") isComplexItemData = false;
+            else isComplexItemData = true;
+        }
+
+        if (isComplexItemData)
+        {
+            ItemData item = new ItemData();
+            item.Parse(payload);
+            monster.customItems.Add(item);
+        }
+        else
+        {
+            monster.items.AddRange(ItemData.TopLevelSplit(payload, '#'));
+        }
+    }
+
+    private bool IsMonsterEntity(string core)
+    {
+        if (string.IsNullOrEmpty(core) || core.Contains("replica", StringComparison.OrdinalIgnoreCase)) return false;
+        string firstToken = ItemData.TopLevelSplit(core, '.')[0].ToLower();
+        if (firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx") return true;
+        if (core.Contains(".jinx.", StringComparison.OrdinalIgnoreCase) || core.Contains(".vase.", StringComparison.OrdinalIgnoreCase) || core.Contains(".orb.", StringComparison.OrdinalIgnoreCase) || core.Contains(".rmon.", StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (string monsterName in MonsterHelper.FormattedMonsterNames) if (core.Contains(monsterName, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    public void DebugContentsToConsoleCompact(string indent = "")
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+        if (!string.IsNullOrEmpty(entityName)) sb.AppendLine($"{indent}Name: {entityName}");
+        if (!string.IsNullOrEmpty(baseMonster)) sb.AppendLine($"{indent}Base Monster: {baseMonster}");
+        if (hp != 0) sb.AppendLine($"{indent}HP: {hp}");
+        if (!string.IsNullOrEmpty(imageOverride)) sb.AppendLine($"{indent}Image Override: {imageOverride}");
+        if (!string.IsNullOrEmpty(bal)) sb.AppendLine($"{indent}Balance: {bal}");
+
+        if (payloadData != null)
+        {
+            sb.AppendLine($"{indent}[✓ Unpacked Monster Payload: {payloadData.GetType().Name}!]");
+            if (payloadData is ModifierData md) md.DebugContentsToConsole(indent + "  ");
+            else if (payloadData is AbilityData ad) ad.DebugAbilityCompact(indent + "  ");
+            else if (payloadData is HeroData hd) hd.DebugContentsToConsoleCompact(indent + "  ");
+        }
+
+        if (traits != null && traits.Count > 0) sb.AppendLine($"{indent}Traits: {string.Join(", ", traits)}");
+        if (items != null && items.Count > 0) sb.AppendLine($"{indent}Items (Stock): {string.Join(", ", items)}");
+
+        if (customItems != null && customItems.Count > 0)
+        {
+            sb.AppendLine($"{indent}Custom Items ({customItems.Count}):");
+            for (int i = 0; i < customItems.Count; i++)
+            {
+                var ci = customItems[i];
+                if (ci != null)
+                {
+                    sb.AppendLine($"{indent}  [{i}] [✓ Unpacked ItemData]");
+                    ci.DebugContentsToConsole(indent + "        ");
+                }
+            }
+        }
+        UnityEngine.Debug.Log($"{indent}--- MONSTER DATA DEBUG (COMPACT) ---\n" + sb.ToString());
     }
 }

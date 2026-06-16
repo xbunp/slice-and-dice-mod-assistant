@@ -3962,3 +3962,137 @@ public static class HpPipMapper
         }
     }
 }
+
+public static class VisualEffectRegistry
+{
+    public class EffectData
+    {
+        public string DisplayName { get; }
+        public string CodeKey { get; }
+        public string Category { get; }
+
+        public EffectData(string displayName, string codeKey, string category)
+        {
+            DisplayName = displayName;
+            CodeKey = codeKey;
+            Category = category;
+        }
+    }
+
+    private static readonly Dictionary<string, EffectData> Effects = new Dictionary<string, EffectData>(StringComparer.OrdinalIgnoreCase);
+
+    static VisualEffectRegistry()
+    {
+        // --- Hero Sides ---
+        Add("Sword", "sd.15", "Hero");
+        Add("Slice", "sd.137", "Hero");
+        Add("Punch", "sd.174", "Hero");
+        Add("Kriss", "sd.30", "Hero");
+        Add("Fork", "sd.36", "Hero");
+        Add("Hammer", "sd.39", "Hero");
+        Add("SwordQuartz", "sd.40", "Hero");
+        Add("Poison", "sd.91", "Hero");
+        Add("Arrow", "sd.46", "Hero");
+        Add("Shield Bash", "sd.41", "Hero");
+        Add("Heal", "sd.92", "Hero");
+        Add("Lightning", "sd.88", "Hero");
+        Add("Flame", "sd.90", "Hero");
+        Add("Frost", "sd.95", "Hero");
+        Add("Big Zap", "sd.101", "Hero");
+        Add("Undying", "sd.117", "Hero");
+        Add("Taunt", "sd.118", "Hero");
+        Add("HealBasic", "sd.103", "Hero");
+        Add("Fang", "sd.169", "Hero");
+        Add("Wolf Bite", "sd.170", "Hero");
+        Add("Claw", "sd.171", "Hero");
+        Add("BoostShield", "sd.146", "Hero");
+        Add("BoostHeal", "sd.147", "Hero");
+        Add("Beam", "sd.181", "Hero");
+        Add("Boost", "sd.150", "Hero");
+
+        // --- Cast/Sticker Sides ---
+        Add("Anvil (Cast)", "left.cast.drop", "Cast");
+        Add("Ellipse (Cast)", "left.cast.slay", "Cast");
+        Add("Crush (Cast)", "left.cast.crush", "Cast");
+        Add("MultiBlade (Cast)", "left.cast.blades", "Cast");
+        Add("Singularity (Cast)", "left.cast.harvest", "Cast");
+        Add("Freeze (Cast)", "left.cast.tick", "Cast");
+        Add("Cross (Cast)", "left.cast.hex", "Cast");
+
+        // --- Enemy Sides ---
+        Add("Gaze (Illusion)", "left.top.hat.illusion", "Enemy");
+        Add("Bee Sting", "left.hat.bee", "Enemy");
+        Add("Bone", "left.hat.bones", "Enemy");
+        Add("Rat Bite", "left.hat.rat", "Enemy");
+        Add("Poison Bite", "left.right.hat.imp", "Enemy");
+        Add("Slime (Slimelet)", "left.hat.slimelet", "Enemy");
+
+        Add("Cross (Ghost)", "left.hat.ghost", "Enemy");
+        Add("Troll Club", "left.hat.troll", "Enemy");
+        Add("Broom", "left.hat.gytha", "Enemy");
+        Add("Bat Swarm", "left.hat.agnes", "Enemy");
+        Add("Gaze (Gytha)", "left.right.hat.gytha", "Enemy");
+        Add("Stomp", "left.hat.ogre", "Enemy");
+        Add("Rocks", "left.right.hat.slate", "Enemy");
+        Add("Spikes", "left.right.hat.spiker", "Enemy");
+        Add("Rock Punch", "left.hat.slate", "Enemy");
+        Add("Spike Punch", "left.hat.spiker", "Enemy");
+        Add("Beak", "left.hat.caw", "Enemy");
+        Add("Curse", "left.hat.magrat", "Enemy");
+        Add("Slime (Slimer)", "left.hat.slimer", "Enemy");
+        Add("Big Claw", "left.hat.alpha", "Enemy");
+        Add("Alpha Bite", "left.hat.bramble", "Enemy");
+        Add("CleaveSword", "left.top.hat.ogre", "Enemy");
+        Add("Boar Bite", "left.hat.boar", "Enemy");
+        Add("Boar Tusks", "left.right.hat.boar", "Enemy");
+
+        Add("Slam", "left.top.hat.troll king", "Enemy");
+        Add("Dragon Bite", "left.hat.rotten", "Enemy");
+        Add("Tarantus Bite", "left.hat.tarantus", "Enemy");
+        Add("Gaze (Lich)", "left.right.hat.lich", "Enemy");
+        Add("Fire Breath", "left.hat.dragon", "Enemy");
+        Add("PoisonBreath", "left.right.hat.dragon", "Enemy");
+        Add("Frost Flank", "left.hat.basalt", "Enemy");
+        Add("Red Beam", "left.top.hat.basalt", "Enemy");
+        Add("Slime (Queen)", "left.mid.hat.slime queen", "Enemy");
+    }
+
+    private static void Add(string displayName, string codeKey, string category)
+    {
+        Effects[displayName] = new EffectData(displayName, codeKey, category);
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the code key for a given display name.
+    /// </summary>
+    /// <param name="displayName">The English text name of the visual effect.</param>
+    /// <param name="codeKey">The resulting key identifier string.</param>
+    /// <returns>True if the effect was found, otherwise false.</returns>
+    public static bool TryGetKey(string displayName, out string codeKey)
+    {
+        if (Effects.TryGetValue(displayName, out var data))
+        {
+            codeKey = data.CodeKey;
+            return true;
+        }
+
+        codeKey = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Retrieves all registered display names, useful for populating UI dropdowns.
+    /// </summary>
+    public static IEnumerable<string> GetAllDisplayNames()
+    {
+        return Effects.Keys;
+    }
+
+    /// <summary>
+    /// Retrieves all data objects for more complex UI logic or filtering.
+    /// </summary>
+    public static IEnumerable<EffectData> GetAllEffects()
+    {
+        return Effects.Values;
+    }
+}

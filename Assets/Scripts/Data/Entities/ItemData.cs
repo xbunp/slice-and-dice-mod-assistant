@@ -23,13 +23,21 @@ public class ASTParser
 
     private Token NextToken()
     {
-        if (pos >= input.Length) return new Token { Type = TokenType.EOF };
+        if (pos >= input.Length)
+        {
+            //UnityEngine.Debug.Log($"[ASTParser.NextToken] EOF at pos {pos}");
+            return new Token { Type = TokenType.EOF };
+        }
 
-        char c = input[pos];
-        if (c == '.') { pos++; return new Token { Type = TokenType.Dot }; }
-        if (c == '#') { pos++; return new Token { Type = TokenType.Hash }; }
-        if (c == '(') { pos++; return new Token { Type = TokenType.LParen }; }
-        if (c == ')') { pos++; return new Token { Type = TokenType.RParen }; }
+        // --- ADDED DEBUG ---
+        // Log the current character at pos before any processing
+        char currentChar = input[pos];
+        //UnityEngine.Debug.Log($"[ASTParser.NextToken] Processing pos: {pos}, char: '{currentChar}' ({(int)currentChar}) | Remaining: '{input.Substring(pos, Math.Min(30, input.Length - pos))}'");
+
+        if (currentChar == '.') { pos++; } //UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: Dot"); return new Token { Type = TokenType.Dot }; }
+        if (currentChar == '#') { pos++; }//UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: Hash"); return new Token { Type = TokenType.Hash }; }
+        if (currentChar == '(') { pos++; }//UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: LParen"); return new Token { Type = TokenType.LParen }; }
+        if (currentChar == ')') { pos++; }//UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: RParen"); return new Token { Type = TokenType.RParen }; }
 
         int start = pos;
         int bracketDepth = 0, braceDepth = 0;
@@ -37,17 +45,38 @@ public class ASTParser
         while (pos < input.Length)
         {
             char curr = input[pos];
-            if (curr == '[') bracketDepth++;
-            else if (curr == ']') bracketDepth--;
-            else if (curr == '{') braceDepth++;
-            else if (curr == '}') braceDepth--;
-            else if (bracketDepth == 0 && braceDepth == 0)
+            // --- ADDED DEBUG ---
+            // Log depth changes within the identifier loop
+            string depthChange = "";
+            if (curr == '[') { bracketDepth++; depthChange = " (bracketDepth++)"; }
+            else if (curr == ']') { bracketDepth--; depthChange = " (bracketDepth--)"; }
+            else if (curr == '{') { braceDepth++; depthChange = " (braceDepth++)"; }
+            else if (curr == '}') { braceDepth--; depthChange = " (braceDepth--)"; }
+
+            //UnityEngine.Debug.Log($"[ASTParser.NextToken] Identifier loop: pos {pos}, curr '{curr}', bracketDepth {bracketDepth}, braceDepth {braceDepth}{depthChange}");
+
+            if (bracketDepth == 0 && braceDepth == 0)
             {
-                if (curr == '.' || curr == '#' || curr == '(' || curr == ')') break;
+                if (curr == '.' || curr == '#' || curr == '(' || curr == ')')
+                {
+                    // --- ADDED DEBUG ---
+                    //UnityEngine.Debug.Log($"[ASTParser.NextToken] Identifier loop BREAK: Detected delimiter '{curr}'");
+                    break; // Delimiter found, stop consuming for identifier
+                }
             }
             pos++;
         }
-        return new Token { Type = TokenType.Identifier, Value = input.Substring(start, pos - start) };
+
+        string identifierValue = input.Substring(start, pos - start);
+
+        if (identifierValue.IndexOf("Slimelet", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            UnityEngine.Debug.Log($"[ASTParser Debug] Found target identifier: '{identifierValue}' | Char at pos: '{(pos < input.Length ? input[pos].ToString() : "EOF")}'");
+        }
+
+        // --- ADDED DEBUG ---
+        //UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: Identifier, Value: '{identifierValue}' (Length: {identifierValue.Length})");
+        return new Token { Type = TokenType.Identifier, Value = identifierValue };
     }
 
     private List<Token> Tokenize()
@@ -140,12 +169,12 @@ public class SequenceNode : ASTNode
     public override string Export() => string.Join("#", Items.Select(e => e.Export()));
 }
 
+
 // ==========================================
-// ITEM DOMAIN DICTIONARY (Factual Rules)
+// ITEM DOMAIN DICTIONARY
 // ==========================================
 public static class ItemDomainRules
 {
-    // Extracted strictly from SDSyntaxBrain ItemPropertyKeys + EntityCommonPropertyKeys
     public static readonly HashSet<string> ValidItemProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "k", "learn", "hat", "t", "sidepos", "tier", "n", "ritem", "ritemx", "facade",
@@ -155,46 +184,18 @@ public static class ItemDomainRules
         "clearicon", "oi", "t1", "t2"
     };
 
-    // Targets explicitly allowed after an inherent "i." modifier
     public static readonly HashSet<string> ValidTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "all", "self", "right5", "right3", "right2", "row", "mid2", "col", "topbot",
         "left2", "rightmost", "right", "bot", "top", "mid", "left", "k", "t"
     };
 
-    // Keys that hold complex, nested strings/entities and should NOT immediately terminate parsing
     public static readonly HashSet<string> ContainerKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "triggerhpdata", "onhitdata", "learn", "unpack", "splice", "abilitydata",
         "peritem", "allitem", "alliteme", "sticker", "enchant", "cast", "mrg", "hat"
     };
 
-    // Common nested properties that do not break a flat dot-chain
-    public static readonly HashSet<string> NonBreakingSubKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "sd", "hp", "i", "k", "hsv", "hsl", "draw", "rect", "p", "b", "t", "sticker", "cast", "sidesc", "splice", "m"
-    };
-
-    /// <summary>
-    /// Specialized hardcoded structural items that mutate dice faces based on the left face.
-    /// FUNCTIONALITY DICTIONARY:
-    /// - togtime: Buff duration toggles between 1 turn and indefinite (entire fight) for all sides.
-    /// - togtarg: Copies the targeting type (e.g., all, self, specific) from the left side to all sides.
-    /// - togfri: Toggles (inverts) friendliness (friend vs foe targeting) for all sides.
-    /// - togvis: Copies the visual animation and sometimes sound from the left side to all sides.
-    /// - togeft: Copies the base effect from the left side to all sides (does not copy keywords/targeting).
-    /// - togpip: Copies the pip count from the left side to all sides. Excellent for adding pips to pipless sides.
-    /// - togkey: Copies keywords from the left side to all sides. Can duplicate existing keywords to stack effects.
-    /// - togorf: Adds the left side's friendly effect as an optional choice (OR) to other sides targeting enemies.
-    /// - togunt: Adds an untargeted effect (mana, revives, ALL targeting) from the left side as a bonus to all sides.
-    /// - togres: Copies targeting restrictions (e.g., pristine, engage, cruel) from the left side to all sides.
-    /// - togresm: Multiplier variant. Turns a restriction into a "x2 if condition met" bonus multiplier.
-    /// - togresa: AND variant. Combines restrictions requiring BOTH to be met.
-    /// - togreso: OR variant. Combines restrictions requiring EITHER to be met.
-    /// - togresx: XOR variant. Combines restrictions requiring EXACTLY ONE to be met.
-    /// - togress: SWAP variant. Swaps "I" and "Target" in the conditional restriction (e.g., swapcruel).
-    /// - togresn: NOT variant. Inverts the restriction, requiring the condition to NOT be met.
-    /// </summary>
     public static readonly HashSet<string> TogItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "togtime", "togtarg", "togfri", "togvis", "togeft",
@@ -202,38 +203,20 @@ public static class ItemDomainRules
         "togres", "togresm", "togresa", "togreso", "togresx", "togress", "togresn"
     };
 
-    /// <summary>
-    /// Checks if a token matches a base item name, a procedural item, or a structural Tog item.
-    /// </summary>
     public static bool IsItemIdentifier(string token)
     {
         if (string.IsNullOrEmpty(token)) return false;
-
         if (token.StartsWith("ritem", StringComparison.OrdinalIgnoreCase)) return true;
         if (TogItems.Contains(token)) return true;
-
         return ExternalGameRegistry.IsValidItemName(token);
     }
 
-    /// <summary>
-    /// Core prefixes that signify a mechanical operation requiring a payload. 
-    /// PAYLOAD TYPES & FUNCTIONALITY:
-    /// - i: Inherent modifier. Applies following parameters/items directly to the defined targets.
-    /// - sd: Dice face definition. Assigns hardcoded effect/pip values to faces.
-    /// - k: Keyword applicator. Applies a keyword to the defined dice faces.
-    /// - t: Trait applicator. Grants passive entity traits (e.g., t.jinx) to the holder.
-    /// - sticker: Swaps a dice face for an item-applying effect. Payload can be a full nested ItemData string.
-    /// - enchant: Swaps a dice face for a modifier-applying effect. Payload is a ModifierData string.
-    /// - cast: Swaps a dice face for a spell/tactic. Payload is an AbilityData string.
-    /// - hat: Replaces dice sides with an entity's dice. Payload is a full nested EntityData string (Heroes/Monsters).
-    /// - onhitdata: Triggers an effect (based on left face) when damaged. Payload is a full EntityData string.
-    /// - triggerhpdata: Triggers an untargeted effect per X HP lost. Payload is a full EntityData string.
-    /// </summary>
     public static readonly HashSet<string> MechanicPrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "i", "sd", "k", "t",
         "sticker", "enchant", "cast",
-        "hat", "onhitdata", "triggerhpdata"
+        "hat", "onhitdata", "triggerhpdata",
+        "facade", "sidesc", "ritemx", "ritem" // <-- Added missing prefixes
     };
 
     public static bool IsRepeatPrefix(string token, out int count)
@@ -244,556 +227,270 @@ public static class ItemDomainRules
     }
 }
 
-// ==========================================
-// UNIVERSAL DATA WRAPPER
-// ==========================================
 [System.Serializable]
-public class ItemProperty
-{
-    public string Key { get; set; }
-    public string Value { get; set; }
+public class ItemProperty { public string Key { get; set; } public string Value { get; set; } public ItemProperty(string k, string v) { Key = k; Value = v; } }
 
-    public ItemProperty(string k, string v)
-    {
-        Key = k;
-        Value = v;
-    }
-}
-
-// ==========================================
-// COMPOSITE MECHANIC ENGINE
-// ==========================================
 [System.Serializable]
 public class ItemMechanic
 {
-    public List<string> Targets = new List<string>(); // e.g., left, topbot, mid
-    public string Prefix = ""; // e.g., i, sd, k, t
-    public string PayloadString = ""; // Raw nested string (e.g., facade.bas1)
+    public List<string> Targets = new List<string>();
+    public string Prefix = "";
+    public string PayloadString = "";
     public object PayloadData { get; set; } = null;
-
-    /// <summary> (.m#) Numerical effect multiplier. Multiplies the item's numerical output by this value (can be negative). Default is 1. </summary>
     public int Multiplier { get; set; } = 1;
-
-    /// <summary> 
-    /// (.mrg.) Merged Item combinations. Combines the effect of two items. 
-    /// Example: If Item A modifies Top/Bot, and Item B modifies Mid, MRG applies B's Mid effect to A's Top/Bot. 
-    /// Note: Results are highly engine-dependent and difficult to predict outside the game environment.
-    /// </summary>
     public string MergedItem { get; set; } = string.Empty;
-
-    /// <summary> 
-    /// (.splice.) Spliced Item combinations. Similar to MRG, but uses alternative combination logic. 
-    /// Creates distinct combined results. Highly engine-dependent.
-    /// </summary>
     public string SplicedItem { get; set; } = string.Empty;
-
-    /// <summary> Supports '#' delimited sub-keywords (e.g., "topbot.k.growth#k.cleave" adds both to top and bottom faces). </summary>
     public List<string> ChainedKeywords { get; set; } = new List<string>();
-
-    /// <summary> 
-    /// (xN.) Pre-multiplier. Applies the item's effect N separate times. 
-    /// Example: 'x5.+1 pip' applies +1 pip five distinct times (different from .m.5 which is a flat +5).
-    /// </summary>
     public int RepeatTimes { get; set; } = 1;
-
-    /// <summary> (pertier.) Multiplies the item's effect by the equipping hero's Tier level (on average 1-3, can range from -5 to 20). </summary>
     public bool PerTier { get; set; }
-
-    /// <summary> 
-    /// (unpack.) Strips conditional activation requirements from a base item. 
-    /// Example: Changes "On 1st turn, can't die" to simply "Can't die".
-    /// </summary>
     public bool Unpack { get; set; }
-
-    /// <summary> 
-    /// (.part.#) Isolates a specific substring/sub-effect of a base item's payload. 
-    /// Example: If an item grants "+2hp" (part.0) and "all sides blank" (part.1), targeting part.0 only gives the HP.
-    /// </summary>
     public int? PartIndex { get; set; }
 
-    // UI BUILDERS
     public ItemMechanic AddTarget(string target) { Targets.Add(target); return this; }
-    public ItemMechanic SetPrefix(string pre) { Prefix = pre; return this; }
-    public ItemMechanic SetPayload(string payload) { PayloadString = payload; return this; }
-
     public string Export()
     {
         List<string> parts = new List<string>();
-
-        // 1. Targets
         if (Targets.Count > 0) parts.AddRange(Targets);
-
-        // 2. Pre-Modifiers
         if (RepeatTimes != 1) parts.Add($"x{RepeatTimes}");
         if (PerTier) parts.Add("pertier");
         if (Unpack) parts.Add("unpack");
-
-        // 3. Prefix & Core Payload
         if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
-
         string corePayload = PayloadString;
         if (ChainedKeywords.Count > 0) corePayload += "#" + string.Join("#", ChainedKeywords);
         if (!string.IsNullOrEmpty(corePayload)) parts.Add(corePayload);
-
-        // 4. Suffixes
         if (PartIndex.HasValue) parts.Add($"part.{PartIndex.Value}");
         if (Multiplier != 1) parts.Add($"m{Multiplier}");
         if (!string.IsNullOrEmpty(MergedItem)) parts.Add($"mrg.{MergedItem}");
         if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
-
         return string.Join(".", parts);
     }
 }
 
-// ======================================================================================
-// EXTERNAL REGISTRY PLACEHOLDERS (Loudly flagged for your existing dictionaries/enums)
-// ======================================================================================
-/* 
- * LOUD WARNING FOR LATER AI / COMPILER:
- * DO NOT REDEFINE THESE TYPES. They exist in the primary game engine dictionaries.
- * Replace the placeholder types below with references to your actual project assemblies.
- */
 public static class ExternalGameRegistry
 {
-    public static bool IsValidSprite(string atlasId) => true; // TODO: Link to project's Sprite Dictionary
-
-    public static bool IsValidKeyword(string key)
-    {
-        if (string.IsNullOrWhiteSpace(key))
-            return false;
-
-        return Enum.TryParse<EffectKeyword>(key, true, out _);
-    }
-
-    public static bool IsValidAbility(string id)
-    {
-        if (string.IsNullOrWhiteSpace(id))
-            return false;
-
-        return BaseAbilityDatabase.ValidAbilities.Contains(id);
-    }
-
-    public static bool IsValidItemName(string token)
-    {
-        if (string.IsNullOrWhiteSpace(token))
-            return false;
-
-        // "Dead Crow" -> "DeadCrow"
-        string normalizedToken = token.Replace(" ", "");
-
-        return Enum.TryParse<BaseItems>(normalizedToken, true, out _);
-    }
+    public static bool IsValidSprite(string atlasId) => true;
+    public static bool IsValidKeyword(string key) => Enum.TryParse<EffectKeyword>(key, true, out _);
+    public static bool IsValidAbility(string id) => BaseAbilityDatabase.ValidAbilities.Contains(id);
+    public static bool IsValidItemName(string token) => Enum.TryParse<BaseItems>(token.Replace(" ", ""), true, out _);
 }
 
-// ==========================================
-// DETAILED METADATA COMPONENT STRUCTURES
-// ==========================================
 [System.Serializable]
 public struct ItemHsvShift
 {
-    public int Hue;        // Range: -99 to 99
-    public int Saturation; // Range: -99 to 99
-    public int Value;      // Range: -99 to 99
-
-    public ItemHsvShift(int h, int s, int v)
-    {
-        Hue = Math.Clamp(h, -99, 99);
-        Saturation = Math.Clamp(s, -99, 99);
-        Value = Math.Clamp(v, -99, 99);
-    }
+    public int Hue, Saturation, Value;
+    public ItemHsvShift(int h, int s, int v) { Hue = Math.Clamp(h, -99, 99); Saturation = Math.Clamp(s, -99, 99); Value = Math.Clamp(v, -99, 99); }
 }
 
-// ==========================================
-// CORE ITEM DATA KNOWLEDGE BASE
-// ==========================================
 [System.Serializable]
 public class ItemData : SDData
 {
     public List<string> GlobalTags = new List<string>();
-
-    // --- EQUIPPABLE ITEM METADATA ---
-    // (Only populated if the item functions as an inventory/equippable object)
-
-    /// <summary> (.n) Plaintext name for the item. </summary>
-    //public string Name { get; set; } = string.Empty; // use base class entityName
-
-    /// <summary> (.tier) Rarity reward pool index. Valid range: -5 to 20. </summary>
     public int? Tier { get; set; }
-
-    /// <summary> (.doc) Rich text description of the item's custom mechanics or use. </summary>
     public string DocumentedDescription { get; set; } = string.Empty;
-
-    /// <summary> (.img) Reference to a game atlas sprite, or a base64.png string. </summary>
-    //public string ImageReference { get; set; } = string.Empty; // use base class imageOverride instead.
-
-    /// <summary> (.hsv) Direct Hue, Saturation, and Value shifting values (-99 to 99). </summary>
     public ItemHsvShift? HsvShift { get; set; }
-
-    /// <summary> (.hue) Simple single-axis hue shift value. </summary>
     public int? SimpleHue { get; set; }
-
-    /// <summary> (.thue) Targeted hue shift applied only to a specific range of colors. Format: "fff:##:##" </summary>
     public string TargetedHue { get; set; } = string.Empty;
-
-    /// <summary> (.p) Palette override configuration. Format: "fff:fff:##" (e.g. "aaa:a0a:60") </summary>
     public string PaletteOverride { get; set; } = string.Empty;
-
-    /// <summary> (.b) Custom border color overlay determined by 3 hex characters (e.g., "f0f"). </summary>
     public string BorderColorCode { get; set; } = string.Empty;
-
-    /// <summary> (.draw) Complex arbitrary UI sprite rendering instructions. </summary>
     public string UiDrawInstructions { get; set; } = string.Empty;
-
-    /// <summary> (.rect) UI single-color layout rectangle drawing parameters. </summary>
     public string UiRectInstructions { get; set; } = string.Empty;
-
-    /// <summary> (learn.) Base game spells or tactics given to the player. </summary>
     public List<string> LearnedAbilities { get; set; } = new List<string>();
-
-    // now handled through item mechanics. 
-    /*
-    /// <summary> 
-    /// (abilitydata.) Custom tactical/spell data payloads. 
-    /// These are raw strings that should be handed off to SpellData or TacticData parsers.
-    /// </summary>
-    public List<string> CustomAbilities { get; set; } = new List<string>();
-
-    /// <summary> 
-    /// (t.) Passive traits mapped to this item. 
-    /// Highly common usage: "t.jinx.[ModifierName]" which invokes a gameplay modifier as a passive trait.
-    /// </summary>
-    public List<string> PassiveTraits { get; set; } = new List<string>();
-
-    /// <summary> 
-    /// (self.) Modifiers applied strictly to the item-carrying entity. 
-    /// Unlike standard modifiers which are global, this payload isolates the effect to the single hero/monster.
-    /// Payload can be a basic name or a fully nested (ModifierData) scope.
-    /// </summary>
-    public List<string> SelfModifiers { get; set; } = new List<string>();
-    */
-
-    /// <summary> (cleardesc) item Suppresses the game's auto-generated description of an item's effect. </summary>
     public bool ClearDescription { get; set; }
-
-    /// <summary> (clearicon) item Suppresses the game's auto-generated item graphics. </summary>
     public bool ClearIcon { get; set; }
-
-    // --- MECHANICAL CONTAINERS ---
     public List<ItemProperty> Containers = new List<ItemProperty>();
     public List<ItemMechanic> Mechanics = new List<ItemMechanic>();
 
-    /// <summary>
-    /// Evaluates whether this item is a true equippable inventory item or simply a mechanical payload (e.g., 'i.k.cleave').
-    /// </summary>
     public bool IsEquippable => !string.IsNullOrEmpty(entityName) || Tier.HasValue;
 
     public override void Parse(string data)
     {
-        UnityEngine.Debug.Log($"[ItemData] Starting Parse on data length: {data?.Length}");
-
-        GlobalTags.Clear();
-        PropertiesClear();
-        Containers.Clear();
-        Mechanics.Clear();
-
+        GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
         if (string.IsNullOrWhiteSpace(data)) return;
 
         List<string> chunks = TopLevelSplit(data.Trim(), '&');
         string itemCore = chunks[0];
 
-        // Process hidden/temporary global tags
         for (int c = 1; c < chunks.Count; c++)
         {
             List<string> hiddenTokens = TopLevelSplit(chunks[c], '.');
-            if (hiddenTokens.Count > 0)
-            {
-                string tag = hiddenTokens[0].ToLower();
-                if (tag == "hidden" || tag == "temporary")
-                {
-                    GlobalTags.Add(hiddenTokens[0]);
-                }
-            }
+            if (hiddenTokens.Count > 0 && (hiddenTokens[0].ToLower() == "hidden" || hiddenTokens[0].ToLower() == "temporary"))
+                GlobalTags.Add(hiddenTokens[0]);
         }
 
-        ASTNode root = new ASTParser(itemCore).Parse();
-        ExtractKnowledge(ref root, this);
+        itemCore = StripOuterParens(itemCore);
 
-        UnityEngine.Debug.Log($"[ItemData] Parse Complete! Name: '{entityName}', Tier: '{Tier}', Mechanics: {Mechanics.Count}");
+        // First split by '#' to handle parallel modifier chains cleanly
+        List<string> chains = TopLevelSplit(itemCore, '#');
+        foreach (var chain in chains)
+        {
+            if (string.IsNullOrWhiteSpace(chain)) continue;
+            List<string> tokens = TopLevelSplit(chain, '.');
+            ExtractKnowledge(tokens, this);
+        }
     }
 
     private void PropertiesClear()
     {
-        entityName = string.Empty;
-        imageOverride = string.Empty;
-        Tier = null;
-        DocumentedDescription = string.Empty;
-        HsvShift = null;
-        SimpleHue = null;
-        TargetedHue = string.Empty;
-        PaletteOverride = string.Empty;
-        BorderColorCode = string.Empty;
-        UiDrawInstructions = string.Empty;
-        UiRectInstructions = string.Empty;
-        ClearDescription = false;
-        ClearIcon = false;
+        entityName = string.Empty; imageOverride = string.Empty; Tier = null; DocumentedDescription = string.Empty;
+        HsvShift = null; SimpleHue = null; TargetedHue = string.Empty; PaletteOverride = string.Empty;
+        BorderColorCode = string.Empty; UiDrawInstructions = string.Empty; UiRectInstructions = string.Empty;
+        ClearDescription = false; ClearIcon = false; LearnedAbilities.Clear();
     }
 
-    private void ExtractKnowledge(ref ASTNode node, ItemData item)
+    private void ExtractKnowledge(List<string> tokens, ItemData item)
     {
-        if (node is ChainNode chain)
+        for (int i = 0; i < tokens.Count; i++)
         {
-            for (int i = 0; i < chain.Elements.Count; i++)
+            string tokenLower = tokens[i].ToLower();
+            string originalToken = tokens[i];
+
+            // If the chunk is entirely wrapped in parentheses, unwrap it to bypass the trap, preserving exact casing!
+            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
-                string token = chain.Elements[i].Export().ToLower();
-
-                // Match Metadata Keywords
-                switch (token)
-                {
-                    case "n":
-                        if (i + 1 < chain.Elements.Count) item.entityName = chain.Elements[++i].Export();
-                        break;
-                    case "tier":
-                        if (i + 1 < chain.Elements.Count && int.TryParse(chain.Elements[i + 1].Export(), out int t))
-                        {
-                            item.Tier = t;
-                            i++;
-                        }
-                        break;
-                    case "doc":
-                    case "sidesc": // Synonymous description keys
-                        if (i + 1 < chain.Elements.Count) item.DocumentedDescription = chain.Elements[++i].Export();
-                        break;
-                    case "img":
-                        if (i + 1 < chain.Elements.Count) item.imageOverride = chain.Elements[++i].Export();
-                        break;
-                    case "hsv":
-                        if (i + 1 < chain.Elements.Count)
-                        {
-                            string[] hsvParts = chain.Elements[++i].Export().Split(':');
-                            if (hsvParts.Length == 3 &&
-                                int.TryParse(hsvParts[0], out int h) &&
-                                int.TryParse(hsvParts[1], out int s) &&
-                                int.TryParse(hsvParts[2], out int v))
-                            {
-                                item.HsvShift = new ItemHsvShift(h, s, v);
-                            }
-                        }
-                        break;
-                    case "hue":
-                        if (i + 1 < chain.Elements.Count && int.TryParse(chain.Elements[i + 1].Export(), out int hueVal))
-                        {
-                            item.SimpleHue = hueVal;
-                            i++;
-                        }
-                        break;
-                    case "thue":
-                        if (i + 1 < chain.Elements.Count) item.TargetedHue = chain.Elements[++i].Export();
-                        break;
-                    case "p":
-                        if (i + 1 < chain.Elements.Count) item.PaletteOverride = chain.Elements[++i].Export();
-                        break;
-                    case "b":
-                        if (i + 1 < chain.Elements.Count) item.BorderColorCode = chain.Elements[++i].Export();
-                        break;
-                    case "draw":
-                        if (i + 1 < chain.Elements.Count) item.UiDrawInstructions = chain.Elements[++i].Export();
-                        break;
-                    case "rect":
-                        if (i + 1 < chain.Elements.Count) item.UiRectInstructions = chain.Elements[++i].Export();
-                        break;
-                    case "learn":
-                        if (i + 1 < chain.Elements.Count) item.LearnedAbilities.Add(chain.Elements[++i].Export());
-                        break;
-
-                        /*
-                    case "abilitydata":
-                        if (i + 1 < chain.Elements.Count) item.CustomAbilities.Add(chain.Elements[++i].Export());
-                        break;
-                    case "t":
-                        if (i + 1 < chain.Elements.Count)
-                        {
-                            string traitPayload = chain.Elements[++i].Export();
-                            // Handle standard nested syntax like: t.jinx.modifierName
-                            if (traitPayload.Equals("jinx", StringComparison.OrdinalIgnoreCase) && i + 1 < chain.Elements.Count)
-                            {
-                                traitPayload += "." + chain.Elements[++i].Export();
-                            }
-                            item.PassiveTraits.Add(traitPayload);
-                        }
-                        break;
-                    case "self":
-                        if (i + 1 < chain.Elements.Count) item.SelfModifiers.Add(chain.Elements[++i].Export());
-                        break;
-                        */
-
-                    case "cleardesc":
-                        item.ClearDescription = true;
-                        break;
-                    case "clearicon":
-                        item.ClearIcon = true;
-                        break;
-
-                    default:
-                        if (TryProcessGenericContainer(chain, ref i, token))
-                        {
-                            // Handled successfully as a standard metadata container
-                        }
-                        else if (IsMechanicTriggerToken(token))
-                        {
-                            ProcessMechanicChain(chain, ref i, token);
-                        }
-                        else if (chain.Elements[i] is ScopeNode isolatedScope)
-                        {
-                            // FIX: Unpack isolated scopes that might be wrapping the entire item/valid chained data
-                            UnityEngine.Debug.Log($"[ItemData] Unpacking isolated ScopeNode to find trapped properties.");
-                            ASTNode inner = isolatedScope.Content;
-                            ExtractKnowledge(ref inner, item);
-                        }
-                        else if (chain.Elements[i] is CompositeNode compNode && compNode.Left is ScopeNode compScope)
-                        {
-                            // FIX: Unpack isolated Composite nodes as well
-                            UnityEngine.Debug.Log($"[ItemData] Unpacking isolated CompositeNode to find trapped properties.");
-                            ASTNode inner = compScope.Content;
-                            ExtractKnowledge(ref inner, item);
-                        }
-                        else
-                        {
-                            UnityEngine.Debug.LogWarning($"[ItemData] Unhandled token dropped during extraction: {token}");
-                        }
-                        break;
-                }
+                string inner = originalToken.Substring(1, originalToken.Length - 2);
+                List<string> innerTokens = TopLevelSplit(inner, '.');
+                ExtractKnowledge(innerTokens, item);
+                continue;
             }
-        }
-        else if (node is ScopeNode scope)
-        {
-            ASTNode inner = scope.Content;
-            ExtractKnowledge(ref inner, item);
-        }
-        else if (node is SequenceNode seq)
-        {
-            foreach (var itemNode in seq.Items)
+
+            switch (tokenLower)
             {
-                ASTNode temp = itemNode;
-                ExtractKnowledge(ref temp, item);
+                case "n": if (i + 1 < tokens.Count) item.entityName = tokens[++i]; break; // PRESERVES EXACT CASING!
+                case "tier": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) item.Tier = t; break;
+                case "doc":
+                case "sidesc": if (i + 1 < tokens.Count) item.DocumentedDescription = tokens[++i]; break;
+                case "img": if (i + 1 < tokens.Count) item.imageOverride = tokens[++i]; break;
+                case "hsv":
+                    if (i + 1 < tokens.Count)
+                    {
+                        string[] hsvParts = tokens[++i].Split(':');
+                        if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out int h) && int.TryParse(hsvParts[1], out int s) && int.TryParse(hsvParts[2], out int v))
+                            item.HsvShift = new ItemHsvShift(h, s, v);
+                    }
+                    break;
+                case "hue": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hueVal)) item.SimpleHue = hueVal; break;
+                case "thue": if (i + 1 < tokens.Count) item.TargetedHue = tokens[++i]; break;
+                case "p": if (i + 1 < tokens.Count) item.PaletteOverride = tokens[++i]; break;
+                case "b": if (i + 1 < tokens.Count) item.BorderColorCode = tokens[++i]; break;
+                case "draw": if (i + 1 < tokens.Count) item.UiDrawInstructions = tokens[++i]; break;
+                case "rect": if (i + 1 < tokens.Count) item.UiRectInstructions = tokens[++i]; break;
+                case "learn": if (i + 1 < tokens.Count) item.LearnedAbilities.Add(tokens[++i]); break;
+                case "cleardesc": item.ClearDescription = true; break;
+                case "clearicon": item.ClearIcon = true; break;
+
+                default:
+                    if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken)) { }
+                    else if (IsMechanicTriggerToken(tokenLower)) ProcessMechanicChain(tokens, ref i, originalToken);
+                    break;
             }
         }
     }
 
-    /// <summary>
-    /// Processes a single mechanical dot-chain, extracting prefixes, targets, payloads, and suffixes.
-    /// </summary>
-    private void ProcessMechanicChain(ChainNode chain, ref int i, string initialToken)
+    private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken)
     {
         ItemMechanic mech = new ItemMechanic();
-        string token = initialToken;
 
-        // PHASE 1: Walk the chain gathering targets and pre-modifiers until locking the payload
-        while (i < chain.Elements.Count)
+        // PHASE 1: Walk the chain gathering targets, prefixes, and the full payload
+        while (i < tokens.Count)
         {
-            string tLower = chain.Elements[i].Export().ToLower();
+            string originalToken = tokens[i];
+            string tLower = originalToken.ToLower();
 
-            if (ItemDomainRules.ValidTargets.Contains(tLower))
+            // Check Prefix FIRST to protect "t" (Traits) from being swallowed as a target
+            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
             {
-                mech.AddTarget(chain.Elements[i].Export());
+                mech.Prefix = tLower;
+                i++;
+
+                // GATHER LOOP: Grab all remaining pieces of the payload until we hit a Suffix
+                List<string> payloadTokens = new List<string>();
+                while (i < tokens.Count)
+                {
+                    string peek = tokens[i].ToLower();
+                    if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
+                        break; // Suffix hit, stop gathering payload
+
+                    payloadTokens.Add(tokens[i]);
+                    i++;
+                }
+                mech.PayloadString = string.Join(".", payloadTokens);
+                i--; // Step back so Phase 2 can process the suffix
+                break;
+            }
+            else if (ItemDomainRules.ValidTargets.Contains(tLower))
+            {
+                mech.AddTarget(originalToken);
             }
             else if (ItemDomainRules.IsRepeatPrefix(tLower, out int reps))
             {
                 mech.RepeatTimes = reps;
             }
-            else if (tLower == "pertier")
-            {
-                mech.PerTier = true;
-            }
-            else if (tLower == "unpack")
-            {
-                mech.Unpack = true;
-            }
-            else if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
-            {
-                mech.Prefix = tLower;
-                // Grab the next immediate element as the payload (e.g. the "(Thief.sd.27-2)" entity block)
-                if (i + 1 < chain.Elements.Count)
-                {
-                    mech.PayloadString = chain.Elements[++i].Export();
-                }
-                break; // Payload acquired, proceed to Phase 2
-            }
+            else if (tLower == "pertier") mech.PerTier = true;
+            else if (tLower == "unpack") mech.Unpack = true;
             else
             {
-                // Raw fallback: This is the payload name itself (e.g. "Stoneskin")
-                mech.PayloadString = chain.Elements[i].Export();
-                break; // Payload acquired, proceed to Phase 2
+                // RAW FALLBACK GATHER LOOP: (If no prefix exists)
+                List<string> payloadTokens = new List<string>();
+                while (i < tokens.Count)
+                {
+                    string peek = tokens[i].ToLower();
+                    if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
+                        break;
+
+                    payloadTokens.Add(tokens[i]);
+                    i++;
+                }
+                mech.PayloadString = string.Join(".", payloadTokens);
+                i--;
+                break;
             }
             i++;
         }
 
-        // PHASE 2: Look-ahead for trailing modification suffixes (part, m, mrg, splice)
-        while (i + 1 < chain.Elements.Count)
+        // PHASE 2: Look-ahead for trailing modification suffixes
+        while (i + 1 < tokens.Count)
         {
-            string nextToken = chain.Elements[i + 1].Export().ToLower();
+            string nextTokenLower = tokens[i + 1].ToLower();
 
-            if (nextToken == "part" && i + 2 < chain.Elements.Count)
+            if (nextTokenLower == "part" && i + 2 < tokens.Count)
             {
-                if (int.TryParse(chain.Elements[i + 2].Export(), out int pIdx))
-                {
-                    mech.PartIndex = pIdx;
-                    i += 2;
-                }
+                if (int.TryParse(tokens[i + 2], out int pIdx)) { mech.PartIndex = pIdx; i += 2; }
                 else break;
             }
-            else if (nextToken.StartsWith("m") && int.TryParse(nextToken.Substring(1), out int mult))
+            else if (nextTokenLower.StartsWith("m") && nextTokenLower.Length > 1 && int.TryParse(nextTokenLower.Substring(1), out int mult))
             {
-                mech.Multiplier = mult;
-                i++;
+                mech.Multiplier = mult; i++;
             }
-            else if (nextToken == "mrg" && i + 2 < chain.Elements.Count)
-            {
-                mech.MergedItem = chain.Elements[i + 2].Export();
-                i += 2;
-            }
-            else if (nextToken == "splice" && i + 2 < chain.Elements.Count)
-            {
-                mech.SplicedItem = chain.Elements[i + 2].Export();
-                i += 2;
-            }
-            else break; // Suffix parsing complete
+            else if (nextTokenLower == "mrg" && i + 2 < tokens.Count) { mech.MergedItem = tokens[i + 2]; i += 2; }
+            else if (nextTokenLower == "splice" && i + 2 < tokens.Count) { mech.SplicedItem = tokens[i + 2]; i += 2; }
+            else break;
         }
 
         AssignDomainPayload(mech);
         Mechanics.Add(mech);
     }
 
-    public override string Export()
+    private bool TryProcessGenericContainer(List<string> tokens, ref int i, string tokenLower, string originalToken)
     {
-        List<string> chainParts = new List<string>();
-
-        // Reconstruct metadata
-        if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
-        if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
-        if (!string.IsNullOrEmpty(DocumentedDescription)) chainParts.Add($"doc.{DocumentedDescription}");
-        if (!string.IsNullOrEmpty(imageOverride)) chainParts.Add($"img.{imageOverride}");
-        if (HsvShift.HasValue) chainParts.Add($"hsv.{HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
-        if (SimpleHue.HasValue) chainParts.Add($"hue.{SimpleHue.Value}");
-        if (!string.IsNullOrEmpty(TargetedHue)) chainParts.Add($"thue.{TargetedHue}");
-        if (!string.IsNullOrEmpty(PaletteOverride)) chainParts.Add($"p.{PaletteOverride}");
-        if (!string.IsNullOrEmpty(BorderColorCode)) chainParts.Add($"b.{BorderColorCode}");
-        if (!string.IsNullOrEmpty(UiDrawInstructions)) chainParts.Add($"draw.{UiDrawInstructions}");
-        if (!string.IsNullOrEmpty(UiRectInstructions)) chainParts.Add($"rect.{UiRectInstructions}");
-        if (ClearDescription) chainParts.Add("cleardesc");
-        if (ClearIcon) chainParts.Add("clearicon");
-
-        // Reconstruct payloads and mechanics
-        foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({cont.Value})");
-        foreach (var mech in Mechanics) chainParts.Add(mech.Export());
-
-        string core = string.Join(".", chainParts);
-
-        StringBuilder sb = new StringBuilder(core);
-        foreach (var tag in GlobalTags) sb.Append($"&{tag}");
-
-        return sb.ToString();
+        if (ItemDomainRules.ContainerKeys.Contains(tokenLower) && !ItemDomainRules.MechanicPrefixes.Contains(tokenLower))
+        {
+            if (i + 1 < tokens.Count)
+            {
+                Containers.Add(new ItemProperty(originalToken, tokens[++i]));
+                return true;
+            }
+        }
+        return false;
     }
 
+    private bool IsMechanicTriggerToken(string token)
+    {
+        return ItemDomainRules.MechanicPrefixes.Contains(token) || token == "pertier" || token == "unpack" ||
+               ItemDomainRules.ValidTargets.Contains(token) || ItemDomainRules.IsItemIdentifier(token) ||
+               ItemDomainRules.IsRepeatPrefix(token, out _);
+    }
+
+    // THE PERFECT SPLIT
     public static List<string> TopLevelSplit(string input, char separator)
     {
         List<string> result = new List<string>();
@@ -817,111 +514,54 @@ public class ItemData : SDData
         return result;
     }
 
-    /// <summary>
-    /// Checks if a fallback token is an unmapped container key and grabs its payload.
-    /// Safely ignores containers that are explicitly handled as Mechanic Prefixes.
-    /// </summary>
-    private bool TryProcessGenericContainer(ChainNode chain, ref int i, string token)
+    private string StripOuterParens(string text)
     {
-        if (ItemDomainRules.ContainerKeys.Contains(token) &&
-            !ItemDomainRules.MechanicPrefixes.Contains(token))
+        if (string.IsNullOrEmpty(text)) return text;
+        string t = text.Trim();
+        while (t.StartsWith("(") && t.EndsWith(")"))
         {
-            if (i + 1 < chain.Elements.Count)
+            int depth = 0; bool matching = true;
+            for (int k = 0; k < t.Length - 1; k++)
             {
-                Containers.Add(new ItemProperty(token, chain.Elements[++i].Export()));
-                return true;
+                if (t[k] == '(') depth++; else if (t[k] == ')') depth--;
+                if (depth == 0) { matching = false; break; }
             }
+            if (matching) t = t.Substring(1, t.Length - 2).Trim();
+            else break;
         }
-        return false;
+        return t;
     }
 
-    /// <summary>
-    /// Checks if a token should trigger the creation of a mechanical rule.
-    /// </summary>
-    private bool IsMechanicTriggerToken(string token)
-    {
-        return ItemDomainRules.MechanicPrefixes.Contains(token) ||
-               token == "pertier" || token == "unpack" ||
-               ItemDomainRules.ValidTargets.Contains(token) ||
-               ItemDomainRules.IsItemIdentifier(token) ||
-               ItemDomainRules.IsRepeatPrefix(token, out _);
-    }
-
-    public void DebugContentsToConsole(string indent = "")
-    {
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        sb.AppendLine($"{indent}--- ITEM DATA DEBUG ---");
-
-        sb.AppendLine($"{indent}Name: {entityName}");
-        sb.AppendLine($"{indent}Tier: {Tier}");
-        sb.AppendLine($"{indent}ImageRef: {imageOverride}");
-
-        if (HsvShift.HasValue)
-            sb.AppendLine($"{indent}HsvShift: {HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
-
-        sb.AppendLine($"{indent}\n{indent}Mechanics ({Mechanics.Count}):");
-        for (int i = 0; i < Mechanics.Count; i++)
-        {
-            var m = Mechanics[i];
-            sb.AppendLine($"{indent}  [{i}] Targets: [{string.Join(", ", m.Targets)}] | Prefix: '{m.Prefix}'");
-            sb.AppendLine($"{indent}      Payload: '{m.PayloadString}'");
-
-            // Recursively print nested ItemData
-            if (m.PayloadData is ItemData nestedItem)
-            {
-                sb.AppendLine($"{indent}      [✓ Recursively Unpacked ItemData!]");
-                // Create a deeper indent for the nested printout
-                nestedItem.DebugContentsToConsole(indent + "        ");
-            }
-            else if (m.PayloadData != null)
-            {
-                sb.AppendLine($"{indent}      [✓ Unpacked {m.PayloadData.GetType().Name}!]");
-
-                // Note: If you add a similar DebugContentsToConsole(indent) method to HeroData, 
-                // you could cast it here and call it to print the entire multi-domain tree!
-                if (m.PayloadData is HeroData hd) hd.DebugContentsToConsoleCompact(indent + "        ");
-            }
-
-            if (m.Multiplier != 1 || !string.IsNullOrEmpty(m.MergedItem) || !string.IsNullOrEmpty(m.SplicedItem) || m.PartIndex.HasValue)
-            {
-                sb.AppendLine($"{indent}      Suffixes -> m:{m.Multiplier}, mrg:{m.MergedItem}, splice:{m.SplicedItem}, part:{m.PartIndex}");
-            }
-        }
-
-        sb.AppendLine($"{indent}\n{indent}Containers ({Containers.Count}):");
-        foreach (var c in Containers) sb.AppendLine($"{indent}  {c.Key}: {c.Value}");
-
-        // Only log at the root level so Unity's console doesn't split the nested logs
-        if (indent == "")
-        {
-            UnityEngine.Debug.Log(sb.ToString());
-        }
-        else
-        {
-            // If it's nested, we just print directly using standard logging so it stacks linearly
-            UnityEngine.Debug.Log(sb.ToString());
-        }
-    }
-
-    /// <summary>
-    /// Evaluates the mechanic's prefix and hands the payload string off to the correct 
-    /// domain parser (EntityData, ModifierData, etc.) to be recursively unpacked.
-    /// </summary>
     private void AssignDomainPayload(ItemMechanic mech)
     {
         if (string.IsNullOrEmpty(mech.PayloadString)) return;
-
-        // Clean any outermost wrapping parentheses from the string so the target class parses correctly.
         string core = StripOuterParens(mech.PayloadString);
 
         if (mech.Prefix == "hat")
         {
-            // === EXTERNAL DOMAIN HANDOFF ===
+            if (IsMonsterEntity(core)) { MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster; }
+            else { HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero; }
+        }
+        else if (mech.Prefix == "onhitdata" || mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
+        else if (mech.Prefix == "enchant" || mech.Prefix == "self") { ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod; }
+        else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata") { mech.PayloadData = AbilityData.CreateSpellOrTactic(core); }
+        else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
+        else if (mech.Prefix == "t")
+        {
+            // FIX: If the trait payload describes a monster entity (like jinx, egg, vase, orb)
+            // we MUST parse it as a MonsterData first before extracting its modifiers.
             if (IsMonsterEntity(core))
             {
                 MonsterData monster = new MonsterData();
                 monster.Parse(core);
                 mech.PayloadData = monster;
+            }
+            else if (core.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+            {
+                string modifierCore = StripOuterParens(core.Substring(5).Trim());
+                ModifierData mod = new ModifierData();
+                mod.Parse(modifierCore);
+                mech.PayloadData = mod;
             }
             else
             {
@@ -930,110 +570,116 @@ public class ItemData : SDData
                 mech.PayloadData = hero;
             }
         }
-        else if (mech.Prefix == "onhitdata" || mech.Prefix == "triggerhpdata")
-        {
-            // === EXTERNAL DOMAIN HANDOFF ===
-            // USER TODO: Uncomment this to pass the payload to your Modifier parser!
-            TriggerHPData hero = new TriggerHPData();
-            hero.Parse(core);
-            mech.PayloadData = hero;
-        }
-        else if (mech.Prefix == "enchant" || mech.Prefix == "self")
-        {
-            // === EXTERNAL DOMAIN HANDOFF ===
-            ModifierData modifier = new ModifierData();
-            modifier.Parse(core);
-            mech.PayloadData = modifier;
-        }
-        else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata")
-        {
-            // === EXTERNAL DOMAIN HANDOFF ===
-            mech.PayloadData = AbilityData.CreateSpellOrTactic(core);
-        }
-        else if (mech.Prefix == "sticker")
-        {
-            // Sticker payloads are Items. We can recursively unpack this natively!
-            ItemData item = new ItemData();
-            item.Parse(core);
-            mech.PayloadData = item;
-        }
-        else if (mech.Prefix == "t")
-        {
-            // === EXTERNAL DOMAIN HANDOFF ===
-            // If the trait is jinx, the remainder of the payload is a ModifierData string
-            if (core.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
-            {
-                string modifierCore = core.Substring(5).Trim();
-                modifierCore = StripOuterParens(modifierCore);
-
-                ModifierData modifier = new ModifierData();
-                modifier.Parse(core);
-                mech.PayloadData = modifier;
-            }
-        }
         else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
         {
-            // If an inherent mechanic has a massive wrapped payload, unpack it as a nested item
-            if (mech.PayloadString.StartsWith("("))
-            {
-                ItemData item = new ItemData();
-                item.Parse(core);
-                mech.PayloadData = item;
-            }
+            if (mech.PayloadString.StartsWith("(")) { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         }
-    }
-
-    /// <summary>
-    /// Strips balanced outer parentheses from a string.
-    /// E.g., "(((Statue.hp.2)))" -> "Statue.hp.2"
-    /// </summary>
-    private string StripOuterParens(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return text;
-        string t = text.Trim();
-
-        while (t.StartsWith("(") && t.EndsWith(")"))
-        {
-            int depth = 0;
-            bool matching = true;
-            for (int k = 0; k < t.Length - 1; k++)
-            {
-                if (t[k] == '(') depth++;
-                else if (t[k] == ')') depth--;
-
-                if (depth == 0) { matching = false; break; } // Hit 0 before the end, parens don't wrap the whole string
-            }
-            if (matching) t = t.Substring(1, t.Length - 2).Trim();
-            else break;
-        }
-        return t;
     }
 
     private bool IsMonsterEntity(string core)
     {
         if (string.IsNullOrEmpty(core)) return false;
 
-        if (core.Contains("replica", StringComparison.OrdinalIgnoreCase))
-            return false;
+        // 1. Grab the very first token at depth 0
+        string firstToken = TopLevelSplit(core, '.')[0].ToLower();
 
-        string firstToken = core.Split('.')[0].ToLower();
+        // 2. If it's wrapped in parenthesis, unwrap it to find the real identity
+        while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
+        {
+            firstToken = StripOuterParens(firstToken);
+            firstToken = TopLevelSplit(firstToken, '.')[0].ToLower();
+        }
 
-        if (firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx")
+        if (firstToken == "replica") return false; // Explicit Hero
+
+        // 3. Match explicit Monster Prefixes
+        if (firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx" || firstToken == "rmon")
             return true;
 
-        if (core.Contains(".jinx.", StringComparison.OrdinalIgnoreCase) ||
-            core.Contains(".vase.", StringComparison.OrdinalIgnoreCase) ||
-            core.Contains(".orb.", StringComparison.OrdinalIgnoreCase) ||
-            core.Contains(".rmon.", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        // Use the cached list for faster lookups
+        // 4. Fallback to Game Registry Lookup
         foreach (string monsterName in MonsterHelper.FormattedMonsterNames)
         {
-            if (core.Contains(monsterName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(firstToken, monsterName, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
+        // 5. Fallback for dirty prefix formats
+        if (firstToken.Contains("jinx") || firstToken.Contains("vase") || firstToken.Contains("orb") || firstToken.Contains("rmon"))
+            return true;
+
         return false;
+    }
+
+    public override string Export()
+    {
+        List<string> chainParts = new List<string>();
+        if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
+        if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
+        if (!string.IsNullOrEmpty(DocumentedDescription)) chainParts.Add($"doc.{DocumentedDescription}");
+        if (!string.IsNullOrEmpty(imageOverride)) chainParts.Add($"img.{imageOverride}");
+        if (HsvShift.HasValue) chainParts.Add($"hsv.{HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
+        if (SimpleHue.HasValue) chainParts.Add($"hue.{SimpleHue.Value}");
+        if (!string.IsNullOrEmpty(TargetedHue)) chainParts.Add($"thue.{TargetedHue}");
+        if (!string.IsNullOrEmpty(PaletteOverride)) chainParts.Add($"p.{PaletteOverride}");
+        if (!string.IsNullOrEmpty(BorderColorCode)) chainParts.Add($"b.{BorderColorCode}");
+        if (!string.IsNullOrEmpty(UiDrawInstructions)) chainParts.Add($"draw.{UiDrawInstructions}");
+        if (!string.IsNullOrEmpty(UiRectInstructions)) chainParts.Add($"rect.{UiRectInstructions}");
+        if (ClearDescription) chainParts.Add("cleardesc");
+        if (ClearIcon) chainParts.Add("clearicon");
+
+        foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({cont.Value})");
+        foreach (var mech in Mechanics) chainParts.Add(mech.Export());
+
+        StringBuilder sb = new StringBuilder(string.Join(".", chainParts));
+        foreach (var tag in GlobalTags) sb.Append($"&{tag}");
+        return sb.ToString();
+    }
+
+    public void DebugContentsToConsole(string indent = "")
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{indent}--- ITEM DATA DEBUG ---");
+        sb.AppendLine($"{indent}Name: {entityName}");
+        sb.AppendLine($"{indent}Tier: {Tier}");
+        sb.AppendLine($"{indent}ImageRef: {imageOverride}");
+        if (HsvShift.HasValue) sb.AppendLine($"{indent}HsvShift: {HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
+
+        sb.AppendLine($"{indent}\n{indent}Mechanics ({Mechanics.Count}):");
+        for (int i = 0; i < Mechanics.Count; i++)
+        {
+            var m = Mechanics[i];
+            sb.AppendLine($"{indent}  [{i}] Targets: [{string.Join(", ", m.Targets)}] | Prefix: '{m.Prefix}'");
+            sb.AppendLine($"{indent}      Payload: '{m.PayloadString}'");
+
+            if (m.PayloadData is ItemData nestedItem)
+            {
+                sb.AppendLine($"{indent}      [✓ Unpacked ItemData!]");
+                nestedItem.DebugContentsToConsole(indent + "        ");
+            }
+            // Add this condition first so nested abilities use the specialized log format
+            else if (m.PayloadData is AbilityData ad)
+            {
+                sb.AppendLine($"{indent}      [✓ Unpacked AbilityData!]");
+                ad.DebugAbilityCompact(indent + "        ");
+            }
+            else if (m.PayloadData is HeroData hd)
+            {
+                sb.AppendLine($"{indent}      [✓ Unpacked HeroData!]");
+                hd.DebugContentsToConsoleCompact(indent + "        ");
+            }
+            else if (m.PayloadData is MonsterData md)
+            {
+                sb.AppendLine($"{indent}      [✓ Unpacked MonsterData!]");
+                md.DebugContentsToConsoleCompact(indent + "        ");
+            }
+            else if (m.PayloadData != null)
+            {
+                sb.AppendLine($"{indent}      [✓ Unpacked {m.PayloadData.GetType().Name}!]");
+            }
+
+            if (m.Multiplier != 1 || !string.IsNullOrEmpty(m.MergedItem) || !string.IsNullOrEmpty(m.SplicedItem) || m.PartIndex.HasValue)
+                sb.AppendLine($"{indent}      Suffixes -> m:{m.Multiplier}, mrg:{m.MergedItem}, splice:{m.SplicedItem}, part:{m.PartIndex}");
+        }
+        UnityEngine.Debug.Log(sb.ToString());
     }
 }

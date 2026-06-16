@@ -939,12 +939,14 @@ public class HeroUI : RootUI
             },
             onRemove: (abilityName) =>
             {
+                /*
                 // Safely remove using our helper method
                 if (CurrentHero.RemoveCustomAbility(abilityName))
                 {
                     NotifyStateChanged();
                     RebuildStatsUI();
                 }
+                */
             }
         );
 
@@ -1516,20 +1518,23 @@ public class HeroUI : RootUI
         if (dropdownValue <= 0) return;
 
         var selectedAbility = BaseAbilityDatabase.Abilities[dropdownValue - 1];
-
+        /*
         if (CurrentHero.AddAbility(selectedAbility.name))
         {
             NotifyStateChanged();
             RebuildStatsUI();
         }
+        */
     }
     private void RemoveAbilityFromHero(string abilityName)
     {
+        /*
         if (CurrentHero.RemoveAbility(abilityName))
         {
             NotifyStateChanged();
             RebuildStatsUI();
         }
+        */
     }
 
     private void ApplyDynamicLayoutConstraints()
