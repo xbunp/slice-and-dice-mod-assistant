@@ -4,9 +4,5 @@ using UnityEngine;
 
 public class ModifierData : SDData
 {
-    public ModifierData() { }
-    public ModifierData(string data)
-    {
-        Parse(data);
-    }
+
 }

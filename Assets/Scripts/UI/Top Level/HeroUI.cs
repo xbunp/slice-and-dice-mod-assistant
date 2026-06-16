@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using TMPro;
+using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -50,7 +51,9 @@ public class HeroUI : RootUI
             // If no active editing session exists yet, auto-provision a clean template
             if (hero == null)
             {
-                ModPackage.Instance.LoadEntityForEditing(new HeroData(HeroData.Hero.Defaults));
+                HeroData newHero = new HeroData();
+                newHero.InitializeAsDefault();
+                ModPackage.Instance.LoadEntityForEditing(newHero);
                 hero = ModPackage.Instance.GetActiveEntity<HeroData>();
             }
 
@@ -563,7 +566,10 @@ public class HeroUI : RootUI
     private void ResetToDefault()
     {
         // Replace active working clone with a clean template
-        ModPackage.Instance.UpdateActiveEntityClone<HeroData>(new HeroData(HeroData.Hero.Defaults));
+        HeroData hero = new HeroData();
+        hero.InitializeAsDefault();
+
+        ModPackage.Instance.UpdateActiveEntityClone<HeroData>(hero);
         showCustomImagePanel = false;
         _currentPoolIndex = 0;
 
@@ -697,7 +703,9 @@ public class HeroUI : RootUI
         else
         {
             // Load a fresh, clean hero template into the editing session
-            ModPackage.Instance.LoadEntityForEditing(new HeroData(HeroData.Hero.Defaults));
+            HeroData hero = new HeroData();
+            hero.InitializeAsDefault();
+            ModPackage.Instance.LoadEntityForEditing(hero);
         }
 
         // Notify visual components to redraw
@@ -1643,7 +1651,9 @@ public class HeroUI : RootUI
         }
         else
         {
-            ModPackage.Instance.LoadEntityForEditing(new HeroData(HeroData.Hero.Defaults));
+            HeroData hero = new HeroData();
+            hero.InitializeAsDefault();
+            ModPackage.Instance.LoadEntityForEditing(hero);
         }
 
         ModPackage.Instance.NotifyActiveEntityChanged<HeroData>(this);

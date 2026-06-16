@@ -10,7 +10,8 @@ public class ItemTester : MonoBehaviour
     [ContextMenu("Parse Item")]
     public void ParseItem()
     {
-        item = new ItemData(syntax);
+        item = new ItemData();
+        item.Parse(syntax);
         item.DebugContentsToConsole();
     }
 }

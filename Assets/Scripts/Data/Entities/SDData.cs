@@ -3,14 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 
-public interface ISyntaxPayload
-{
-    string Export();
-    void Parse(string data);
-}
-
 [System.Serializable]
-public abstract class SDData : ISyntaxPayload
+public abstract class SDData
 {
     public string entityName = "NewEntity";
     public string imageOverride = "None";
@@ -37,15 +31,5 @@ public abstract class SDData : ISyntaxPayload
                 imageOverride = tokens[++i];
             }
         }
-    }
-
-    /// <summary>
-    /// Unified static factory to instantiate and parse any entity.
-    /// </summary>
-    public static T Parse<T>(string data) where T : SDData, new()
-    {
-        var entity = new T();
-        entity.Parse(data); // Calls the instance Parse method safely
-        return entity;
     }
 }

@@ -4,17 +4,28 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
+// ==========================================
+// HERO DOMAIN DICTIONARY (Factual Rules)
+// ==========================================
+public static class HeroDomainRules
+{
+    // These specific modifiers are lists and nested containers that require complex parsing.
+    public static readonly HashSet<string> CollectionModifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "i", "t", "gift", "learn", "abilitydata", "jinx"
+    };
+
+    // Sub-properties that naturally nest under the base "i." prefix logic
+    public static readonly HashSet<string> InherentSubKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "t", "jinx", "gift", "learn"
+    };
+}
+
 [System.Serializable]
 public class HeroData : EntityData
 {
-    public enum Hero
-    {
-        Blank,
-        Defaults,
-        Spell,
-        Tactic
-    }
-
+    // Retained for UI/Reflection backwards compatibility
     public static readonly string[] HeroPropertyKeys =
     {
         "replica", "img", "n", "col", "hp", "tier", "hsv", "hsl", "hue", "sd",
@@ -49,45 +60,10 @@ public class HeroData : EntityData
     }
 
     // ==========================================
-    // CONSTRUCTORS (DRY & Flawless Allocation)
-    // ==========================================
-
-    public HeroData(Hero state = Hero.Blank)
-    {
-        InitializeAsBlank(); // Preps memory, arrays, and lists so nothing is ever null-referenced.
-
-        switch (state)
-        {
-            case Hero.Defaults:
-                ApplyDefaults();
-                break;
-            case Hero.Spell:
-            case Hero.Tactic:
-                baseReplica = "Fey";
-                entityName = "Fey";
-                break;
-            case Hero.Blank:
-            default:
-                // Remains a perfect void of nulls and zeros.
-                break;
-        }
-    }
-
-    public HeroData(string data, Hero state = Hero.Blank) : this(state)
-    {
-        ParseInstance(data);
-    }
-
-    public static new HeroData Parse(string data)
-    {
-        return new HeroData(data, Hero.Blank);
-    }
-
-    // ==========================================
     // INITIALIZATION STATE MANAGEMENT
     // ==========================================
 
-    private void InitializeAsBlank()
+    public void InitializeAsBlank()
     {
         entityName = null;
         imageOverride = null;
@@ -127,7 +103,7 @@ public class HeroData : EntityData
         }
     }
 
-    private void ApplyDefaults()
+    public void InitializeAsDefault()
     {
         entityName = "NewEntity";
         baseReplica = "Statue";
@@ -138,142 +114,202 @@ public class HeroData : EntityData
     }
 
     // ==========================================
-    // PARSING & EXPORTING
+    // AST KNOWLEDGE EXTRACTION (Parse Core)
     // ==========================================
 
     public virtual void ParseInstance(string data)
     {
-        if (string.IsNullOrEmpty(data)) return;
+        if (string.IsNullOrWhiteSpace(data)) return;
 
-        data = data.Trim();
-        List<string> tokens = new List<string>();
+        UnityEngine.Debug.Log($"[HeroData] Starting AST Parse on data length: {data.Length}");
 
-        if (data.StartsWith("((") && data.EndsWith(")"))
+        // Hand off to the master internal AST builder (identical to ItemData)
+        ASTNode root = new ASTParser(data.Trim()).Parse();
+        ExtractKnowledge(ref root, this);
+
+        UnityEngine.Debug.Log($"[HeroData] AST Parse Complete! Name: '{entityName}', Replica: '{baseReplica}'");
+    }
+
+    private void ExtractKnowledge(ref ASTNode node, HeroData hero)
+    {
+        if (node is ChainNode chain)
         {
-            int depth = 1;
-            int innerEndIndex = -1;
-            for (int idx = 2; idx < data.Length; idx++)
+            for (int i = 0; i < chain.Elements.Count; i++)
             {
-                if (data[idx] == '(') depth++;
-                else if (data[idx] == ')')
+                string token = chain.Elements[i].Export().ToLower();
+
+                switch (token)
                 {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        innerEndIndex = idx;
+                    case "replica":
+                        if (i + 1 < chain.Elements.Count) hero.baseReplica = chain.Elements[++i].Export();
                         break;
-                    }
-                }
-            }
-
-            if (innerEndIndex != -1 && innerEndIndex < data.Length - 1)
-            {
-                string innerHeroStr = data.Substring(1, innerEndIndex);
-                string trailingModifiersStr = data.Substring(innerEndIndex + 1, data.Length - innerEndIndex - 2);
-
-                tokens.AddRange(TokenizeString(innerHeroStr));
-                if (!string.IsNullOrEmpty(trailingModifiersStr))
-                {
-                    tokens.AddRange(TokenizeString(trailingModifiersStr));
-                }
-            }
-            else
-            {
-                tokens = TokenizeString(data);
-            }
-        }
-        else
-        {
-            tokens = TokenizeString(data);
-        }
-
-        for (int i = 0; i < tokens.Count; i++)
-        {
-            string key = tokens[i].ToLower();
-            string value = (i + 1 < tokens.Count) ? tokens[i + 1] : "";
-            bool consumeValue = true;
-
-            switch (key)
-            {
-                case "replica": this.baseReplica = value; break;
-                case "n": this.entityName = value; break;
-                case "img": this.imageOverride = value; break;
-                case "col": this.colorClass = value; break;
-                case "hp":
-                    this.hp = (string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out int hpVal)) ? 0 : hpVal;
-                    break;
-                case "tier": if (int.TryParse(value, out int t)) this.tier = t; break;
-                case "hsv":
-                    string[] hsvParts = value.Split(':');
-                    if (hsvParts.Length == 3)
-                    {
-                        int.TryParse(hsvParts[0], out this.h);
-                        int.TryParse(hsvParts[1], out this.s);
-                        int.TryParse(hsvParts[2], out this.v);
-                    }
-                    break;
-                case "hsl": this.hsl = value; break;
-                case "hue": if (int.TryParse(value, out int hVal)) this.hue = hVal; break;
-                case "i":
-                    if (string.Equals(value, "t", StringComparison.OrdinalIgnoreCase) &&
-                        i + 2 < tokens.Count && string.Equals(tokens[i + 2], "jinx", StringComparison.OrdinalIgnoreCase) &&
-                        i + 3 < tokens.Count)
-                    {
-                        this.curses.AddRange(tokens[i + 3].Split('#'));
-                        i += 3;
-                    }
-                    else if (string.Equals(value, "gift", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
-                    {
-                        this.blessings.AddRange(tokens[i + 2].Split('#'));
-                        i += 2;
-                    }
-                    else if (string.Equals(value, "learn", StringComparison.OrdinalIgnoreCase) && i + 2 < tokens.Count)
-                    {
-                        this.baseAbilityData.AddRange(tokens[i + 2].Split('#'));
-                        i += 2;
-                    }
-                    else if (value.StartsWith("("))
-                    {
-                        this.customItems.Add(SDData.Parse<ItemData>(value));
-                    }
-                    else
-                    {
-                        this.items.AddRange(value.Split('#'));
-                    }
-                    break;
-                case "t": this.traits.AddRange(value.Split('#')); break;
-                case "abilitydata":
-                    if (value.StartsWith("(")) this.AddCustomAbility(AbilityData.Parse(value));
-                    else this.baseAbilityData.AddRange(value.Split('#'));
-                    break;
-                case "p": this.p = value; break;
-                case "b": this.b = value; break;
-                case "rect": this.rect = value; break;
-                case "draw": this.draw = value; break;
-                case "thue": this.thue = value; break;
-                case "adj": if (int.TryParse(value, out int a)) this.adj = a; break;
-                case "speech": this.speech = value; break;
-                case "doc": this.doc = value; break;
-                case "sd":
-                    string[] faces = value.Split(':');
-                    for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
-                    {
-                        if (faces[f] == "0") continue;
-                        string[] faceParts = faces[f].Split('-');
-                        if (faceParts.Length == 2)
+                    case "n":
+                        if (i + 1 < chain.Elements.Count) hero.entityName = chain.Elements[++i].Export();
+                        break;
+                    case "img":
+                        if (i + 1 < chain.Elements.Count) hero.imageOverride = chain.Elements[++i].Export();
+                        break;
+                    case "col":
+                        if (i + 1 < chain.Elements.Count) hero.colorClass = chain.Elements[++i].Export();
+                        break;
+                    case "hp":
+                        if (i + 1 < chain.Elements.Count && int.TryParse(chain.Elements[++i].Export(), out int hpVal)) hero.hp = hpVal;
+                        break;
+                    case "tier":
+                        if (i + 1 < chain.Elements.Count && int.TryParse(chain.Elements[++i].Export(), out int t)) hero.tier = t;
+                        break;
+                    case "hsv":
+                        if (i + 1 < chain.Elements.Count)
                         {
-                            int.TryParse(faceParts[0], out this.diceSides[f].effectID);
-                            int.TryParse(faceParts[1], out this.diceSides[f].pips);
+                            string[] hsvParts = chain.Elements[++i].Export().Split(':');
+                            if (hsvParts.Length == 3)
+                            {
+                                int.TryParse(hsvParts[0], out hero.h);
+                                int.TryParse(hsvParts[1], out hero.s);
+                                int.TryParse(hsvParts[2], out hero.v);
+                            }
                         }
-                    }
-                    break;
+                        break;
+                    case "hsl":
+                        if (i + 1 < chain.Elements.Count) hero.hsl = chain.Elements[++i].Export();
+                        break;
+                    case "hue":
+                        if (i + 1 < chain.Elements.Count && int.TryParse(chain.Elements[++i].Export(), out int hVal)) hero.hue = hVal;
+                        break;
+                    case "p":
+                        if (i + 1 < chain.Elements.Count) hero.p = chain.Elements[++i].Export();
+                        break;
+                    case "b":
+                        if (i + 1 < chain.Elements.Count) hero.b = chain.Elements[++i].Export();
+                        break;
+                    case "rect":
+                        if (i + 1 < chain.Elements.Count) hero.rect = chain.Elements[++i].Export();
+                        break;
+                    case "draw":
+                        if (i + 1 < chain.Elements.Count) hero.draw = chain.Elements[++i].Export();
+                        break;
+                    case "thue":
+                        if (i + 1 < chain.Elements.Count) hero.thue = chain.Elements[++i].Export();
+                        break;
+                    case "adj":
+                        if (i + 1 < chain.Elements.Count && int.TryParse(chain.Elements[++i].Export(), out int a)) hero.adj = a;
+                        break;
+                    case "speech":
+                        if (i + 1 < chain.Elements.Count) hero.speech = chain.Elements[++i].Export();
+                        break;
+                    case "doc":
+                        if (i + 1 < chain.Elements.Count) hero.doc = chain.Elements[++i].Export();
+                        break;
+                    case "sd":
+                        if (i + 1 < chain.Elements.Count)
+                        {
+                            string[] faces = chain.Elements[++i].Export().Split(':');
+                            for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
+                            {
+                                if (faces[f] == "0") continue;
+                                string[] faceParts = faces[f].Split('-');
+                                if (faceParts.Length == 2)
+                                {
+                                    int.TryParse(faceParts[0], out hero.diceSides[f].effectID);
+                                    int.TryParse(faceParts[1], out hero.diceSides[f].pips);
+                                }
+                            }
+                        }
+                        break;
 
-                default: consumeValue = false; break;
+                    // --- COLLECTION & NESTED MODIFIERS ---
+                    case "t":
+                        if (i + 1 < chain.Elements.Count) hero.traits.AddRange(chain.Elements[++i].Export().Split('#'));
+                        break;
+                    case "gift":
+                        if (i + 1 < chain.Elements.Count) hero.blessings.AddRange(chain.Elements[++i].Export().Split('#'));
+                        break;
+                    case "abilitydata":
+                        if (i + 1 < chain.Elements.Count)
+                        {
+                            ASTNode next = chain.Elements[++i];
+                            if (next is ScopeNode abScope)
+                            {
+                                AbilityData ability = AbilityData.CreateAbility(abScope.Export());
+                                hero.AddCustomAbility(ability);
+
+                            }
+                            else
+                            {
+                                hero.baseAbilityData.AddRange(next.Export().Split('#'));
+                            }
+                        }
+                        break;
+                    case "i":
+                        if (i + 1 < chain.Elements.Count)
+                        {
+                            ASTNode next = chain.Elements[i + 1];
+                            string nextVal = next.Export().ToLower();
+
+                            if (nextVal == "t" && i + 2 < chain.Elements.Count && chain.Elements[i + 2].Export().ToLower() == "jinx" && i + 3 < chain.Elements.Count)
+                            {
+                                hero.curses.AddRange(chain.Elements[i + 3].Export().Split('#'));
+                                i += 3;
+                            }
+                            else if (nextVal == "gift" && i + 2 < chain.Elements.Count)
+                            {
+                                hero.blessings.AddRange(chain.Elements[i + 2].Export().Split('#'));
+                                i += 2;
+                            }
+                            else if (nextVal == "learn" && i + 2 < chain.Elements.Count)
+                            {
+                                hero.baseAbilityData.AddRange(chain.Elements[i + 2].Export().Split('#'));
+                                i += 2;
+                            }
+                            else if (next is ScopeNode customScope)
+                            {
+                                ItemData item = new ItemData();
+                                item.Parse(customScope.Export());
+                                hero.customItems.Add(item);
+                                i++;
+                            }
+                            else
+                            {
+                                hero.items.AddRange(next.Export().Split('#'));
+                                i++;
+                            }
+                        }
+                        break;
+
+                    default:
+                        // Recursively dive into isolated Scope/Composite wraps to bypass redundant outer parentheses
+                        if (chain.Elements[i] is ScopeNode isolatedScope)
+                        {
+                            ASTNode inner = isolatedScope.Content;
+                            ExtractKnowledge(ref inner, hero);
+                        }
+                        else if (chain.Elements[i] is CompositeNode compNode && compNode.Left is ScopeNode compScope)
+                        {
+                            ASTNode inner = compScope.Content;
+                            ExtractKnowledge(ref inner, hero);
+                        }
+                        break;
+                }
             }
-
-            if (consumeValue) i++;
+        }
+        else if (node is ScopeNode scope)
+        {
+            ASTNode inner = scope.Content;
+            ExtractKnowledge(ref inner, hero);
+        }
+        else if (node is SequenceNode seq)
+        {
+            foreach (var itemNode in seq.Items)
+            {
+                ASTNode temp = itemNode;
+                ExtractKnowledge(ref temp, hero);
+            }
         }
     }
+
+    // ==========================================
+    // EXPORTING (Symmetrical Reconstruction)
+    // ==========================================
 
     public virtual new string Export()
     {
@@ -290,8 +326,7 @@ public class HeroData : EntityData
             if (!hasImageOverride) AppendColorModifier(heroSb);
         }
 
-        if (!string.IsNullOrEmpty(entityName))
-            heroSb.Append($".n.{FormatName(entityName)}");
+        if (!string.IsNullOrEmpty(entityName)) heroSb.Append($".n.{FormatName(entityName)}");
 
         if (!string.IsNullOrEmpty(colorClass) && !IsDefaultColor(baseReplica, colorClass))
             heroSb.Append($".col.{colorClass}");
@@ -322,6 +357,7 @@ public class HeroData : EntityData
 
         heroSb.Append(")");
 
+        // Suffix/Modifier Chain Output
         StringBuilder thoseSb = new StringBuilder();
 
         if (traits != null)
@@ -337,8 +373,8 @@ public class HeroData : EntityData
                 if (ci != null) thoseSb.Append($".i.({ci.Export()})");
 
         if (blessings != null)
-            foreach (var b in blessings)
-                if (!string.IsNullOrEmpty(b)) thoseSb.Append($".gift.{FormatName(b)}");
+            foreach (var bl in blessings)
+                if (!string.IsNullOrEmpty(bl)) thoseSb.Append($".gift.{FormatName(bl)}");
 
         if (curses != null)
             foreach (var c in curses)
@@ -354,6 +390,7 @@ public class HeroData : EntityData
 
         if (thoseSb.Length == 0) return heroSb.ToString();
 
+        // Parity Export Wrap - The nested composition inherently unwraps exactly via AST Parsing
         return $"({heroSb.ToString()}{thoseSb.ToString()})";
     }
 
@@ -502,8 +539,6 @@ public class HeroData : EntityData
                 if (spell != null)
                 {
                     sb.AppendLine($"{indent}  [{i}] Spell Name: {spell.entityName}");
-                    // If SpellData/AbilityData implements a similar debug method, it can be called recursively:
-                    // spell.DebugContentsToConsole(indent + "        ");
                 }
             }
         }
@@ -517,53 +552,31 @@ public class HeroData : EntityData
                 if (tactic != null)
                 {
                     sb.AppendLine($"{indent}  [{i}] Tactic Name: {tactic.entityName}");
-                    // If TacticData/AbilityData implements a similar debug method, it can be called recursively:
-                    // tactic.DebugContentsToConsole(indent + "        ");
                 }
             }
         }
 
-        if (indent == "")
-        {
-            UnityEngine.Debug.Log(sb.ToString());
-        }
-        else
-        {
-            UnityEngine.Debug.Log(sb.ToString());
-        }
+        if (indent == "") UnityEngine.Debug.Log(sb.ToString());
+        else UnityEngine.Debug.Log(sb.ToString());
     }
 
     public void DebugContentsToConsoleCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
 
-        // Core Hero Data (Only show if non-null, non-empty, or non-default)
-        if (!string.IsNullOrEmpty(entityName))
-            sb.AppendLine($"{indent}Name: {entityName}");
+        if (!string.IsNullOrEmpty(entityName)) sb.AppendLine($"{indent}Name: {entityName}");
+        if (baseReplica != null && !string.IsNullOrEmpty(baseReplica.ToString())) sb.AppendLine($"{indent}Base Replica: {baseReplica}");
+        if (!string.IsNullOrEmpty(colorClass)) sb.AppendLine($"{indent}Color Class: {colorClass}");
+        if (tier != 0) sb.AppendLine($"{indent}Tier: {tier}");
+        if (hp != 0) sb.AppendLine($"{indent}HP: {hp}");
+        if (!string.IsNullOrEmpty(imageOverride)) sb.AppendLine($"{indent}Image Override: {imageOverride}");
 
-        if (baseReplica != null && !string.IsNullOrEmpty(baseReplica.ToString()))
-            sb.AppendLine($"{indent}Base Replica: {baseReplica}");
-
-        if (!string.IsNullOrEmpty(colorClass))
-            sb.AppendLine($"{indent}Color Class: {colorClass}");
-
-        if (tier != 0)
-            sb.AppendLine($"{indent}Tier: {tier}");
-
-        if (hp != 0)
-            sb.AppendLine($"{indent}HP: {hp}");
-
-        if (!string.IsNullOrEmpty(imageOverride))
-            sb.AppendLine($"{indent}Image Override: {imageOverride}");
-
-        // HSV/Hue/HSL values
         if (h != 0) sb.AppendLine($"{indent}h: {h}");
         if (s != 0) sb.AppendLine($"{indent}s: {s}");
         if (v != 0) sb.AppendLine($"{indent}v: {v}");
         if (hue != 0) sb.AppendLine($"{indent}Hue: {hue}");
         if (!string.IsNullOrEmpty(hsl)) sb.AppendLine($"{indent}HSL: {hsl}");
 
-        // Layout/Visuals
         if (adj.HasValue) sb.AppendLine($"{indent}adj: {adj.Value}");
         if (!string.IsNullOrEmpty(p)) sb.AppendLine($"{indent}p: {p}");
         if (!string.IsNullOrEmpty(b)) sb.AppendLine($"{indent}b: {b}");
@@ -571,52 +584,33 @@ public class HeroData : EntityData
         if (!string.IsNullOrEmpty(draw)) sb.AppendLine($"{indent}draw: {draw}");
         if (!string.IsNullOrEmpty(thue)) sb.AppendLine($"{indent}thue: {thue}");
 
-        // Narrative
         if (!string.IsNullOrEmpty(speech)) sb.AppendLine($"{indent}Speech: '{speech}'");
         if (!string.IsNullOrEmpty(doc)) sb.AppendLine($"{indent}Doc: '{doc}'");
 
-        // Dice Sides (effectID is treated as an int)
         if (diceSides != null && diceSides.Length > 0)
         {
             bool headerPrinted = false;
             for (int i = 0; i < diceSides.Length; i++)
             {
                 var side = diceSides[i];
-                if (side != null)
+                if (side != null && (side.effectID != 0 || side.pips != 0))
                 {
-                    bool hasEffect = side.effectID != 0;
-                    bool hasPips = side.pips != 0;
-
-                    if (hasEffect || hasPips)
+                    if (!headerPrinted)
                     {
-                        if (!headerPrinted)
-                        {
-                            sb.AppendLine($"{indent}Dice Sides:");
-                            headerPrinted = true;
-                        }
-                        sb.AppendLine($"{indent}  [{i}] EffectID: {side.effectID} | Pips: {side.pips}");
+                        sb.AppendLine($"{indent}Dice Sides:");
+                        headerPrinted = true;
                     }
+                    sb.AppendLine($"{indent}  [{i}] EffectID: {side.effectID} | Pips: {side.pips}");
                 }
             }
         }
 
-        // Standard Lists
-        if (traits != null && traits.Count > 0)
-            sb.AppendLine($"{indent}Traits: {string.Join(", ", traits)}");
+        if (traits != null && traits.Count > 0) sb.AppendLine($"{indent}Traits: {string.Join(", ", traits)}");
+        if (blessings != null && blessings.Count > 0) sb.AppendLine($"{indent}Blessings: {string.Join(", ", blessings)}");
+        if (curses != null && curses.Count > 0) sb.AppendLine($"{indent}Curses: {string.Join(", ", curses)}");
+        if (baseAbilityData != null && baseAbilityData.Count > 0) sb.AppendLine($"{indent}Base Abilities: {string.Join(", ", baseAbilityData)}");
+        if (items != null && items.Count > 0) sb.AppendLine($"{indent}Items (Stock): {string.Join(", ", items)}");
 
-        if (blessings != null && blessings.Count > 0)
-            sb.AppendLine($"{indent}Blessings: {string.Join(", ", blessings)}");
-
-        if (curses != null && curses.Count > 0)
-            sb.AppendLine($"{indent}Curses: {string.Join(", ", curses)}");
-
-        if (baseAbilityData != null && baseAbilityData.Count > 0)
-            sb.AppendLine($"{indent}Base Abilities: {string.Join(", ", baseAbilityData)}");
-
-        if (items != null && items.Count > 0)
-            sb.AppendLine($"{indent}Items (Stock): {string.Join(", ", items)}");
-
-        // Custom Items (Calls the existing DebugContentsToConsole method)
         if (customItems != null && customItems.Count > 0)
         {
             bool headerPrinted = false;
@@ -636,7 +630,6 @@ public class HeroData : EntityData
             }
         }
 
-        // Custom Spells
         if (customSpells != null && customSpells.Count > 0)
         {
             bool headerPrinted = false;
@@ -651,13 +644,10 @@ public class HeroData : EntityData
                         headerPrinted = true;
                     }
                     sb.AppendLine($"{indent}  [{i}] Spell Name: {spell.entityName}");
-                    // If SpellData/AbilityData implements DebugContentsToConsole, call it:
-                    spell.DebugContentsToConsoleCompact(indent + "        ");
                 }
             }
         }
 
-        // Custom Tactics
         if (customTactics != null && customTactics.Count > 0)
         {
             bool headerPrinted = false;
@@ -672,13 +662,10 @@ public class HeroData : EntityData
                         headerPrinted = true;
                     }
                     sb.AppendLine($"{indent}  [{i}] Tactic Name: {tactic.entityName}");
-                    // If TacticData/AbilityData implements DebugContentsToConsole, call it:
-                    tactic.DebugContentsToConsoleCompact(indent + "        ");
                 }
             }
         }
 
-        // Only print if there is actual data inside the body
         if (sb.Length > 0)
         {
             string header = $"{indent}--- HERO DATA DEBUG (COMPACT) ---\n";

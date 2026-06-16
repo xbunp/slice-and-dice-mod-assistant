@@ -282,7 +282,8 @@ namespace SliceDiceTextMod
 
         private static HeroData ParseHero(List<Token> tokens, ref int pos)
         {
-            HeroData hero = new HeroData(HeroData.Hero.Blank);
+            HeroData hero = new HeroData();
+            hero.InitializeAsBlank();
 
             while (pos < tokens.Count && tokens[pos].Type != TokenType.EOF && tokens[pos].Type != TokenType.Ampersand && tokens[pos].Type != TokenType.Comma)
             {
@@ -357,7 +358,9 @@ namespace SliceDiceTextMod
                         {
                             // Custom Item nested handling
                             string itemStr = ExtractBalancedBlock(tokens, ref pos);
-                            hero.customItems.Add(SDData.Parse<ItemData>(itemStr));
+                            ItemData item = new ItemData();
+                            item.Parse(itemStr);
+                            hero.customItems.Add(item);
                         }
                         else
                         {
@@ -405,7 +408,7 @@ namespace SliceDiceTextMod
                         {
                             // Safely extract the custom ability string and pass it to AbilityData.Parse
                             string cabString = ExtractBalancedBlock(tokens, ref pos);
-                            hero.AddCustomAbility(AbilityData.Parse(cabString));
+                            hero.AddCustomAbility(AbilityData.WhatAmI(cabString)); //todo this might be fucked
                         }
                         else
                         {
@@ -423,7 +426,9 @@ namespace SliceDiceTextMod
                         {
                             // Safely extract custom item block so it doesn't break the dice modifier parser
                             string itemStr = ExtractBalancedBlock(tokens, ref pos);
-                            hero.customItems.Add(SDData.Parse<ItemData>(itemStr));
+                            ItemData item = new ItemData();
+                            item.Parse(itemStr);
+                            hero.customItems.Add(item);
                         }
                         else
                         {

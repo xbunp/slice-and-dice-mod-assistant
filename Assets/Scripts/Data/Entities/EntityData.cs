@@ -34,9 +34,12 @@ public abstract class EntityData : SDData
 
     public DiceSideData[] diceSides = new DiceSideData[6];
 
-    public EntityData()
+    protected void InitializeDiceFaces()
     {
-        for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData();
+        for (int i = 0; i < diceSides.Length; i++)
+        {
+            diceSides[i] = new DiceSideData();
+        }
     }
 
     // ==========================================
@@ -172,10 +175,5 @@ public abstract class EntityData : SDData
     protected static string FormatName(string name)
     {
         return name ?? "";
-    }
-
-    internal static ISyntaxPayload Create(string payloadString)
-    {
-        throw new NotImplementedException();
     }
 }

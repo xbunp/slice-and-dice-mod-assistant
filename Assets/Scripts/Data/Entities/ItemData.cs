@@ -411,24 +411,6 @@ public class ItemData : SDData
 {
     public List<string> GlobalTags = new List<string>();
 
-    public ItemData() : base()
-    {
-    }
-
-    // Constructor
-    public ItemData(string data) : this()
-    {
-        ((SDData)this).Parse(data);
-    }
-
-    // Static Factory
-    public static ItemData Create(string data)
-    {
-        var item = new ItemData();
-        ((SDData)item).Parse(data);
-        return item;
-    }
-
     // --- EQUIPPABLE ITEM METADATA ---
     // (Only populated if the item functions as an inventory/equippable object)
 
@@ -937,37 +919,43 @@ public class ItemData : SDData
             // === EXTERNAL DOMAIN HANDOFF ===
             if (IsMonsterEntity(core))
             {
-                // USER TODO: Link to your Monster class
-                mech.PayloadData = new MonsterData(core);
+                MonsterData monster = new MonsterData();
+                monster.Parse(core);
+                mech.PayloadData = monster;
             }
             else
             {
-                // USER TODO: Link to your Hero class
-                mech.PayloadData = new HeroData(core);
+                HeroData hero = new HeroData();
+                hero.Parse(core);
+                mech.PayloadData = hero;
             }
         }
         else if (mech.Prefix == "onhitdata" || mech.Prefix == "triggerhpdata")
         {
             // === EXTERNAL DOMAIN HANDOFF ===
             // USER TODO: Uncomment this to pass the payload to your Modifier parser!
-            mech.PayloadData = new HeroData(core);
+            TriggerHPData hero = new TriggerHPData();
+            hero.Parse(core);
+            mech.PayloadData = hero;
         }
         else if (mech.Prefix == "enchant" || mech.Prefix == "self")
         {
             // === EXTERNAL DOMAIN HANDOFF ===
-            // USER TODO: Uncomment this to pass the payload to your Modifier parser!
-            mech.PayloadData = new ModifierData(core);
+            ModifierData modifier = new ModifierData();
+            modifier.Parse(core);
+            mech.PayloadData = modifier;
         }
         else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata")
         {
             // === EXTERNAL DOMAIN HANDOFF ===
-            // USER TODO: Uncomment this to pass the payload to your Ability parser!
-            mech.PayloadData = AbilityData.Parse(core);
+            mech.PayloadData = AbilityData.CreateSpellOrTactic(core);
         }
         else if (mech.Prefix == "sticker")
         {
             // Sticker payloads are Items. We can recursively unpack this natively!
-            mech.PayloadData = new ItemData(core);
+            ItemData item = new ItemData();
+            item.Parse(core);
+            mech.PayloadData = item;
         }
         else if (mech.Prefix == "t")
         {
@@ -977,7 +965,10 @@ public class ItemData : SDData
             {
                 string modifierCore = core.Substring(5).Trim();
                 modifierCore = StripOuterParens(modifierCore);
-                mech.PayloadData = new ModifierData(modifierCore);
+
+                ModifierData modifier = new ModifierData();
+                modifier.Parse(core);
+                mech.PayloadData = modifier;
             }
         }
         else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
@@ -985,7 +976,9 @@ public class ItemData : SDData
             // If an inherent mechanic has a massive wrapped payload, unpack it as a nested item
             if (mech.PayloadString.StartsWith("("))
             {
-                mech.PayloadData = new ItemData(core);
+                ItemData item = new ItemData();
+                item.Parse(core);
+                mech.PayloadData = item;
             }
         }
     }

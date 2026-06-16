@@ -31,7 +31,12 @@ public class MonsterUI : EntityUI<MonsterData>
     protected override Sprite GetFacadeDiceSprite(string facadeID) => EntityUIHelpers.GetFacadeSprite(facadeID);
     protected override bool AllowFacades() => true;
     protected override string ExportEntity(MonsterData entity) => MonsterData.Export(entity);
-    protected override MonsterData ParseEntity(string data) => MonsterData.Parse(data);
+    protected override MonsterData ParseEntity(string data)
+    {
+        MonsterData monster = new MonsterData();
+        monster.Parse(data);
+        return monster;
+    }
 
     private void OpenMonsterPortraitsModal(Action<MonsterType, Sprite> onMonsterSelected)
     {

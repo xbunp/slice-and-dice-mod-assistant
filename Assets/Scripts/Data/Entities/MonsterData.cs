@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Unity.VisualScripting;
 using UnityEngine;
 
 [System.Serializable]
@@ -115,16 +116,9 @@ public class MonsterData : EntityData
         return sb.ToString();
     }
 
-    public MonsterData() { }
-    public MonsterData (string data)
+    public override void Parse(string data)
     {
-        Parse(data);
-    }
-
-    public static new MonsterData Parse(string data)
-    {
-        MonsterData monster = new MonsterData();
-        if (string.IsNullOrEmpty(data)) return monster;
+        if (string.IsNullOrEmpty(data)) return;
 
         data = data.Trim();
         List<string> tokens = new List<string>();
@@ -179,13 +173,13 @@ public class MonsterData : EntityData
 
                 if (tokens.Count > 0 && !MonsterPropertyKeys.Contains(tokens[0].ToLower()))
                 {
-                    monster.baseMonster = tokens[0];
+                    baseMonster = tokens[0];
                     tokens.RemoveAt(0); // consume the name
                 }
             }
             else if (!MonsterPropertyKeys.Contains(firstToken))
             {
-                monster.baseMonster = tokens[0];
+                baseMonster = tokens[0];
                 tokens.RemoveAt(0); // consume the name
             }
         }
@@ -199,54 +193,56 @@ public class MonsterData : EntityData
 
             switch (key)
             {
-                case "n": monster.entityName = value; break;
-                case "img": monster.imageOverride = value; break;
+                case "n": entityName = value; break;
+                case "img": imageOverride = value; break;
                 case "hp":
-                    monster.hp = (string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out int parsedHp)) ? 0 : parsedHp;
+                    hp = (string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out int parsedHp)) ? 0 : parsedHp;
                     break;
 
                 case "hsv":
                     string[] hsvParts = value.Split(':');
                     if (hsvParts.Length == 3)
                     {
-                        int.TryParse(hsvParts[0], out monster.h);
-                        int.TryParse(hsvParts[1], out monster.s);
-                        int.TryParse(hsvParts[2], out monster.v);
+                        int.TryParse(hsvParts[0], out h);
+                        int.TryParse(hsvParts[1], out s);
+                        int.TryParse(hsvParts[2], out v);
                     }
                     break;
-                case "hsl": monster.hsl = value; break;
-                case "hue": if (int.TryParse(value, out int hVal)) monster.hue = hVal; break;
+                case "hsl": hsl = value; break;
+                case "hue": if (int.TryParse(value, out int hVal)) hue = hVal; break;
 
                 case "i":
                     if (string.Equals(value, "t", StringComparison.OrdinalIgnoreCase) &&
                         i + 2 < tokens.Count && string.Equals(tokens[i + 2], "jinx", StringComparison.OrdinalIgnoreCase) &&
                         i + 3 < tokens.Count)
                     {
-                        monster.curses.AddRange(tokens[i + 3].Split('#'));
+                        curses.AddRange(tokens[i + 3].Split('#'));
                         i += 3;
                     }
                     else if (value.StartsWith("("))
                     {
-                        monster.customItems.Add(SDData.Parse<ItemData>(value));
+                        ItemData item = new ItemData();
+                        item.Parse(value);
+                        customItems.Add(item);
                     }
                     else
                     {
-                        monster.items.AddRange(value.Split('#'));
+                        items.AddRange(value.Split('#'));
                     }
                     break;
 
                 case "t":
-                    monster.traits.AddRange(value.Split('#'));
+                    traits.AddRange(value.Split('#'));
                     break;
 
-                case "bal": monster.bal = value; break;
+                case "bal": bal = value; break;
 
-                case "p": monster.p = value; break;
-                case "b": monster.b = value; break;
-                case "rect": monster.rect = value; break;
-                case "draw": monster.draw = value; break;
-                case "thue": monster.thue = value; break;
-                case "doc": monster.doc = value; break;
+                case "p": p = value; break;
+                case "b": b = value; break;
+                case "rect": rect = value; break;
+                case "draw": draw = value; break;
+                case "thue": thue = value; break;
+                case "doc": doc = value; break;
 
                 case "sd":
                     string[] faces = value.Split(':');
@@ -256,17 +252,15 @@ public class MonsterData : EntityData
                         string[] faceParts = faces[f].Split('-');
                         if (faceParts.Length == 2)
                         {
-                            int.TryParse(faceParts[0], out monster.diceSides[f].effectID);
-                            int.TryParse(faceParts[1], out monster.diceSides[f].pips);
+                            int.TryParse(faceParts[0], out diceSides[f].effectID);
+                            int.TryParse(faceParts[1], out diceSides[f].pips);
                         }
                     }
                     break;
 
                 default: consumeValue = false; break;
             }
-
             if (consumeValue) i++;
         }
-        return monster;
     }
 }

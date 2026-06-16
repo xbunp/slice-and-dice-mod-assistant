@@ -31,6 +31,7 @@ public class SpellData : AbilityData
 
     public SpellData() : base()
     {
+        InitializeDiceFaces();
         // Initialize as a 1-cost spell using standard mana effect ID 76
         diceSides[4].effectID = 76;
         diceSides[4].pips = manaCost;
@@ -57,6 +58,7 @@ public class TacticData : AbilityData
 
     public TacticData() : base()
     {
+        InitializeDiceFaces();
         diceSides[4].effectID = 0;
         diceSides[4].pips = 0;
     }

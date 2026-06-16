@@ -89,6 +89,7 @@ public class AbilityUI : RootUI
         SpellData newSpell = new SpellData();
         newSpell.entityName = "New Ability";
         newSpell.imageOverride = "None"; // Force blank starting state
+        newSpell.baseReplica = "Fey";
 
         // Default Primary Effect
         newSpell.diceSides[0].effectID = 15; // Damage
@@ -892,7 +893,7 @@ public class AbilityUI : RootUI
                     cleanVal = cleanVal.Substring(12).Trim();
                 }
 
-                AbilityData imported = AbilityData.Parse(cleanVal);
+                AbilityData imported = AbilityData.WhatAmI(cleanVal);
                 if (imported != null)
                 {
                     ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(imported);
@@ -927,7 +928,7 @@ public class AbilityUI : RootUI
 
             try
             {
-                AbilityData imported = AbilityData.Parse(cleanVal);
+                AbilityData imported = AbilityData.WhatAmI(cleanVal);
                 if (imported != null)
                 {
                     ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(imported);
