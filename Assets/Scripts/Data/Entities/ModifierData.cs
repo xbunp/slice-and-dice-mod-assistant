@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 using UnityEngine;
-
 
 [System.Serializable]
 public class ModifierData : SDData
@@ -11,49 +7,18 @@ public class ModifierData : SDData
     [Header("Raw Modifier Commands")]
     public List<string> coreCommands = new List<string>();
 
-    [Header("Nested Domain Data")]
-    public List<AbilityData> customAbilities = new List<AbilityData>();
-    public List<ItemData> customItems = new List<ItemData>();
-    public List<MonsterData> customMonsters = new List<MonsterData>();
-
-    // ==========================================
-    // KNOWLEDGE EXTRACTION (The Perfect Linear Parser)
-    // ==========================================
-
     public override void Parse(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
+        string core = StaticBranchTracing.StripOuterParens(data.Trim());
 
-        // 1. Split by '#' first to handle multiple chained modifiers in a sequence
-        List<string> subModifiers = ItemData.TopLevelSplit(data.Trim(), '#');
-
-        foreach (var subMod in subModifiers)
+        List<string> chains = StaticBranchTracing.TopLevelSplit(core, '#');
+        foreach (var chain in chains)
         {
-            if (string.IsNullOrWhiteSpace(subMod)) continue;
-
-            string core = StripOuterParens(subMod);
-            List<string> tokens = ItemData.TopLevelSplit(core, '.');
-
+            if (string.IsNullOrWhiteSpace(chain)) continue;
+            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
             ExtractKnowledge(tokens);
         }
-    }
-
-    private string StripOuterParens(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return text;
-        string t = text.Trim();
-        while (t.StartsWith("(") && t.EndsWith(")"))
-        {
-            int depth = 0; bool matching = true;
-            for (int k = 0; k < t.Length - 1; k++)
-            {
-                if (t[k] == '(') depth++; else if (t[k] == ')') depth--;
-                if (depth == 0) { matching = false; break; }
-            }
-            if (matching) t = t.Substring(1, t.Length - 2).Trim();
-            else break;
-        }
-        return t;
     }
 
     private void ExtractKnowledge(List<string> tokens)
@@ -63,17 +28,15 @@ public class ModifierData : SDData
             string originalToken = tokens[i];
             string tokenLower = originalToken.ToLower();
 
-            // Unwrap trapped parens
             if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
                 string inner = originalToken.Substring(1, originalToken.Length - 2);
-                List<string> innerTokens = ItemData.TopLevelSplit(inner, '.');
+                List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
                 ExtractKnowledge(innerTokens);
                 continue;
             }
 
-            // Bridge Handoffs: If we hit a known container, gather it and pass it down the pipeline.
-            if (tokenLower == "abilitydata" || tokenLower == "i" || tokenLower == "hat" || tokenLower == "egg" || tokenLower == "rmon")
+            if (tokenLower == "abilitydata" || tokenLower == "i" || tokenLower == "hat" || tokenLower == "egg" || tokenLower == "rmon" || tokenLower == "add" || tokenLower == "vase" || tokenLower == "jinx")
             {
                 int startIndex = i + 1;
                 if (startIndex >= tokens.Count) break;
@@ -82,8 +45,7 @@ public class ModifierData : SDData
                 while (endIndex < tokens.Count)
                 {
                     string peek = tokens[endIndex].ToLower();
-                    // Break if we hit another top-level structural modifier key
-                    if (peek == "abilitydata" || peek == "i" || peek == "hat" || peek == "egg") break;
+                    if (peek == "abilitydata" || peek == "i" || peek == "hat" || peek == "egg" || peek == "rmon" || peek == "add" || peek == "vase" || peek == "jinx") break;
                     endIndex++;
                 }
 
@@ -91,31 +53,55 @@ public class ModifierData : SDData
                 if (count > 0)
                 {
                     string payload = string.Join(".", tokens.GetRange(startIndex, count));
-                    i = endIndex - 1; // Advance outer loop
+                    i = endIndex - 1;
 
                     if (tokenLower == "abilitydata")
-                    {
-                        customAbilities.Add(AbilityData.CreateAbility(payload));
-                    }
+                        customPayloads.Add(new CustomPayload { Prefix = tokenLower, Data = AbilityData.CreateAbility(payload) });
                     else if (tokenLower == "i")
                     {
-                        ItemData item = new ItemData();
-                        item.Parse(payload);
-                        customItems.Add(item);
+                        ItemData item = new ItemData(); item.Parse(payload);
+                        customPayloads.Add(new CustomPayload { Prefix = tokenLower, Data = item, Type = PayloadType.Item });
                     }
-                    else if (tokenLower == "hat" || tokenLower == "egg" || tokenLower == "rmon")
+                    else if (tokenLower == "egg" || tokenLower == "rmon")
                     {
-                        // If it's hat/egg, pass the prefix + payload to MonsterData to figure out
-                        MonsterData monster = new MonsterData();
-                        monster.Parse(originalToken + "." + payload);
-                        customMonsters.Add(monster);
+                        MonsterData monster = new MonsterData(); monster.Parse(originalToken + "." + payload);
+                        customPayloads.Add(new CustomPayload { Prefix = "", Data = monster, Type = PayloadType.Monster });
+                    }
+                    else if (tokenLower == "hat")
+                    {
+                        if (StaticBranchTracing.IsMonsterEntity(payload))
+                        {
+                            MonsterData m = new MonsterData(); m.Parse(payload);
+                            customPayloads.Add(new CustomPayload { Prefix = "hat", Data = m, Type = PayloadType.Monster });
+                        }
+                        else
+                        {
+                            HeroData h = new HeroData(); h.Parse(payload);
+                            customPayloads.Add(new CustomPayload { Prefix = "hat", Data = h, Type = PayloadType.Hero });
+                        }
+                    }
+                    else if (tokenLower == "add")
+                    {
+                        if (StaticBranchTracing.IsMonsterEntity(payload))
+                        {
+                            MonsterData m = new MonsterData(); m.Parse(payload);
+                            customPayloads.Add(new CustomPayload { Prefix = "add", Data = m, Type = PayloadType.Monster });
+                        }
+                        else
+                        {
+                            HeroData h = new HeroData(); h.Parse(payload);
+                            customPayloads.Add(new CustomPayload { Prefix = "add", Data = h, Type = PayloadType.Hero });
+                        }
+                    }
+                    else if (tokenLower == "vase" || tokenLower == "jinx")
+                    {
+                        ModifierData mod = new ModifierData(); mod.Parse(originalToken + "." + payload);
+                        customPayloads.Add(new CustomPayload { Prefix = "", Data = mod, Type = PayloadType.Modifier });
                     }
                 }
             }
             else
             {
-                // It's a raw modifier command like "ea", "sthief", "summon", "temporary". 
-                // We just save it safely so it isn't lost.
                 coreCommands.Add(originalToken);
             }
         }
@@ -124,11 +110,11 @@ public class ModifierData : SDData
     public override string Export()
     {
         List<string> parts = new List<string>(coreCommands);
-
-        foreach (var ab in customAbilities) if (ab != null) parts.Add($"abilitydata.({ab.Export()})");
-        foreach (var itm in customItems) if (itm != null) parts.Add($"i.({itm.Export()})");
-        foreach (var mon in customMonsters) if (mon != null) parts.Add(mon.Export());
-
+        foreach (var cp in customPayloads)
+        {
+            string exp = cp.Export();
+            if (!string.IsNullOrEmpty(exp)) parts.Add(exp);
+        }
         return string.Join(".", parts);
     }
 
@@ -136,34 +122,21 @@ public class ModifierData : SDData
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.AppendLine($"{indent}--- MODIFIER DATA DEBUG ---");
+        if (coreCommands.Count > 0) sb.AppendLine($"{indent}Core Commands: {string.Join(".", coreCommands)}");
 
-        if (coreCommands.Count > 0)
-            sb.AppendLine($"{indent}Core Commands: {string.Join(".", coreCommands)}");
-
-        if (customAbilities.Count > 0)
+        if (customPayloads != null && customPayloads.Count > 0)
         {
-            for (int i = 0; i < customAbilities.Count; i++)
+            sb.AppendLine($"{indent}Custom Payloads ({customPayloads.Count}):");
+            for (int i = 0; i < customPayloads.Count; i++)
             {
-                sb.AppendLine($"{indent}  [✓ Unpacked AbilityData!]");
-                customAbilities[i]?.DebugAbilityCompact(indent + "    ");
-            }
-        }
+                var cp = customPayloads[i];
+                sb.AppendLine($"{indent}  [{i}] Prefix: '{cp.Prefix}' | [✓ Unpacked {cp.Data?.GetType().Name}]");
 
-        if (customItems.Count > 0)
-        {
-            for (int i = 0; i < customItems.Count; i++)
-            {
-                sb.AppendLine($"{indent}  [✓ Unpacked ItemData!]");
-                customItems[i]?.DebugContentsToConsole(indent + "    ");
-            }
-        }
-
-        if (customMonsters.Count > 0)
-        {
-            for (int i = 0; i < customMonsters.Count; i++)
-            {
-                sb.AppendLine($"{indent}  [✓ Unpacked MonsterData!]");
-                customMonsters[i]?.DebugContentsToConsoleCompact(indent + "    ");
+                if (cp.Data is ItemData id) id.DebugContentsToConsole(indent + "        ");
+                else if (cp.Data is HeroData hd) hd.DebugContentsToConsoleCompact(indent + "        ");
+                else if (cp.Data is AbilityData ad) ad.DebugAbilityCompact(indent + "        ");
+                else if (cp.Data is ModifierData md) md.DebugContentsToConsole(indent + "        ");
+                else if (cp.Data is MonsterData mnd) mnd.DebugContentsToConsoleCompact(indent + "        ");
             }
         }
 

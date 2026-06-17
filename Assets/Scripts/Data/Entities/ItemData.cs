@@ -1,178 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
-using UnityEngine;
 
-// ==========================================
-// INTERNAL AST (Strictly for parsing string structure)
-// ==========================================
-public abstract class ASTNode { public abstract string Export(); }
-
-[System.Serializable]
-public class ASTParser
-{
-    private enum TokenType { Identifier, Dot, Hash, LParen, RParen, EOF }
-    private class Token { public TokenType Type; public string Value; }
-
-    private readonly string input;
-    private int pos;
-
-    public ASTParser(string input) { this.input = input ?? ""; this.pos = 0; }
-
-    private Token NextToken()
-    {
-        if (pos >= input.Length)
-        {
-            //UnityEngine.Debug.Log($"[ASTParser.NextToken] EOF at pos {pos}");
-            return new Token { Type = TokenType.EOF };
-        }
-
-        // --- ADDED DEBUG ---
-        // Log the current character at pos before any processing
-        char currentChar = input[pos];
-        //UnityEngine.Debug.Log($"[ASTParser.NextToken] Processing pos: {pos}, char: '{currentChar}' ({(int)currentChar}) | Remaining: '{input.Substring(pos, Math.Min(30, input.Length - pos))}'");
-
-        if (currentChar == '.') { pos++; } //UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: Dot"); return new Token { Type = TokenType.Dot }; }
-        if (currentChar == '#') { pos++; }//UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: Hash"); return new Token { Type = TokenType.Hash }; }
-        if (currentChar == '(') { pos++; }//UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: LParen"); return new Token { Type = TokenType.LParen }; }
-        if (currentChar == ')') { pos++; }//UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: RParen"); return new Token { Type = TokenType.RParen }; }
-
-        int start = pos;
-        int bracketDepth = 0, braceDepth = 0;
-
-        while (pos < input.Length)
-        {
-            char curr = input[pos];
-            // --- ADDED DEBUG ---
-            // Log depth changes within the identifier loop
-            string depthChange = "";
-            if (curr == '[') { bracketDepth++; depthChange = " (bracketDepth++)"; }
-            else if (curr == ']') { bracketDepth--; depthChange = " (bracketDepth--)"; }
-            else if (curr == '{') { braceDepth++; depthChange = " (braceDepth++)"; }
-            else if (curr == '}') { braceDepth--; depthChange = " (braceDepth--)"; }
-
-            //UnityEngine.Debug.Log($"[ASTParser.NextToken] Identifier loop: pos {pos}, curr '{curr}', bracketDepth {bracketDepth}, braceDepth {braceDepth}{depthChange}");
-
-            if (bracketDepth == 0 && braceDepth == 0)
-            {
-                if (curr == '.' || curr == '#' || curr == '(' || curr == ')')
-                {
-                    // --- ADDED DEBUG ---
-                    //UnityEngine.Debug.Log($"[ASTParser.NextToken] Identifier loop BREAK: Detected delimiter '{curr}'");
-                    break; // Delimiter found, stop consuming for identifier
-                }
-            }
-            pos++;
-        }
-
-        string identifierValue = input.Substring(start, pos - start);
-
-        if (identifierValue.IndexOf("Slimelet", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            UnityEngine.Debug.Log($"[ASTParser Debug] Found target identifier: '{identifierValue}' | Char at pos: '{(pos < input.Length ? input[pos].ToString() : "EOF")}'");
-        }
-
-        // --- ADDED DEBUG ---
-        //UnityEngine.Debug.Log($"[ASTParser.NextToken] -> Token: Identifier, Value: '{identifierValue}' (Length: {identifierValue.Length})");
-        return new Token { Type = TokenType.Identifier, Value = identifierValue };
-    }
-
-    private List<Token> Tokenize()
-    {
-        List<Token> tokens = new List<Token>();
-        while (true) { var t = NextToken(); tokens.Add(t); if (t.Type == TokenType.EOF) break; }
-        return tokens;
-    }
-
-    public ASTNode Parse()
-    {
-        var tokens = Tokenize();
-        int index = 0;
-        return ParseSequence(tokens, ref index);
-    }
-
-    private ASTNode ParseSequence(List<Token> tokens, ref int index)
-    {
-        SequenceNode seq = new SequenceNode();
-        while (index < tokens.Count && tokens[index].Type != TokenType.EOF && tokens[index].Type != TokenType.RParen)
-        {
-            seq.Items.Add(ParseChain(tokens, ref index));
-            if (index < tokens.Count && tokens[index].Type == TokenType.Hash) index++;
-        }
-        return seq.Items.Count == 1 ? seq.Items[0] : seq;
-    }
-
-    private ASTNode ParseChain(List<Token> tokens, ref int index)
-    {
-        ChainNode chain = new ChainNode();
-        while (index < tokens.Count && tokens[index].Type != TokenType.EOF && tokens[index].Type != TokenType.RParen && tokens[index].Type != TokenType.Hash)
-        {
-            if (tokens[index].Type == TokenType.LParen)
-            {
-                index++;
-                ASTNode content = ParseSequence(tokens, ref index);
-                if (index < tokens.Count && tokens[index].Type == TokenType.RParen) index++;
-                ASTNode scopeNode = new ScopeNode(content);
-                if (index < tokens.Count && tokens[index].Type == TokenType.Identifier)
-                {
-                    scopeNode = new CompositeNode(scopeNode, tokens[index].Value);
-                    index++;
-                }
-                chain.Elements.Add(scopeNode);
-            }
-            else if (tokens[index].Type == TokenType.Identifier) { chain.Elements.Add(new StringNode(tokens[index].Value)); index++; }
-            else if (tokens[index].Type == TokenType.Dot) index++;
-            else index++;
-        }
-        return chain.Elements.Count == 1 ? chain.Elements[0] : chain;
-    }
-}
-
-[System.Serializable]
-public class StringNode : ASTNode
-{
-    public string Value { get; set; }
-    public StringNode(string value) => Value = value;
-    public override string Export() => Value;
-}
-
-[System.Serializable]
-public class ScopeNode : ASTNode
-{
-    public ASTNode Content { get; set; }
-    public ScopeNode(ASTNode content) => Content = content;
-    public override string Export() => Content != null ? $"({Content.Export()})" : "()";
-}
-
-[System.Serializable]
-public class CompositeNode : ASTNode
-{
-    public ASTNode Left { get; set; }
-    public string Suffix { get; set; }
-    public CompositeNode(ASTNode left, string suffix) { Left = left; Suffix = suffix; }
-    public override string Export() => $"{Left.Export()}{Suffix}";
-}
-
-[System.Serializable]
-public class ChainNode : ASTNode
-{
-    public List<ASTNode> Elements { get; set; } = new List<ASTNode>();
-    public override string Export() => string.Join(".", Elements.Select(e => e.Export()));
-}
-
-[System.Serializable]
-public class SequenceNode : ASTNode
-{
-    public List<ASTNode> Items { get; set; } = new List<ASTNode>();
-    public override string Export() => string.Join("#", Items.Select(e => e.Export()));
-}
-
-
-// ==========================================
-// ITEM DOMAIN DICTIONARY
-// ==========================================
 public static class ItemDomainRules
 {
     public static readonly HashSet<string> ValidItemProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -216,7 +45,7 @@ public static class ItemDomainRules
         "i", "sd", "k", "t",
         "sticker", "enchant", "cast",
         "hat", "onhitdata", "triggerhpdata",
-        "facade", "sidesc", "ritemx", "ritem" // <-- Added missing prefixes
+        "facade", "sidesc"
     };
 
     public static bool IsRepeatPrefix(string token, out int count)
@@ -307,24 +136,23 @@ public class ItemData : SDData
         GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
         if (string.IsNullOrWhiteSpace(data)) return;
 
-        List<string> chunks = TopLevelSplit(data.Trim(), '&');
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string itemCore = chunks[0];
 
         for (int c = 1; c < chunks.Count; c++)
         {
-            List<string> hiddenTokens = TopLevelSplit(chunks[c], '.');
+            List<string> hiddenTokens = StaticBranchTracing.TopLevelSplit(chunks[c], '.');
             if (hiddenTokens.Count > 0 && (hiddenTokens[0].ToLower() == "hidden" || hiddenTokens[0].ToLower() == "temporary"))
                 GlobalTags.Add(hiddenTokens[0]);
         }
 
-        itemCore = StripOuterParens(itemCore);
+        itemCore = StaticBranchTracing.StripOuterParens(itemCore);
 
-        // First split by '#' to handle parallel modifier chains cleanly
-        List<string> chains = TopLevelSplit(itemCore, '#');
+        List<string> chains = StaticBranchTracing.TopLevelSplit(itemCore, '#');
         foreach (var chain in chains)
         {
             if (string.IsNullOrWhiteSpace(chain)) continue;
-            List<string> tokens = TopLevelSplit(chain, '.');
+            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
             ExtractKnowledge(tokens, this);
         }
     }
@@ -344,18 +172,22 @@ public class ItemData : SDData
             string tokenLower = tokens[i].ToLower();
             string originalToken = tokens[i];
 
-            // If the chunk is entirely wrapped in parentheses, unwrap it to bypass the trap, preserving exact casing!
             if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
                 string inner = originalToken.Substring(1, originalToken.Length - 2);
-                List<string> innerTokens = TopLevelSplit(inner, '.');
-                ExtractKnowledge(innerTokens, item);
+                List<string> innerChains = StaticBranchTracing.TopLevelSplit(inner, '#');
+                foreach (var chain in innerChains)
+                {
+                    if (string.IsNullOrWhiteSpace(chain)) continue;
+                    List<string> innerTokens = StaticBranchTracing.TopLevelSplit(chain, '.');
+                    ExtractKnowledge(innerTokens, item);
+                }
                 continue;
             }
 
             switch (tokenLower)
             {
-                case "n": if (i + 1 < tokens.Count) item.entityName = tokens[++i]; break; // PRESERVES EXACT CASING!
+                case "n": if (i + 1 < tokens.Count) item.entityName = tokens[++i]; break;
                 case "tier": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) item.Tier = t; break;
                 case "doc":
                 case "sidesc": if (i + 1 < tokens.Count) item.DocumentedDescription = tokens[++i]; break;
@@ -390,31 +222,27 @@ public class ItemData : SDData
     {
         ItemMechanic mech = new ItemMechanic();
 
-        // PHASE 1: Walk the chain gathering targets, prefixes, and the full payload
         while (i < tokens.Count)
         {
             string originalToken = tokens[i];
             string tLower = originalToken.ToLower();
 
-            // Check Prefix FIRST to protect "t" (Traits) from being swallowed as a target
             if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
             {
                 mech.Prefix = tLower;
                 i++;
 
-                // GATHER LOOP: Grab all remaining pieces of the payload until we hit a Suffix
                 List<string> payloadTokens = new List<string>();
                 while (i < tokens.Count)
                 {
                     string peek = tokens[i].ToLower();
                     if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
-                        break; // Suffix hit, stop gathering payload
-
+                        break;
                     payloadTokens.Add(tokens[i]);
                     i++;
                 }
                 mech.PayloadString = string.Join(".", payloadTokens);
-                i--; // Step back so Phase 2 can process the suffix
+                i--;
                 break;
             }
             else if (ItemDomainRules.ValidTargets.Contains(tLower))
@@ -429,14 +257,15 @@ public class ItemData : SDData
             else if (tLower == "unpack") mech.Unpack = true;
             else
             {
-                // RAW FALLBACK GATHER LOOP: (If no prefix exists)
                 List<string> payloadTokens = new List<string>();
+                payloadTokens.Add(originalToken);
+                i++;
+
                 while (i < tokens.Count)
                 {
                     string peek = tokens[i].ToLower();
                     if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
                         break;
-
                     payloadTokens.Add(tokens[i]);
                     i++;
                 }
@@ -447,7 +276,6 @@ public class ItemData : SDData
             i++;
         }
 
-        // PHASE 2: Look-ahead for trailing modification suffixes
         while (i + 1 < tokens.Count)
         {
             string nextTokenLower = tokens[i + 1].ToLower();
@@ -490,56 +318,14 @@ public class ItemData : SDData
                ItemDomainRules.IsRepeatPrefix(token, out _);
     }
 
-    // THE PERFECT SPLIT
-    public static List<string> TopLevelSplit(string input, char separator)
-    {
-        List<string> result = new List<string>();
-        int p = 0, b = 0, br = 0, start = 0;
-        for (int i = 0; i < input.Length; i++)
-        {
-            char c = input[i];
-            if (c == '(') p++;
-            else if (c == ')') p--;
-            else if (c == '[') b++;
-            else if (c == ']') b--;
-            else if (c == '{') br++;
-            else if (c == '}') br--;
-            else if (c == separator && p == 0 && b == 0 && br == 0)
-            {
-                result.Add(input.Substring(start, i - start));
-                start = i + 1;
-            }
-        }
-        result.Add(input.Substring(start));
-        return result;
-    }
-
-    private string StripOuterParens(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return text;
-        string t = text.Trim();
-        while (t.StartsWith("(") && t.EndsWith(")"))
-        {
-            int depth = 0; bool matching = true;
-            for (int k = 0; k < t.Length - 1; k++)
-            {
-                if (t[k] == '(') depth++; else if (t[k] == ')') depth--;
-                if (depth == 0) { matching = false; break; }
-            }
-            if (matching) t = t.Substring(1, t.Length - 2).Trim();
-            else break;
-        }
-        return t;
-    }
-
     private void AssignDomainPayload(ItemMechanic mech)
     {
         if (string.IsNullOrEmpty(mech.PayloadString)) return;
-        string core = StripOuterParens(mech.PayloadString);
+        string core = StaticBranchTracing.StripOuterParens(mech.PayloadString);
 
         if (mech.Prefix == "hat")
         {
-            if (IsMonsterEntity(core)) { MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster; }
+            if (StaticBranchTracing.IsMonsterEntity(core)) { MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster; }
             else { HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero; }
         }
         else if (mech.Prefix == "onhitdata" || mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
@@ -548,66 +334,24 @@ public class ItemData : SDData
         else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         else if (mech.Prefix == "t")
         {
-            // FIX: If the trait payload describes a monster entity (like jinx, egg, vase, orb)
-            // we MUST parse it as a MonsterData first before extracting its modifiers.
-            if (IsMonsterEntity(core))
+            if (StaticBranchTracing.IsMonsterEntity(core))
             {
-                MonsterData monster = new MonsterData();
-                monster.Parse(core);
-                mech.PayloadData = monster;
+                MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster;
             }
             else if (core.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
             {
-                string modifierCore = StripOuterParens(core.Substring(5).Trim());
-                ModifierData mod = new ModifierData();
-                mod.Parse(modifierCore);
-                mech.PayloadData = mod;
+                string modifierCore = StaticBranchTracing.StripOuterParens(core.Substring(5).Trim());
+                ModifierData mod = new ModifierData(); mod.Parse(modifierCore); mech.PayloadData = mod;
             }
             else
             {
-                HeroData hero = new HeroData();
-                hero.Parse(core);
-                mech.PayloadData = hero;
+                HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero;
             }
         }
         else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
         {
             if (mech.PayloadString.StartsWith("(")) { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         }
-    }
-
-    private bool IsMonsterEntity(string core)
-    {
-        if (string.IsNullOrEmpty(core)) return false;
-
-        // 1. Grab the very first token at depth 0
-        string firstToken = TopLevelSplit(core, '.')[0].ToLower();
-
-        // 2. If it's wrapped in parenthesis, unwrap it to find the real identity
-        while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
-        {
-            firstToken = StripOuterParens(firstToken);
-            firstToken = TopLevelSplit(firstToken, '.')[0].ToLower();
-        }
-
-        if (firstToken == "replica") return false; // Explicit Hero
-
-        // 3. Match explicit Monster Prefixes
-        if (firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx" || firstToken == "rmon")
-            return true;
-
-        // 4. Fallback to Game Registry Lookup
-        foreach (string monsterName in MonsterHelper.FormattedMonsterNames)
-        {
-            if (string.Equals(firstToken, monsterName, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        // 5. Fallback for dirty prefix formats
-        if (firstToken.Contains("jinx") || firstToken.Contains("vase") || firstToken.Contains("orb") || firstToken.Contains("rmon"))
-            return true;
-
-        return false;
     }
 
     public override string Export()
@@ -641,7 +385,8 @@ public class ItemData : SDData
         sb.AppendLine($"{indent}--- ITEM DATA DEBUG ---");
         sb.AppendLine($"{indent}Name: {entityName}");
         sb.AppendLine($"{indent}Tier: {Tier}");
-        sb.AppendLine($"{indent}ImageRef: {imageOverride}");
+        string displayValue = !string.IsNullOrEmpty(imageOverride) && imageOverride.Length > 32 ? "<base64 string img>" : imageOverride;
+        sb.AppendLine($"{indent}ImageRef: {displayValue}");
         if (HsvShift.HasValue) sb.AppendLine($"{indent}HsvShift: {HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
 
         sb.AppendLine($"{indent}\n{indent}Mechanics ({Mechanics.Count}):");
@@ -656,7 +401,6 @@ public class ItemData : SDData
                 sb.AppendLine($"{indent}      [✓ Unpacked ItemData!]");
                 nestedItem.DebugContentsToConsole(indent + "        ");
             }
-            // Add this condition first so nested abilities use the specialized log format
             else if (m.PayloadData is AbilityData ad)
             {
                 sb.AppendLine($"{indent}      [✓ Unpacked AbilityData!]");
@@ -671,6 +415,11 @@ public class ItemData : SDData
             {
                 sb.AppendLine($"{indent}      [✓ Unpacked MonsterData!]");
                 md.DebugContentsToConsoleCompact(indent + "        ");
+            }
+            else if (m.PayloadData is ModifierData mod)
+            {
+                sb.AppendLine($"{indent}      [✓ Unpacked ModifierData!]");
+                mod.DebugContentsToConsole(indent + "        ");
             }
             else if (m.PayloadData != null)
             {

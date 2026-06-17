@@ -295,8 +295,9 @@ public class MonsterUI : EntityUI<MonsterData>
             onAdd: (itemName) =>
             {
                 if (CurrentEntity.customItems == null)
-                    CurrentEntity.customItems = new List<ItemData>();
-
+                {
+                    Debug.LogError($"CUSTOM ITEMS NULL, CATATSROPHIC ERROR.", this);
+                }
                 if (!CurrentEntity.customItems.Any(i => i.entityName == itemName)) // Note: change to 'name' if needed
                 {
                     CurrentEntity.customItems.Add(new ItemData { entityName = itemName }); // Note: change to 'name' if needed

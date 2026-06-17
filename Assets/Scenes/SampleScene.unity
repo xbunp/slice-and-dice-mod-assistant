@@ -172,8 +172,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   syntax: 
   item:
-    entityName: NewEntity
-    imageOverride: None
+    entityName: 
+    imageOverride: 
+    customPayloads: []
     GlobalTags: []
     Containers: []
     Mechanics: []

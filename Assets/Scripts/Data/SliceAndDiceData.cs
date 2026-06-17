@@ -1262,7 +1262,26 @@ public static class SDColors
     };
 
     public static readonly Dictionary<string, string> TraitNiceNames = new Dictionary<string, string>
-{
+    {
+    // Heroes
+    { "Housecat", "Hero does not level up." },
+    { "Tinder", "Upon death: 1 damage to all enemies" },
+    //{ "Pockets", "(Nonfunctional) On pick, gain a random tier 1 item and 2x random tier 0 junk items" },
+    { "Presence", "All hp: become immune to damage this turn" },
+    { "Spine", "On-hit: damage the attacker for 1" },
+    //{ "Coffin", "(Nonfunctional) On pick, gain a random tier 0 hero" },
+    { "Granite", "The inner 2 hp: must be removed individually" },
+    { "Mimic", "Replace my sides with the middle base sides of other heroes (in petrify order from top to bottom)" },
+    { "Robot", "+2 item slots (max 4)" },
+    //{ "Luggage", "(Nonfunctional) On pick, gain a random tier 6 item and a random tier 7 item and a random tier 8 item" },
+    //{ "Vessel", "(Nonfunctional) On pick, gain a random tier 3 blessing" },
+    { "Dice", "Add lucky to all sides" },
+    { "Jumble", "Add fluctuate to all sides" },
+    //{ "Tainted", "(Nonfunctional) On pick, gain a random tier 3 curse" },
+    //{ "Twin", "(Nonfunctional) There is a copy of me who benefits from my items" },
+    { "Tw1n", "Hidden from the Party UI." },
+
+    // Monsters
     { "Bones", "1 damage to adjacent allies upon death." },
     { "Imp", "On-hit: damage the attacker for 1" },
     { "Sniper", "Starts at the back" },
@@ -1317,10 +1336,12 @@ public static class SDColors
     { "Basalt", "The first time I take exactly 1 damage, double it to 2, then increase 1 to 2" },
     { "Hexia", "On-hit: attacker takes equal damage to me\nWhenever you use an ability: damage the bottom hero equal to the cost" },
     { "The Hand", "All heroes: +1 pip to all sides" },
-    { "Inevitable", "Every 5th hp (Starts at 3rd hp): become immune to damage this turn\n(Hidden trait) Add era to all sides" },
+    { "Inevitable", "Every 5th hp (Starts at 3rd hp): become immune to damage this turn (Hidden trait) Add era to all sides" },
     { "PainSigil", "All heroes: Add pain to all sides" },
     { "DecaySigil", "All heroes: Add decay to all sides" },
     { "DeathSigil", "All heroes: Add death to all sides" }
+        // TODO
+        // you can technically list all heroes with learn.abilities, t.mage for example will teach his spell.
 };
 
 

@@ -997,8 +997,9 @@ public class HeroUI : RootUI
             onAdd: (itemName) =>
             {
                 if (CurrentHero.customItems == null)
-                    CurrentHero.customItems = new List<ItemData>();
-
+                {
+                    Debug.LogError($"CUSTOM ITEMS NULL, CATATSROPHIC ERROR.", this);
+                }
                 if (!CurrentHero.customItems.Any(i => i.entityName == itemName)) // Note: change to 'name' if needed
                 {
                     CurrentHero.customItems.Add(new ItemData { entityName = itemName }); // Note: change to 'name' if needed
