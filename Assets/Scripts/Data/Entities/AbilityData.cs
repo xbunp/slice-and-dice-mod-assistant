@@ -8,7 +8,7 @@ public static class AbilityDomainRules
 {
     public static readonly HashSet<string> AbilityKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "sd", "i", "t", "gift", "abilitydata", "n", "img", "hp", "col", "tier",
+        "sd", "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "n", "img", "hp", "col", "tier",
         "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "doc", "adj", "speech"
     };
 }
@@ -93,14 +93,16 @@ public abstract class AbilityData : HeroData
                         if (hsv.Length == 3 && int.TryParse(hsv[0], out h) && int.TryParse(hsv[1], out s) && int.TryParse(hsv[2], out v)) { }
                     }
                     break;
-                case "hsl": if (i + 1 < tokens.Count) hsl = tokens[++i]; break;
                 case "hue": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hueVal)) hue = hueVal; break;
                 case "p": if (i + 1 < tokens.Count) p = tokens[++i]; break;
                 case "b": if (i + 1 < tokens.Count) b = tokens[++i]; break;
                 case "rect": if (i + 1 < tokens.Count) rect = tokens[++i]; break;
                 case "draw": if (i + 1 < tokens.Count) draw = tokens[++i]; break;
-                case "thue": if (i + 1 < tokens.Count) thue = tokens[++i]; break;
+
+                case "thue": if (i + 1 < tokens.Count) thue = UnpackTHue(tokens[++i]); break;
+
                 case "sd":
+                    InitializeDiceFaces();
                     if (i + 1 < tokens.Count)
                     {
                         string[] faces = tokens[++i].Split(':');
@@ -185,7 +187,7 @@ public abstract class AbilityData : HeroData
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
 
         if (hasImageOverride) { sb.Append($".img.{FormatName(imageOverride)}"); AppendColorModifier(sb); }
-        if (!string.IsNullOrEmpty(thue)) sb.Append($".thue.{thue}");
+        if (thue != null && thue.colorOffset != 0) sb.Append($".{PackTHue(thue)}");
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");
         if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity" && entityName != "Fey") sb.Append($".n.{FormatName(entityName)}");
 
@@ -341,5 +343,56 @@ public abstract class AbilityData : HeroData
         }
 
         UnityEngine.Debug.Log(sb.ToString());
+    }
+
+    // FOR ON HIT DATA / TARGETTED DATA.
+
+    /// <summary>
+    /// Translates the parsed 'hp' value into a human-readable description of 
+    /// which health pips on the target entity are affected according to the Textmod API rules.
+    /// </summary>
+    public static string GetPipsAffectedDescription(int hp)
+    {
+        if (hp <= 0) return "None";
+
+        switch (hp)
+        {
+            case 1: return "All HP";
+            case 2: return "Every 2nd HP";
+            case 3: return "Every 3rd HP";
+            case 4: return "Every 4th HP";
+            case 5: return "Every 5th HP";
+            case 6: return "Every 10th HP";
+            case 7: return "Every 10th HP, starting with the 5th";
+            case 8: return "Every 2nd HP, starting with the 1st";
+            case 9: return "Every 3rd HP, starting with the 1st";
+            case 10: return "Inner 1 HP";
+            case 11: return "Inner 2 HP";
+            case 12: return "Inner 3 HP";
+            case 13: return "Inner 5 HP";
+            case 14: return "Outer 1 HP";
+            case 15: return "Outer 2 HP";
+            case 16: return "Outer 3 HP";
+            case 17: return "Outer 5 HP";
+            case 18: return "Middle HP";
+            case 19: return "2 Evenly Spaced HP";
+            case 20: return "3 Evenly Spaced HP";
+            case 21: return "4 Evenly Spaced HP";
+            default:
+                int offset = hp - 20;
+                return $"The {offset}{GetOrdinalSuffix(offset)} HP";
+        }
+    }
+
+    protected static string GetOrdinalSuffix(int num)
+    {
+        if (num % 100 >= 11 && num % 100 <= 13) return "th";
+        switch (num % 10)
+        {
+            case 1: return "st";
+            case 2: return "nd";
+            case 3: return "rd";
+            default: return "th";
+        }
     }
 }

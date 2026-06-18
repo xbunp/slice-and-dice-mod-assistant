@@ -435,6 +435,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         int startIndex = (tabIndex == 0) ? 0 : tabIndex - 1;
         int endIndex = (tabIndex == 0) ? 6 : tabIndex;
 
+        CurrentEntity.InitializeDiceFaces();
+
         for (int i = startIndex; i < endIndex; i++)
         {
             int index = i;

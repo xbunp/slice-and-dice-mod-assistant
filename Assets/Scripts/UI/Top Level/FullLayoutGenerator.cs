@@ -28,9 +28,16 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject togglePrefab;
     public GameObject filteredDropdown;
 
+    public FlexibleColorPicker colorPicker;
+
     [Header("Layout Settings")]
     public float rowHeight = 35f;
     public float rowSpacing = 8f;
+
+    private void Start()
+    {
+        colorPicker.CloseColorPicker();
+    }
 
     /// <summary>
     /// Instantiates the UI Wrapper and returns the screen container with the RootWrapper assigned.

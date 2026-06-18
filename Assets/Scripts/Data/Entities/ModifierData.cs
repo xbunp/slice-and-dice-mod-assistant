@@ -95,8 +95,14 @@ public class ModifierData : SDData
                     }
                     else if (tokenLower == "vase" || tokenLower == "jinx")
                     {
-                        ModifierData mod = new ModifierData(); mod.Parse(originalToken + "." + payload);
-                        customPayloads.Add(new CustomPayload { Prefix = "", Data = mod, Type = PayloadType.Modifier });
+                        ModifierData mod = new ModifierData();
+
+                        // FIX: Parse ONLY the inner payload to prevent infinite recursion
+                        string corePayload = StaticBranchTracing.StripOuterParens(payload);
+                        mod.Parse(corePayload);
+
+                        // Set Prefix to tokenLower so we preserve "vase" or "jinx" during export
+                        customPayloads.Add(new CustomPayload { Prefix = tokenLower, Data = mod, Type = PayloadType.Modifier });
                     }
                 }
             }

@@ -6,10 +6,15 @@ public class ItemTester : MonoBehaviour
 {
     public string syntax;
     public ItemData item;
+    public HeroData hero;
 
     [ContextMenu("Parse Item")]
     public void ParseItem()
     {
+        //hero = new HeroData();
+        //hero.Parse(syntax);
+        //hero.DebugContentsToConsoleCompact();
+
         item = new ItemData();
         item.Parse(syntax);
         item.DebugContentsToConsole();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Newtonsoft.Json;
 
 public class ModPackage : MonoBehaviour
 {
@@ -214,9 +215,14 @@ public class ModPackage : MonoBehaviour
     {
         if (source == null) return null;
 
-        string json = JsonUtility.ToJson(source);
-        // Deserialize using the concrete runtime type rather than the generic compile-time parameter
-        return JsonUtility.FromJson(json, source.GetType()) as T;
+        // Configure serializer to ignore loops instead of throwing an error
+        var settings = new JsonSerializerSettings
+        {
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+        };
+
+        string json = JsonConvert.SerializeObject(source, settings);
+        return JsonConvert.DeserializeObject(json, source.GetType(), settings) as T;
     }
 
     public void NotifyActiveEntityChanged<T>(object sender) where T : EntityData

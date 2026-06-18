@@ -97,7 +97,7 @@ public class RootUIFactory : MonoBehaviour
         HeroUI = CreateTabInstance<HeroUI>("HeroUI", "Heroes");
         MonsterUI = CreateTabInstance<MonsterUI>("MonsterUI", "Monsters");
         ItemUI = CreateTabInstance<ItemUI>("ItemUI", "Items");
-        AbilityUI = CreateTabInstance<AbilityUI>("AbilityUI", "Spells & Tactics");
+        AbilityUI = CreateTabInstance<AbilityUI>("AbilityUI", "Abilities");
 
         uiGenerator.canvas = originalCanvas;
     }

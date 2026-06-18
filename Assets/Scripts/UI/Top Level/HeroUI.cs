@@ -292,7 +292,10 @@ public class HeroUI : RootUI
     private void OnPasteHeroString(string pastedString)
     {
         if (string.IsNullOrWhiteSpace(pastedString)) return;
-        HeroData importedHero = TextModLexerParser.ParseHero(pastedString);
+
+        // Bypass the deleted Lexer and use the native parser directly
+        HeroData importedHero = new HeroData();
+        importedHero.Parse(pastedString);
 
         // Safely replace the active working clone with the imported hero
         ModPackage.Instance.UpdateActiveEntityClone<HeroData>(importedHero);
@@ -404,6 +407,12 @@ public class HeroUI : RootUI
         if (statsUI.Inputs.TryGetValue("HeroFacS", out var hS)) hS.SetTextWithoutNotify(CurrentHero.s.ToString());
         if (statsUI.Inputs.TryGetValue("HeroFacV", out var hV)) hV.SetTextWithoutNotify(CurrentHero.v.ToString());
 
+        if (statsUI.Sliders.TryGetValue("ThueRangeSlider", out var thueRangeSlider))
+            thueRangeSlider.SetValueWithoutNotify(CurrentHero.thue.colorRange);
+
+        if (statsUI.Sliders.TryGetValue("ThueOffsetSlider", out var thueOffsetSlider))
+            thueOffsetSlider.SetValueWithoutNotify(CurrentHero.thue.colorOffset);
+
         int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
         int endIndex = (currentDiceTab == 0) ? 6 : currentDiceTab;
 
@@ -464,6 +473,7 @@ public class HeroUI : RootUI
             }
 
             portraitPreview.SetPortraitHSV(CurrentHero.h, CurrentHero.s, CurrentHero.v);
+            portraitPreview.SetPortraitTHue(CurrentHero.thue);
         }
 
         if (statsUI != null && statsUI.Buttons != null)
@@ -479,6 +489,19 @@ public class HeroUI : RootUI
                 SetButtonIcon(overrideBtn, s);
             }
         }
+        /*
+        if (statsUI.Buttons.TryGetValue("ThueColorBtn", out var thueColorBtn))
+        {
+            if (ColorUtility.TryParseHtmlString(CurrentHero.thue.colorHex, out Color thueColor))
+            {
+                thueColorBtn.image.color = thueColor;
+            }
+            else
+            {
+                thueColorBtn.image.color = Color.white;
+            }
+        }
+        */
 
         int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
         int endIndex = (currentDiceTab == 0) ? 6 : currentDiceTab;
@@ -829,6 +852,47 @@ public class HeroUI : RootUI
             GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateHeroHsvData(2, v); })
         ));
 
+        layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("T-Hue Color:", 0.35f),
+                    GridCellSpec.CreateButton("ThueColorBtn", "Pick Color", 0.65f, () => {
+                        if (uiGenerator.colorPicker == null)
+                        {
+                            Debug.LogWarning("FlexibleColorPicker reference is missing from the scene.");
+                            return;
+                        }
+
+                        Color initialColor = Color.white;
+                        if (CurrentHero.thue != null)
+                        {
+                            initialColor = CurrentHero.thue.colorHex;
+                        }
+
+                        OpenColorPicker(initialColor, (color) => {
+                            if (CurrentHero.thue == null)
+                            {
+                                CurrentHero.thue = new Thue { colorRange = 0, colorOffset = 0 };
+                            }
+
+                            CurrentHero.thue.colorHex = color;
+                            NotifyStateChanged();
+                        });
+                    })
+                ));
+
+        layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("T-Hue Range:", 0.20f),
+                    GridCellSpec.CreateSlider("ThueRangeSlider", 0, 99, true, 0.30f, (val) => {
+                        CurrentHero.thue.colorRange = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    }),
+                    GridCellSpec.CreateLabel("T-Hue Shift:", 0.20f),
+                    GridCellSpec.CreateSlider("ThueOffsetSlider", -99, 99, true, 0.30f, (val) => {
+                        CurrentHero.thue.colorOffset = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    })
+                ));
+        // ------------------------------------
+
         HeroColorOption currentOption = SDColors.GetOptionFromColorCode(CurrentHero.colorClass);
         string currentFormattedName = SDColors.GetFormattedColorName(currentOption);
 
@@ -1149,6 +1213,8 @@ public class HeroUI : RootUI
 
         int startIndex = (tabIndex == 0) ? 0 : tabIndex - 1;
         int endIndex = (tabIndex == 0) ? 6 : tabIndex;
+
+        CurrentHero.InitializeDiceFaces();
 
         for (int i = startIndex; i < endIndex; i++)
         {
@@ -1488,7 +1554,10 @@ public class HeroUI : RootUI
             if (val == CurrentHero.Export()) return;
             try
             {
-                HeroData importedHero = TextModLexerParser.ParseHero(val);
+                // Bypass the deleted Lexer and use the native parser directly
+                HeroData importedHero = new HeroData();
+                importedHero.Parse(val);
+
                 if (importedHero != null)
                 {
                     ModPackage.Instance.UpdateActiveEntityClone<HeroData>(importedHero);
@@ -1686,4 +1755,22 @@ public class HeroUI : RootUI
         return rootWrapper != null && rootWrapper.gameObject.activeInHierarchy;
     }
 
+    private void OpenColorPicker(Color initialColor, Action<Color> onColorChanged)
+    {
+        if (uiGenerator.colorPicker == null) return;
+
+        uiGenerator.colorPicker.gameObject.SetActive(true);
+        uiGenerator.colorPicker.SetColor(initialColor);
+
+        uiGenerator.colorPicker.onColorChange.RemoveAllListeners();
+        uiGenerator.colorPicker.onColorChange.AddListener(new UnityEngine.Events.UnityAction<Color>(onColorChanged));
+    }
+
+    private void CloseColorPicker()
+    {
+        if (uiGenerator.colorPicker != null)
+        {
+            uiGenerator.colorPicker.gameObject.SetActive(false);
+        }
+    }
 }

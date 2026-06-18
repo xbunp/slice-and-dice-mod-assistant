@@ -382,11 +382,6 @@ public static class EntityUIHelpers
     // Recommendation: Move into HeroData domain objects, or extension utility methods.
     // =====================================================================
 
-    public static string ExtractHeroName(string rawText)
-    {
-        HeroData dummy = TextModLexerParser.ParseHero(rawText);
-        return string.IsNullOrEmpty(dummy.entityName) ? "Unknown Hero" : dummy.entityName;
-    }
 
     public static string[] GetKeywordOptions()
     {

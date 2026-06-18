@@ -3,11 +3,12 @@
 // 3. HERO DATA
 // ==========================================
 
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEngine;
-using System.Linq;
 
 public static class HeroDomainRules
 {
@@ -24,6 +25,11 @@ public static class HeroDomainRules
         "replica", "n", "img", "col", "hp", "tier", "hsv", "hsl", "hue",
         "p", "b", "rect", "draw", "thue", "adj", "speech", "doc"
     };
+
+    public static readonly HashSet<string> HeroItemBoundaryKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "sd", "hp", "tier", "col"
+    };
 }
 
 [System.Serializable]
@@ -35,8 +41,14 @@ public class HeroData : EntityData
     public int? adj;
     public string speech;
 
-    [SerializeField] public List<SpellData> customSpells;
-    [SerializeField] public List<TacticData> customTactics;
+    // Change from [SerializeField] public List<SpellData> customSpells;
+    [System.NonSerialized] // Tells Unity's serializer to ignore this field
+    [JsonProperty]         // Tells Newtonsoft to keep serializing this field
+    public List<SpellData> customSpells;
+
+    [System.NonSerialized]
+    [JsonProperty]
+    public List<TacticData> customTactics;
 
     public IReadOnlyList<AbilityData> customAbilityData
     {
@@ -45,12 +57,15 @@ public class HeroData : EntityData
             var combined = new List<AbilityData>();
             if (customSpells != null) combined.AddRange(customSpells);
             if (customTactics != null) combined.AddRange(customTactics);
+            if (customOnHits != null) combined.AddRange(customOnHits);
+            if (customTriggerHPs != null) combined.AddRange(customTriggerHPs);
             return combined;
         }
     }
 
     public void InitializeAsDefault()
     {
+        InitializeAsBlank();
         entityName = "NewEntity"; baseReplica = "Statue"; colorClass = "y"; imageOverride = "None"; hp = 7; tier = 1;
     }
 
@@ -58,40 +73,45 @@ public class HeroData : EntityData
     {
         entityName = null; imageOverride = null; baseReplica = null; colorClass = null;
         hp = 0; h = 0; s = 0; v = 0; tier = 0; hue = 0;
-        hsl = null; p = null; b = null; rect = null; draw = null; thue = null; doc = null; speech = null; adj = null;
-        items = new List<string>(); traits = new List<string>(); blessings = new List<string>(); curses = new List<string>();
-        baseAbilityData = new List<string>(); customSpells = new List<SpellData>(); customTactics = new List<TacticData>();
+        p = null; b = null; rect = null; draw = null; thue = null; doc = null; speech = null; adj = null;
+
+        items = new List<string>();
+        traits = new List<string>();
+        blessings = new List<string>();
+        curses = new List<string>();
+        baseAbilityData = new List<string>();
+        customSpells = new List<SpellData>();
+        customTactics = new List<TacticData>();
+        customOnHits = new List<OnHitData>();
+        customTriggerHPs = new List<TriggerHPData>(); 
         customPayloads = new List<CustomPayload>();
+        thue = new Thue();
+
         diceSides = new DiceSideData[6];
         for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData { effectID = 0, pips = 0, facadeID = null, keywords = new List<string>() };
     }
 
     public override void Parse(string data)
     {
+        InitializeAsBlank(); // Ensure we start completely clean
         if (string.IsNullOrWhiteSpace(data)) return;
 
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string heroCore = StaticBranchTracing.StripOuterParens(chunks[0]);
 
-        List<string> chains = StaticBranchTracing.TopLevelSplit(heroCore, '#');
-        bool isFirstChain = true;
-        foreach (var chain in chains)
+        // FIX: Do NOT split by '#' at the top level. Process as a single chain.
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(heroCore, '.');
+
+        if (tokens.Count > 0)
         {
-            if (string.IsNullOrWhiteSpace(chain)) continue;
-            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-
-            if (isFirstChain && tokens.Count > 0)
+            string firstLower = tokens[0].ToLower();
+            if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
             {
-                isFirstChain = false;
-                string firstLower = tokens[0].ToLower();
-                if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
-                {
-                    baseReplica = tokens[0];
-                }
+                baseReplica = tokens[0];
             }
-
-            ExtractKnowledge(tokens);
         }
+
+        ExtractKnowledge(tokens);
     }
 
     private void ExtractKnowledge(List<string> tokens)
@@ -103,69 +123,77 @@ public class HeroData : EntityData
 
             if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
-                string inner = originalToken.Substring(1, originalToken.Length - 2);
-                List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
-                ExtractKnowledge(innerTokens);
+                ProcessRecursiveParentheses(originalToken, ExtractKnowledge);
                 continue;
             }
 
-            if (TryProcessMetadata(tokens, ref i, tokenLower)) continue;
-            else if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
-            else if (TryProcessCollections(tokens, ref i, tokenLower)) continue;
-            else if (tokenLower == "i")
+            if (TryProcessCommonMetadata(tokens, ref i, tokenLower)) continue;
+            if (TryProcessEntityMetadata(tokens, ref i, tokenLower)) continue;
+            if (TryProcessHeroSpecificMetadata(tokens, ref i, tokenLower)) continue;
+            if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
+            if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
+
+            if (tokenLower == "t")
             {
-                StaticBranchTracing.ProcessAndRouteProperty(
-                    tokens, ref i,
-                    HeroDomainRules.HeroPropertyKeys, // FIX: Pass the full property list so it breaks on 'i', 't', and 'sd'
-                    this
-                );
+                ProcessTraitToken(tokens, ref i, HeroDomainRules.HeroPropertyKeys);
+                continue;
+            }
+
+            if (TryProcessCollections(tokens, ref i, tokenLower)) continue;
+
+            if (tokenLower == "i")
+            {
+                int startIndex = i + 1;
+                if (startIndex >= tokens.Count) continue;
+
+                int endIndex = startIndex;
+                while (endIndex < tokens.Count)
+                {
+                    string peek = tokens[endIndex].ToLower();
+                    // Stop collecting if we hit another hero property/item boundary
+                    if (HeroDomainRules.HeroItemBoundaryKeys.Contains(peek)) break;
+                    endIndex++;
+                }
+
+                int count = endIndex - startIndex;
+                if (count > 0)
+                {
+                    List<string> itemTokens = tokens.GetRange(startIndex, count);
+                    string itemString = string.Join(".", itemTokens);
+                    i = endIndex - 1; // Advance outer loop counter past the parsed item
+
+                    if (itemString.Contains("("))
+                    {
+                        ItemData customItem = new ItemData();
+                        customItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
+                        customPayloads.Add(new CustomPayload { Prefix = "i", Data = customItem });
+                    }
+                    else
+                    {
+                        items.Add(itemString); // Adds as a single "left2.k.possessed#facade.Yca21:0" item
+                    }
+                }
+                continue;
             }
         }
     }
 
-    private bool TryProcessMetadata(List<string> tokens, ref int i, string tokenLower)
+    // Separates the hero-specific properties from the shared metadata
+    private bool TryProcessHeroSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
     {
-        if (!HeroDomainRules.MetadataKeys.Contains(tokenLower)) return false;
         if (i + 1 >= tokens.Count) return false;
+        string nextVal = tokens[i + 1];
 
-        string nextVal = tokens[++i];
         switch (tokenLower)
         {
             case "replica": baseReplica = nextVal; break;
-            case "n": entityName = nextVal; break;
-            case "img": imageOverride = nextVal; break;
             case "col": colorClass = nextVal; break;
-            case "hp": if (int.TryParse(nextVal, out int hpVal)) hp = hpVal; break;
             case "tier": if (int.TryParse(nextVal, out int t)) tier = t; break;
-            case "hsv":
-                string[] hsvParts = nextVal.Split(':');
-                if (hsvParts.Length == 3) { int.TryParse(hsvParts[0], out h); int.TryParse(hsvParts[1], out s); int.TryParse(hsvParts[2], out v); }
-                break;
-            case "hsl": hsl = nextVal; break;
-            case "hue": if (int.TryParse(nextVal, out int hVal)) hue = hVal; break;
-            case "p": p = nextVal; break;
-            case "b": b = nextVal; break;
-            case "rect": rect = nextVal; break;
-            case "draw": draw = nextVal; break;
-            case "thue": thue = nextVal; break;
             case "adj": if (int.TryParse(nextVal, out int a)) adj = a; break;
             case "speech": speech = nextVal; break;
-            case "doc": doc = nextVal; break;
+            default: return false;
         }
-        return true;
-    }
-
-    private bool TryProcessDiceSides(List<string> tokens, ref int i, string tokenLower)
-    {
-        if (tokenLower != "sd" || i + 1 >= tokens.Count) return false;
-        InitializeDiceFaces();
-        string[] faces = tokens[++i].Split(':');
-        for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
-        {
-            if (faces[f] == "0") continue;
-            string[] faceParts = faces[f].Split('-');
-            if (faceParts.Length == 2) { int.TryParse(faceParts[0], out diceSides[f].effectID); int.TryParse(faceParts[1], out diceSides[f].pips); }
-        }
+        i++;
         return true;
     }
 
@@ -174,11 +202,17 @@ public class HeroData : EntityData
         if (i + 1 >= tokens.Count) return false;
         if (tokenLower == "t") { traits.AddRange(StaticBranchTracing.TopLevelSplit(tokens[++i], '#')); return true; }
         if (tokenLower == "gift") { blessings.AddRange(StaticBranchTracing.TopLevelSplit(tokens[++i], '#')); return true; }
-        if (tokenLower == "abilitydata")
+        if (tokenLower == "abilitydata" || tokenLower == "triggerhpdata" || tokenLower == "onhitdata")
         {
             string payload = tokens[++i];
-            if (payload.StartsWith("(")) { AddCustomAbility(AbilityData.CreateAbility(payload)); }
-            else { baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#')); }
+            if (payload.StartsWith("("))
+            {
+                AddCustomAbility(AbilityData.CreateAbility(payload));
+            }
+            else
+            {
+                baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
+            }
             return true;
         }
         return false;
@@ -200,7 +234,7 @@ public class HeroData : EntityData
         if (!string.IsNullOrEmpty(b)) heroSb.Append($".b.{b}");
         if (!string.IsNullOrEmpty(rect)) heroSb.Append($".rect.{rect}");
         if (!string.IsNullOrEmpty(draw)) heroSb.Append($".draw.{draw}");
-        if (!string.IsNullOrEmpty(thue)) heroSb.Append($".thue.{thue}");
+        //if (thue != null && (thue.colorRange != 0 || thue.colorOffset != 0)) heroSb.Append($".{PackTHue(thue)}"); //done in apply color now
 
         AppendDiceSides(heroSb);
         if (!string.IsNullOrEmpty(speech)) heroSb.Append($".speech.{speech}");
@@ -239,7 +273,13 @@ public class HeroData : EntityData
             {
                 if (cab != null)
                 {
-                    abilitiesSb.Append($".abilitydata.({cab.Export()})");
+                    // Prefix correctly based on type
+                    if (cab is TriggerHPData)
+                        abilitiesSb.Append($".triggerhpdata.({cab.Export()})");
+                    else if (cab is OnHitData)
+                        abilitiesSb.Append($".onhitdata.({cab.Export()})");
+                    else
+                        abilitiesSb.Append($".abilitydata.({cab.Export()})");
                 }
             }
 
@@ -257,15 +297,21 @@ public class HeroData : EntityData
         if (ability == null) return;
         if (customSpells == null) customSpells = new List<SpellData>();
         if (customTactics == null) customTactics = new List<TacticData>();
+        if (customOnHits == null) customOnHits = new List<OnHitData>();
+        if (customTriggerHPs == null) customTriggerHPs = new List<TriggerHPData>();
+
         if (ability is SpellData spell) { if (!customSpells.Any(s => s.entityName == spell.entityName)) customSpells.Add(spell); }
         else if (ability is TacticData tactic) { if (!customTactics.Any(t => t.entityName == tactic.entityName)) customTactics.Add(tactic); }
+        else if (ability is OnHitData onHit) { if (!customOnHits.Any(o => o.entityName == onHit.entityName)) customOnHits.Add(onHit); }
+        else if (ability is TriggerHPData trig) { if (!customTriggerHPs.Any(t => t.entityName == trig.entityName)) customTriggerHPs.Add(trig); }
     }
 
     public void DebugContentsToConsoleCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
 
-        if (!string.IsNullOrEmpty(entityName)) sb.AppendLine($"{indent}Name: {entityName}");
+        string displayName = !string.IsNullOrEmpty(entityName) ? entityName : baseReplica;
+        if (!string.IsNullOrEmpty(displayName)) sb.AppendLine($"{indent}Name: {displayName}");
         if (baseReplica != null && !string.IsNullOrEmpty(baseReplica.ToString())) sb.AppendLine($"{indent}Base Replica: {baseReplica}");
         if (!string.IsNullOrEmpty(colorClass)) sb.AppendLine($"{indent}Color Class: {colorClass}");
         if (tier != 0) sb.AppendLine($"{indent}Tier: {tier}");
@@ -295,6 +341,21 @@ public class HeroData : EntityData
         if (curses != null && curses.Count > 0) sb.AppendLine($"{indent}Curses: {string.Join(", ", curses)}");
         if (baseAbilityData != null && baseAbilityData.Count > 0) sb.AppendLine($"{indent}Base Abilities: {string.Join(", ", baseAbilityData)}");
         if (items != null && items.Count > 0) sb.AppendLine($"{indent}Items (Stock): {string.Join(", ", items)}");
+
+        if (customAbilityData != null && customAbilityData.Count > 0)
+        {
+            sb.AppendLine($"{indent}Custom Abilities ({customAbilityData.Count}):");
+            foreach (var cab in customAbilityData)
+            {
+                string abilityType = cab is SpellData ? "Spell" :
+                                     cab is TacticData ? "Tactic" :
+                                     cab is OnHitData ? "OnHit" :
+                                     cab is TriggerHPData ? "TriggerHP" : "Ability";
+
+                sb.AppendLine($"{indent}  [✓ Unpacked {abilityType}: {cab.entityName ?? "Unnamed"}]");
+                cab.DebugAbilityCompact();
+            }
+        }
 
         if (customPayloads != null && customPayloads.Count > 0)
         {

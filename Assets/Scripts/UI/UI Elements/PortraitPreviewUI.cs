@@ -279,4 +279,14 @@ public class PortraitPreviewUI : MonoBehaviour
             return false;
         }
     }
+
+    public void SetPortraitTHue(Thue thue)
+    {
+        if (thue != null && thue.colorOffset != 0)
+        {
+            portrait.material.SetColor("_THueColor", thue.colorHex);
+            portrait.material.SetFloat("_THueRange", thue.colorRange);
+            portrait.material.SetFloat("_THueShift", thue.colorOffset);
+        }
+    }
 }

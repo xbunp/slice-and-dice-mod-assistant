@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 
 public static class ItemDomainRules
 {
@@ -118,7 +119,7 @@ public class ItemData : SDData
     public string DocumentedDescription { get; set; } = string.Empty;
     public ItemHsvShift? HsvShift { get; set; }
     public int? SimpleHue { get; set; }
-    public string TargetedHue { get; set; } = string.Empty;
+    //public string TargetedHue { get; set; } = string.Empty;
     public string PaletteOverride { get; set; } = string.Empty;
     public string BorderColorCode { get; set; } = string.Empty;
     public string UiDrawInstructions { get; set; } = string.Empty;
@@ -159,12 +160,14 @@ public class ItemData : SDData
 
     private void PropertiesClear()
     {
+        thue = new Thue();
         entityName = string.Empty; imageOverride = string.Empty; Tier = null; DocumentedDescription = string.Empty;
-        HsvShift = null; SimpleHue = null; TargetedHue = string.Empty; PaletteOverride = string.Empty;
+        HsvShift = null; SimpleHue = null; PaletteOverride = string.Empty;
         BorderColorCode = string.Empty; UiDrawInstructions = string.Empty; UiRectInstructions = string.Empty;
         ClearDescription = false; ClearIcon = false; LearnedAbilities.Clear();
     }
 
+    /*
     private void ExtractKnowledge(List<string> tokens, ItemData item)
     {
         for (int i = 0; i < tokens.Count; i++)
@@ -217,7 +220,54 @@ public class ItemData : SDData
             }
         }
     }
+    */
 
+    private void ExtractKnowledge(List<string> tokens, ItemData item)
+    {
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            string tokenLower = tokens[i].ToLower();
+            string originalToken = tokens[i];
+
+            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
+            {
+                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, item));
+                continue;
+            }
+
+            if (TryProcessCommonMetadata(tokens, ref i, tokenLower))
+            {
+                // Sync specific ItemData variables with the parsed base class values
+                if (tokenLower == "hsv") item.HsvShift = new ItemHsvShift(h, s, v);
+                else if (tokenLower == "hue") item.SimpleHue = hue;
+
+                else if (tokenLower == "thue") item.thue = UnpackTHue(tokens[i]);
+
+                else if (tokenLower == "p") item.PaletteOverride = p;
+                else if (tokenLower == "b") item.BorderColorCode = b;
+                else if (tokenLower == "draw") item.UiDrawInstructions = draw;
+                else if (tokenLower == "rect") item.UiRectInstructions = rect;
+                else if (tokenLower == "doc") item.DocumentedDescription = doc;
+                continue;
+            }
+
+            switch (tokenLower)
+            {
+                case "tier": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) item.Tier = t; break;
+                case "sidesc": if (i + 1 < tokens.Count) item.DocumentedDescription = tokens[++i]; break;
+                case "learn": if (i + 1 < tokens.Count) item.LearnedAbilities.Add(tokens[++i]); break;
+                case "cleardesc": item.ClearDescription = true; break;
+                case "clearicon": item.ClearIcon = true; break;
+
+                default:
+                    if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken)) { }
+                    else if (IsMechanicTriggerToken(tokenLower)) ProcessMechanicChain(tokens, ref i, originalToken);
+                    break;
+            }
+        }
+    }
+
+    /*
     private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken)
     {
         ItemMechanic mech = new ItemMechanic();
@@ -297,6 +347,7 @@ public class ItemData : SDData
         AssignDomainPayload(mech);
         Mechanics.Add(mech);
     }
+    */
 
     private bool TryProcessGenericContainer(List<string> tokens, ref int i, string tokenLower, string originalToken)
     {
@@ -360,10 +411,13 @@ public class ItemData : SDData
         if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
         if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
         if (!string.IsNullOrEmpty(DocumentedDescription)) chainParts.Add($"doc.{DocumentedDescription}");
-        if (!string.IsNullOrEmpty(imageOverride)) chainParts.Add($"img.{imageOverride}");
+        if (!string.IsNullOrEmpty(imageOverride) && imageOverride != "None") chainParts.Add($"img.{imageOverride}");
         if (HsvShift.HasValue) chainParts.Add($"hsv.{HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
         if (SimpleHue.HasValue) chainParts.Add($"hue.{SimpleHue.Value}");
-        if (!string.IsNullOrEmpty(TargetedHue)) chainParts.Add($"thue.{TargetedHue}");
+
+        //if (!string.IsNullOrEmpty(TargetedHue)) chainParts.Add($"thue.{TargetedHue}");
+        if (this.thue != null && this.thue.colorOffset != 0) chainParts.Add($".{PackTHue(this.thue)}");
+
         if (!string.IsNullOrEmpty(PaletteOverride)) chainParts.Add($"p.{PaletteOverride}");
         if (!string.IsNullOrEmpty(BorderColorCode)) chainParts.Add($"b.{BorderColorCode}");
         if (!string.IsNullOrEmpty(UiDrawInstructions)) chainParts.Add($"draw.{UiDrawInstructions}");
@@ -430,5 +484,88 @@ public class ItemData : SDData
                 sb.AppendLine($"{indent}      Suffixes -> m:{m.Multiplier}, mrg:{m.MergedItem}, splice:{m.SplicedItem}, part:{m.PartIndex}");
         }
         UnityEngine.Debug.Log(sb.ToString());
+    }
+
+    // Helper method to safely collect forward payload tokens without suffix collisions
+    private string BuildPayloadString(List<string> tokens, ref int i)
+    {
+        List<string> payloadTokens = new List<string>();
+        while (i < tokens.Count)
+        {
+            string peek = tokens[i].ToLower();
+            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
+                break;
+            payloadTokens.Add(tokens[i]);
+            i++;
+        }
+        i--; // Backtrack so that the suffix parser can evaluate the boundary token
+        return string.Join(".", payloadTokens);
+    }
+
+    private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken)
+    {
+        ItemMechanic mech = new ItemMechanic();
+
+        while (i < tokens.Count)
+        {
+            string originalToken = tokens[i];
+            string tLower = originalToken.ToLower();
+
+            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
+            {
+                mech.Prefix = tLower;
+                i++; // Move past the prefix
+                mech.PayloadString = BuildPayloadString(tokens, ref i);
+                break; // Exits the mechanic loop immediately once the payload is assigned
+            }
+            else if (ItemDomainRules.ValidTargets.Contains(tLower))
+            {
+                mech.AddTarget(originalToken);
+            }
+            else if (ItemDomainRules.IsRepeatPrefix(tLower, out int reps))
+            {
+                mech.RepeatTimes = reps;
+            }
+            else if (tLower == "pertier") mech.PerTier = true;
+            else if (tLower == "unpack") mech.Unpack = true;
+            else
+            {
+                // The current token is the start of the payload
+                List<string> payloadTokens = new List<string> { originalToken };
+                i++; // Move past the first payload token
+
+                string subsequent = BuildPayloadString(tokens, ref i);
+                if (!string.IsNullOrEmpty(subsequent))
+                {
+                    payloadTokens.Add(subsequent);
+                }
+
+                mech.PayloadString = string.Join(".", payloadTokens);
+                break; // Exits the mechanic loop immediately once the payload is assigned
+            }
+            i++;
+        }
+
+        // Process trailing suffixes (part, multiplier, mrg, splice)
+        while (i + 1 < tokens.Count)
+        {
+            string nextTokenLower = tokens[i + 1].ToLower();
+
+            if (nextTokenLower == "part" && i + 2 < tokens.Count)
+            {
+                if (int.TryParse(tokens[i + 2], out int pIdx)) { mech.PartIndex = pIdx; i += 2; }
+                else break;
+            }
+            else if (nextTokenLower.StartsWith("m") && nextTokenLower.Length > 1 && int.TryParse(nextTokenLower.Substring(1), out int mult))
+            {
+                mech.Multiplier = mult; i++;
+            }
+            else if (nextTokenLower == "mrg" && i + 2 < tokens.Count) { mech.MergedItem = tokens[i + 2]; i += 2; }
+            else if (nextTokenLower == "splice" && i + 2 < tokens.Count) { mech.SplicedItem = tokens[i + 2]; i += 2; }
+            else break;
+        }
+
+        AssignDomainPayload(mech);
+        Mechanics.Add(mech);
     }
 }
