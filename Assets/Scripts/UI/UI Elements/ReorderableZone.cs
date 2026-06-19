@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -12,9 +13,11 @@ public class ReorderableZone : MonoBehaviour
     private GameObject _placeholder;
     private Canvas _rootCanvas;
 
+    public event Action OnZoneChanged;
+
     private void Awake()
     {
-        _rootCanvas = GetComponentInParent<Canvas>();
+        //_rootCanvas = GetComponentInParent<Canvas>();
     }
 
     /// <summary>
@@ -37,6 +40,11 @@ public class ReorderableZone : MonoBehaviour
     }
 
     // --- BRAIN LOGIC FIRED BY DUMB ITEMS ---
+
+    public void SetCanvas(Canvas canvas)
+    {
+        _rootCanvas = canvas;
+    }
 
     public void HandleBeginDrag(ReorderableItem item, PointerEventData eventData)
     {
@@ -75,7 +83,7 @@ public class ReorderableZone : MonoBehaviour
         }
 
         // Controller checks if the item has been dragged into a DIFFERENT Zone
-        ReorderableZone hoveredZone = GetZoneUnderMouse(eventData);
+        ReorderableZone hoveredZone = GetZoneUnderMouse(item, eventData);
 
         if (hoveredZone != null && hoveredZone != this)
         {
@@ -102,6 +110,7 @@ public class ReorderableZone : MonoBehaviour
 
         // Re-sync the array to match the actual layout hierarchy
         SyncEntrantsOrder();
+        OnZoneChanged?.Invoke();
     }
 
     // --- INTERNAL ZONE MANAGEMENT ---
@@ -142,16 +151,20 @@ public class ReorderableZone : MonoBehaviour
         _placeholder.transform.SetSiblingIndex(newIndex);
     }
 
-    private ReorderableZone GetZoneUnderMouse(PointerEventData eventData)
+    private ReorderableZone GetZoneUnderMouse(ReorderableItem item, PointerEventData eventData)
     {
         List<RaycastResult> results = new List<RaycastResult>();
         EventSystem.current.RaycastAll(eventData, results);
         foreach (var hit in results)
         {
             ReorderableZone zone = hit.gameObject.GetComponentInParent<ReorderableZone>();
-            // Prevent dropping a parent zone into one of its own nested child zones
-            if (zone != null && !zone.transform.IsChildOf(this.transform))
+
+            // FIX: Prevent dropping an item into a zone that lives INSIDE the item itself (paradox).
+            // We check against item.transform, NOT this.transform.
+            if (zone != null && !zone.transform.IsChildOf(item.transform))
+            {
                 return zone;
+            }
         }
         return null;
     }

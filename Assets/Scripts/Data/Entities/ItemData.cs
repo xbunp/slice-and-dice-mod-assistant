@@ -26,6 +26,26 @@ public static class ItemDomainRules
         "peritem", "allitem", "alliteme", "sticker", "enchant", "cast", "mrg", "hat"
     };
 
+    /// <summary>
+    /// Specialized hardcoded structural items that mutate dice faces based on the left face.
+    /// FUNCTIONALITY DICTIONARY:
+    /// - togtime: Buff duration toggles between 1 turn and indefinite (entire fight) for all sides.
+    /// - togtarg: Copies the targeting type (e.g., all, self, specific) from the left side to all sides.
+    /// - togfri: Toggles (inverts) friendliness (friend vs foe targeting) for all sides.
+    /// - togvis: Copies the visual animation and sometimes sound from the left side to all sides.
+    /// - togeft: Copies the base effect from the left side to all sides (does not copy keywords/targeting).
+    /// - togpip: Copies the pip count from the left side to all sides. Excellent for adding pips to pipless sides.
+    /// - togkey: Copies keywords from the left side to all sides. Can duplicate existing keywords to stack effects.
+    /// - togorf: Adds the left side's friendly effect as an optional choice (OR) to other sides targeting enemies.
+    /// - togunt: Adds an untargeted effect (mana, revives, ALL targeting) from the left side as a bonus to all sides.
+    /// - togres: Copies targeting restrictions (e.g., pristine, engage, cruel) from the left side to all sides.
+    /// - togresm: Multiplier variant. Turns a restriction into a "x2 if condition met" bonus multiplier.
+    /// - togresa: AND variant. Combines restrictions requiring BOTH to be met.
+    /// - togreso: OR variant. Combines restrictions requiring EITHER to be met.
+    /// - togresx: XOR variant. Combines restrictions requiring EXACTLY ONE to be met.
+    /// - togress: SWAP variant. Swaps "I" and "Target" in the conditional restriction (e.g., swapcruel).
+    /// - togresn: NOT variant. Inverts the restriction, requiring the condition to NOT be met.
+    /// </summary>
     public static readonly HashSet<string> TogItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "togtime", "togtarg", "togfri", "togvis", "togeft",
@@ -41,6 +61,20 @@ public static class ItemDomainRules
         return ExternalGameRegistry.IsValidItemName(token);
     }
 
+    /// <summary>
+    /// Core prefixes that signify a mechanical operation requiring a payload. 
+    /// PAYLOAD TYPES & FUNCTIONALITY:
+    /// - i: Inherent modifier. Applies following parameters/items directly to the defined targets.
+    /// - sd: Dice face definition. Assigns hardcoded effect/pip values to faces.
+    /// - k: Keyword applicator. Applies a keyword to the defined dice faces.
+    /// - t: Trait applicator. Grants passive entity traits (e.g., t.jinx) to the holder.
+    /// - sticker: Swaps a dice face for an item-applying effect. Payload can be a full nested ItemData string.
+    /// - enchant: Swaps a dice face for a modifier-applying effect. Payload is a ModifierData string.
+    /// - cast: Swaps a dice face for a spell/tactic. Payload is an AbilityData string.
+    /// - hat: Replaces dice sides with an entity's dice. Payload is a full nested EntityData string (Heroes/Monsters).
+    /// - onhitdata: Triggers an effect (based on left face) when damaged. Payload is a full EntityData string.
+    /// - triggerhpdata: Triggers an untargeted effect per X HP lost. Payload is a full EntityData string.
+    /// </summary>
     public static readonly HashSet<string> MechanicPrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "i", "sd", "k", "t",
@@ -63,17 +97,42 @@ public class ItemProperty { public string Key { get; set; } public string Value 
 [System.Serializable]
 public class ItemMechanic
 {
-    public List<string> Targets = new List<string>();
-    public string Prefix = "";
-    public string PayloadString = "";
+    public List<string> Targets = new List<string>();  // e.g., left, topbot, mid
+    public string Prefix = "";  // e.g., i, sd, k, t
+    public string PayloadString = ""; // Raw nested string (e.g., facade.bas1)
     public object PayloadData { get; set; } = null;
+
+    /// <summary> (.m#) Numerical effect multiplier. Multiplies the item's numerical output by this value (can be negative). Default is 1. </summary>
     public int Multiplier { get; set; } = 1;
+    /// <summary> 
+    /// (.mrg.) Merged Item combinations. Combines the effect of two items. 
+    /// Example: If Item A modifies Top/Bot, and Item B modifies Mid, MRG applies B's Mid effect to A's Top/Bot. 
+    /// Note: Results are highly engine-dependent and difficult to predict outside the game environment.
+    /// </summary>
     public string MergedItem { get; set; } = string.Empty;
+    /// <summary> 
+    /// (.splice.) Spliced Item combinations. Similar to MRG, but uses alternative combination logic. 
+    /// Creates distinct combined results. Highly engine-dependent.
+    /// </summary>
     public string SplicedItem { get; set; } = string.Empty;
+    /// <summary> Supports '#' delimited sub-keywords (e.g., "topbot.k.growth#k.cleave" adds both to top and bottom faces). </summary>
     public List<string> ChainedKeywords { get; set; } = new List<string>();
+    /// <summary> 
+    /// (xN.) Pre-multiplier. Applies the item's effect N separate times. 
+    /// Example: 'x5.+1 pip' applies +1 pip five distinct times (different from .m.5 which is a flat +5).
+    /// </summary>
     public int RepeatTimes { get; set; } = 1;
+    /// <summary> (pertier.) Multiplies the item's effect by the equipping hero's Tier level (on average 1-3, can range from -5 to 20). </summary>
     public bool PerTier { get; set; }
+    /// <summary> 
+    /// (unpack.) Strips conditional activation requirements from a base item. 
+    /// Example: Changes "On 1st turn, can't die" to simply "Can't die".
+    /// </summary>
     public bool Unpack { get; set; }
+    /// <summary> 
+    /// (.part.#) Isolates a specific substring/sub-effect of a base item's payload. 
+    /// Example: If an item grants "+2hp" (part.0) and "all sides blank" (part.1), targeting part.0 only gives the HP.
+    /// </summary>
     public int? PartIndex { get; set; }
 
     public ItemMechanic AddTarget(string target) { Targets.Add(target); return this; }
@@ -98,7 +157,15 @@ public class ItemMechanic
 
 public static class ExternalGameRegistry
 {
-    public static bool IsValidSprite(string atlasId) => true;
+    // ======================================================================================
+    // EXTERNAL REGISTRY PLACEHOLDERS (Loudly flagged for your existing dictionaries/enums)
+    // ======================================================================================
+    /* 
+     * LOUD WARNING FOR LATER AI / COMPILER:
+     * DO NOT REDEFINE THESE TYPES. They exist in the primary game engine dictionaries.
+     * Replace the placeholder types below with references to your actual project assemblies.
+     */
+    public static bool IsValidSprite(string atlasId) => true; // TODO: Link to project's Sprite Dictionary
     public static bool IsValidKeyword(string key) => Enum.TryParse<EffectKeyword>(key, true, out _);
     public static bool IsValidAbility(string id) => BaseAbilityDatabase.ValidAbilities.Contains(id);
     public static bool IsValidItemName(string token) => Enum.TryParse<BaseItems>(token.Replace(" ", ""), true, out _);
@@ -107,6 +174,7 @@ public static class ExternalGameRegistry
 [System.Serializable]
 public struct ItemHsvShift
 {
+    // Range: -99 to 99
     public int Hue, Saturation, Value;
     public ItemHsvShift(int h, int s, int v) { Hue = Math.Clamp(h, -99, 99); Saturation = Math.Clamp(s, -99, 99); Value = Math.Clamp(v, -99, 99); }
 }
@@ -115,20 +183,54 @@ public struct ItemHsvShift
 public class ItemData : SDData
 {
     public List<string> GlobalTags = new List<string>();
+    /// <summary> (.tier) Rarity reward pool index. Valid range: -5 to 20. </summary>
     public int? Tier { get; set; }
+    /// <summary> (.doc) Rich text description of the item's custom mechanics or use. </summary>
     public string DocumentedDescription { get; set; } = string.Empty;
+    /// <summary> (.hsv) Direct Hue, Saturation, and Value shifting values (-99 to 99). </summary>
     public ItemHsvShift? HsvShift { get; set; }
+    /// <summary> (.hue) Simple single-axis hue shift value. </summary>
     public int? SimpleHue { get; set; }
-    //public string TargetedHue { get; set; } = string.Empty;
+    /// <summary> (.p) Palette override configuration. Format: "fff:fff:##" (e.g. "aaa:a0a:60") </summary>
     public string PaletteOverride { get; set; } = string.Empty;
+    /// <summary> (.b) Custom border color overlay determined by 3 hex characters (e.g., "f0f"). </summary>
     public string BorderColorCode { get; set; } = string.Empty;
+    /// <summary> (.draw) Complex arbitrary UI sprite rendering instructions. </summary>
     public string UiDrawInstructions { get; set; } = string.Empty;
+    /// <summary> (.rect) UI single-color layout rectangle drawing parameters. </summary>
     public string UiRectInstructions { get; set; } = string.Empty;
+    /// <summary> (learn.) Base game spells or tactics given to the player. </summary>
     public List<string> LearnedAbilities { get; set; } = new List<string>();
+
+    /// <summary> (cleardesc) item Suppresses the game's auto-generated description of an item's effect. </summary>
     public bool ClearDescription { get; set; }
+    /// <summary> (clearicon) item Suppresses the game's auto-generated item graphics. </summary>
+
     public bool ClearIcon { get; set; }
     public List<ItemProperty> Containers = new List<ItemProperty>();
     public List<ItemMechanic> Mechanics = new List<ItemMechanic>();
+
+    // now handled through item mechanics. 
+    /*
+    /// <summary> 
+    /// (abilitydata.) Custom tactical/spell data payloads. 
+    /// These are raw strings that should be handed off to SpellData or TacticData parsers.
+    /// </summary>
+    public List<string> CustomAbilities { get; set; } = new List<string>();
+
+    /// <summary> 
+    /// (t.) Passive traits mapped to this item. 
+    /// Highly common usage: "t.jinx.[ModifierName]" which invokes a gameplay modifier as a passive trait.
+    /// </summary>
+    public List<string> PassiveTraits { get; set; } = new List<string>();
+
+    /// <summary> 
+    /// (self.) Modifiers applied strictly to the item-carrying entity. 
+    /// Unlike standard modifiers which are global, this payload isolates the effect to the single hero/monster.
+    /// Payload can be a basic name or a fully nested (ModifierData) scope.
+    /// </summary>
+    public List<string> SelfModifiers { get; set; } = new List<string>();
+    */
 
     public bool IsEquippable => !string.IsNullOrEmpty(entityName) || Tier.HasValue;
 
@@ -266,88 +368,6 @@ public class ItemData : SDData
             }
         }
     }
-
-    /*
-    private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken)
-    {
-        ItemMechanic mech = new ItemMechanic();
-
-        while (i < tokens.Count)
-        {
-            string originalToken = tokens[i];
-            string tLower = originalToken.ToLower();
-
-            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
-            {
-                mech.Prefix = tLower;
-                i++;
-
-                List<string> payloadTokens = new List<string>();
-                while (i < tokens.Count)
-                {
-                    string peek = tokens[i].ToLower();
-                    if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
-                        break;
-                    payloadTokens.Add(tokens[i]);
-                    i++;
-                }
-                mech.PayloadString = string.Join(".", payloadTokens);
-                i--;
-                break;
-            }
-            else if (ItemDomainRules.ValidTargets.Contains(tLower))
-            {
-                mech.AddTarget(originalToken);
-            }
-            else if (ItemDomainRules.IsRepeatPrefix(tLower, out int reps))
-            {
-                mech.RepeatTimes = reps;
-            }
-            else if (tLower == "pertier") mech.PerTier = true;
-            else if (tLower == "unpack") mech.Unpack = true;
-            else
-            {
-                List<string> payloadTokens = new List<string>();
-                payloadTokens.Add(originalToken);
-                i++;
-
-                while (i < tokens.Count)
-                {
-                    string peek = tokens[i].ToLower();
-                    if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
-                        break;
-                    payloadTokens.Add(tokens[i]);
-                    i++;
-                }
-                mech.PayloadString = string.Join(".", payloadTokens);
-                i--;
-                break;
-            }
-            i++;
-        }
-
-        while (i + 1 < tokens.Count)
-        {
-            string nextTokenLower = tokens[i + 1].ToLower();
-
-            if (nextTokenLower == "part" && i + 2 < tokens.Count)
-            {
-                if (int.TryParse(tokens[i + 2], out int pIdx)) { mech.PartIndex = pIdx; i += 2; }
-                else break;
-            }
-            else if (nextTokenLower.StartsWith("m") && nextTokenLower.Length > 1 && int.TryParse(nextTokenLower.Substring(1), out int mult))
-            {
-                mech.Multiplier = mult; i++;
-            }
-            else if (nextTokenLower == "mrg" && i + 2 < tokens.Count) { mech.MergedItem = tokens[i + 2]; i += 2; }
-            else if (nextTokenLower == "splice" && i + 2 < tokens.Count) { mech.SplicedItem = tokens[i + 2]; i += 2; }
-            else break;
-        }
-
-        AssignDomainPayload(mech);
-        Mechanics.Add(mech);
-    }
-    */
 
     private bool TryProcessGenericContainer(List<string> tokens, ref int i, string tokenLower, string originalToken)
     {

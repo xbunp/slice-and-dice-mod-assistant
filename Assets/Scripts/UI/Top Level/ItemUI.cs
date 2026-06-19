@@ -9,9 +9,10 @@ public class ItemUI : RootUI
 {
     public enum ItemNodeType
     {
-        BaseItem,
         Equippable,
+        BaseItem,
         Hat,
+        Sticker,
         Chain,
         Splice,
         Merge,
@@ -19,6 +20,21 @@ public class ItemUI : RootUI
         ItemPart,
         RawString
     }
+
+    private readonly string[] _nodeDropdownOptions = new string[]
+    {
+        "-- Add Logic Node --",
+        "Equippable Item (Root Metadata)",
+        "Base / Ritem",
+        "(Hat) Set Dice Faces",
+        "Sticker",
+        "(#) Chain Items",
+        "Splice Item",
+        "Merge Item",
+        "Unpack Item",
+        "Item Part",
+        "Raw String"
+    };
 
     private class WorkspaceItem : ReorderableItem
     {
@@ -56,20 +72,6 @@ public class ItemUI : RootUI
 
     private bool _isLoading = false;
 
-    private readonly string[] _nodeDropdownOptions = new string[]
-    {
-        "-- Add Logic Node --",
-        "Base Item",
-        "Item Appearance",
-        "(Hat) Set Dice Face(s)",
-        "(#) Chain Items",
-        "Splice Item",
-        "Merge Item",
-        "Unpack Item",
-        "Item Part",
-        "Raw String"
-    };
-
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
         Instance = this;
@@ -80,7 +82,6 @@ public class ItemUI : RootUI
 
         base.Initialize(uiGeneratorRef);
     }
-
     protected override void BuildUIAndBind()
     {
         float totalHeight = 600f;
@@ -131,19 +132,16 @@ public class ItemUI : RootUI
     }
 
     #region CORE DATA FLOW & UI BINDING
-
     private void SetInputValue(GridReferences refs, string key, string value)
     {
         if (refs != null && refs.Inputs.TryGetValue(key, out var input))
             input.SetTextWithoutNotify(value ?? "");
     }
-
     private void SetToggleValue(GridReferences refs, string key, bool value)
     {
         if (refs != null && refs.Toggles.TryGetValue(key, out var toggle))
             toggle.SetIsOnWithoutNotify(value);
     }
-
     private void PopulateMainPanelFromData()
     {
         if (_mainRefs == null || currentItem == null || _selectedWorkspaceItem == null) return;
@@ -218,17 +216,14 @@ public class ItemUI : RootUI
         if (_finalStringInput != null) _finalStringInput.text = rawExport;
         if (_englishTranslationText != null) _englishTranslationText.text = englishOutput;
     }
-
     private bool IsMechanicNode(ItemNodeType type)
     {
         // Meta-nodes don't export to currentItem.Mechanics directly, they edit fields on currentItem
         return type != ItemNodeType.BaseItem && type != ItemNodeType.Equippable;
     }
-
     #endregion
 
     #region LAYOUT DEFINITIONS
-
     private ColumnSpec BuildWorkspaceColumn(float rowHeight, float dynamicScrollHeight, float topBarHeight)
     {
         List<GridRowSpec> rows = new List<GridRowSpec>
@@ -241,7 +236,6 @@ public class ItemUI : RootUI
 
         return new ColumnSpec("Workspace_Column", 0.0f, 0.3f, rows);
     }
-
     private List<GridRowSpec> GetMainEditorRows(float rowHeight)
     {
         if (_selectedWorkspaceItem == null)
@@ -252,21 +246,23 @@ public class ItemUI : RootUI
             };
         }
 
+        ItemMechanic mech = _selectedWorkspaceItem.Mechanic;
+
         switch (_selectedWorkspaceItem.Type)
         {
-            case ItemNodeType.BaseItem: return GetBaseItemRows(rowHeight);
-            case ItemNodeType.Equippable: return GetAppearanceRows(rowHeight);
-            case ItemNodeType.Hat: return GetPlaceholderRows(rowHeight, "Hat / Set Dice Face(s)");
+            case ItemNodeType.Equippable: return GetEquippableRows(rowHeight);
+            case ItemNodeType.BaseItem: return GetBaseItemRows(rowHeight, mech);
+            case ItemNodeType.Hat: return GetHatRows(rowHeight, mech);
+            case ItemNodeType.Sticker: return GetStickerRows(rowHeight, mech);
             case ItemNodeType.Chain: return GetPlaceholderRows(rowHeight, "Chain Items (#)");
-            case ItemNodeType.Splice: return GetPlaceholderRows(rowHeight, "Splice Item");
-            case ItemNodeType.Merge: return GetPlaceholderRows(rowHeight, "Merge Item");
-            case ItemNodeType.Unpack: return GetPlaceholderRows(rowHeight, "Unpack Item");
-            case ItemNodeType.ItemPart: return GetPlaceholderRows(rowHeight, "Item Part");
-            case ItemNodeType.RawString: return GetPlaceholderRows(rowHeight, "Raw String / Direct Inject");
+            case ItemNodeType.Splice: return GetSuffixNodeRows(rowHeight, mech, "Splice Item (.splice.X)");
+            case ItemNodeType.Merge: return GetSuffixNodeRows(rowHeight, mech, "Merge Item (.mrg.X)");
+            case ItemNodeType.Unpack: return GetUnpackRows(rowHeight, mech);
+            case ItemNodeType.ItemPart: return GetPartRows(rowHeight, mech);
+            case ItemNodeType.RawString: return GetRawStringRows(rowHeight, mech);
             default: return new List<GridRowSpec>();
         }
     }
-
     private List<GridRowSpec> GetBaseItemRows(float rowHeight)
     {
         return new List<GridRowSpec>
@@ -279,7 +275,6 @@ public class ItemUI : RootUI
             new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_Doc", "Documented Description (doc)", 1.0f, (val) => { currentItem.DocumentedDescription = val; UpdateCompilerOutput(); }))
         };
     }
-
     /*
     private List<GridRowSpec> GetAppearanceRows(float rowHeight)
     {
@@ -324,7 +319,6 @@ public class ItemUI : RootUI
     #endregion
 
     #region WORKSPACE HIERARCHY LOGIC
-
     private void ConfigureWorkspace()
     {
         if (generatedScreen == null || !generatedScreen.ColumnRefs.TryGetValue("Workspace_Column", out GridReferences refs)) return;
@@ -348,7 +342,6 @@ public class ItemUI : RootUI
             _rootWorkspaceZone = _workspaceContent.gameObject.GetComponent<ReorderableZone>() ?? _workspaceContent.gameObject.AddComponent<ReorderableZone>();
         }
     }
-
     private void OnNodeDropdownSelected(int index)
     {
         if (index <= 0) return;
@@ -364,7 +357,6 @@ public class ItemUI : RootUI
             dropdown.SetValueWithoutNotify(0);
         }
     }
-
     private void AddNodeToWorkspace(ItemNodeType type, string label)
     {
         if (_workspaceContent == null || _rootWorkspaceZone == null) return;
@@ -419,13 +411,11 @@ public class ItemUI : RootUI
         SelectWorkspaceBlock(workspaceItem); // Auto-select when adding
         UpdateCompilerOutput();
     }
-
     private void SelectWorkspaceBlock(WorkspaceItem instance)
     {
         _selectedWorkspaceItem = instance;
         RebuildMainEditorPanel();
     }
-
     private void RemoveBlockFromWorkspace(WorkspaceItem item)
     {
         if (item == null) return;
@@ -463,7 +453,6 @@ public class ItemUI : RootUI
         Destroy(item.gameObject);
         StartCoroutine(ExecuteRecompileNextFrame());
     }
-
     private void ClearWorkspace()
     {
         _selectedWorkspaceItem = null;
@@ -478,17 +467,14 @@ public class ItemUI : RootUI
         RebuildMainEditorPanel();
         UpdateCompilerOutput();
     }
-
     private System.Collections.IEnumerator ExecuteRecompileNextFrame()
     {
         yield return null;
         UpdateCompilerOutput();
     }
-
     #endregion
 
     #region TOP BAR & CONTROLS
-
     private void BuildTopCompilerBar(float height)
     {
         GameObject topBar = new GameObject("TopCompilerBar", typeof(RectTransform), typeof(Image));
@@ -519,11 +505,9 @@ public class ItemUI : RootUI
         _englishTranslationText = topBar.GetComponentInChildren<TextMeshProUGUI>();
         topRefs.Inputs.TryGetValue("Input_RawString", out _finalStringInput);
     }
-
     private void OnClickNewItem() { ClearWorkspace(); }
     private void OnClickSaveItem() { Debug.Log("Save Item Logic Pipeline Needed"); }
     private void OnSelectLoadItem(int index) { if (index > 0) Debug.Log("Load Item Logic Pipeline Needed"); }
-
     private void CopyToClipboard()
     {
         if (_finalStringInput != null && !string.IsNullOrEmpty(_finalStringInput.text))
@@ -532,11 +516,9 @@ public class ItemUI : RootUI
             uiGenerator.CreatePopup("Successfully compiled item string and copied to system clipboard!");
         }
     }
-
     #endregion
 
     #region PARSING & VALUE CHANGERS
-
     private void OnTierChanged(string text)
     {
         if (_isLoading) return;
@@ -544,7 +526,6 @@ public class ItemUI : RootUI
         else currentItem.Tier = null;
         UpdateCompilerOutput();
     }
-
     private void OnHueChanged(string text)
     {
         if (_isLoading) return;
@@ -552,7 +533,6 @@ public class ItemUI : RootUI
         else currentItem.SimpleHue = null;
         UpdateCompilerOutput();
     }
-
     private void UpdateHsvShift()
     {
         if (_isLoading || _mainRefs == null) return;
@@ -566,11 +546,9 @@ public class ItemUI : RootUI
 
         UpdateCompilerOutput();
     }
-
     #endregion
 
     #region BOILERPLATE LAYOUT UTILS
-
     private float CalculateScrollExtraHeight(RectTransform content)
     {
         float extraHeight = 0f;
@@ -583,7 +561,6 @@ public class ItemUI : RootUI
         }
         return extraHeight;
     }
-
     private void ConfigureFlexibleLayout(RectTransform target)
     {
         if (target == null) return;
@@ -591,7 +568,6 @@ public class ItemUI : RootUI
         layoutElement.preferredHeight = -1;
         layoutElement.flexibleHeight = 1f;
     }
-
     private void StretchToParent(RectTransform rt, float topOffset, float bottomOffset)
     {
         if (rt == null) return;
@@ -600,7 +576,6 @@ public class ItemUI : RootUI
         rt.offsetMin = new Vector2(0f, bottomOffset);
         rt.offsetMax = new Vector2(0f, -topOffset);
     }
-
     private void ApplyDynamicLayoutConstraints()
     {
         float rowHeight = uiGenerator != null ? uiGenerator.rowHeight : 40f;
@@ -693,13 +668,11 @@ public class ItemUI : RootUI
 
         iconPicker.OpenModal(config);
     }
-
     private void ToggleCustomImagePanel()
     {
         showCustomImagePanel = !showCustomImagePanel;
         RebuildMainEditorPanel();
     }
-
     private void UpdateItemHsvData(int componentIndex, int value)
     {
         int h = currentItem.HsvShift?.Hue ?? 0;
@@ -735,7 +708,6 @@ public class ItemUI : RootUI
 
         UpdateCompilerOutput();
     }
-
     private List<GridRowSpec> GetAppearanceRows(float rowHeight)
     {
         var layout = new List<GridRowSpec>
@@ -797,7 +769,6 @@ public class ItemUI : RootUI
 
         return layout;
     }
-
     private void RebuildMainEditorPanel()
     {
         if (_mainScroll == null || _mainScroll.content == null) return;
@@ -849,5 +820,187 @@ public class ItemUI : RootUI
         }
 
         PopulateMainPanelFromData();
+    }
+
+    private List<GridRowSpec> GetEquippableRows(float rowHeight)
+    {
+        var layout = new List<GridRowSpec>
+        {
+            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_Meta", "--- EQUIPPABLE METADATA ---", 1.0f)),
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateInput("In_Name", "Item Name (n)", 0.7f, (val) => { currentItem.entityName = val; UpdateCompilerOutput(); }),
+                GridCellSpec.CreateInput("In_Tier", "Tier (tier)", 0.3f, OnTierChanged)
+            ),
+            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_Doc", "Documented Description (doc)", 1.0f, (val) => { currentItem.DocumentedDescription = val; UpdateCompilerOutput(); })),
+
+            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_Colors", "--- AESTHETICS & COLORS ---", 1.0f)),
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateLabel("Icon Override:", 0.30f),
+                GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, OpenFacadeModal),
+                GridCellSpec.CreateInput("In_Img", "None", 0.35f, (val) => { currentItem.imageOverride = val; UpdateCompilerOutput(); }),
+                GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
+            )
+        };
+
+        if (showCustomImagePanel) layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
+
+        layout.AddRange(new List<GridRowSpec>
+        {
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateLabel("Hue:", 0.30f),
+                GridCellSpec.CreateSlider("Sld_H", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(0, Mathf.RoundToInt(val))),
+                GridCellSpec.CreateInput("In_H", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateItemHsvData(0, h); })
+            ),
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateLabel("Saturation:", 0.30f),
+                GridCellSpec.CreateSlider("Sld_S", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(1, Mathf.RoundToInt(val))),
+                GridCellSpec.CreateInput("In_S", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateItemHsvData(1, s); })
+            ),
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateLabel("Value:", 0.30f),
+                GridCellSpec.CreateSlider("Sld_V", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(2, Mathf.RoundToInt(val))),
+                GridCellSpec.CreateInput("In_V", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateItemHsvData(2, v); })
+            ),
+            /*
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateInput("In_Hue", "Simple Hue (hue)", 0.33f, (val) => { if (int.TryParse(val, out int parsedHue)) currentItem.SimpleHue = parsedHue; else currentItem.SimpleHue = null; UpdateCompilerOutput(); }),
+                GridCellSpec.CreateInput("In_THue", "Target Hue (thue)", 0.33f, (val) => { currentItem.TargetedHue = val; UpdateCompilerOutput(); }),
+                GridCellSpec.CreateInput("In_P", "Palette Override (p)", 0.34f, (val) => { currentItem.PaletteOverride = val; UpdateCompilerOutput(); })
+            ),
+            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_B", "Border Color Code (b)", 1.0f, (val) => { currentItem.BorderColorCode = val; UpdateCompilerOutput(); })),
+
+            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_UI", "--- UI & RENDERING OVERRIDES ---", 1.0f)),
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateInput("In_Rect", "Rect Layout (rect)", 0.5f, (val) => { currentItem.UiRectInstructions = val; UpdateCompilerOutput(); }),
+                GridCellSpec.CreateInput("In_Draw", "Draw Mode (draw)", 0.5f, (val) => { currentItem.UiDrawInstructions = val; UpdateCompilerOutput(); })
+            ),
+            */
+            new GridRowSpec(rowHeight,
+                GridCellSpec.CreateToggle("Tgl_ClearIcon", "Clear Base Icon", 0.5f, (val) => { currentItem.ClearIcon = val; UpdateCompilerOutput(); }),
+                GridCellSpec.CreateToggle("Tgl_ClearDesc", "Clear Base Desc", 0.5f, (val) => { currentItem.ClearDescription = val; UpdateCompilerOutput(); })
+            )
+        });
+
+        return layout;
+    }
+
+    // Reusable UI for selecting where the mechanic applies (topbot, left2, all, etc.)
+    private List<GridRowSpec> GetTargetSelectionRows(float rowHeight, ItemMechanic mech)
+    {
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Targ", "1. Execution Targets (e.g., topbot, left, all)", 1.0f)),
+            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_Targets", "Target string (comma separated)", 1.0f, (val) => {
+                mech.Targets = val.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                UpdateCompilerOutput();
+            }))
+        };
+    }
+
+    private List<GridRowSpec> GetBaseItemRows(float rowHeight, ItemMechanic mech)
+    {
+        var layout = GetTargetSelectionRows(rowHeight, mech);
+        mech.Prefix = ""; // Base items have no prefix, just the name
+
+        layout.Add(new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_BaseItem", "2. Base Item Payload", 1.0f)));
+        layout.Add(new GridRowSpec(rowHeight,
+            GridCellSpec.CreateDropdown("Drop_BaseItem", "Select Base Item:", 1.0f, Enum.GetNames(typeof(BaseItems)), (idx) => {
+                mech.PayloadString = Enum.GetNames(typeof(BaseItems))[idx];
+                UpdateCompilerOutput();
+            })
+        ));
+
+        // Manual override for custom items from ModPackage
+        layout.Add(new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_BaseItemStr", "Or Custom String:", 1.0f, (val) => { mech.PayloadString = val; UpdateCompilerOutput(); })));
+        return layout;
+    }
+
+    private List<GridRowSpec> GetHatRows(float rowHeight, ItemMechanic mech)
+    {
+        var layout = GetTargetSelectionRows(rowHeight, mech);
+        mech.Prefix = "hat"; // Sets the compiler prefix to 'hat.'
+
+        layout.Add(new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Hat", "2. Hat Payload (HeroData / MonsterData String)", 1.0f)));
+        layout.Add(new GridRowSpec(rowHeight,
+            GridCellSpec.CreateInput("In_HatPayload", "Paste Entity String (e.g. egg.Slimelet)", 1.0f, (val) => {
+                mech.PayloadString = val;
+                UpdateCompilerOutput();
+            })
+        ));
+        return layout;
+    }
+
+    private List<GridRowSpec> GetStickerRows(float rowHeight, ItemMechanic mech)
+    {
+        var layout = GetTargetSelectionRows(rowHeight, mech);
+        mech.Prefix = "sticker";
+
+        layout.Add(new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Sticker", "2. Sticker Payload (ItemData String)", 1.0f)));
+        layout.Add(new GridRowSpec(rowHeight,
+            GridCellSpec.CreateInput("In_StickerPayload", "Paste Item String to apply as sticker", 1.0f, (val) => {
+                mech.PayloadString = val;
+                UpdateCompilerOutput();
+            })
+        ));
+        return layout;
+    }
+
+    private List<GridRowSpec> GetRawStringRows(float rowHeight, ItemMechanic mech)
+    {
+        mech.Prefix = "";
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Raw", "Raw AST String Injector", 1.0f)),
+            new GridRowSpec(rowHeight * 3f, GridCellSpec.CreateInput("In_RawPayload", "(replica.Thief.i.(all...))", 1.0f, (val) => {
+                mech.PayloadString = val;
+                UpdateCompilerOutput();
+            }))
+        };
+    }
+
+    private List<GridRowSpec> GetSuffixNodeRows(float rowHeight, ItemMechanic mech, string header)
+    {
+        mech.Prefix = ""; // No prefix, we are writing to the suffix properties
+        mech.PayloadString = "";
+
+        var layout = new List<GridRowSpec>
+        {
+            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Suf", $"--- {header} ---", 1.0f)),
+            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_SuffixValue", "Item to Splice/Merge", 1.0f, (val) => {
+                if (_selectedWorkspaceItem.Type == ItemNodeType.Splice) mech.SplicedItem = val;
+                else if (_selectedWorkspaceItem.Type == ItemNodeType.Merge) mech.MergedItem = val;
+                UpdateCompilerOutput();
+            }))
+        };
+        return layout;
+    }
+
+    private List<GridRowSpec> GetPartRows(float rowHeight, ItemMechanic mech)
+    {
+        mech.Prefix = "";
+        mech.PayloadString = "";
+
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Part", "--- Item Part Extraction (.part.X) ---", 1.0f)),
+            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_PartIdx", "Index (e.g. 0, 1, 2)", 1.0f, (val) => {
+                if (int.TryParse(val, out int idx)) mech.PartIndex = idx;
+                else mech.PartIndex = null;
+                UpdateCompilerOutput();
+            }))
+        };
+    }
+
+    private List<GridRowSpec> GetUnpackRows(float rowHeight, ItemMechanic mech)
+    {
+        mech.Prefix = "";
+        mech.PayloadString = "";
+        mech.Unpack = true; // Hardcoded true for this node type
+
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Unpack", "--- Unpack Item (.unpack) ---", 1.0f)),
+            new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("LBL_UnpackDesc", "Strips conditional activation requirements from a base item.", 1.0f))
+        };
     }
 }
