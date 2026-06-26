@@ -52,11 +52,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     public List<string> BaseAbilities => baseAbilityData;
     public List<CustomPayload> CustomPayloads => customPayloads;
 
-    public void InitializeDiceFaces()
-    {
-        for (int i = 0; i < diceSides.Length; i++) diceSides[i] = new DiceSideData();
-    }
-
     protected bool TryProcessEntityMetadata(List<string> tokens, ref int i, string tokenLower)
     {
         if (tokenLower == "hp")
@@ -78,48 +73,8 @@ public abstract class EntityData : SDData, IPayloadContainer
         else if (hue != 0) sb.Append($".hue.{hue}");
     }
     */
-    protected void AppendDiceSides(StringBuilder sb)
-    {
-        // Find the last modified side so we can truncate trailing zeroes
-        int lastActiveIndex = -1;
-        for (int i = 0; i < 6; i++)
-        {
-            if (diceSides[i] != null && diceSides[i].effectID != 0)
-            {
-                lastActiveIndex = i;
-            }
-        }
 
-        // If no custom sides are defined, omit the .sd block entirely
-        if (lastActiveIndex == -1) return;
-
-        sb.Append(".sd.");
-        for (int i = 0; i <= lastActiveIndex; i++)
-        {
-            var side = diceSides[i];
-            if (side == null || side.effectID == 0)
-            {
-                sb.Append("0");
-            }
-            else
-            {
-                // Simplify: if pips are 0, omit the "-0" suffix
-                if (side.pips == 0)
-                {
-                    sb.Append(side.effectID);
-                }
-                else
-                {
-                    sb.Append($"{side.effectID}-{side.pips}");
-                }
-            }
-
-            // Only append separator if there are more customized sides remaining
-            if (i < lastActiveIndex) sb.Append(":");
-        }
-    }
-
-    protected string BuildFaceModifiers(bool allowFacade)
+    public string BuildFaceModifiers(bool allowFacade)
     {
         StringBuilder modSb = new StringBuilder();
         var groupedModifiers = new Dictionary<string, int>();
@@ -274,6 +229,68 @@ public abstract class EntityData : SDData, IPayloadContainer
         else if (hue != 0)
         {
             sb.Append($".hue.{hue}");
+        }
+    }
+
+    public void InitializeDiceFaces()
+    {
+        // Ensure the array itself exists
+        if (diceSides == null || diceSides.Length != 6)
+        {
+            diceSides = new DiceSideData[6];
+        }
+
+        // ONLY instantiate slots that are completely null, preserving existing data
+        for (int i = 0; i < diceSides.Length; i++)
+        {
+            if (diceSides[i] == null)
+            {
+                diceSides[i] = new DiceSideData();
+                // Safety net: ensure keywords list is never null
+                if (diceSides[i].keywords == null) diceSides[i].keywords = new List<string>();
+            }
+        }
+    }
+
+    protected void AppendDiceSides(StringBuilder sb)
+    {
+        // Find the last modified side so we can truncate trailing zeroes
+        int lastActiveIndex = -1;
+        for (int i = 0; i < 6; i++)
+        {
+            // CHANGED: Also check if pips != 0 so we don't drop pip-only modifications
+            if (diceSides[i] != null && (diceSides[i].effectID != 0 || diceSides[i].pips != 0))
+            {
+                lastActiveIndex = i;
+            }
+        }
+
+        // If no custom sides are defined, omit the .sd block entirely
+        if (lastActiveIndex == -1) return;
+
+        sb.Append(".sd.");
+        for (int i = 0; i <= lastActiveIndex; i++)
+        {
+            var side = diceSides[i];
+            if (side == null || (side.effectID == 0 && side.pips == 0))
+            {
+                sb.Append("0");
+            }
+            else
+            {
+                // Simplify: if pips are 0, omit the "-0" suffix
+                if (side.pips == 0)
+                {
+                    sb.Append(side.effectID);
+                }
+                else
+                {
+                    sb.Append($"{side.effectID}-{side.pips}");
+                }
+            }
+
+            // Only append separator if there are more customized sides remaining
+            if (i < lastActiveIndex) sb.Append(":");
         }
     }
 }

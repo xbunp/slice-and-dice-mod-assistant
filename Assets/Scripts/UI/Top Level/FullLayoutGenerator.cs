@@ -9,6 +9,25 @@ using UnityEngine.UI;
 
 public class FullScreenUIGenerator : MonoBehaviour
 {
+    private static FullScreenUIGenerator _instance;
+    public static FullScreenUIGenerator Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                // Search the scene for an existing instance if it hasn't initialized yet
+                _instance = UnityEngine.Object.FindFirstObjectByType<FullScreenUIGenerator>();
+
+                if (_instance == null)
+                {
+                    Debug.LogWarning("No FullScreenUIGenerator found in the scene.");
+                }
+            }
+            return _instance;
+        }
+    }
+
     public Canvas canvas;
 
     [Header("UI Prefabs")]
@@ -27,12 +46,27 @@ public class FullScreenUIGenerator : MonoBehaviour
     public GameObject IDEInterfacePrefab;
     public GameObject togglePrefab;
     public GameObject filteredDropdown;
+    public GameObject dicePreviewAlonePrefab;
 
     public FlexibleColorPicker colorPicker;
 
     [Header("Layout Settings")]
     public float rowHeight = 35f;
     public float rowSpacing = 8f;
+
+    private void Awake()
+    {
+        // Ensure there is only one instance of this class
+        if (_instance == null)
+        {
+            _instance = this;
+        }
+        else if (_instance != this)
+        {
+            Debug.LogWarning($"Duplicate FullScreenUIGenerator detected on {gameObject.name}. Destroying duplicate.");
+            Destroy(gameObject);
+        }
+    }
 
     private void Start()
     {

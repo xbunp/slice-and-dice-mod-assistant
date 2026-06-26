@@ -108,8 +108,8 @@ namespace ModEditor
                             viewportImage.color = Color.clear;
                         }
 
-                        ContextMenuTrigger trigger = viewportRt.gameObject.GetComponent<ContextMenuTrigger>();
-                        if (trigger == null) trigger = viewportRt.gameObject.AddComponent<ContextMenuTrigger>();
+                        RightClickInputContextMenuTrigger trigger = viewportRt.gameObject.GetComponent<RightClickInputContextMenuTrigger>();
+                        if (trigger == null) trigger = viewportRt.gameObject.AddComponent<RightClickInputContextMenuTrigger>();
 
                         FilteredDropdown dropdownPrefab = uiGenerator.filteredDropdown != null
                             ? uiGenerator.filteredDropdown.GetComponent<FilteredDropdown>() : null;

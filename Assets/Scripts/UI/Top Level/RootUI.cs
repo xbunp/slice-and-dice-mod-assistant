@@ -8,7 +8,7 @@ using UnityEngine;
 public class RootUI : MonoBehaviour
 {
     protected GeneratedScreen generatedScreen;
-    protected FullScreenUIGenerator uiGenerator;
+    public FullScreenUIGenerator uiGenerator { get; protected set; }
 
     public virtual void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
@@ -135,4 +135,6 @@ public class RootUI : MonoBehaviour
             onRemove
         );
     }
+
+
 }

@@ -7,19 +7,7 @@ using UnityEngine.UI;
 
 public class ItemUI : RootUI
 {
-    public enum ItemNodeType
-    {
-        Equippable,
-        BaseItem,
-        Hat,
-        Sticker,
-        Chain,
-        Splice,
-        Merge,
-        Unpack,
-        ItemPart,
-        RawString
-    }
+
 
     private readonly string[] _nodeDropdownOptions = new string[]
     {
@@ -253,12 +241,12 @@ public class ItemUI : RootUI
             case ItemNodeType.Equippable: return GetEquippableRows(rowHeight);
             case ItemNodeType.BaseItem: return GetBaseItemRows(rowHeight, mech);
             case ItemNodeType.Hat: return GetHatRows(rowHeight, mech);
-            case ItemNodeType.Sticker: return GetStickerRows(rowHeight, mech);
-            case ItemNodeType.Chain: return GetPlaceholderRows(rowHeight, "Chain Items (#)");
-            case ItemNodeType.Splice: return GetSuffixNodeRows(rowHeight, mech, "Splice Item (.splice.X)");
-            case ItemNodeType.Merge: return GetSuffixNodeRows(rowHeight, mech, "Merge Item (.mrg.X)");
-            case ItemNodeType.Unpack: return GetUnpackRows(rowHeight, mech);
-            case ItemNodeType.ItemPart: return GetPartRows(rowHeight, mech);
+            //case ItemNodeType.Sticker: return GetStickerRows(rowHeight, mech);
+            //case ItemNodeType.Chain: return GetPlaceholderRows(rowHeight, "Chain Items (#)");
+            //case ItemNodeType.Splice: return GetSuffixNodeRows(rowHeight, mech, "Splice Item (.splice.X)");
+            //case ItemNodeType.Merge: return GetSuffixNodeRows(rowHeight, mech, "Merge Item (.mrg.X)");
+            //case ItemNodeType.Unpack: return GetUnpackRows(rowHeight, mech);
+            //case ItemNodeType.ItemPart: return GetPartRows(rowHeight, mech);
             case ItemNodeType.RawString: return GetRawStringRows(rowHeight, mech);
             default: return new List<GridRowSpec>();
         }
@@ -958,6 +946,7 @@ public class ItemUI : RootUI
         };
     }
 
+    /*
     private List<GridRowSpec> GetSuffixNodeRows(float rowHeight, ItemMechanic mech, string header)
     {
         mech.Prefix = ""; // No prefix, we are writing to the suffix properties
@@ -974,7 +963,7 @@ public class ItemUI : RootUI
         };
         return layout;
     }
-
+    */
     private List<GridRowSpec> GetPartRows(float rowHeight, ItemMechanic mech)
     {
         mech.Prefix = "";

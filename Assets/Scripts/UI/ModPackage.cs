@@ -18,8 +18,8 @@ public class ModPackage : MonoBehaviour
     // --- CONCURRENT SESSION TRACKING (ENTITIES) ---
     private class EditingSession
     {
-        public EntityData Original;
-        public EntityData Clone;
+        public SDData Original;
+        public SDData Clone;
     }
 
     // Single-session tracker per Entity Type (Hero, Monster, etc.)
@@ -31,7 +31,7 @@ public class ModPackage : MonoBehaviour
         new Dictionary<SliceDiceTextMod.TextModBlock, SliceDiceTextMod.TextModBlock>();
 
     // --- EVENTS ---
-    public event Action<Type, EntityData> OnActiveEntityChanged;
+    public event Action<Type, SDData> OnActiveEntityChanged;
     public event Action OnDirectivesChanged; // Invoked when directives are saved, deleted, or reloaded
     public event Action OnModLoaded;
 
@@ -51,7 +51,11 @@ public class ModPackage : MonoBehaviour
     private void Start()
     {
         CreateNewMod();
-        RootUIFactory.Instance.InitializeEntireUI();
+
+        if (RootUIFactory.Instance != null)
+        {
+            RootUIFactory.Instance.InitializeEntireUI();
+        }
     }
 
     public void CreateNewMod()
@@ -73,7 +77,7 @@ public class ModPackage : MonoBehaviour
     // --- ENTITY-SPECIFIC API (SINGLE-SESSION / TYPE-SAFE) ---
     // =========================================================================
 
-    public void LoadEntityForEditing<T>(T originalEntity) where T : EntityData
+    public void LoadEntityForEditing<T>(T originalEntity) where T : SDData
     {
         Type type = typeof(T);
 
@@ -92,7 +96,7 @@ public class ModPackage : MonoBehaviour
         _activeSessions[type] = session;
         OnActiveEntityChanged?.Invoke(type, session.Clone);
     }
-    public T GetActiveEntity<T>() where T : EntityData
+    public T GetActiveEntity<T>() where T : SDData
     {
         if (_activeSessions.TryGetValue(typeof(T), out var session))
         {
@@ -100,7 +104,7 @@ public class ModPackage : MonoBehaviour
         }
         return null;
     }
-    public void UnloadEditingSession<T>() where T : EntityData
+    public void UnloadEditingSession<T>() where T : SDData
     {
         Type type = typeof(T);
         if (_activeSessions.Remove(type))
@@ -108,7 +112,7 @@ public class ModPackage : MonoBehaviour
             OnActiveEntityChanged?.Invoke(type, null);
         }
     }
-    public void SaveActiveEntity<T>() where T : EntityData
+    public void SaveActiveEntity<T>() where T : SDData
     {
         Type type = typeof(T);
 
@@ -118,7 +122,7 @@ public class ModPackage : MonoBehaviour
             session.Original = session.Clone;
         }
     }
-    public void DeleteEntity<T>(T entityToDelete) where T : EntityData
+    public void DeleteEntity<T>(T entityToDelete) where T : SDData
     {
         if (entityToDelete == null) return;
 
@@ -215,17 +219,17 @@ public class ModPackage : MonoBehaviour
     {
         if (source == null) return null;
 
-        // Configure serializer to ignore loops instead of throwing an error
         var settings = new JsonSerializerSettings
         {
-            ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+            TypeNameHandling = TypeNameHandling.Auto
         };
 
         string json = JsonConvert.SerializeObject(source, settings);
         return JsonConvert.DeserializeObject(json, source.GetType(), settings) as T;
     }
 
-    public void NotifyActiveEntityChanged<T>(object sender) where T : EntityData
+    public void NotifyActiveEntityChanged<T>(object sender) where T : SDData
     {
         Type type = typeof(T);
         if (_activeSessions.TryGetValue(type, out var session))
@@ -251,7 +255,7 @@ public class ModPackage : MonoBehaviour
     /// Replaces the currently active working clone in an editing session.
     /// Useful for actions like pasting an import or resetting an entity to defaults.
     /// </summary>
-    public void UpdateActiveEntityClone<T>(T newClone) where T : EntityData
+    public void UpdateActiveEntityClone<T>(T newClone) where T : SDData
     {
         Type type = typeof(T);
         if (_activeSessions.TryGetValue(type, out var session))

@@ -1974,7 +1974,7 @@ public static class DiceTargetHelper
     public static readonly string[] FaceNames = { "left", "mid", "top", "bot", "right", "rightmost" };
 
     // Bitmask mapping based on indices: Left(1), Mid(2), Top(4), Bot(8), Right(16), Rightmost(32)
-    private static readonly (string name, int mask)[] TargetAliases = new (string, int)[]
+    public static readonly (string name, int mask)[] TargetAliases = new (string, int)[]
     {
         ("all", 63),       // 1+2+4+8+16+32 = 63
         ("right5", 62),    // 2+4+8+16+32 = 62
@@ -1992,6 +1992,29 @@ public static class DiceTargetHelper
         ("mid", 2),        // 2
         ("left", 1)        // 1
     };
+
+    public static string FormatAliasName(string rawName)
+    {
+        return rawName switch
+        {
+            "all" => "All",
+            "right5" => "Right 5",
+            "right3" => "Right 3",
+            "right2" => "Right 2",
+            "row" => "Row",
+            "mid2" => "Middle 2",
+            "col" => "Column",
+            "topbot" => "Top/Bottom",
+            "left2" => "Left 2",
+            "rightmost" => "Rightmost",
+            "right" => "Right",
+            "bot" => "Bottom",
+            "top" => "Top",
+            "mid" => "Middle",
+            "left" => "Left",
+            _ => rawName
+        };
+    }
 
     /// <summary>
     /// Evaluates combinations of available target aliases to find the absolute shortest text representation.

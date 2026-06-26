@@ -26,7 +26,7 @@ public class RootUIFactory : MonoBehaviour
     public ScratchModUI ScratchModUI { get; private set; }
     public HeroUI HeroUI { get; private set; }
     public MonsterUI MonsterUI { get; private set; }
-    public ItemUI ItemUI { get; private set; }
+    public StringAuthoringUIManager ItemUI { get; private set; }
     public AbilityUI AbilityUI { get; private set; }
 
     //public SettingsUI SettingsUI { get; private set; }
@@ -96,7 +96,7 @@ public class RootUIFactory : MonoBehaviour
         ScratchModUI = CreateTabInstance<ScratchModUI>("ScratchModUI", "Modifiers");
         HeroUI = CreateTabInstance<HeroUI>("HeroUI", "Heroes");
         MonsterUI = CreateTabInstance<MonsterUI>("MonsterUI", "Monsters");
-        ItemUI = CreateTabInstance<ItemUI>("ItemUI", "Items");
+        ItemUI = CreateTabInstance<StringAuthoringUIManager>("ItemUI", "Items");
         AbilityUI = CreateTabInstance<AbilityUI>("AbilityUI", "Abilities");
 
         uiGenerator.canvas = originalCanvas;

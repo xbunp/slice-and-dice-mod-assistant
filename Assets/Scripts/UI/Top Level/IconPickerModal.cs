@@ -34,6 +34,8 @@ public struct IconPickerConfig
 
 public class IconPickerModal : MonoBehaviour
 {
+    public static IconPickerModal Instance { get; private set; }
+
     [Header("UI References")]
     public GameObject modalPanel;
     public Transform gridContent;
@@ -99,6 +101,15 @@ public class IconPickerModal : MonoBehaviour
 
     private void Awake()
     {
+        // Singleton initialization
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogWarning($"Duplicate instance of {nameof(IconPickerModal)} found on {gameObject.name}. Destroying the duplicate.");
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+
         _layoutGroup = gridContent.GetComponent<LayoutGroup>();
         _scrollRect = gridContent.GetComponentInParent<ScrollRect>();
 

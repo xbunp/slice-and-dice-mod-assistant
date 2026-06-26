@@ -8,7 +8,7 @@ using UnityEngine.InputSystem; // Assumes Input System package based on Pointer.
 
 namespace ModEditor
 {
-    public class ContextMenuTrigger : MonoBehaviour, IPointerClickHandler
+    public class RightClickInputContextMenuTrigger : MonoBehaviour, IPointerClickHandler
     {
         [Header("References")]
         [SerializeField] private FilteredDropdown dropdownPrefab;

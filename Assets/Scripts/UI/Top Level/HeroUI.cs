@@ -636,6 +636,8 @@ public class HeroUI : RootUI
     }
     private void UpdateHeroHsvData(int componentIndex, int value)
     {
+        if (isDrawingUI) return;
+
         if (componentIndex == 0) CurrentHero.h = value;
         else if (componentIndex == 1) CurrentHero.s = value;
         else if (componentIndex == 2) CurrentHero.v = value;
@@ -1451,6 +1453,10 @@ public class HeroUI : RootUI
     private void RebuildDiceScrollView()
     {
         if (diceScrollRect == null) return;
+
+        bool wasDrawing = isDrawingUI;
+        isDrawingUI = true;
+
         diceUI = uiGenerator.RebuildGrid(diceScrollRect.content, GenerateDiceLayout(currentDiceTab));
 
         // Account for VerticalLayoutGroup spacing and padding dynamically
@@ -1468,6 +1474,7 @@ public class HeroUI : RootUI
 
         diceScrollRect.content.sizeDelta = new Vector2(0, diceUI.TotalHeight + extraHeight);
 
+        isDrawingUI = wasDrawing; // RESTORE FLAG
         Canvas.ForceUpdateCanvases();
         UpdateUIFromData();
     }

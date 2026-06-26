@@ -1,0 +1,315 @@
+// ==========================================
+// 1. SUPPORT STRUCTS, ENUMS & SYSTEM TYPES
+// ==========================================
+
+public enum PayloadType { Item, Ability, Hero, Monster, Modifier }
+public enum MonsterSize { HeroSized, Large, Huge }
+
+[Serializable]
+public class Thue
+{
+    public Color colorHex;
+    public int colorRange;
+    public int colorOffset;
+}
+
+[Serializable]
+public struct ItemHsvShift
+{
+    public int Hue;        // Range: -99 to 99
+    public int Saturation; // Range: -99 to 99
+    public int Value;      // Range: -99 to 99
+    public ItemHsvShift(int h, int s, int v);
+}
+
+public class CustomPayload 
+{ 
+    public string Prefix; 
+    public object Data; 
+    public PayloadType Type; 
+    public string Export(); 
+}
+
+public class DiceSideData 
+{ 
+    public int effectID; 
+    public int pips; 
+    public string facadeID; 
+    public string facadeColor; 
+    public List<string> keywords = new List<string>(); 
+}
+
+public class ItemProperty 
+{ 
+    public string Key; 
+    public string Value; 
+    public ItemProperty(string key, string value);
+}
+
+public class ItemMechanic 
+{ 
+    public List<string> Targets = new List<string>(); 
+    public string Prefix; 
+    public string PayloadString; 
+    public object PayloadData; 
+    public int RepeatTimes; 
+    public bool PerTier; 
+    public bool Unpack; 
+    public int? PartIndex; 
+    public int Multiplier; 
+    public string MergedItem; 
+    public string SplicedItem; 
+    public void AddTarget(string target);
+    public string Export(); 
+}
+
+public interface IPayloadContainer
+{
+    List<string> BaseItems { get; }
+    List<string> Traits { get; }
+    List<string> Curses { get; }
+    List<string> Blessings { get; }
+    List<string> BaseAbilities { get; }
+    List<CustomPayload> CustomPayloads { get; }
+}
+
+
+// ==========================================
+// 2. PARSING & SERALIZATION DOMAIN RULES
+// ==========================================
+
+public static class EntityDomainRules
+{
+    public static readonly HashSet<string> CommonMetadataKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "n", "img", "doc", "hp", "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "sd"
+    };
+    public static readonly HashSet<string> CommonCollectionKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "i", "t", "gift", "learn", "abilitydata"
+    };
+}
+
+public static class HeroDomainRules
+{
+    public static readonly HashSet<string> HeroPropertyKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "replica", "img", "n", "col", "hp", "tier", "hsv", "hsl", "hue", "sd",
+        "speech", "doc", "i", "p", "t", "gift", "abilitydata", "adj", "b", "rect",
+        "draw", "thue", "triggerhpdata"
+    };
+    public static readonly HashSet<string> MetadataKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "replica", "n", "img", "col", "hp", "tier", "hsv", "hsl", "hue",
+        "p", "b", "rect", "draw", "thue", "adj", "speech", "doc"
+    };
+    public static readonly HashSet<string> HeroItemBoundaryKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "sd", "hp", "tier", "col"
+    };
+}
+
+public static class MonsterDomainRules
+{
+    public static readonly HashSet<string> MonsterPropertyKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata", "onhitdata"
+    };
+}
+
+public static class AbilityDomainRules
+{
+    public static readonly HashSet<string> AbilityKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "sd", "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "n", "img", "hp", "col", "tier",
+        "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "doc", "adj", "speech"
+    };
+}
+
+
+// ==========================================
+// 3. CORE HIERARCHY DATA CLASSES
+// ==========================================
+
+[Serializable]
+public abstract class SDData
+{
+    public string entityName = "";
+    public string imageOverride = "None";
+    public string doc;
+    public int h, s, v;
+    public int hue;
+    public string p, b, draw, rect;
+    public Thue thue = new Thue();
+
+    public List<CustomPayload> customPayloads = new List<CustomPayload>();
+    public List<ItemData> customItems => customPayloads?.Where(p => p.Type == PayloadType.Item).Select(p => p.Data as ItemData).ToList();
+    public List<AbilityData> customAbilities => customPayloads?.Where(p => p.Type == PayloadType.Ability).Select(p => p.Data as AbilityData).ToList();
+    public List<HeroData> customHeroes => customPayloads?.Where(p => p.Type == PayloadType.Hero).Select(p => p.Data as HeroData).ToList();
+    public List<MonsterData> customMonsters => customPayloads?.Where(p => p.Type == PayloadType.Monster).Select(p => p.Data as MonsterData).ToList();
+
+    public virtual string Export();
+    public virtual void Parse(string data);
+    protected void ProcessRecursiveParentheses(string originalToken, Action<List<string>> processingDelegate);
+    protected bool TryProcessCommonMetadata(List<string> tokens, ref int i, string tokenLower);
+    protected static string FormatName(string name);
+    protected static string PackTHue(Thue thue);
+    protected static Thue UnpackTHue(string thue);
+}
+
+[Serializable]
+public abstract class EntityData : SDData, IPayloadContainer
+{
+    public int hp = 0;
+    public List<string> items = new List<string>();
+    public List<string> traits = new List<string>();
+    public List<string> blessings = new List<string>();
+    public List<string> curses = new List<string>();
+    public List<string> baseAbilityData = new List<string>();
+    public DiceSideData[] diceSides = new DiceSideData[6];
+
+    public List<OnHitData> customOnHits;
+    public List<TriggerHPData> customTriggerHPs;
+
+    public List<string> BaseItems => items;
+    public List<string> Traits => traits;
+    public List<string> Curses => curses;
+    public List<string> Blessings => blessings;
+    public List<string> BaseAbilities => baseAbilityData;
+    public List<CustomPayload> CustomPayloads => customPayloads;
+
+    public void InitializeDiceFaces();
+    protected bool TryProcessEntityMetadata(List<string> tokens, ref int i, string tokenLower);
+    protected void AppendDiceSides(StringBuilder sb);
+    protected string BuildFaceModifiers(bool allowFacade);
+    protected bool TryProcessDiceSides(List<string> tokens, ref int i, string tokenLower);
+    protected void ProcessTraitToken(List<string> tokens, ref int i, HashSet<string> domainPropertyKeys);
+    protected bool TryProcessTriggerData(List<string> tokens, ref int i, string tokenLower);
+    protected void AppendColorModifier(StringBuilder sb);
+}
+
+[Serializable]
+public class ItemData : SDData
+{
+    public List<string> GlobalTags = new List<string>();
+    public int? Tier { get; set; }
+    public string DocumentedDescription { get; set; } = string.Empty;
+    public ItemHsvShift? HsvShift { get; set; }
+    public int? SimpleHue { get; set; }
+    public string PaletteOverride { get; set; } = string.Empty;
+    public string BorderColorCode { get; set; } = string.Empty;
+    public string UiDrawInstructions { get; set; } = string.Empty;
+    public string UiRectInstructions { get; set; } = string.Empty;
+    public List<string> LearnedAbilities { get; set; } = new List<string>();
+    public bool ClearDescription { get; set; }
+    public bool ClearIcon { get; set; }
+    public List<ItemProperty> Containers = new List<ItemProperty>();
+    public List<ItemMechanic> Mechanics = new List<ItemMechanic>();
+
+    public bool IsEquippable => !string.IsNullOrEmpty(entityName) || Tier.HasValue;
+
+    public override void Parse(string data);
+    public override string Export();
+    public void DebugContentsToConsole(string indent = "");
+}
+
+[Serializable]
+public class ModifierData : SDData
+{
+    public List<string> coreCommands = new List<string>();
+
+    public override void Parse(string data);
+    public override string Export();
+    public void DebugContentsToConsole(string indent = "");
+}
+
+[Serializable]
+public class HeroData : EntityData
+{
+    public string baseReplica;
+    public string colorClass;
+    public int tier;
+    public int? adj;
+    public string speech;
+
+    public List<SpellData> customSpells;
+    public List<TacticData> customTactics;
+    public IReadOnlyList<AbilityData> customAbilityData { get; }
+
+    public void InitializeAsDefault();
+    public void InitializeAsBlank();
+    public override void Parse(string data);
+    public override string Export();
+    public void AddCustomAbility(AbilityData ability);
+    public void DebugContentsToConsoleCompact(string indent = "");
+}
+
+[Serializable]
+public class MonsterData : EntityData
+{
+    public object payloadData;
+    public string baseMonster = "Wolf";
+    public MonsterSize size = MonsterSize.HeroSized;
+    public string bal;
+
+    public static string Export(MonsterData monster);
+    public override void Parse(string data);
+    public void DebugContentsToConsoleCompact(string indent = "");
+}
+
+[Serializable]
+public abstract class AbilityData : HeroData
+{
+    public string baseDummyType { get => baseReplica; set => baseReplica = value; }
+    public DiceSideData PrimaryEffect { get => diceSides[0]; set => diceSides[0] = value; }
+    public DiceSideData SecondaryEffect { get => diceSides[1]; set => diceSides[1] = value; }
+
+    public override void Parse(string data);
+    public override string Export();
+    public abstract string ExportWrapped();
+    protected string ExportInner();
+    public void DebugAbilityCompact(string indent = "");
+
+    // Factories and Resolvers
+    public static AbilityData FigureItOut(string data);
+    public static AbilityData WhatAmI(string data);
+    public static AbilityData CreateSpellOrTactic(string data);
+    public static AbilityData CreateAbility(string data);
+    public static string GetPipsAffectedDescription(int hp);
+    protected static string GetOrdinalSuffix(int num);
+}
+
+[Serializable]
+public class SpellData : AbilityData
+{
+    public int manaCost = 1;
+    public DiceSideData ManaCostSide { get => diceSides[4]; set => diceSides[4] = value; }
+
+    public override string Export();
+    public override string ExportWrapped();
+}
+
+[Serializable]
+public class TacticData : AbilityData
+{
+    public DiceSideData TacticCostTop { get => diceSides[2]; set => diceSides[2] = value; }
+    public DiceSideData TacticCostBottom { get => diceSides[3]; set => diceSides[3] = value; }
+    public DiceSideData TacticCostRightmost { get => diceSides[5]; set => diceSides[5] = value; }
+
+    public override string Export();
+    public override string ExportWrapped();
+}
+
+[Serializable]
+public class OnHitData : AbilityData
+{
+    public override string Export();
+    public override string ExportWrapped();
+}
+
+[Serializable]
+public class TriggerHPData : AbilityData
+{
+    public override string Export();
+    public override string ExportWrapped();
+}
