@@ -283,7 +283,7 @@ public class HeroUI : RootUI
 
         portraitPreview.SetSlotIcon(
             index,
-            face.facadeID,
+            ResolveFacadeName(face.facadeID), // <-- Wrap facadeID with the resolver
             face.effectID,
             face.facadeColor,
             face.pips
@@ -521,7 +521,8 @@ public class HeroUI : RootUI
                 }
                 if (diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
                 {
-                    Sprite s = EntityUIHelpers.GetFacadeSprite(face.facadeID);
+                    // <-- Wrap facadeID with the resolver here too
+                    Sprite s = EntityUIHelpers.GetFacadeSprite(ResolveFacadeName(face.facadeID));
                     SetButtonIcon(facBtn, s);
                 }
             }
@@ -1779,5 +1780,40 @@ public class HeroUI : RootUI
         {
             uiGenerator.colorPicker.gameObject.SetActive(false);
         }
+    }
+
+    // Add this helper method anywhere inside the HeroUI class
+    private string ResolveFacadeName(string facadeID)
+    {
+        if (string.IsNullOrEmpty(facadeID)) return facadeID;
+
+        // 1. Try to get it directly first (works if it's already a full name)
+        if (EntityUIHelpers.GetFacadeSprite(facadeID) != null) return facadeID;
+
+        // 2. Pattern patch for S&D short names (e.g., "Aid9" -> "Aid", "9")
+        var match = Regex.Match(facadeID, @"^([a-zA-Z]+)(\d+)$");
+        if (match.Success)
+        {
+            string prefix = match.Groups[1].Value;
+            string id = match.Groups[2].Value;
+            string searchPrefix = $"{prefix}_{id}_"; // Rebuilds to "Aid_9_"
+
+            // Legacy monolith fallback patching
+            if (prefix.ToLower() == "bas" && int.TryParse(id, out int basId))
+            {
+                if (basId >= 188 && basId <= 219) searchPrefix = $"big_{basId - 188}_";
+                else if (basId >= 220 && basId <= 247) searchPrefix = $"hug_{basId - 220}_";
+                else if (basId >= 248 && basId <= 265) searchPrefix = $"tin_{basId - 248}_";
+            }
+
+            // Find the full sprite name in the database pool
+            var sprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && sp.name.StartsWith(searchPrefix, StringComparison.OrdinalIgnoreCase));
+            if (sprite != null)
+            {
+                return sprite.name;
+            }
+        }
+
+        return facadeID;
     }
 }

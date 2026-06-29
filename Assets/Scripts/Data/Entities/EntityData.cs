@@ -84,12 +84,19 @@ public abstract class EntityData : SDData, IPayloadContainer
             var face = diceSides[i];
             List<string> chunks = new List<string>();
 
-            foreach (var kw in face.keywords) if (!string.IsNullOrWhiteSpace(kw)) chunks.Add($"k.{kw.Trim().ToLower()}");
+            foreach (var kw in face.keywords)
+                if (!string.IsNullOrWhiteSpace(kw)) chunks.Add($"k.{kw.Trim().ToLower()}");
 
             if (allowFacade && !string.IsNullOrWhiteSpace(face.facadeID))
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
-                if (!string.IsNullOrWhiteSpace(face.facadeColor)) facStr += $":{face.facadeColor}";
+
+                // FIX: Force the mandatory HSV zeroing if no color is provided
+                if (!string.IsNullOrWhiteSpace(face.facadeColor))
+                    facStr += $":{face.facadeColor}";
+                else
+                    facStr += ":0";
+
                 chunks.Add(facStr);
             }
 

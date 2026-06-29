@@ -146,6 +146,39 @@ public class HeroData : EntityData
                 int startIndex = i + 1;
                 if (startIndex >= tokens.Count) continue;
 
+                // --- FIX: Intercept Dice Face Modifiers (e.g. i.mid.facade.Aid0:0) ---
+                if (startIndex + 2 < tokens.Count)
+                {
+                    string sideToken = tokens[startIndex].ToLower();
+                    int faceIndex = -1;
+
+                    if (sideToken == "left") faceIndex = 0;
+                    else if (sideToken == "mid") faceIndex = 1;
+                    else if (sideToken == "top") faceIndex = 2;
+                    else if (sideToken == "bot") faceIndex = 3;
+                    else if (sideToken == "right") faceIndex = 4;
+                    else if (sideToken == "rightmost") faceIndex = 5;
+
+                    if (faceIndex >= 0)
+                    {
+                        string modProp = tokens[startIndex + 1].ToLower();
+                        if (modProp == "facade")
+                        {
+                            string facadeVal = tokens[startIndex + 2];
+                            string[] facadeParts = facadeVal.Split(':');
+                            diceSides[faceIndex].facadeID = facadeParts[0]; // Captures the short name cleanly ("Aid0")
+                            if (facadeParts.Length > 1)
+                            {
+                                diceSides[faceIndex].facadeColor = string.Join(":", facadeParts.Skip(1));
+                            }
+
+                            i = startIndex + 2; // Jump loop tracker forward
+                            continue;
+                        }
+                    }
+                }
+                // --- END FIX ---
+
                 int endIndex = startIndex;
                 while (endIndex < tokens.Count)
                 {
@@ -226,7 +259,28 @@ public class HeroData : EntityData
 
         if (!string.IsNullOrEmpty(baseReplica)) { heroSb.Append($"replica.{FormatName(baseReplica)}"); if (!hasImageOverride) AppendColorModifier(heroSb); }
         if (!string.IsNullOrEmpty(entityName)) heroSb.Append($".n.{FormatName(entityName)}");
-        if (!string.IsNullOrEmpty(colorClass)) heroSb.Append($".col.{colorClass}");
+
+        bool skipColor = false;
+        string activeVisual = hasImageOverride ? imageOverride : baseReplica;
+        // Try parsing the current active visual into a HeroType
+        if (!string.IsNullOrEmpty(activeVisual) && Enum.TryParse(activeVisual, true, out HeroType parsedHero))
+        {
+            // Lookup the inherent natural color for this hero sprite
+            if (SDColors.HeroColorMap.TryGetValue(parsedHero, out HeroColorOption defaultColor))
+            {
+                // If the selected color matches the default, flag it to be omitted
+                if (EntityUIHelpers.ReverseLookupColor(colorClass) == defaultColor)
+                {
+                    skipColor = true;
+                }
+            }
+        }
+        // Only append the color modifier if it differs from the inherent default
+        if (!skipColor && !string.IsNullOrEmpty(colorClass))
+        {
+            heroSb.Append($".col.{colorClass}");
+        }
+
         if (hp > 0) heroSb.Append($".hp.{hp}");
         if (tier > 0) heroSb.Append($".tier.{tier}");
         if (!string.IsNullOrEmpty(p)) heroSb.Append($".p.{p}");

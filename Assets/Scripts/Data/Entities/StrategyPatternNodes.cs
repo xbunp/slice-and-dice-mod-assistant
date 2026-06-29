@@ -50,7 +50,8 @@ public abstract class AuthoringNodeDef
     public virtual bool HasPayloadPort => true;
 
     // Core Behaviors
-    public abstract string Compile(EntityCard card);
+    //public abstract string Compile(EntityCard card);
+
     public abstract void DrawInspector(StringAuthoringUIManager ui, EntityCard card);
 }
 
@@ -70,7 +71,7 @@ public class HatNodeDef : AuthoringNodeDef
     private DiceSideData _diceClipboard = null;
     private DiceFacesPreviewUI _previewUI;
     private int _currentMask = 1; // Default (left)
-
+    /*
     public override string Compile(EntityCard card)
     {
         if (!(card.MechanicData.PayloadData is HeroData heroData))
@@ -94,12 +95,15 @@ public class HatNodeDef : AuthoringNodeDef
         string childModifiers = StringAuthoringUIManager.CompileZone(card.PayloadPort?.Entrants.Cast<EntityCard>() ?? new List<EntityCard>());
 
         if (!string.IsNullOrWhiteSpace(childModifiers))
+        {
+            if (childModifiers.StartsWith(".")) childModifiers = childModifiers.Substring(1);
             return $"{prefix}{hatCore}.i.({childModifiers})";
+        }
 
         return $"{prefix}{hatCore}";
     }
-
-    private string GetHatDiceString(HeroData heroData)
+    */
+    public static string GetHatDiceString(HeroData heroData)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -316,16 +320,25 @@ public class HatNodeDef : AuthoringNodeDef
 
             layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Pips:", 0.25f),
-                GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => { if (int.TryParse(val, out int p)) { face.pips = p; ui.AutoCompile(); } }), // Fixed: AutoCompile instead of Rebuild
+                GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => {
+                    if (int.TryParse(val, out int p))
+                    {
+                        face.pips = p;
+                        ui.AutoCompile();
+                        UpdateHatDiceUIFromData(heroData); // <-- ADDED: Refresh the UI graphics
+                    }
+                }),
                 GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => {
                     face.pips--;
                     if (_diceUI.Inputs.TryGetValue($"Pips_{index}", out var inp)) inp.SetTextWithoutNotify(face.pips.ToString());
                     ui.AutoCompile();
+                    UpdateHatDiceUIFromData(heroData); // <-- ADDED: Refresh the UI graphics
                 }),
                 GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => {
                     face.pips++;
                     if (_diceUI.Inputs.TryGetValue($"Pips_{index}", out var inp)) inp.SetTextWithoutNotify(face.pips.ToString());
                     ui.AutoCompile();
+                    UpdateHatDiceUIFromData(heroData); // <-- ADDED: Refresh the UI graphics
                 })
             ));
 
@@ -745,12 +758,14 @@ public class HatNodeDef : AuthoringNodeDef
 public class EquippableNodeDef : AuthoringNodeDef
 {
     public override string NodeNiceName => "Equippable Item Appearance";
+    public override bool IsEntity => true;
     public override ItemNodeType NodeType => ItemNodeType.Equippable;
     public override Color GetColor() => new Color(0.6f, 0.5f, 0.1f); // Gold
     private static Material _cachedShaderMaterial;
 
     public override string GetTitle(EntityCard card) =>
         string.IsNullOrEmpty(card.RootData.entityName) ? "[Equippable]" : $"[Equippable] {card.RootData.entityName}";
+    /*
     public override string Compile(EntityCard card)
     {
         if (card?.RootData == null) return string.Empty;
@@ -765,8 +780,6 @@ public class EquippableNodeDef : AuthoringNodeDef
         {
             baseExpr = compiledChildren;
 
-            // Extract the leading identifier token (e.g. "Pin" or "ritemx" from "(Pin).splice.Wandify")
-            // to decide whether to output flat or nested image masking syntax.
             string firstToken = baseExpr.Split(new char[] { '.', '#', '(', ')', ' ' }, System.StringSplitOptions.RemoveEmptyEntries)
                                         .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
 
@@ -788,11 +801,22 @@ public class EquippableNodeDef : AuthoringNodeDef
         // 3. Handle Image Override and Draw Instructions
         if (!string.IsNullOrEmpty(card.RootData.imageOverride))
         {
-            string imgName = card.RootData.imageOverride;
+            string imgName = card.RootData.imageOverride.Trim();
             bool isBase = IsBaseItem(imgName);
             bool startsWithIte = imgName.StartsWith("ite", StringComparison.OrdinalIgnoreCase);
 
-            if (isBase || startsWithIte)
+            if (imgName.StartsWith("("))
+            {
+                // Fully custom injected rect/draw bracket string
+                parts.Add($"img.{imgName}");
+
+                if (card.RootData.HsvShift.HasValue)
+                {
+                    var hsv = card.RootData.HsvShift.Value;
+                    parts.Add($"hsv.{hsv.Hue}:{hsv.Saturation}:{hsv.Value}");
+                }
+            }
+            else if (isBase || startsWithIte)
             {
                 // Standard internal game items
                 string formattedImgName = isBase ? GetBaseItemName(imgName) : imgName;
@@ -811,7 +835,7 @@ public class EquippableNodeDef : AuthoringNodeDef
 
                 if (baseItemName.Equals("Void", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Clean format for Void bases: .draw.bas16:-1:-1.hsv.X:X:X
+                    // Clean format for Void bases
                     parts.Add($"draw.{imgName}{drawOffset}");
 
                     if (card.RootData.HsvShift.HasValue)
@@ -860,6 +884,7 @@ public class EquippableNodeDef : AuthoringNodeDef
 
         return string.Join(".", parts);
     }
+    */
     private bool IsBaseItem(string imageName)
     {
         if (string.IsNullOrEmpty(imageName)) return false;
@@ -1273,7 +1298,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
     public override ItemNodeType NodeType => ItemNodeType.BaseItem;
     public override Color GetColor() => new Color(0.4f, 0.3f, 0.3f); // Gold
 
-
     // Cache the formatted names so we don't calculate Regex every frame
     private static string[] _formattedItemNames;
     private static string[] FormattedItemNames
@@ -1296,11 +1320,13 @@ public class BaseItemNodeDef : AuthoringNodeDef
         public bool Unpack;
         public string ItemName = "Void";
         public string Part = "";
-        public string NextOp = "#"; // The operator connecting this to the next item
-        public string Target = "none"; // Holds the target prefix (e.g., left, topbot)
-        public int Repeats = 0;
-        public int Multiplier = 0;
-        public int PerTier = 0;
+        public string NextOp = "#";
+        public string Target = "none";
+
+        // New Extended Fields
+        public int Repeats = 1;
+        public int Multiplier = 1;
+        public bool PerTier = false;
     }
 
     public enum BasePackEntryType
@@ -1312,7 +1338,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
         TogItem
     }
 
-    // Automatically generates the top dropdown directly from the enum to guarantee they never desync.
     private static string[] _entryTypeOptions;
     private static string[] EntryTypeOptions
     {
@@ -1330,25 +1355,16 @@ public class BaseItemNodeDef : AuthoringNodeDef
         }
     }
 
-    // The Universal Adapter: Feed it an entry type, it hands you the exact string[] to use for dropdowns
     private static string[] GetOptionArray(BasePackEntryType type)
     {
         switch (type)
         {
-            case BasePackEntryType.BaseItem:
-                return FormattedItemNames; // Your cached BaseItems enum formatter
-            case BasePackEntryType.Keyword:
-                return Enum.GetNames(typeof(EffectKeyword));
-            case BasePackEntryType.TogItem:
-                return ItemDomainRules.TogItems.ToArray();
-            case BasePackEntryType.Ritem:
-                // TODO: Point this to your actual Ritem keys
-                return new string[] { "ritem.0" };
-            case BasePackEntryType.Ritemx:
-                // TODO: Point this to your actual Ritemx keys
-                return new string[] { "ritemx.0" };
-            default:
-                return new string[0];
+            case BasePackEntryType.BaseItem: return FormattedItemNames;
+            case BasePackEntryType.Keyword: return Enum.GetNames(typeof(EffectKeyword));
+            case BasePackEntryType.TogItem: return ItemDomainRules.TogItems.ToArray();
+            case BasePackEntryType.Ritem: return new string[] { "ritem.0" };
+            case BasePackEntryType.Ritemx: return new string[] { "ritemx.0" };
+            default: return new string[0];
         }
     }
 
@@ -1357,47 +1373,24 @@ public class BaseItemNodeDef : AuthoringNodeDef
     {
         if (_targetOptions == null)
         {
-            // Dynamically extract all alias strings defined in your helper class
-            var aliases = DiceTargetHelper.TargetAliases
-                                          .Select(alias => alias.name)
-                                          .ToList();
-
-            // Insert "none" at the front to act as your empty prefix sentinel
+            var aliases = DiceTargetHelper.TargetAliases.Select(alias => alias.name).ToList();
             aliases.Insert(0, "none");
             _targetOptions = aliases.ToArray();
         }
         return _targetOptions;
     }
 
-    public override string Compile(EntityCard card)
-    {
-        // 1. Get the string from the internal UI list (e.g. "(Sword)#(Shield)")
-        string internalPayload = card.MechanicData.PayloadString ?? "";
-
-        // 2. Compile any visual modifiers dropped inside this BaseItem's PayloadPort
-        string childModifiers = StringAuthoringUIManager.CompileZone(card.PayloadPort?.Entrants.Cast<EntityCard>());
-
-        if (string.IsNullOrWhiteSpace(internalPayload)) return childModifiers;
-
-        // 3. Append children correctly.
-        if (!string.IsNullOrWhiteSpace(childModifiers))
-        {
-            // If a child is an operator, it handles its own syntax. 
-            // If it's a raw string (e.g. "k.cruel"), we provide the dot.
-            string connector = childModifiers.StartsWith(".") || childModifiers.StartsWith("#") ? "" : ".";
-
-            // E.g., ((Sword)#(Shield)).k.cruel
-            return $"({internalPayload}){connector}{childModifiers}";
-        }
-
-        return internalPayload;
-    }
     public override string GetTitle(EntityCard card)
     {
         string payload = string.IsNullOrWhiteSpace(card.MechanicData.PayloadString) ? "Empty Pack" : card.MechanicData.PayloadString;
         if (payload.Length > 30) payload = payload.Substring(0, 30) + "...";
         return $"[Packed] {payload}";
     }
+
+    // ==========================================
+    // INSPECTOR ORCHESTRATION
+    // ==========================================
+
     public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
@@ -1410,7 +1403,34 @@ public class BaseItemNodeDef : AuthoringNodeDef
         var layout = new List<GridRowSpec>();
         List<BaseItemEntry> entries = ParsePayload(card.MechanicData.PayloadString);
 
-        // --- TOP SELECTOR ROW ---
+        // Actions to pass down for state changes
+        Action saveState = () => SaveState(card, entries, ui, false);
+        Action saveAndRebuild = () => SaveState(card, entries, ui, true);
+
+        // 1. Build Top Header
+        BuildTopSelectorRow(layout, entries, saveAndRebuild);
+
+        // 2. Build Sub-Rows Iteratively
+        for (int i = 0; i < entries.Count; i++)
+        {
+            BuildEntryUI(layout, i, entries, saveState, saveAndRebuild);
+        }
+
+        // 3. Compile the actual physical UI
+        var refs = fsg.RebuildGrid(containerObj.GetComponent<RectTransform>(), layout, false);
+
+        // 4. Fill values safely post-instantiation
+        for (int i = 0; i < entries.Count; i++)
+        {
+            PopulateEntryValues(refs, i, entries[i]);
+        }
+
+        layoutElem.minHeight = refs.TotalHeight + (fsg.rowHeight * 2);
+        layoutElem.flexibleHeight = 0;
+    }
+
+    private void BuildTopSelectorRow(List<GridRowSpec> layout, List<BaseItemEntry> entries, Action saveAndRebuild)
+    {
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Add Expression:", 0.35f),
             GridCellSpec.CreateFilteredDropdown("TypeSelector", "-- Select Type --", 0.65f, EntryTypeOptions, (val) =>
@@ -1422,132 +1442,139 @@ public class BaseItemNodeDef : AuthoringNodeDef
 
                 BaseItemEntry newEntry = new BaseItemEntry { Type = selectedType, NextOp = "" };
                 string[] defaultOptions = GetOptionArray(selectedType);
-                newEntry.ItemName = defaultOptions.Length > 0 ? defaultOptions[0] : "Void";
 
-                // Initialize defaults
-                switch (selectedType)
+                newEntry.ItemName = selectedType switch
                 {
-                    case BasePackEntryType.BaseItem:
-                        newEntry.ItemName = FormattedItemNames[0];
-                        break;
-
-                    case BasePackEntryType.Ritemx:
-                        newEntry.ItemName = "ritemx.0"; // Clean fallback placeholder
-                        break;
-
-                    case BasePackEntryType.Keyword:
-                        // Automatically fetches the first defined keyword from your public enum
-                        newEntry.ItemName = Enum.GetNames(typeof(EffectKeyword)).FirstOrDefault() ?? "acidic";
-                        break;
-
-                    case BasePackEntryType.TogItem:
-                        // Safely extracts the first element from your public static static HashSet
-                        newEntry.ItemName = ItemDomainRules.TogItems.FirstOrDefault() ?? "togtime";
-                        break;
-                }
+                    BasePackEntryType.BaseItem => FormattedItemNames[0],
+                    BasePackEntryType.Ritemx => "ritemx.0",
+                    BasePackEntryType.Keyword => Enum.GetNames(typeof(EffectKeyword)).FirstOrDefault() ?? "acidic",
+                    BasePackEntryType.TogItem => ItemDomainRules.TogItems.FirstOrDefault() ?? "togtime",
+                    _ => defaultOptions.Length > 0 ? defaultOptions[0] : "Void"
+                };
 
                 entries.Add(newEntry);
-                SaveState(card, entries, ui, true);
+                saveAndRebuild();
             })
         ));
 
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer_Top", "", 1.0f)));
-
-        // --- RENDER DYNAMIC ROWS ---
-        for (int i = 0; i < entries.Count; i++)
-        {
-            int index = i;
-            var entry = entries[i];
-
-            // Universally fetch the correct dropdown list for whatever type this entry is
-            string[] currentOptions = GetOptionArray(entry.Type);
-
-            if (entry.Type == BasePackEntryType.BaseItem || entry.Type == BasePackEntryType.Ritem || entry.Type == BasePackEntryType.Ritemx)
-            {
-                // [Unpack] | [Item Dropdown] | Part: [Input] | [X]
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateToggle($"Unpack_{index}", "Unpack", 0.18f, (val) => { entry.Unpack = val; SaveState(card, entries, ui, false); }),
-                    GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.47f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; SaveState(card, entries, ui, false); }),
-                    GridCellSpec.CreateLabel("Part:", 0.12f),
-                    GridCellSpec.CreateInput($"Part_{index}", entry.Part, 0.13f, (val) => { entry.Part = val; SaveState(card, entries, ui, false); }),
-                    GridCellSpec.CreateButton($"Del_{index}", "X", 0.1f, () => { entries.RemoveAt(index); SaveState(card, entries, ui, true); })
-                ));
-            }
-            else if (entry.Type == BasePackEntryType.Keyword)
-            {
-                // [Target Dropdown] | k. | [Keyword Dropdown] | [X]
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateFilteredDropdown($"Target_{index}", entry.Target, 0.35f, GetTargetOptions(), (val) => { entry.Target = GetTargetOptions()[val]; SaveState(card, entries, ui, false); }),
-                    GridCellSpec.CreateLabel("k.", 0.08f),
-                    GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.47f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; SaveState(card, entries, ui, false); }),
-                    GridCellSpec.CreateButton($"Del_{index}", "X", 0.1f, () => { entries.RemoveAt(index); SaveState(card, entries, ui, true); })
-                ));
-            }
-            else if (entry.Type == BasePackEntryType.TogItem)
-            {
-                // [Target Dropdown] | [Tog Dropdown] | [X]
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateFilteredDropdown($"Target_{index}", entry.Target, 0.35f, GetTargetOptions(), (val) => { entry.Target = GetTargetOptions()[val]; SaveState(card, entries, ui, false); }),
-                    GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.55f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; SaveState(card, entries, ui, false); }),
-                    GridCellSpec.CreateButton($"Del_{index}", "X", 0.1f, () => { entries.RemoveAt(index); SaveState(card, entries, ui, true); })
-                ));
-            }
-
-            // JOINING OPERATOR CELL ROW
-            if (i < entries.Count - 1)
-            {
-                string opLabel = NodeOperatorUtility.GetLabel(entry.NextOp);
-
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("", 0.35f),
-                    GridCellSpec.CreateButton($"Op_{index}", opLabel, 0.3f, () => {
-                        // FIX: Use your utility to cycle the operator
-                        entry.NextOp = NodeOperatorUtility.CycleOp(entry.NextOp);
-                        SaveState(card, entries, ui, true);
-                    }),
-                    GridCellSpec.CreateLabel("", 0.35f)
-                ));
-            }
-        }
-
-        var refs = fsg.RebuildGrid(containerObj.GetComponent<RectTransform>(), layout, false);
-
-        // --- POPULATE DYNAMIC VALUES VISUALLY ---
-        for (int i = 0; i < entries.Count; i++)
-        {
-            var entry = entries[i];
-
-            if (refs.Toggles.TryGetValue($"Unpack_{i}", out var tgl)) tgl.SetIsOnWithoutNotify(entry.Unpack);
-            if (refs.Inputs.TryGetValue($"Part_{i}", out var inp)) inp.SetTextWithoutNotify(entry.Part);
-
-            // Dynamically fetch the correct array for this specific entry type
-            if (refs.FilteredDropdowns.TryGetValue($"Item_{i}", out var drop))
-            {
-                string[] sourceArray = GetOptionArray(entry.Type);
-                int dropIdx = Array.IndexOf(sourceArray, entry.ItemName);
-                if (dropIdx >= 0) drop.SetValueWithoutNotify(dropIdx);
-            }
-
-            // Target Population
-            if (refs.FilteredDropdowns.TryGetValue($"Target_{i}", out var targetDrop))
-            {
-                int targetIdx = Array.IndexOf(GetTargetOptions(), entry.Target);
-                if (targetIdx >= 0) targetDrop.SetValueWithoutNotify(targetIdx);
-            }
-        }
-
-        layoutElem.minHeight = refs.TotalHeight + (fsg.rowHeight * 2);
-        layoutElem.flexibleHeight = 0;
     }
 
-    // --- HELPER LOGIC ---
-    private string CycleOp(string current)
+    private void BuildEntryUI(List<GridRowSpec> layout, int index, List<BaseItemEntry> entries, Action saveState, Action saveAndRebuild)
     {
-        if (current == "#") return ".mrg.";
-        if (current == ".mrg.") return ".splice.";
-        if (current == ".splice.") return ".i.";
-        return "#";
+        var entry = entries[index];
+        string[] currentOptions = GetOptionArray(entry.Type);
+
+        // Define standard delete button width so all rows align on the right
+        float btnDelW = 0.12f;
+
+        if (entry.Type == BasePackEntryType.BaseItem || entry.Type == BasePackEntryType.Ritem || entry.Type == BasePackEntryType.Ritemx)
+        {
+            // Row 1: Core Identity & Deletion (Gives the dropdown maximum room)
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateToggle($"Unpack_{index}", "Unpack", 0.22f, (val) => { entry.Unpack = val; saveState(); }),
+                GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.66f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); }),
+                GridCellSpec.CreateButton($"Del_{index}", "X", btnDelW, () => { entries.RemoveAt(index); saveAndRebuild(); })
+            ));
+
+            // Row 2: Advanced Modifiers (Condensed labels for a clean, uniform fit)
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Part:", 0.12f),
+                GridCellSpec.CreateInput($"Part_{index}", entry.Part, 0.14f, (val) => { entry.Part = val; saveState(); }),
+
+                GridCellSpec.CreateLabel("Repeat:", 0.14f),
+                GridCellSpec.CreateInput($"Rep_{index}", entry.Repeats.ToString(), 0.14f, (val) => {
+                    if (int.TryParse(val, out int v))
+                    {
+                        entry.Repeats = v;
+                        if (v > 1 && entry.PerTier)
+                        {
+                            entry.PerTier = false;
+                            saveAndRebuild();
+                        }
+                        else
+                        {
+                            saveState();
+                        }
+                    }
+                }),
+
+                GridCellSpec.CreateLabel("M# Multi:", 0.12f),
+                GridCellSpec.CreateInput($"Mult_{index}", entry.Multiplier.ToString(), 0.14f, (val) => { if (int.TryParse(val, out int v)) { entry.Multiplier = v; saveState(); } }),
+
+                GridCellSpec.CreateToggle($"Tier_{index}", "Tier", 0.20f, (val) => {
+                    entry.PerTier = val;
+                    if (val && entry.Repeats > 1)
+                    {
+                        entry.Repeats = 1;
+                        saveAndRebuild();
+                    }
+                    else
+                    {
+                        saveState();
+                    }
+                })
+            ));
+        }
+        else if (entry.Type == BasePackEntryType.Keyword)
+        {
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateFilteredDropdown($"Target_{index}", entry.Target, 0.35f, GetTargetOptions(), (val) => { entry.Target = GetTargetOptions()[val]; saveState(); }),
+                GridCellSpec.CreateLabel("k.", 0.08f),
+                GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.45f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); }),
+                GridCellSpec.CreateButton($"Del_{index}", "X", btnDelW, () => { entries.RemoveAt(index); saveAndRebuild(); })
+            ));
+        }
+        else if (entry.Type == BasePackEntryType.TogItem)
+        {
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateFilteredDropdown($"Target_{index}", entry.Target, 0.35f, GetTargetOptions(), (val) => { entry.Target = GetTargetOptions()[val]; saveState(); }),
+                GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.53f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); }),
+                GridCellSpec.CreateButton($"Del_{index}", "X", btnDelW, () => { entries.RemoveAt(index); saveAndRebuild(); })
+            ));
+        }
+
+        // Join Operator row between elements (Narrowed button to look more like a connector)
+        if (index < entries.Count - 1)
+        {
+            string opLabel = NodeOperatorUtility.GetLabel(entry.NextOp);
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("", 0.38f),
+                GridCellSpec.CreateButton($"Op_{index}", opLabel, 0.24f, () => {
+                    entry.NextOp = NodeOperatorUtility.CycleOp(entry.NextOp);
+                    saveAndRebuild();
+                }),
+                GridCellSpec.CreateLabel("", 0.38f)
+            ));
+        }
     }
+
+    private void PopulateEntryValues(GridReferences refs, int i, BaseItemEntry entry)
+    {
+        if (refs.Toggles.TryGetValue($"Unpack_{i}", out var tglU)) tglU.SetIsOnWithoutNotify(entry.Unpack);
+        if (refs.Inputs.TryGetValue($"Part_{i}", out var inpP)) inpP.SetTextWithoutNotify(entry.Part);
+        if (refs.Inputs.TryGetValue($"Rep_{i}", out var inpR)) inpR.SetTextWithoutNotify(entry.Repeats.ToString());
+        if (refs.Inputs.TryGetValue($"Mult_{i}", out var inpM)) inpM.SetTextWithoutNotify(entry.Multiplier.ToString());
+        if (refs.Toggles.TryGetValue($"Tier_{i}", out var tglT)) tglT.SetIsOnWithoutNotify(entry.PerTier);
+
+        if (refs.FilteredDropdowns.TryGetValue($"Item_{i}", out var drop))
+        {
+            string[] sourceArray = GetOptionArray(entry.Type);
+            int dropIdx = Array.IndexOf(sourceArray, entry.ItemName);
+            if (dropIdx >= 0) drop.SetValueWithoutNotify(dropIdx);
+        }
+
+        if (refs.FilteredDropdowns.TryGetValue($"Target_{i}", out var targetDrop))
+        {
+            int targetIdx = Array.IndexOf(GetTargetOptions(), entry.Target);
+            if (targetIdx >= 0) targetDrop.SetValueWithoutNotify(targetIdx);
+        }
+    }
+
+    // ==========================================
+    // BACKEND PARSING & SAVING
+    // ==========================================
+
     private void SaveState(EntityCard card, List<BaseItemEntry> entries, StringAuthoringUIManager ui, bool forceInspectorRebuild)
     {
         List<string> parts = new List<string>();
@@ -1561,9 +1588,22 @@ public class BaseItemNodeDef : AuthoringNodeDef
             {
                 case BasePackEntryType.BaseItem:
                 case BasePackEntryType.Ritemx:
-                    s = e.ItemName;
-                    if (e.Unpack) s = "unpack." + s;
+                case BasePackEntryType.Ritem:
+                    string prefix = "";
+                    if (e.PerTier)
+                    {
+                        prefix += "pertier.";
+                    }
+                    else if (e.Repeats != 1 && e.Repeats != 0)
+                    {
+                        prefix += $"x{e.Repeats}.";
+                    }
+
+                    if (e.Unpack) prefix += "unpack.";
+
+                    s = prefix + e.ItemName;
                     if (!string.IsNullOrWhiteSpace(e.Part)) s += $".part.{e.Part}";
+                    if (e.Multiplier != 1) s += $".m.{e.Multiplier}";
                     break;
 
                 case BasePackEntryType.Keyword:
@@ -1578,11 +1618,8 @@ public class BaseItemNodeDef : AuthoringNodeDef
             }
 
             s = $"({s})";
+            if (i < entries.Count - 1) s += e.NextOp;
 
-            if (i < entries.Count - 1)
-            {
-                s += e.NextOp;
-            }
             parts.Add(s);
         }
 
@@ -1595,13 +1632,13 @@ public class BaseItemNodeDef : AuthoringNodeDef
             ui.RefreshSidebar();
         }
     }
+
     private List<BaseItemEntry> ParsePayload(string payload)
     {
         var entries = new List<BaseItemEntry>();
         if (string.IsNullOrWhiteSpace(payload)) return entries;
 
         string clean = payload.Replace("(", "").Replace(")", "");
-
         string[] tokens = Regex.Split(clean, NodeOperatorUtility.ParseRegexPattern);
 
         for (int i = 0; i < tokens.Length; i += 2)
@@ -1611,7 +1648,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
 
             var entry = new BaseItemEntry { NextOp = opStr };
 
-            // Parse and isolate target prefixes (e.g. "topbot.k.exert")
             string target = "none";
             string workingSegment = segment;
             var targetMatch = Regex.Match(segment, @"^([a-z0-9_]+)\.(k\.|tog|ritemx\.)");
@@ -1623,7 +1659,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
 
             entry.Target = target;
 
-            // Categorize types on reload
             if (workingSegment.StartsWith("k."))
             {
                 entry.Type = BasePackEntryType.Keyword;
@@ -1658,19 +1693,52 @@ public class BaseItemNodeDef : AuthoringNodeDef
     private void ParseBaseOrRitemx(BaseItemEntry entry, string segment)
     {
         string cleanSeg = segment;
+
+        // Reset defaults
+        entry.Repeats = 1;
+        entry.Multiplier = 1;
+        entry.PerTier = false;
+
+        // 1. Extract Repeats (e.g. x5.)
+        if (cleanSeg.StartsWith("pertier."))
+        {
+            entry.PerTier = true;
+            cleanSeg = cleanSeg.Substring(8);
+        }
+        else
+        {
+            var repeatMatch = Regex.Match(cleanSeg, @"^x(\d+)\.");
+            if (repeatMatch.Success)
+            {
+                entry.Repeats = int.Parse(repeatMatch.Groups[1].Value);
+                cleanSeg = cleanSeg.Substring(repeatMatch.Length);
+            }
+        }
+
+        // 2. Extract Unpack
         if (cleanSeg.StartsWith("unpack."))
         {
             entry.Unpack = true;
             cleanSeg = cleanSeg.Substring(7);
         }
 
+        // 4. Extract Multiplier (e.g. .m.-1 or .m.6)
+        var multMatch = Regex.Match(cleanSeg, @"\.m\.(-?\d+)");
+        if (multMatch.Success)
+        {
+            entry.Multiplier = int.Parse(multMatch.Groups[1].Value);
+            cleanSeg = cleanSeg.Remove(multMatch.Index, multMatch.Length);
+        }
+
+        // 5. Extract Part (e.g. .part.2)
         var partMatch = Regex.Match(cleanSeg, @"\.part\.(\d+)$");
         if (partMatch.Success)
         {
             entry.Part = partMatch.Groups[1].Value;
-            cleanSeg = cleanSeg.Substring(0, partMatch.Index);
+            cleanSeg = cleanSeg.Remove(partMatch.Index, partMatch.Length);
         }
 
+        // 6. Whatever is left is the core item name
         entry.ItemName = cleanSeg;
     }
 }
@@ -1687,7 +1755,9 @@ public class RawStringNodeDef : AuthoringNodeDef
         if (payload.Length > 20) payload = payload.Substring(0, 20) + "...";
         return $"[Raw] {payload}";
     }
+    /*
     public override string Compile(EntityCard card) => card.MechanicData.PayloadString;
+    */
     public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
     {
         ui.CreateInspectorTextArea("Raw Payload", card.MechanicData.PayloadString, v => { card.MechanicData.PayloadString = v; ui.AutoCompile(); });
@@ -1711,10 +1781,12 @@ public class OperatorNodeDef : AuthoringNodeDef
         if (current == ".splice.") return ".i.";
         return "#";
     }
+    /*
     public override string Compile(EntityCard card)
     {
         return string.IsNullOrEmpty(card.MechanicData.PayloadString) ? "#" : card.MechanicData.PayloadString;
     }
+    */
     public override string GetTitle(EntityCard card)
     {
         string op = string.IsNullOrEmpty(card.MechanicData.PayloadString) ? "#" : card.MechanicData.PayloadString;
@@ -1781,7 +1853,7 @@ public class ManualBracketNodeDef : AuthoringNodeDef
 
         return $"[ Group ] ({compiledChildren})";
     }
-
+    /*
     public override string Compile(EntityCard card)
     {
         // 1. Compile everything dropped inside this group's port
@@ -1793,7 +1865,7 @@ public class ManualBracketNodeDef : AuthoringNodeDef
         // 2. Wrap the output explicitly in parentheses
         return $"({compiledChildren})";
     }
-
+    */
     public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;

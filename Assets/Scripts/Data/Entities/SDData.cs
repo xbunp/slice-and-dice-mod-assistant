@@ -119,7 +119,10 @@ public abstract class SDData
             hex = UnityEngine.ColorUtility.ToHtmlStringRGB(thue.colorHex).ToLower();
         }
 
-        return $"thue.{hex}:{thue.colorRange}:{thue.colorOffset}";
+        // FIX: Pad the middle range value to always be 2 characters (e.g., 5 becomes "05")
+        string rangeStr = thue.colorRange.ToString("D2");
+
+        return $"thue.{hex}:{rangeStr}:{thue.colorOffset}";
     }
 
     protected static Thue UnpackTHue(string thue)

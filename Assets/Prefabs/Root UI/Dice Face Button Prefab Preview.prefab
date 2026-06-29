@@ -493,7 +493,6 @@ GameObject:
   m_Component:
   - component: {fileID: 6336916027648250074}
   - component: {fileID: 1919967851277860795}
-  - component: {fileID: 7988821571931829947}
   m_Layer: 5
   m_Name: Hero UI Portrait Panel
   m_TagString: Untagged
@@ -552,59 +551,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2371351435502812799}
   m_CullTransparentMesh: 1
---- !u!114 &7988821571931829947
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2371351435502812799}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 04ee50b3950e0b1488992516d81187a4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  backdrop: {fileID: 0}
-  portrait: {fileID: 0}
-  myName: {fileID: 0}
-  hp: {fileID: 0}
-  tier: {fileID: 0}
-  left:
-    background: {fileID: 1642407493498153027}
-    pips: {fileID: 1292109257328491603}
-    button: {fileID: 2717024545520351868}
-  middle:
-    background: {fileID: 2589849227521770667}
-    pips: {fileID: 3220682476681503014}
-    button: {fileID: 7522348897221735271}
-  right:
-    background: {fileID: 3188650964346958191}
-    pips: {fileID: 4986789579622876965}
-    button: {fileID: 979503523388643622}
-  rightmost:
-    background: {fileID: 3125216538199651972}
-    pips: {fileID: 2680183826126817450}
-    button: {fileID: 3666341399304735485}
-  top:
-    background: {fileID: 5125956581166797056}
-    pips: {fileID: 761457469462698524}
-    button: {fileID: 5143903499077903310}
-  bottom:
-    background: {fileID: 5373381941690570961}
-    pips: {fileID: 9011332712878077923}
-    button: {fileID: 4237829728865084000}
-  pipsprites:
-  - {fileID: -1350323409, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: -869948695, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: -1229617303, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: -1145263409, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: 739914271, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: -322264801, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: -2012878152, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: 1452603271, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: 949519614, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: 527803149, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
-  - {fileID: 71988140, guid: 456a34b432f86ee499afb059c8a0fc42, type: 3}
 --- !u!1 &2405643579952378911
 GameObject:
   m_ObjectHideFlags: 0

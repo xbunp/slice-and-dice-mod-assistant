@@ -100,6 +100,8 @@ public class DiceFacesPreviewUI : MonoBehaviour
         SlotUI slot = GetSlotByIndex(index);
         if (slot.background == null) return;
 
+        SetPipSprite(slot.pips, pips);
+
         int h = 0, s = 0, v = 0;
         string[] hsv = (facadeColor ?? "").Split(':');
         if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;

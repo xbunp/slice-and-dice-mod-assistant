@@ -54,10 +54,10 @@ public class EntityCard : ReorderableItem, IPointerClickHandler
 
     public string Compile()
     {
-        // Generate the standard text (which inherently concatenates children)
-        string rawStr = NodeRegistry.Get(NodeType).Compile(this);
+        // Simply hand this card to the global compiler
+        string rawStr = ItemSyntaxCompiler.CompileCard(this);
 
-        // If we are doing the visual overlay pass, wrap this node's output in its color
+        // Visual overlay rich-text pass
         if (StringAuthoringUIManager.IsCompilingRichText && !string.IsNullOrWhiteSpace(rawStr))
         {
             Color nodeColor = NodeRegistry.Get(NodeType).GetColor();
@@ -657,60 +657,18 @@ public class StringAuthoringUIManager : RootUI
         labelText.color = Color.grey;
         labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
 
-        // Input Field (Using Prefab)
-        // Output Field (Using Prefab)
+        // Clean Input Field Initialization
         if (inputFieldPrefab != null)
         {
-            GameObject outputObj = Instantiate(inputFieldPrefab, BreadcrumbPanel);
-            RectTransform outputRect = outputObj.GetComponent<RectTransform>();
-            outputRect.anchorMin = new Vector2(0.02f, 0.1f);
-            outputRect.anchorMax = new Vector2(0.98f, 0.9f);
-            outputRect.offsetMin = Vector2.zero;
-            outputRect.offsetMax = Vector2.zero;
+            GameObject inputObj = Instantiate(inputFieldPrefab, container);
+            var inputField = inputObj.GetComponent<TMPro.TMP_InputField>();
 
-            _compiledOutputField = outputObj.GetComponent<TMPro.TMP_InputField>();
-            _compiledOutputField.readOnly = true;
+            var inputLayout = inputObj.GetComponent<LayoutElement>() ?? inputObj.AddComponent<LayoutElement>();
+            inputLayout.flexibleWidth = 1f;
 
-            // Stacked Syntax Highlighter Overlay setup
-            _compiledOutputField.textComponent.color = Color.clear; // Make real text transparent
-            _compiledOutputField.richText = false;
-
-            // Create a clean GameObject dynamically to avoid script stripping & dependency errors
-            GameObject highlighterObj = new GameObject("SyntaxHighlighter", typeof(RectTransform));
-            highlighterObj.transform.SetParent(_compiledOutputField.textComponent.transform.parent, false);
-
-            _syntaxHighlighterText = highlighterObj.AddComponent<TMPro.TextMeshProUGUI>();
-
-            var canvasGroup = highlighterObj.GetComponent<CanvasGroup>();
-            if (canvasGroup == null)
-            {
-                canvasGroup = highlighterObj.AddComponent<CanvasGroup>();
-            }
-            canvasGroup.blocksRaycasts = false;
-            canvasGroup.interactable = false;
-
-            RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
-            RectTransform textCompRt = _compiledOutputField.textComponent.GetComponent<RectTransform>();
-            highlightRt.anchorMin = textCompRt.anchorMin;
-            highlightRt.anchorMax = textCompRt.anchorMax;
-            highlightRt.offsetMin = textCompRt.offsetMin;
-            highlightRt.offsetMax = textCompRt.offsetMax;
-            highlightRt.pivot = textCompRt.pivot;
-
-            _syntaxHighlighterText.enableAutoSizing = false;
-            _syntaxHighlighterText.fontSize = _compiledOutputField.textComponent.fontSize;
-            _syntaxHighlighterText.alignment = _compiledOutputField.textComponent.alignment;
-            _syntaxHighlighterText.margin = _compiledOutputField.textComponent.margin;
-            _syntaxHighlighterText.enableWordWrapping = _compiledOutputField.textComponent.enableWordWrapping;
-            _syntaxHighlighterText.richText = true;
-
-            _compiledOutputField.onValueChanged.AddListener((val) =>
-            {
-                if (_syntaxHighlighterText != null)
-                {
-                    //_syntaxHighlighterText.text = ColorHelpers.FormatSyntaxHighlighting(val);
-                }
-            });
+            inputField.text = initialValue;
+            inputField.onValueChanged.RemoveAllListeners();
+            inputField.onValueChanged.AddListener(onValueChanged);
         }
     }
     public void ImportFromClipboard()
@@ -803,10 +761,10 @@ public class StringAuthoringUIManager : RootUI
     {
         ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
 
-        // 1. VALIDATE FIRST: Ensure the canvas has all its required operators before we draw anything
+        // 1. VALIDATE FIRST: Recursively ensure the canvas has all required operators before drawing
         if (rootZone != null)
         {
-            ValidateWorkspaceOperators(rootZone);
+            ValidateWorkspaceOperatorsRecursive(rootZone);
         }
 
         // 2. CLEAR: Wipe the old sidebar UI
@@ -821,7 +779,6 @@ public class StringAuthoringUIManager : RootUI
         var headerBg = headerRect.gameObject.AddComponent<UnityEngine.UI.Image>();
         headerBg.color = new Color(1, 1, 1, 0.05f);
         var headerBtn = headerRect.gameObject.AddComponent<UnityEngine.UI.Button>();
-        //headerBtn.onClick.AddListener(() => InspectWorkspaceItem());
 
         var headerText = CreateRect("Label", headerRect).gameObject.AddComponent<TMPro.TextMeshProUGUI>();
         ItemData activeClone = ModPackage.Instance?.GetActiveEntity<ItemData>();
@@ -896,18 +853,19 @@ public class StringAuthoringUIManager : RootUI
 
         var cards = rootZone.Entrants.Cast<EntityCard>();
 
-        // 1. Compile plain text for the interactable/copyable background field
+        // 1. Compile plain text
         IsCompilingRichText = false;
-        _compiledOutputField.text = CompileZone(cards);
+        _compiledOutputField.text = ItemSyntaxCompiler.CompileZone(cards);
 
-        // 2. Compile rich text for the foreground syntax overlay
+        // 2. Compile rich text
         if (_syntaxHighlighterText != null)
         {
             IsCompilingRichText = true;
-            _syntaxHighlighterText.text = CompileZone(cards);
-            IsCompilingRichText = false; // Reset
+            _syntaxHighlighterText.text = ItemSyntaxCompiler.CompileZone(cards);
+            IsCompilingRichText = false;
         }
     }
+
     private void OnAddNodeSelected(int index, TMPro.TMP_Dropdown dropdown)
     {
         // Safety checks: skip if placeholder is selected or workspace zone is missing
@@ -1021,14 +979,56 @@ public class StringAuthoringUIManager : RootUI
     {
         if (cards == null) return "";
 
-        // Pure, explicit concatenation. The nodes output exactly what they mean.
-        var parts = cards.Select(c => c.Compile()).Where(s => !string.IsNullOrWhiteSpace(s));
-        return string.Join("", parts);
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        EntityCard prevCard = null;
+
+        foreach (var card in cards)
+        {
+            string part = card.Compile();
+            if (string.IsNullOrWhiteSpace(part)) continue;
+
+            part = part.Trim();
+
+            if (prevCard != null)
+            {
+                var prevDef = NodeRegistry.Get(prevCard.NodeType);
+                var currDef = NodeRegistry.Get(card.NodeType);
+
+                bool prevIsOp = prevDef.IsOperator;
+                bool currIsOp = currDef.IsOperator;
+
+                // Smart chaining: Inject dots natively between elements where appropriate
+                if (!prevIsOp && !currIsOp)
+                {
+                    string currentStr = sb.ToString();
+                    if (!currentStr.EndsWith(".") && !currentStr.EndsWith("#") &&
+                        !currentStr.EndsWith(".mrg.") && !currentStr.EndsWith(".splice.") && !currentStr.EndsWith(".i.") &&
+                        !part.StartsWith(".") && !part.StartsWith("#"))
+                    {
+                        sb.Append(".");
+                    }
+                }
+            }
+
+            sb.Append(part);
+            prevCard = card;
+        }
+
+        string result = sb.ToString();
+
+        // Fallback cleanup to catch anything that slipped out of raw strings
+        while (result.Contains("..")) result = result.Replace("..", ".");
+        result = result.Replace(".#", "#").Replace("#.", "#");
+
+        return result;
     }
-    private void ValidateWorkspaceOperators(ReorderableZone zone)
+
+    private bool ValidateWorkspaceOperators(ReorderableZone zone)
     {
-        if (zone == null) return;
+        if (zone == null) return false;
         bool layoutChanged = false;
+
+        bool IsValidOpTarget(AuthoringNodeDef def) => def != null && (def.IsEntity || def.NodeType == ItemNodeType.Bracket || def.NodeType == ItemNodeType.RawString);
 
         // PASS 1: Destroy dangling or redundant operators
         for (int i = zone.Entrants.Count - 1; i >= 0; i--)
@@ -1041,8 +1041,11 @@ public class StringAuthoringUIManager : RootUI
                 var prevCard = !isFirst ? zone.Entrants[i - 1] as EntityCard : null;
                 var nextCard = !isLast ? zone.Entrants[i + 1] as EntityCard : null;
 
-                // If an operator is at the ends, or next to something that doesn't want operators, kill it.
-                if (isFirst || isLast || prevCard?.NodeType == ItemNodeType.Operator || nextCard?.NodeType == ItemNodeType.Operator)
+                var prevDef = prevCard != null ? NodeRegistry.Get(prevCard.NodeType) : null;
+                var nextDef = nextCard != null ? NodeRegistry.Get(nextCard.NodeType) : null;
+
+                // An operator is valid if it connects valid structures (Entities, Brackets, or forced RawStrings).
+                if (isFirst || isLast || !IsValidOpTarget(prevDef) || !IsValidOpTarget(nextDef))
                 {
                     zone.Entrants.RemoveAt(i);
                     Destroy(card.gameObject);
@@ -1051,16 +1054,18 @@ public class StringAuthoringUIManager : RootUI
             }
         }
 
-        // PASS 2: Auto-Spawn operators between nodes that require them
+        // PASS 2: Auto-Spawn operators between nodes that natively represent base entities
         for (int i = 0; i < zone.Entrants.Count - 1; i++)
         {
             if (zone.Entrants[i] is EntityCard card1 && zone.Entrants[i + 1] is EntityCard card2)
             {
-                // If two BaseItems (or other payloads) are touching, force an Operator between them
-                if (card1.NodeType == ItemNodeType.BaseItem && card2.NodeType == ItemNodeType.BaseItem)
+                var def1 = NodeRegistry.Get(card1.NodeType);
+                var def2 = NodeRegistry.Get(card2.NodeType);
+
+                if (def1.IsEntity && def2.IsEntity)
                 {
                     EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                    opCard.MechanicData.PayloadString = "#"; // Default to AND
+                    opCard.MechanicData.PayloadString = "#";
 
                     opCard.transform.SetParent(zone.transform, false);
                     opCard.transform.SetSiblingIndex(card2.transform.GetSiblingIndex());
@@ -1072,8 +1077,24 @@ public class StringAuthoringUIManager : RootUI
             }
         }
 
-        if (layoutChanged) RefreshSidebar();
+        return layoutChanged;
     }
+
+    private void ValidateWorkspaceOperatorsRecursive(ReorderableZone zone)
+    {
+        if (zone == null) return;
+        ValidateWorkspaceOperators(zone);
+
+        var entrantsCopy = zone.Entrants.ToList();
+        foreach (var entrant in entrantsCopy)
+        {
+            if (entrant is EntityCard card && card.PayloadPort != null)
+            {
+                ValidateWorkspaceOperatorsRecursive(card.PayloadPort);
+            }
+        }
+    }
+
     public ReorderableItem CreateEntityCard(ItemNodeType nodeType)
     {
         var def = NodeRegistry.Get(nodeType);
