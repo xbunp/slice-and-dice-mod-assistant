@@ -1,0 +1,117 @@
+=
+heropool.ace.part.0.mn.Remove vanilla pool,
+
+(party.thief.n.BaZ.col.b.tier.12.hp.12.sd.100:118-3:88:88.i.left.eyepatch#k.exert#facade.ite164:57:-50:0.i.mid.eyepatch#k.managain#facade.bas118:70:4:0.img.3b2yIs2CAk2K8V2Pyf2R8w3SkEX3ThKA3ZTM63TZMC3ZTAm5TQV85w2le000YVJccsWz88uAmii=O2Nn5b8dEAAaaaGjaLIFqhx2wawXVw8jgRX38ji8X2wjjgwX18jh9BS9jg8ElCEWbb8FkCWbbaECWwbbRESbbEDkEVwb9wEnSw8B7MDkZZZhKnkHHFVEo=6oEV8=YK87xYxK86wpw6wpTr6qTcpc6cpQ3tIo5wdw6wdQ2tcso=6ow1yeso=4o82Pso7o5oRs1PcIoYoRIt2PIwbRIuUPsLvsVPdoetIWPofsJ)
+&0.ph.bbarty;1;!m(hidden&temporary)@2!m(hidden&temporary&0.x5.ph.s[b][amber]Add a hero[b][cu][nh][grey]Some Colors are here for other[n]mods but not supported by Bmod[cu]
+@1[orange]Orange[cu] [274000ra0Nn5YVJ3gwg3gxg1gwhw0gwg1Mgwg2Ng3Owg1]
+@2!m(add.(lost.n.Guile.tier.0.img.274000ra0Nn5YVJ3gwg3gxg1gwhw0gwg1Mgwg2Ng3Owg1)&Temporary&hidden)
+@1[yellow]Yellow[cu] [274000JD2=O2YVJ3gN2gMwMw0gMwMhwMwMg1gwMg2wgw2w1gw1]
+@2!m(add.(lazy.n.Might.tier.0.img.274000JD2=O2YVJ3gN2gMwMw0gMwMhwMwMg1gwMg2wgw2w1gw1)&Temporary&hidden)
+@1[grey]Grey[cu] [274mpsfhj000YVJ0gw0wg1MgMgM1Q0gM2Mgw4xg2gyg0gx]
+@2!m(add.(alloy.n.Kindness.tier.0.img.274mpsfhj000YVJ0gw0wg1MgMgM1Q0gM2Mgw4xg2gyg0gx)&Temporary&hidden)
+@1[red]Red[cu] [274H77000k33YVJw1g1w9M4O1w1M1wgw2wj0i]
+@2!m(add.(fey.n.Life.tier.0.img.274H77000k33YVJw1g1w9M4O1w1M1wgw2wj0i)&Temporary&hidden)
+@1[blue]Blue[cu] [2740004jt8uAYVJ1gxg1gwg2gwNwg0gwOwg0gwNwg2gwg1gxg1]
+@2!m(add.(ace.n.Knowledge.tier.0.img.2740004jt8uAYVJ1gxg1gwg2gwNwg0gwOwg0gwNwg2gwg1gxg1)&Temporary&hidden)
+@1[green]greeN[cu] [274000ewh5o3YVJ1wMw2wMgMw1Mg0gM0wg2gwi0iwg2gw0wg0gw0]
+@2!m(add.(dice.n.Chaos.tier.0.img.274000ewh5o3YVJ1wMw2wMgMw1Mg0gM0wg2gwi0iwg2gw0wg0gw0)&Temporary&hidden)
+@1[huish]Huish[cu] [274Isoqif000YVJwgygxkwg1g1g0M2M0w4wh2hx0g0x]
+@2!m(add.(ace.n.Friendship.col.h.tier.0.img.274Isoqif000YVJwgygxkwg1g1g0M2M0w4wh2hx0g0x)&Temporary&hidden)
+@1[iuish]Iuish[cu] [274000GGGYVJmps0MgwgM0MgygMg1g1gw1w1yg0gx1gMg2gMgMg0]
+@2!m(add.(ace.n.Death.col.i.tier.0.img.274000GGGYVJmps0MgwgM0MgygMg1g1gw1w1yg0gx1gMg2gMgMg0)&temporary&hidden&ch.vsilvernumV1)
+@1[uuish]Uuish[cu] [274000YVJ=N=UwM1g0g2wgwgw0hM0Mh0w2w0hM0Mh0wgwgw2g0g1]
+@2!m(add.(ace.n.Creativity.col.u.tier.0.img.274000YVJ=N=UwM1g0g2wgwgw0hM0Mh0w2w0hM0Mh0wgwgw2g0g1)&temporary&hidden&ch.vpinknumV1)
+@1[violet]Violet[cu] [274N0N000v3AYVJg1w0h2g0wg0M0g1w2g2w1w0M0gw0w2h0w1g]
+@2!m(add.(ace.n.Contempt.col.v.tier.0.img.274N0N000v3AYVJg1w0h2g0wg0M0g1w2g2w1w0M0gw0w2h0w1g)&temporary&hidden&ch.violetnumV1)
+@1[fuish]Fuish[cu] [274000OXEzQpYVJ1w1N1wg0N2h4wh2w1x0g4g5]
+@2!m(add.(ace.n.Creation.col.f.tier.0.img.274000OXEzQpYVJ1w1N1wg0N2h4wh2w1x0g4g5)&temporary&hidden&ch.vfuishnumV1)
+@1[quish]Quish[cu] [273=ggYVJH77w4w0g2g8g2g8g2g0w4w]
+@2!m(add.(ace.n.Chance.col.q.tier.0.img.273=ggYVJH77w4w0g2g8g2g8g2g0w4w)&temporary&hidden)
+@1[kuish]Kuish[cu] [274000qhxDuPYVJ0gwNg0MwPgMwMyMiz0i0gw5g3wg0]
+@2!m(add.(ace.n.Conscience.col.k.tier.0.img.274000qhxDuPYVJ0gwNg0MwPgMwMyMiz0i0gw5g3wg0)&temporary&hidden)
+@1[mahogany]Mahogany[cu] [3136wMg274000n50YVJFxq2g1g3h36260g06263wg4]
+@2!m(add.(ace.n.Betrayal.col.m.tier.0.img.3136wMg274000n50YVJFxq2g1g3h36260g06263wg4)&temporary&hidden)
+@1[lime]Lime[cu] [2740002Q2YVJrC6gwg0gwgyMyMkM0MiM3g3MyM2MgM1]
+@2!m(add.(ace.n.Change.col.l.tier.0.img.2740002Q2YVJrC6gwg0gwgyMyMkM0MiM3g3MyM2MgM1)&temporary&hidden)
+@1[light]White[cu] [273YVJ000FFE0g2g1w2w3g4i1w1g1wgw2wiw0wh]
+@2!m(add.(ace.n.Belief.col.w.tier.0.img.273YVJ000FFE0g2g1w2w3g4i1w1g1wgw2wiw0wh)&temporary&hidden)
+@1[purple]Purple[cu] [273000qhxhbmg4i2h0gw0wg0w4wg0g0g0g0k2wgw1]
+@2!m(add.(ace.n.Consumption.col.p.tier.0.img.273000qhxhbmg4i2h0gw0wg0w4wg0g0g0g0k2wgw1)&temporary&hidden)
+@1[amber]Amber[cu] [274Nn5YVJ=L00000NwN1wMgMw1wiw0gwgMgwg0wiw0M4M0wiw0]@2!m(add.ace.n.WORD.col.a.tier.0.img.274Nn5YVJ=L00000NwN1wMgMw1wiw0gwgMgwg0wiw0M4M0wiw0&temporary&hidden)
+@1[cyan]Cyan[cu] [274000jQWYVJ8uA1gwg2gyg0gAg0hwh1MiM2i4g2]@2!m(add.ace.n.Beauty.col.c.tier.0.img.274000jQWYVJ8uA1gwg2gyg0gAg0hwh1MiM2i4g2&temporary&hidden)
+@1[dark]Dark[cu] [273435YVJ000wkwg4h4h4h4h4gwkw]@2!m(add.ace.n.Shadow.col.d.tier.0.img.273435YVJ000wkwg4h4h4h4h4gwkw&temporary&hidden)
+@1[euish]Euish[cu] [273YVJ000GGGhw1wh4x1wh3jw1wh0g4whw1wg]@2!m(add.ace.n.Unknown.col.e.tier.0.img.273YVJ000GGGhw1wh4x1wh3jw1wh0g4whw1wg&temporary&hidden)
+@1[juish]Juish[cu] [33240w250g561gwg1273000T%=YVJ4544g55w6hw4h6wg55w4540]@2!m(add.ace.n.Cold.col.j.tier.0.img.33240w250g561gwg1273000T%=YVJ4544g55w6hw4h6wg55w4540&temporary&hidden)
+@1[sea]Sea[cu] [2748uA0005evYVJgw1wh0N1wgMhM1wiM2hw3gw4w4w]@2!m(add.ace.n.The Deep.col.s.tier.0.img.2748uA0005evYVJgw1wh0N1wgMhM1wiM2hw3gw4w4w&temporary&hidden)
+@1[tuish]Tuish[cu] [2740005o38f8YVJwi0N0w1gN0w1Mg1w0g1g0wg2g0gzh4w]@2!m(add.ace.n.Hunting.col.t.tier.0.img.2740005o38f8YVJwi0N0w1gN0w1Mg1w0g1g0wg2g0gzh4w&temporary&hidden)
+@1[xuish]Xuish[cu] [3233gNg573w5w3264000WY8JD2YVJ1h1w7x7w]@2!m(add.ace.n.Energy.col.x.tier.0.img.3233gNg573w5w3264000WY8JD2YVJ1h1w7x7w&temporary&hidden)
+@1[zuish]Zuish[cu] [3223g151g0M0g274000Zn2YVJ=O233g012gw3gMyM3gwg21033g]@2!m(add.ace.n.Heat.col.z.tier.0.img.3223g151g0M0g274000Zn2YVJ=O233g012gw3gMyM3gwg21033g&temporary&hidden)
+)&hidden&temporary&(0.ph.zbarty@61@6!m(hidden&temporary)@7!m(
+(1.ph.sAmount of choices for starting party or whatevs
+@1All random@2!m(Level Up&Temporary&hidden)@1Some of them@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)
+@1Most of them@2!mVersatile^6&Versatile^2&Temporary&hidden@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden))
+&
+(1.ph.!m((h.top.missing)&(ch.vbartyV1)&(hidden)&(Temporary)))&hidden&temporary)).mn.Barty Selector,
+
+
+
+=================
+clean copy
+===================
+
+=
+heropool.ace.part.0.mn.Remove vanilla pool,
+
+(party.thief.n.BaZ.col.b.tier.12.hp.12.sd.100:118-3:88:88.i.left.eyepatch#k.exert#facade.ite164:57:-50:0.i.mid.eyepatch#k.managain#facade.bas118:70:4:0.img.3b2yIs2CAk2K8V2Pyf2R8w3SkEX3ThKA3ZTM63TZMC3ZTAm5TQV85w2le000YVJccsWz88uAmii=O2Nn5b8dEAAaaaGjaLIFqhx2wawXVw8jgRX38ji8X2wjjgwX18jh9BS9jg8ElCEWbb8FkCWbbaECWwbbRESbbEDkEVwb9wEnSw8B7MDkZZZhKnkHHFVEo=6oEV8=YK87xYxK86wpw6wpTr6qTcpc6cpQ3tIo5wdw6wdQ2tcso=6ow1yeso=4o82Pso7o5oRs1PcIoYoRIt2PIwbRIuUPsLvsVPdoetIWPofsJ)
+&0.ph.bbarty;1;!m(hidden&temporary)@2!m(hidden&temporary&0.x5.ph.s[b][amber]Add a hero[b][cu][nh][grey]Some Colors are here for other[n]mods but not supported by Bmod[cu]
+@1[orange]Orange[cu] [274000ra0Nn5YVJ3gwg3gxg1gwhw0gwg1Mgwg2Ng3Owg1]
+@2!m(add.(lost.n.Guile.tier.0.img.274000ra0Nn5YVJ3gwg3gxg1gwhw0gwg1Mgwg2Ng3Owg1)&Temporary&hidden)
+@1[yellow]Yellow[cu] [274000JD2=O2YVJ3gN2gMwMw0gMwMhwMwMg1gwMg2wgw2w1gw1]
+@2!m(add.(lazy.n.Might.tier.0.img.274000JD2=O2YVJ3gN2gMwMw0gMwMhwMwMg1gwMg2wgw2w1gw1)&Temporary&hidden)
+@1[grey]Grey[cu] [274mpsfhj000YVJ0gw0wg1MgMgM1Q0gM2Mgw4xg2gyg0gx]
+@2!m(add.(alloy.n.Kindness.tier.0.img.274mpsfhj000YVJ0gw0wg1MgMgM1Q0gM2Mgw4xg2gyg0gx)&Temporary&hidden)
+@1[red]Red[cu] [274H77000k33YVJw1g1w9M4O1w1M1wgw2wj0i]
+@2!m(add.(fey.n.Life.tier.0.img.274H77000k33YVJw1g1w9M4O1w1M1wgw2wj0i)&Temporary&hidden)
+@1[blue]Blue[cu] [2740004jt8uAYVJ1gxg1gwg2gwNwg0gwOwg0gwNwg2gwg1gxg1]
+@2!m(add.(ace.n.Knowledge.tier.0.img.2740004jt8uAYVJ1gxg1gwg2gwNwg0gwOwg0gwNwg2gwg1gxg1)&Temporary&hidden)
+@1[green]greeN[cu] [274000ewh5o3YVJ1wMw2wMgMw1Mg0gM0wg2gwi0iwg2gw0wg0gw0]
+@2!m(add.(dice.n.Chaos.tier.0.img.274000ewh5o3YVJ1wMw2wMgMw1Mg0gM0wg2gwi0iwg2gw0wg0gw0)&Temporary&hidden)
+@1[huish]Huish[cu] [274Isoqif000YVJwgygxkwg1g1g0M2M0w4wh2hx0g0x]
+@2!m(add.(ace.n.Friendship.col.h.tier.0.img.274Isoqif000YVJwgygxkwg1g1g0M2M0w4wh2hx0g0x)&Temporary&hidden)
+@1[iuish]Iuish[cu] [274000GGGYVJmps0MgwgM0MgygMg1g1gw1w1yg0gx1gMg2gMgMg0]
+@2!m(add.(ace.n.Death.col.i.tier.0.img.274000GGGYVJmps0MgwgM0MgygMg1g1gw1w1yg0gx1gMg2gMgMg0)&temporary&hidden&ch.vsilvernumV1)
+@1[uuish]Uuish[cu] [274000YVJ=N=UwM1g0g2wgwgw0hM0Mh0w2w0hM0Mh0wgwgw2g0g1]
+@2!m(add.(ace.n.Creativity.col.u.tier.0.img.274000YVJ=N=UwM1g0g2wgwgw0hM0Mh0w2w0hM0Mh0wgwgw2g0g1)&temporary&hidden&ch.vpinknumV1)
+@1[violet]Violet[cu] [274N0N000v3AYVJg1w0h2g0wg0M0g1w2g2w1w0M0gw0w2h0w1g]
+@2!m(add.(ace.n.Contempt.col.v.tier.0.img.274N0N000v3AYVJg1w0h2g0wg0M0g1w2g2w1w0M0gw0w2h0w1g)&temporary&hidden&ch.violetnumV1)
+@1[fuish]Fuish[cu] [274000OXEzQpYVJ1w1N1wg0N2h4wh2w1x0g4g5]
+@2!m(add.(ace.n.Creation.col.f.tier.0.img.274000OXEzQpYVJ1w1N1wg0N2h4wh2w1x0g4g5)&temporary&hidden&ch.vfuishnumV1)
+@1[quish]Quish[cu] [273=ggYVJH77w4w0g2g8g2g8g2g0w4w]
+@2!m(add.(ace.n.Chance.col.q.tier.0.img.273=ggYVJH77w4w0g2g8g2g8g2g0w4w)&temporary&hidden)
+@1[kuish]Kuish[cu] [274000qhxDuPYVJ0gwNg0MwPgMwMyMiz0i0gw5g3wg0]
+@2!m(add.(ace.n.Conscience.col.k.tier.0.img.274000qhxDuPYVJ0gwNg0MwPgMwMyMiz0i0gw5g3wg0)&temporary&hidden)
+@1[mahogany]Mahogany[cu] [3136wMg274000n50YVJFxq2g1g3h36260g06263wg4]
+@2!m(add.(ace.n.Betrayal.col.m.tier.0.img.3136wMg274000n50YVJFxq2g1g3h36260g06263wg4)&temporary&hidden)
+@1[lime]Lime[cu] [2740002Q2YVJrC6gwg0gwgyMyMkM0MiM3g3MyM2MgM1]
+@2!m(add.(ace.n.Change.col.l.tier.0.img.2740002Q2YVJrC6gwg0gwgyMyMkM0MiM3g3MyM2MgM1)&temporary&hidden)
+@1[light]White[cu] [273YVJ000FFE0g2g1w2w3g4i1w1g1wgw2wiw0wh]
+@2!m(add.(ace.n.Belief.col.w.tier.0.img.273YVJ000FFE0g2g1w2w3g4i1w1g1wgw2wiw0wh)&temporary&hidden)
+@1[purple]Purple[cu] [273000qhxhbmg4i2h0gw0wg0w4wg0g0g0g0k2wgw1]
+@2!m(add.(ace.n.Consumption.col.p.tier.0.img.273000qhxhbmg4i2h0gw0wg0w4wg0g0g0g0k2wgw1)&temporary&hidden)
+@1[amber]Amber[cu] [274Nn5YVJ=L00000NwN1wMgMw1wiw0gwgMgwg0wiw0M4M0wiw0]@2!m(add.ace.n.WORD.col.a.tier.0.img.274Nn5YVJ=L00000NwN1wMgMw1wiw0gwgMgwg0wiw0M4M0wiw0&temporary&hidden)
+@1[cyan]Cyan[cu] [274000jQWYVJ8uA1gwg2gyg0gAg0hwh1MiM2i4g2]@2!m(add.ace.n.Beauty.col.c.tier.0.img.274000jQWYVJ8uA1gwg2gyg0gAg0hwh1MiM2i4g2&temporary&hidden)
+@1[dark]Dark[cu] [273435YVJ000wkwg4h4h4h4h4gwkw]@2!m(add.ace.n.Shadow.col.d.tier.0.img.273435YVJ000wkwg4h4h4h4h4gwkw&temporary&hidden)
+@1[euish]Euish[cu] [273YVJ000GGGhw1wh4x1wh3jw1wh0g4whw1wg]@2!m(add.ace.n.Unknown.col.e.tier.0.img.273YVJ000GGGhw1wh4x1wh3jw1wh0g4whw1wg&temporary&hidden)
+@1[juish]Juish[cu] [33240w250g561gwg1273000T%=YVJ4544g55w6hw4h6wg55w4540]@2!m(add.ace.n.Cold.col.j.tier.0.img.33240w250g561gwg1273000T%=YVJ4544g55w6hw4h6wg55w4540&temporary&hidden)
+@1[sea]Sea[cu] [2748uA0005evYVJgw1wh0N1wgMhM1wiM2hw3gw4w4w]@2!m(add.ace.n.The Deep.col.s.tier.0.img.2748uA0005evYVJgw1wh0N1wgMhM1wiM2hw3gw4w4w&temporary&hidden)
+@1[tuish]Tuish[cu] [2740005o38f8YVJwi0N0w1gN0w1Mg1w0g1g0wg2g0gzh4w]@2!m(add.ace.n.Hunting.col.t.tier.0.img.2740005o38f8YVJwi0N0w1gN0w1Mg1w0g1g0wg2g0gzh4w&temporary&hidden)
+@1[xuish]Xuish[cu] [3233gNg573w5w3264000WY8JD2YVJ1h1w7x7w]@2!m(add.ace.n.Energy.col.x.tier.0.img.3233gNg573w5w3264000WY8JD2YVJ1h1w7x7w&temporary&hidden)
+@1[zuish]Zuish[cu] [3223g151g0M0g274000Zn2YVJ=O233g012gw3gMyM3gwg21033g]@2!m(add.ace.n.Heat.col.z.tier.0.img.3223g151g0M0g274000Zn2YVJ=O233g012gw3gMyM3gwg21033g&temporary&hidden)
+)&hidden&temporary&(0.ph.zbarty@61@6!m(hidden&temporary)@7!m(
+(1.ph.sAmount of choices for starting party or whatevs
+@1All random@2!m(Level Up&Temporary&hidden)@1Some of them@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)
+@1Most of them@2!mVersatile^6&Versatile^2&Temporary&hidden@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden))
+&
+(1.ph.!m((h.top.missing)&(ch.vbartyV1)&(hidden)&(Temporary)))&hidden&temporary)).mn.Barty Selector,
+
+

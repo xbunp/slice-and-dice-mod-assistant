@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -19,7 +20,7 @@ public class ScratchModUI : RootUI
 
     // Inspector variables
     private RectTransform _inspectorContainer;
-    private VisualBlockCard _currentlyInspectedCard;
+    public VisualBlockCard CurrentlyInspectedCard { get; private set; }
 
     protected override void BuildUIAndBind()
     {
@@ -41,7 +42,7 @@ public class ScratchModUI : RootUI
         List<GridRowSpec> leftRows = new List<GridRowSpec>
         {
             new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("LeftTitle", "Tools", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateButton("LoadModBtn", "Load Mod", 1.0f, LoadModFromClipboard)),
+            new GridRowSpec(rowHeight, GridCellSpec.CreateButton("PasteModBtn", "Paste (Decompile)", 1.0f, PasteFromClipboard)),
             new GridRowSpec(rowHeight, GridCellSpec.CreateDropdown("ModDropdown", "", 1.0f, dropdownOptions.ToArray(), OnDropdownSelected)),
             new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("LeftTitle2", "Quick Add Block", 1.0f)),
             new GridRowSpec(rowHeight, GridCellSpec.CreateButton("BtnOption1", "Clear Party", 0.8f, AddClearPartyBlock))
@@ -54,14 +55,12 @@ public class ScratchModUI : RootUI
                 GridCellSpec.CreateButton("BtnCompile", "Compile", 0.5f, CompileBlocks),
                 GridCellSpec.CreateButton("BtnClear", "Clear", 0.5f, ClearWorkspace)
             ),
-            // Height will be overridden dynamically by ApplyDynamicLayoutConstraints
             new GridRowSpec(400f, GridCellSpec.CreateScrollView("WorkspaceScrollArea", 1.0f))
         };
 
         List<GridRowSpec> rightRows = new List<GridRowSpec>
         {
             new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("INSPECTOR_TITLE", "INSPECTOR PROPERTIES", 1.0f)),
-            // Delete button is now cleanly handled inside the node's UI itself
             new GridRowSpec(400f, GridCellSpec.CreateScrollView("InspectorScrollArea", 1.0f))
         };
 
@@ -84,15 +83,15 @@ public class ScratchModUI : RootUI
 
             ConfigureWorkspace();
             ConfigureInspector();
-            ApplyDynamicLayoutConstraints(); // Fixes squishing/overflow issues!
+            ApplyDynamicLayoutConstraints();
         }
     }
 
     public void SelectCardForInspection(VisualBlockCard card)
     {
-        if (_currentlyInspectedCard != null) _currentlyInspectedCard.Deselect();
+        if (CurrentlyInspectedCard != null) CurrentlyInspectedCard.Deselect();
 
-        _currentlyInspectedCard = card;
+        CurrentlyInspectedCard = card;
 
         foreach (Transform child in _inspectorContainer)
         {
@@ -101,18 +100,110 @@ public class ScratchModUI : RootUI
 
         if (card == null || card.UINode == null) return;
 
-        // Wire up the delete button natively!
         card.UINode.OnDeleteRequested = DeleteSelectedBlock;
-
         GridReferences refs = uiGenerator.RebuildGrid(_inspectorContainer, card.UINode.GetRowSpecs(), useMargins: false);
-
         card.UINode.BindUI(_inspectorContainer, refs);
         card.UINode.RestoreState(_inspectorContainer, refs);
 
         LayoutRebuilder.ForceRebuildLayoutImmediate(_inspectorContainer);
     }
 
-    // --- NEW: Ported from HeroUI to force ScrollViews to fill the screen ---
+    private void PasteFromClipboard()
+    {
+        string clipboard = GUIUtility.systemCopyBuffer;
+        if (string.IsNullOrWhiteSpace(clipboard)) return;
+
+        ClearWorkspace();
+
+        ITextmodNode decompiled = TextmodDecompiler.Decompile(clipboard);
+        if (decompiled == null) return;
+
+        if (decompiled is CommaChainBlock chain)
+        {
+            foreach (var node in chain.Nodes)
+            {
+                string name = CodeBlocks.GetOptionNameForNode(node);
+                InstantiateCard(node, name, _rootWorkspaceZone);
+            }
+        }
+        else
+        {
+            string name = CodeBlocks.GetOptionNameForNode(decompiled);
+            InstantiateCard(decompiled, name, _rootWorkspaceZone);
+        }
+    }
+
+    private VisualBlockCard InstantiateCard(ITextmodNode compilerNode, string optionName, ReorderableZone zone)
+    {
+        UIBlockNode uiNode = BlockRegistry.CreateUI(compilerNode);
+
+        GameObject cardGo = new GameObject($"Card_{optionName}", typeof(RectTransform), typeof(CanvasGroup), typeof(LayoutElement));
+        VisualBlockCard card = cardGo.AddComponent<VisualBlockCard>();
+
+        bool canHoldChildren = compilerNode is IBlockContainer || compilerNode is IBlockWrapper;
+
+        card.Initialize(optionName, canHoldChildren);
+        card.CompilerNode = compilerNode;
+        card.UINode = uiNode;
+
+        if (card.NestedZone != null) card.NestedZone.SetCanvas(_rootCanvas);
+        zone.AddEntrant(card);
+
+        PopulateNestedZone(compilerNode, card.NestedZone);
+        return card;
+    }
+
+    private void PopulateNestedZone(ITextmodNode node, ReorderableZone zone)
+    {
+        if (zone == null) return;
+
+        if (node is IBlockContainer container && container.ChildNodes != null)
+        {
+            foreach (var child in container.ChildNodes)
+                InstantiateCard(child, BlockRegistry.GetNodeName(child), zone);
+        }
+        else if (node is IBlockWrapper wrapper && wrapper.PayloadNode != null)
+        {
+            if (wrapper.PayloadNode is CommaChainBlock cc)
+                foreach (var c in cc.Nodes) InstantiateCard(c, BlockRegistry.GetNodeName(c), zone);
+            else
+                InstantiateCard(wrapper.PayloadNode, BlockRegistry.GetNodeName(wrapper.PayloadNode), zone);
+        }
+    }
+
+    private List<ITextmodNode> CompileZoneRecursive(ReorderableZone zone)
+    {
+        List<ITextmodNode> compiledNodes = new List<ITextmodNode>();
+
+        foreach (var entrant in zone.Entrants)
+        {
+            var card = entrant as VisualBlockCard;
+            if (card == null) continue;
+
+            if (card.NestedZone != null)
+            {
+                List<ITextmodNode> childNodes = CompileZoneRecursive(card.NestedZone);
+
+                if (card.CompilerNode is IBlockContainer container)
+                    container.ChildNodes = childNodes;
+                else if (card.CompilerNode is IBlockWrapper wrapper)
+                    wrapper.PayloadNode = GetSingleOrChain(childNodes);
+            }
+            compiledNodes.Add(card.CompilerNode);
+        }
+        return compiledNodes;
+    }
+
+    private void AddBlockToWorkspace(string optionName)
+    {
+        if (_rootWorkspaceZone == null) return;
+        ITextmodNode compilerNode = BlockRegistry.CreateNode(optionName);
+        if (compilerNode == null) return;
+
+        var card = InstantiateCard(compilerNode, optionName, _rootWorkspaceZone);
+        SelectCardForInspection(card);
+    }
+
     private void ApplyDynamicLayoutConstraints()
     {
         if (generatedScreen.ColumnRefs.TryGetValue("Middle_Column", out GridReferences midRefs))
@@ -125,7 +216,6 @@ public class ScratchModUI : RootUI
                 ConfigureFlexibleLayout(rowRt);
                 ConfigureFlexibleLayout(scrollRt);
 
-                // Middle column has a Title row and a Buttons row above it
                 float topOffset = (uiGenerator.rowHeight * 2f) + (uiGenerator.rowSpacing * 3f);
                 StretchToParent(rowRt, topOffset, 10f);
                 StretchToParent(scrollRt, 0f, 0f);
@@ -142,7 +232,6 @@ public class ScratchModUI : RootUI
                 ConfigureFlexibleLayout(rowRt);
                 ConfigureFlexibleLayout(scrollRt);
 
-                // Right column only has a Title row above it
                 float topOffset = uiGenerator.rowHeight + (uiGenerator.rowSpacing * 2f);
                 StretchToParent(rowRt, topOffset, 10f);
                 StretchToParent(scrollRt, 0f, 0f);
@@ -194,10 +283,7 @@ public class ScratchModUI : RootUI
 
                 var layout = content.gameObject.GetComponent<VerticalLayoutGroup>() ?? content.gameObject.AddComponent<VerticalLayoutGroup>();
                 layout.spacing = 4f;
-
-                // Add padding (Left, Right, Top, Bottom) to prevent elements from touching the edges
                 layout.padding = new RectOffset(12, 12, 12, 12);
-
                 layout.childControlHeight = true;
                 layout.childControlWidth = true;
                 layout.childForceExpandHeight = false;
@@ -221,11 +307,7 @@ public class ScratchModUI : RootUI
 
                 var layout = _inspectorContainer.gameObject.GetComponent<VerticalLayoutGroup>() ?? _inspectorContainer.gameObject.AddComponent<VerticalLayoutGroup>();
                 layout.spacing = 8f;
-
-                // Add padding (Left, Right, Top, Bottom) to clear the flush borders
                 layout.padding = new RectOffset(12, 12, 12, 12);
-
-                // This MUST be false! Otherwise Unity crushes the manual heights set by FullScreenUIGenerator.
                 layout.childControlHeight = false;
                 layout.childControlWidth = true;
                 layout.childForceExpandHeight = false;
@@ -246,12 +328,12 @@ public class ScratchModUI : RootUI
 
     private void DeleteSelectedBlock()
     {
-        if (_currentlyInspectedCard == null) return;
+        if (CurrentlyInspectedCard == null) return;
 
-        if (_currentlyInspectedCard.CurrentZone != null)
-            _currentlyInspectedCard.CurrentZone.RemoveEntrant(_currentlyInspectedCard);
+        if (CurrentlyInspectedCard.CurrentZone != null)
+            CurrentlyInspectedCard.CurrentZone.RemoveEntrant(CurrentlyInspectedCard);
 
-        Destroy(_currentlyInspectedCard.gameObject);
+        Destroy(CurrentlyInspectedCard.gameObject);
         SelectCardForInspection(null);
     }
 
@@ -271,56 +353,11 @@ public class ScratchModUI : RootUI
         }
     }
 
-    private List<ITextmodNode> CompileZoneRecursive(ReorderableZone zone)
-    {
-        List<ITextmodNode> compiledNodes = new List<ITextmodNode>();
-
-        foreach (var entrant in zone.Entrants)
-        {
-            var card = entrant as VisualBlockCard;
-            if (card == null) continue;
-
-            // If this card has a nested zone, compile its children first (Bottom-Up Compilation)
-            if (card.NestedZone != null)
-            {
-                List<ITextmodNode> childNodes = CompileZoneRecursive(card.NestedZone);
-
-                // 1. Assign to List-based nodes
-                if (card.CompilerNode is CommaChainBlock cc) cc.Nodes = childNodes;
-                else if (card.CompilerNode is AndChainBlock ac) ac.Nodes = childNodes;
-                else if (card.CompilerNode is Phase_LinkedBlock lc) lc.Phases = childNodes;
-                else if (card.CompilerNode is Phase_SimpleChoiceBlock sc) sc.Choices = childNodes;
-                else if (card.CompilerNode is Reward_ChoiceBlock rc) rc.Options = childNodes;
-                else if (card.CompilerNode is Phase_ChoiceBlock cb) cb.Options = childNodes;
-                else if (card.CompilerNode is Phase_LevelEndBlock leb) leb.EndScreenData = childNodes;
-
-                // 2. Assign to Single-Payload wrapper nodes
-                else if (card.CompilerNode is ContextWrapperBlock cw) cw.Payload = GetSingleOrChain(childNodes);
-                else if (card.CompilerNode is MultiplierBlock mb) mb.Payload = GetSingleOrChain(childNodes);
-                else if (card.CompilerNode is FloorConditionBlock fc) fc.Payload = GetSingleOrChain(childNodes);
-                else if (card.CompilerNode is LevelConstraintBlock lcb) lcb.Payload = GetSingleOrChain(childNodes);
-                else if (card.CompilerNode is ReplaceCommandBlock rep) rep.TargetNode = GetSingleOrChain(childNodes);
-                else if (card.CompilerNode is Phase_ChallengeBlock chb) chb.RewardPayload = GetSingleOrChain(childNodes);
-                else if (card.CompilerNode is Phase_RandomRevealBlock rrb) rrb.RewardData = GetSingleOrChain(childNodes);
-
-
-            }
-
-            compiledNodes.Add(card.CompilerNode);
-        }
-        return compiledNodes;
-    }
-
-    /// <summary>
-    /// Helper to safely handle wrapper nodes (like ch.) that expect a single payload.
-    /// If the user drops multiple blocks into it, we implicitly wrap them in a Comma Chain to prevent data loss.
-    /// </summary>
     private ITextmodNode GetSingleOrChain(List<ITextmodNode> nodes)
     {
         if (nodes == null || nodes.Count == 0) return null;
         if (nodes.Count == 1) return nodes[0];
 
-        // Auto-wrap multiple children to keep the AST intact
         return new CommaChainBlock { Nodes = nodes };
     }
 
@@ -334,7 +371,7 @@ public class ScratchModUI : RootUI
         SelectCardForInspection(null);
     }
 
-    private void LoadModFromClipboard() { /* Hook up to TextmodTranslator later */ }
+    private void LoadModFromClipboard() { }
 
     private void AddClearPartyBlock()
     {
@@ -360,219 +397,79 @@ public class ScratchModUI : RootUI
         _rootWorkspaceZone.AddEntrant(card);
         SelectCardForInspection(card);
     }
-
-    private void AddBlockToWorkspace(string optionName)
-    {
-        if (_rootWorkspaceZone == null) return;
-
-        ITextmodNode compilerNode = TextmodBlockFactory.CreateBlock(optionName);
-        if (compilerNode == null) return;
-
-        UIBlockNode uiNode = UIBlockFactory.CreateUIBlock(compilerNode);
-
-        GameObject cardGo = new GameObject($"Card_{optionName}", typeof(RectTransform), typeof(CanvasGroup), typeof(LayoutElement));
-        VisualBlockCard card = cardGo.AddComponent<VisualBlockCard>();
-
-        // Check if this block type is designed to hold nested children
-        bool canHoldChildren = (
-            compilerNode is CommaChainBlock ||
-            compilerNode is AndChainBlock ||
-            compilerNode is Phase_LinkedBlock ||
-            compilerNode is Phase_SimpleChoiceBlock || // ph.!
-            compilerNode is Reward_ChoiceBlock ||      // o (Or Tag)
-            compilerNode is ContextWrapperBlock ||     // ch., ph., etc.
-            compilerNode is MultiplierBlock ||         // xN.
-            compilerNode is FloorConditionBlock ||     // lvl.
-            compilerNode is LevelConstraintBlock ||    // lvl.
-            compilerNode is ReplaceCommandBlock ||       // replace.
-            compilerNode is Phase_ChoiceBlock ||       // ph.c
-            compilerNode is Phase_LevelEndBlock ||     // ph.2
-            compilerNode is Phase_ChallengeBlock ||    // ph.9
-            compilerNode is Phase_RandomRevealBlock    // ph.r
-        );
-
-        card.Initialize(optionName, canHoldChildren);
-
-        card.CompilerNode = compilerNode;
-        card.UINode = uiNode;
-
-        if (card.NestedZone != null) card.NestedZone.SetCanvas(_rootCanvas);
-
-        _rootWorkspaceZone.AddEntrant(card);
-        SelectCardForInspection(card);
-    }
 }
 #endregion
 
 #region 2. FACTORIES & DEFINITIONS
 public static class CodeBlocks
 {
-    /*
-    public static readonly List<string> _blockSyntaxOptions = new List<string>
+    private static readonly Dictionary<string, Func<ITextmodNode>> _registry = new Dictionary<string, Func<ITextmodNode>>
     {
-    // Wrappers & Flow
-    "Chain: Comma (Top Level AND)",
-    "Chain: Ampersand (Nested AND)",
-    "Wrapper: Multiplier (xN)",
-    "Wrapper: Context/Phase Definer", // Consolidates 4 wrappers
-    
-    // Commands
-    "Command: Encounter Setup",       // Consolidates Fight & Party
-    "Command: Entity Manipulation",   // Consolidates Replace & Add Pool
-    "Command: Game Setting",          // Consolidates Add, Zone, Diff, Lvl, Global
-
-    // Phases (Grouped by purpose)
-    "Phase: Simple Choice Screen (!)",
-    "Phase: Choice / PointBuy (c)",
-    "Phase: Challenge Phase (9)",
-    "Phase: Sequence / Story (s)",
-    "Phase: Boolean Logic (b/z)",     // Consolidates b and z
-    "Phase: Trade / Combine (t/7)",   // Consolidates t and 7
-    "Phase: Hero Adjustments (5/8)",  // Consolidates 5 and 8
-    "Phase: UI Screens (2/4/r/g)",    // Consolidates End, Message, Reveal, Gen
-    "Phase: Static / Event",          // Consolidates Static and Linked
-
-    // Rewards
-    "Reward: Grant Entity",           // Consolidates Standard, Random, Enum, Var, Rep, Skip
-    "Reward: Choice Options (o)"      // 'Or' tag holds children, so it stays independent
+        { "Chain: Comma (Top Level AND)", () => new CommaChainBlock() },
+        { "Chain: Ampersand (Nested AND)", () => new AndChainBlock() },
+        { "Wrapper: Floor Condition", () => new FloorConditionBlock() },
+        { "Wrapper: Multiplier (xN)", () => new MultiplierBlock() },
+        { "Command: Add Entity (add.)", () => new AddEntityBlock() },
+        { "Command: Fight Encounter (fight.)", () => new FightBlock() },
+        { "Command: Set Party (party.)", () => new PartyBlock() },
+        { "Command: Replace Entity (replace.)", () => new ReplaceCommandBlock() },
+        { "Command: Add to Pool (item/hero/monster)", () => new PoolBlock() },
+        { "Command: Grant All Items (allitem/alliteme)", () => new AllItemBlock() },
+        { "Command: Set Zone (zone.)", () => new ZoneBlock() },
+        { "Command: Set Difficulty (diff.)", () => new DifficultyBlock() },
+        { "Command: Level Constraint (lvl.)", () => new LevelConstraintBlock() },
+        { "Global Command", () => new GlobalCommandBlock() },
+        { "Context: Implied Phase (ph.)", () => new PhaseContextBlock() },
+        { "Context: Indexed Game Phase (phi.)", () => new IndexedPhaseContextBlock() },
+        { "Context: Modifier Pick Phase (phmp.)", () => new ModPickContextBlock() },
+        { "Context: Choosable Reward (ch.)", () => new ChoosableContextBlock() },
+        { "Phase: Simple Choice (!)", () => new Phase_SimpleChoiceBlock() },
+        { "Phase: Level End Screen (2)", () => new Phase_LevelEndBlock() },
+        { "Phase: Message Popup (4)", () => new Phase_MessageBlock() },
+        { "Phase: Hero Change Offer (5)", () => new Phase_HeroChangeBlock() },
+        { "Phase: Item Combine / Smithing (7)", () => new Phase_ItemCombineBlock() },
+        { "Phase: Position Swap (8)", () => new Phase_PositionSwapBlock() },
+        { "Phase: Challenge Phase (9)", () => new Phase_ChallengeBlock() },
+        { "Phase: Boolean Check 1 (b)", () => new Phase_Boolean1Block() },
+        { "Phase: Choice Screen (c)", () => new Phase_ChoiceBlock() },
+        { "Phase: Linked Events (l)", () => new Phase_LinkedBlock() },
+        { "Phase: Random Reveal Popup (r)", () => new Phase_RandomRevealBlock() },
+        { "Phase: Story Sequence (s)", () => new Phase_SequenceBlock() },
+        { "Phase: Cursed Chest Trade (t)", () => new Phase_TradeBlock() },
+        { "Phase: Generate Screen (g)", () => new Phase_GenerateScreenBlock() },
+        { "Phase: Boolean Check 2 (z)", () => new Phase_Boolean2Block() },
+        { "Phase: Static (0,1,3,d,6,e)", () => new Phase_StaticBlock() },
+        { "Reward: Standard (i/m/g/l)", () => new Reward_StandardBlock() },
+        { "Reward: Random Reward (r/q)", () => new Reward_RandomBlock() },
+        { "Reward: Random Choice (o)", () => new Reward_ChoiceBlock() },
+        { "Reward: Enum Item (e)", () => new Reward_EnumItemBlock() },
+        { "Reward: Modify Variable (v)", () => new Reward_ValueModifyBlock() },
+        { "Reward: Replace Reward (p)", () => new Reward_ReplaceBlock() },
+        { "Reward: Skip (s)", () => new Reward_SkipBlock() },
+        { "Sequence Option Fork", () => new SequenceOptionBlock() }
     };
-    */
 
-    
-    public static readonly List<string> _blockSyntaxOptions = new List<string>
+    public static readonly List<string> _blockSyntaxOptions = _registry.Keys.ToList();
+    public static string GetOptionNameForNode(ITextmodNode node)
     {
-        "Chain: Comma (Top Level AND)",
-        "Chain: Ampersand (Nested AND)",
-        "Wrapper: Floor Condition",
-        "Wrapper: Multiplier (xN)",
-        "Command: Add Entity (add.)",
-        "Command: Fight Encounter (fight.)",
-        "Command: Set Party (party.)",
-        "Command: Replace Entity (replace.)",
-        "Command: Add to Pool (item/hero/monster)",
-        "Command: Grant All Items (allitem/alliteme)",
-        "Command: Set Zone (zone.)",
-        "Command: Set Difficulty (diff.)",
-        "Command: Level Constraint (lvl.)",
-        "Global Command",
-        "Context: Implied Phase (ph.)",
-        "Context: Indexed Game Phase (phi.)",
-        "Context: Modifier Pick Phase (phmp.)",
-        "Context: Choosable Reward (ch.)",
-        "Phase: Simple Choice (!)",
-        "Phase: Level End Screen (2)",
-        "Phase: Message Popup (4)",
-        "Phase: Hero Change Offer (5)",
-        "Phase: Item Combine / Smithing (7)",
-        "Phase: Position Swap (8)",
-        "Phase: Challenge Phase (9)",
-        "Phase: Boolean Check 1 (b)",
-        "Phase: Choice Screen (c)",
-        "Phase: Linked Events (l)",
-        "Phase: Random Reveal Popup (r)",
-        "Phase: Story Sequence (s)",
-        "Phase: Cursed Chest Trade (t)",
-        "Phase: Generate Screen (g)",
-        "Phase: Boolean Check 2 (z)",
-        "Phase: Static (0,1,3,d,6,e)",
-        "Reward: Standard (i/m/g/l)",
-        "Reward: Random Reward (r/q)",
-        "Reward: Random Choice (o)",
-        "Reward: Enum Item (e)",
-        "Reward: Modify Variable (v)",
-        "Reward: Replace Reward (p)",
-        "Reward: Skip (s)"
-    };
-    
-}
+        if (node == null) return "GENERIC BLOCK";
+        System.Type targetType = node.GetType();
 
-public static class TextmodBlockFactory
-{
-    public static ITextmodNode CreateBlock(string optionName)
-    {
-        switch (optionName)
+        foreach (var pair in _registry)
         {
-            case "Chain: Comma (Top Level AND)": return new CommaChainBlock();
-            case "Chain: Ampersand (Nested AND)": return new AndChainBlock();
-            case "Wrapper: Floor Condition": return new FloorConditionBlock();
-            case "Wrapper: Multiplier (xN)": return new MultiplierBlock();
-            case "Command: Add Entity (add.)": return new AddEntityBlock();
-            case "Command: Fight Encounter (fight.)": return new FightBlock();
-            case "Command: Set Party (party.)": return new PartyBlock();
-            case "Command: Replace Entity (replace.)": return new ReplaceCommandBlock();
-            case "Command: Add to Pool (item/hero/monster)": return new PoolBlock();
-            case "Command: Grant All Items (allitem/alliteme)": return new AllItemBlock();
-            case "Command: Set Zone (zone.)": return new SimpleValueBlock("zone");
-            case "Command: Set Difficulty (diff.)": return new SimpleValueBlock("diff");
-            case "Command: Level Constraint (lvl.)": return new LevelConstraintBlock();
-            case "Global Command": return new GlobalCommandBlock();
-            case "Context: Implied Phase (ph.)": return new ContextWrapperBlock("ph");
-            case "Context: Indexed Game Phase (phi.)": return new ContextWrapperBlock("phi");
-            case "Context: Modifier Pick Phase (phmp.)": return new ContextWrapperBlock("phmp");
-            case "Context: Choosable Reward (ch.)": return new ContextWrapperBlock("ch");
-            case "Phase: Simple Choice (!)": return new Phase_SimpleChoiceBlock();
-            case "Phase: Level End Screen (2)": return new Phase_LevelEndBlock();
-            case "Phase: Message Popup (4)": return new Phase_MessageBlock();
-            case "Phase: Hero Change Offer (5)": return new Phase_HeroChangeBlock();
-            case "Phase: Item Combine / Smithing (7)": return new Phase_ItemCombineBlock();
-            case "Phase: Position Swap (8)": return new Phase_PositionSwapBlock();
-            case "Phase: Challenge Phase (9)": return new Phase_ChallengeBlock();
-            case "Phase: Boolean Check 1 (b)": return new Phase_Boolean1Block();
-            case "Phase: Choice Screen (c)": return new Phase_ChoiceBlock();
-            case "Phase: Linked Events (l)": return new Phase_LinkedBlock();
-            case "Phase: Random Reveal Popup (r)": return new Phase_RandomRevealBlock();
-            case "Phase: Story Sequence (s)": return new Phase_SequenceBlock();
-            case "Phase: Cursed Chest Trade (t)": return new Phase_TradeBlock();
-            case "Phase: Generate Screen (g)": return new Phase_GenerateScreenBlock();
-            case "Phase: Boolean Check 2 (z)": return new Phase_Boolean2Block();
-            case "Phase: Static (0,1,3,d,6,e)": return new Phase_StaticBlock();
-            case "Reward: Standard (i/m/g/l)": return new Reward_StandardBlock();
-            case "Reward: Random Reward (r/q)": return new Reward_RandomBlock();
-            case "Reward: Random Choice (o)": return new Reward_ChoiceBlock();
-            case "Reward: Enum Item (e)": return new Reward_EnumItemBlock();
-            case "Reward: Modify Variable (v)": return new Reward_ValueModifyBlock();
-            case "Reward: Replace Reward (p)": return new Reward_ReplaceBlock();
-            case "Reward: Skip (s)": return new Reward_SkipBlock();
-            default:
-                Debug.LogWarning($"Unknown block option selected: {optionName}");
-                return null;
+            var testInstance = pair.Value();
+            if (testInstance != null && testInstance.GetType() == targetType)
+            {
+                if (node is ContextWrapperBlock actualCw && testInstance is ContextWrapperBlock templateCw)
+                {
+                    if (actualCw.Prefix != templateCw.Prefix) continue;
+                }
+                return pair.Key;
+            }
         }
+        return "GENERIC BLOCK";
     }
-}
 
-public static class UIBlockFactory
-{
-    public static UIBlockNode CreateUIBlock(ITextmodNode compilerNode)
-    {
-        if (compilerNode is PoolBlock poolNode)
-        {
-            return new PoolBlockUI(poolNode);
-        }
-
-        if (compilerNode is TextmodBlock textmodBase)
-        {
-            return new DefaultBlockUI(textmodBase);
-        }
-
-        if (compilerNode is Phase_MessageBlock msgNode) return new Phase_MessageBlockUI(msgNode);
-        if (compilerNode is Phase_HeroChangeBlock hcNode) return new Phase_HeroChangeBlockUI(hcNode);
-        if (compilerNode is Phase_ItemCombineBlock icNode) return new Phase_ItemCombineBlockUI(icNode);
-        if (compilerNode is Phase_PositionSwapBlock psNode) return new Phase_PositionSwapBlockUI(psNode);
-        if (compilerNode is Phase_ChoiceBlock chNode) return new Phase_ChoiceBlockUI(chNode);
-        if (compilerNode is Phase_StaticBlock statNode) return new Phase_StaticBlockUI(statNode);
-        if (compilerNode is Phase_GenerateScreenBlock genNode) return new Phase_GenerateScreenBlockUI(genNode);
-        if (compilerNode is Phase_LinkedBlock lkNode) return new Phase_LinkedBlockUI(lkNode);
-        if (compilerNode is Phase_LevelEndBlock leNode) return new Phase_LevelEndBlockUI(leNode);
-        if (compilerNode is Phase_ChallengeBlock clNode) return new Phase_ChallengeBlockUI(clNode);
-
-        // 5. Complex Branching Phases (Stopgaps)
-        if (compilerNode is Phase_Boolean1Block b1Node) return new Phase_Boolean1BlockUI(b1Node);
-        if (compilerNode is Phase_Boolean2Block b2Node) return new Phase_Boolean2BlockUI(b2Node);
-        if (compilerNode is Phase_TradeBlock trNode) return new Phase_TradeBlockUI(trNode);
-        if (compilerNode is Phase_SequenceBlock seqNode) return new Phase_SequenceBlockUI(seqNode);
-
-        return null;
-    }
 }
 #endregion
 
@@ -647,55 +544,63 @@ public class VisualBlockCard : ReorderableItem, IPointerClickHandler
 #endregion
 
 #region 4. INSPECTOR UI DEFINITIONS
-/// <summary>
-/// Base class for all Inspector UIs. Handles standard shared properties natively.
-/// </summary>
 public abstract class UIBlockNode
 {
     protected TextmodBlock BaseCompilerNode;
 
     public System.Action OnDeleteRequested;
 
-    // FIX: Accept ITextmodNode instead of TextmodBlock
     protected UIBlockNode(ITextmodNode baseNode)
     {
-        // Safely cast. If it's just an ITextmodNode (like chains/wrappers), 
-        // BaseCompilerNode becomes null and the universal UI properties gracefully ignore it.
         BaseCompilerNode = baseNode as TextmodBlock;
     }
 
-    // Subclasses provide their title and bespoke rows
     public abstract string GetBlockTitle();
     protected abstract List<GridRowSpec> GetSpecificRowSpecs();
     protected abstract void BindSpecificUI(RectTransform container, GridReferences refs);
     protected abstract void RestoreSpecificState(RectTransform container, GridReferences refs);
 
-    /// <summary>
-    /// Merges the specific block UI rows with the Universal base property rows.
-    /// </summary>
+    protected List<GridRowSpec> GetHeaderRowSpecs()
+    {
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("LblTitle", $"<b>{GetBlockTitle()}</b>", 0.70f),
+                GridCellSpec.CreateButton("BtnDeleteBlock", "Delete", 0.30f, () => OnDeleteRequested?.Invoke())
+            )
+        };
+    }
+
+    protected List<GridRowSpec> GetUniversalRowSpecs()
+    {
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(GridCellSpec.CreateLabel("LblBaseProps", "General Properties", 1.0f)),
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("LblEncName", "Modifier Name (.mn):", 0.35f),
+                GridCellSpec.CreateInput("InpEncounterName", "", 0.65f, null)
+            ),
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("LblHidden", "Hidden:", 0.35f),
+                GridCellSpec.CreateToggle("TglHidden", "", 0.15f, null),
+                GridCellSpec.CreateLabel("LblTemp", "Temporary:", 0.35f),
+                GridCellSpec.CreateToggle("TglTemp", "", 0.15f, null)
+            ),
+            new GridRowSpec(GridCellSpec.CreateLabel("LblSpecificPropsHeader", "Node Specific Properties", 1.0f))
+        };
+    }
+
     public List<GridRowSpec> GetRowSpecs()
     {
-        // Initialize the list and add the standard rows all at once
-        List<GridRowSpec> rows = new List<GridRowSpec>
+        List<GridRowSpec> rows = new List<GridRowSpec>();
+
+        rows.AddRange(GetHeaderRowSpecs());
+
+        if (BaseCompilerNode != null)
         {
-        // --- HEADER ROW (Title + Delete Button) ---
-        new GridRowSpec(
-            GridCellSpec.CreateLabel("LblTitle", $"<b>{GetBlockTitle()}</b>", 0.70f),
-            GridCellSpec.CreateButton("BtnDeleteBlock", "Delete", 0.30f, () => OnDeleteRequested?.Invoke())
-        ),
+            rows.AddRange(GetUniversalRowSpecs());
+        }
 
-        // --- UNIVERSAL PROPERTIES ---
-        new GridRowSpec(GridCellSpec.CreateLabel("LblBaseProps", "General Properties", 1.0f)),
-
-        new GridRowSpec(
-            GridCellSpec.CreateLabel("LblEncName", "Modifier Name (.mn):", 0.35f),
-            GridCellSpec.CreateInput("InpEncounterName", "", 0.65f, null)
-        ),
-
-        new GridRowSpec(GridCellSpec.CreateLabel("LblBaseProps", "Node Specific Properties", 1.0f))
-        };
-
-        // --- SPECIFIC PROPERTIES AT THE BOTTOM ---
         rows.AddRange(GetSpecificRowSpecs());
 
         return rows;
@@ -709,6 +614,14 @@ public abstract class UIBlockNode
         {
             if (refs.Inputs.TryGetValue("InpEncounterName", out var inpEncName))
                 inpEncName.onValueChanged.AddListener(v => BaseCompilerNode.CustomEncounterName = v);
+
+            if (refs.Toggles != null)
+            {
+                if (refs.Toggles.TryGetValue("TglHidden", out var tglH))
+                    tglH.onValueChanged.AddListener(v => BaseCompilerNode.IsHidden = v);
+                if (refs.Toggles.TryGetValue("TglTemp", out var tglT))
+                    tglT.onValueChanged.AddListener(v => BaseCompilerNode.IsTemporary = v);
+            }
         }
     }
 
@@ -720,76 +633,20 @@ public abstract class UIBlockNode
         {
             if (refs.Inputs.TryGetValue("InpEncounterName", out var inpEncName))
                 inpEncName.text = BaseCompilerNode.CustomEncounterName;
+
+            if (refs.Toggles != null)
+            {
+                if (refs.Toggles.TryGetValue("TglHidden", out var tglH))
+                    tglH.isOn = BaseCompilerNode.IsHidden;
+                if (refs.Toggles.TryGetValue("TglTemp", out var tglT))
+                    tglT.isOn = BaseCompilerNode.IsTemporary;
+            }
         }
     }
 }
-
-/// <summary>
-/// Bespoke Inspector UI specifically for Pool commands (like Clear Party).
-/// </summary>
-public class PoolBlockUI : UIBlockNode
-{
-    private PoolBlock _node;
-
-    public PoolBlockUI(PoolBlock node) : base(node)
-    {
-        _node = node;
-    }
-
-    public override string GetBlockTitle() => $"{_node.Type.ToString().ToUpper()} POOL";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblEnt", "Entities (+ split):", 0.35f),
-                GridCellSpec.CreateInput("InpEntities", "", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblPart", "Part ID:", 0.35f),
-                GridCellSpec.CreateInput("InpPart", "", 0.65f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpEntities", out var inpEnt))
-            inpEnt.onValueChanged.AddListener(v => _node.Entities = v.Split('+').Select(s => s.Trim()).ToList());
-
-        if (refs.Inputs.TryGetValue("InpPart", out var inpPart))
-            inpPart.onValueChanged.AddListener(v => { if (int.TryParse(v, out int p)) _node.Part = p; else _node.Part = -1; });
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpEntities", out var inpEnt))
-            inpEnt.text = string.Join("+", _node.Entities);
-
-        if (refs.Inputs.TryGetValue("InpPart", out var inpPart))
-            inpPart.text = _node.Part.ToString();
-    }
-}
-
-public class DefaultBlockUI : UIBlockNode
-{
-    public DefaultBlockUI(TextmodBlock node) : base(node) { }
-
-    public override string GetBlockTitle() => "GENERIC BLOCK";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec> {
-            new GridRowSpec(GridCellSpec.CreateLabel("LblWIP", "Specific properties WIP for this block type.", 1f))
-        };
-    }
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs) { }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs) { }
-}
 #endregion
 
-#region 5. COMPILER AST NODES
+#region 5. COMPILER AST BASE STRUCTURES
 public interface ITextmodNode
 {
     string Compile();
@@ -801,11 +658,117 @@ public class RawTextNode : ITextmodNode
     public RawTextNode(string text) { Text = text; }
     public string Compile() => Text;
 }
+
+/// <summary>
+/// The abstract base class for all Textmod compiler blocks. 
+/// </summary>
+/// <remarks>
+/// <para><b>THE TEXTMOD MODIFIER ENGINE &amp; SYNTAX RULES:</b></para>
+/// <para>
+/// The engine makes no strict syntactic distinction between what a modifier "is" or "can be." 
+/// A modifier can be a massive mod-defining structural element (like a pool definition) or a 
+/// simple gameplay mutator (like adding a monster to every fight). Because of this, it is 
+/// syntactically valid to write mismatched modifiers (e.g., placing a hero pool inside a jinx monster 
+/// payload). While the game will not crash, the mismatched payload simply won't perform any action, 
+/// as the game evaluates modifiers based on their intended logical context.
+/// </para>
+/// 
+/// <para><b>UNIVERSAL PARENTHETICAL WRAPPING ():</b></para>
+/// <para>
+/// Parentheses <c>()</c> can be wrapped around any modifier or group of modifiers at any time to 
+/// help the code compile correctly, resolve syntax precedence, and prevent layout collisions in deep nests.
+/// </para>
+/// 
+/// <para><b>GLOBAL MODIFIER UTILITIES:</b></para>
+/// <list type="bullet">
+/// <item><description><c>.doc.richtext</c>: Appends a custom richtext description to a modifier when viewed in the UI.</description></item>
+/// <item><description><c>.mn.name</c>: Overrides the displayed custom mod name in the UI.</description></item>
+/// <item><description><c>.part.#</c>: Subsections a modifier payload so only a specific part ID executes.</description></item>
+/// </list>
+/// 
+/// <para><b>COMMON MUTATOR PROPERTIES &amp; TARGETS:</b></para>
+/// <list type="bullet">
+/// <item><description><c>hero.keyword</c> / <c>monster.keyword</c>: Bestows a specific passive keyword to all heroes or monsters.</description></item>
+/// <item><description><c>sideposition.keyword</c>: Applies a keyword only to specified dice faces (see Dice Face Alignments below).</description></item>
+/// <item><description><c>i.item</c>: Awards a specific item.</description></item>
+/// <item><description><c>add.monster</c>: Spawns a designated monster in every fight.</description></item>
+/// <item><description><c>add.hero</c>: Adds a new hero to the current run party.</description></item>
+/// <item><description><c>party.hero+hero...</c>: Wipes the active party and inserts the specified set of heroes.</description></item>
+/// <item><description><c>allitem.item</c> / <c>alliteme.item</c>: Bestows an item's passive effects to all heroes (allitem) or all monsters (alliteme).</description></item>
+/// <item><description><c>peritem.item</c>: Applies a modifier's mutator effect to heroes scaled by how many items they have equipped.</description></item>
+/// <item><description><c>monster.spirit</c>: Bestows a monster's passive trait as a constant passive mutator. Format: <c>&lt;MonsterProperName&gt;.spirit</c> (e.g., <c>Demon.spirit</c>, <c>Troll.spirit</c>).</description></item>
+/// </list>
+/// 
+/// <para><b>DICE FACE ALIGNMENTS &amp; TARGETS:</b></para>
+/// <para>
+/// Sides are designated via text-based aliases corresponding to physical layout positions:
+/// </para>
+/// <list type="bullet">
+/// <item><description><c>left</c>: Index 0 (Bitmask 1)</description></item>
+/// <item><description><c>mid</c>: Index 1 (Bitmask 2)</description></item>
+/// <item><description><c>top</c>: Index 2 (Bitmask 4)</description></item>
+/// <item><description><c>bot</c>: Index 3 (Bitmask 8)</description></item>
+/// <item><description><c>right</c>: Index 4 (Bitmask 16)</description></item>
+/// <item><description><c>rightmost</c>: Index 5 (Bitmask 32)</description></item>
+/// </list>
+/// <para>
+/// Compound Target Aliases:
+/// </para>
+/// <list type="bullet">
+/// <item><description><c>all</c>: All faces (Bitmask 63)</description></item>
+/// <item><description><c>right5</c>: All except left (Bitmask 62)</description></item>
+/// <item><description><c>right3</c>: Middle, right, and rightmost (Bitmask 50)</description></item>
+/// <item><description><c>right2</c>: Right and rightmost (Bitmask 48)</description></item>
+/// <item><description><c>row</c>: Middle Row (Left, Mid, Right - Bitmask 19)</description></item>
+/// <item><description><c>mid2</c>: Middle and right (Bitmask 18)</description></item>
+/// <item><description><c>col</c>: Column (Mid, Top, Bot - Bitmask 14)</description></item>
+/// <item><description><c>topbot</c>: Top and bottom (Bitmask 12)</description></item>
+/// <item><description><c>left2</c>: Middle and left (Bitmask 3)</description></item>
+/// </list>
+/// 
+/// <para><b>HERO STACK POSITION TARGETING:</b></para>
+/// <list type="bullet">
+/// <item><description><c>h.heroposition.modifier</c>: Restricts a mutator effect to specific slots in the hero stack. 
+/// <i>Note: This behavior is highly contextual to the source of the modifier and requires active in-game exploration to predict exact stacking layouts.</i></description></item>
+/// </list>
+/// 
+/// <para><b>SCALING, SPLICING &amp; CONDITIONAL SYNTAX:</b></para>
+/// <list type="bullet">
+/// <item><description><c>modtier.#</c>: Multiplies a gameplay mutator's scaling coefficient directly.</description></item>
+/// <item><description><c>x2-9.modifier</c>: Duplicates a modifier's payload X times (functions slightly differently than modtier).</description></item>
+/// <item><description><c>modifier&amp;modifier</c>: Packages two modifiers together so they act as a single inseparable payload.</description></item>
+/// <item><description><c>modifier.splice.modifier</c>: Combines two modifiers in a combinatorial way to alter conditions/results (e.g., <c>mod1.splice.mod2</c>). Grouping with parentheses is valid. 
+/// <i>Warning: Recursive splices (e.g. splicing splices) can be unstable and are generally not recommended.</i></description></item>
+/// <item><description><c>modifier.splice.item</c>: Splices a modifier's active mutator behaviors directly into a standard item's properties.</description></item>
+/// <item><description><c>unpack.modifier</c>: Forces the modifier to parse by stripping away any conditional wrapper filters.</description></item>
+/// <item><description><c>delivery.xxxx</c>: Grants random items. Suffixes with 4 random alphanumeric characters (e.g., <c>delivery.1a90</c>, <c>delivery.87ad</c>). 
+/// There is no programatic way to know in advance what items will be granted; these must be discovered experimentally.</description></item>
+/// </list>
+/// 
+/// <para><b>END OF TURN ABILITY TRIGGERS (ea.):</b></para>
+/// <para>
+/// Casts a designated ability at the end of each turn. Syntax can target base-game abilities or custom internal payloads:
+/// </para>
+/// <list type="bullet">
+/// <item><description>Base Game: <c>ea.Burst</c> or <c>ea.Luck</c></description></item>
+/// <item><description>Complex Custom: <c>ea.&lt;s/t&gt;&lt;heroName&gt;.abilitydata.(&lt;internal_syntax&gt;)</c> 
+/// (where <c>s</c> or <c>t</c> refers to Spell or Tactic respectively, e.g., <c>ea.sthief.abilitydata.(statue.sd.0-0:0-0:0-0:0-0:76-3:0-0)</c>).</description></item>
+/// </list>
+/// 
+/// <para><b>RUN PROGRESSION STACKING (COMPLETED CHECKS):</b></para>
+/// <list type="bullet">
+/// <item><description><c>pl.modifier</c>: Evaluates and stacks the mutator an additional time for each standard fight completed during the run.</description></item>
+/// <item><description><c>pb.modifier</c>: Stacks the mutator for each boss fight completed (maximum 5 bosses across a 20-floor run).</description></item>
+/// <item><description><c>pt.modifier</c>: Stacks the mutator scaled by how many combat turns have elapsed during the active fight.</description></item>
+/// </list>
+/// </remarks>
 public abstract class TextmodBlock : ITextmodNode
 {
     public string CustomEncounterName = "";
-    public string CustomEntityName = "";
-    public string ModTier = "";
+    public string RichTextDocumentation = "";
+    public int Part = -1;
+    public bool IsHidden = false;
+    public bool IsTemporary = false;
 
     public abstract string CompileCore();
 
@@ -813,12 +776,19 @@ public abstract class TextmodBlock : ITextmodNode
     {
         string core = CompileCore();
 
-        if (!string.IsNullOrEmpty(CustomEntityName))
-            core += $".n.{CustomEntityName}";
-        if (!string.IsNullOrEmpty(CustomEncounterName))
-            core += $".mn.{CustomEncounterName}";
-        if (!string.IsNullOrEmpty(ModTier))
-            core += $".modtier.{ModTier}";
+        if (!string.IsNullOrEmpty(CustomEncounterName)) core += $".mn.{CustomEncounterName}";
+        if (!string.IsNullOrEmpty(RichTextDocumentation)) core += $".doc.{RichTextDocumentation}";
+        if (Part != -1) core += $".part.{Part}";
+
+        bool needsWrap = IsHidden || IsTemporary;
+        if (needsWrap)
+        {
+            string wrapped = $"({core}";
+            if (IsHidden) wrapped += "&hidden";
+            if (IsTemporary) wrapped += "&temporary";
+            wrapped += ")";
+            return wrapped;
+        }
 
         return core;
     }
@@ -828,28 +798,629 @@ public abstract class TextmodBlock : ITextmodNode
         if (node == null) return "";
         string compiled = node.Compile();
 
-        char[] delimiters = { '&', '@', ';', ',', '+', '~', '#' };
+        char[] delimiters = { '&', ',', '+' };
         if (compiled.IndexOfAny(delimiters) >= 0 && !(compiled.StartsWith("(") && compiled.EndsWith(")")))
-        {
             return $"({compiled})";
-        }
+
         return compiled;
     }
 }
+#endregion
 
-public class CommaChainBlock : ITextmodNode
+#region 6. DECOMPILER ENGINE
+public static class TextmodDecompiler
+{
+    public static ITextmodNode Decompile(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return null;
+        input = input.Trim().TrimEnd(',');
+
+        List<string> topTokens = SplitOuter(input, ',');
+        if (topTokens.Count > 1)
+        {
+            CommaChainBlock chain = new CommaChainBlock();
+            foreach (var t in topTokens)
+            {
+                var node = DecompileSingle(t);
+                if (node != null) chain.Nodes.Add(node);
+            }
+            return chain;
+        }
+
+        return DecompileSingle(input);
+    }
+
+    private static ITextmodNode DecompileSingle(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return null;
+
+        token = Unwrap(token.Trim());
+
+        List<string> andTokens = SplitOuter(token, '&');
+
+        bool isHidden = false;
+        bool isTemp = false;
+
+        andTokens.RemoveAll(t =>
+        {
+            string lower = t.ToLower();
+            if (lower == "hidden") { isHidden = true; return true; }
+            if (lower == "temporary") { isTemp = true; return true; }
+            return false;
+        });
+
+        if (andTokens.Count > 1)
+        {
+            AndChainBlock andChain = new AndChainBlock();
+            foreach (var t in andTokens)
+            {
+                var thisNode = DecompileSingle(t);
+                if (thisNode != null) andChain.Nodes.Add(thisNode);
+            }
+            return andChain;
+        }
+
+        string core = andTokens.Count == 1 ? andTokens[0] : token;
+
+        string customName = "";
+        string doc = "";
+        int part = -1;
+
+        int propIdx = -1;
+        int depth = 0;
+        for (int i = 0; i < core.Length; i++)
+        {
+            if (core[i] == '(' || core[i] == '[' || core[i] == '{') depth++;
+            else if (core[i] == ')' || core[i] == ']' || core[i] == '}') depth--;
+            else if (depth == 0 && core[i] == '.')
+            {
+                string rem = core.Substring(i);
+                if (rem.StartsWith(".mn.") || rem.StartsWith(".n.") || rem.StartsWith(".doc.") || rem.StartsWith(".part."))
+                {
+                    propIdx = i;
+                    break;
+                }
+            }
+        }
+
+        if (propIdx != -1)
+        {
+            string props = core.Substring(propIdx);
+            core = core.Substring(0, propIdx);
+
+            customName = ExtractTagValue(ref props, "mn") ?? ExtractTagValue(ref props, "n");
+            doc = ExtractTagValue(ref props, "doc");
+            string partStr = ExtractTagValue(ref props, "part");
+            if (!string.IsNullOrEmpty(partStr)) int.TryParse(partStr, out part);
+        }
+
+        if (core.StartsWith("=")) core = core.Substring(1).Trim();
+
+        ITextmodNode node = ParseCore(core);
+
+        if (node is TextmodBlock block)
+        {
+            if (!string.IsNullOrEmpty(customName)) block.CustomEncounterName = customName;
+            if (!string.IsNullOrEmpty(doc)) block.RichTextDocumentation = doc;
+            if (part != -1) block.Part = part;
+            block.IsHidden = isHidden;
+            block.IsTemporary = isTemp;
+        }
+
+        return node;
+    }
+
+    private static ITextmodNode ParseCore(string core)
+    {
+        if (string.IsNullOrEmpty(core)) return null;
+
+        Match multiMatch = Regex.Match(core, @"^x(\d+)\.(.*)");
+        if (multiMatch.Success)
+            return new MultiplierBlock { Multiplier = int.Parse(multiMatch.Groups[1].Value), Payload = DecompileSingle(multiMatch.Groups[2].Value) };
+
+        Match floorMatch = Regex.Match(core, @"^((?:e\d+(?:\.\d+)?|\-?\d+(?:-\-?\d+)?))\.(.*)");
+        if (floorMatch.Success)
+        {
+            string prefix = floorMatch.Groups[1].Value;
+            string payload = floorMatch.Groups[2].Value;
+            FloorConditionBlock fc = new FloorConditionBlock();
+
+            if (prefix.Contains("-"))
+            {
+                fc.Type = FloorConditionBlock.ConditionType.Range;
+                var p = prefix.Split('-');
+                int.TryParse(p[0], out fc.StartFloor);
+                int.TryParse(p[1], out fc.EndFloor);
+            }
+            else if (prefix.StartsWith("e"))
+            {
+                fc.Type = FloorConditionBlock.ConditionType.EveryX;
+                var p = prefix.Substring(1).Split('.');
+                int.TryParse(p[0], out fc.Interval);
+                if (p.Length > 1) int.TryParse(p[1], out fc.Offset);
+            }
+            else
+            {
+                fc.Type = FloorConditionBlock.ConditionType.Single;
+                int.TryParse(prefix, out fc.StartFloor);
+            }
+            fc.Payload = DecompileSingle(payload);
+            return fc;
+        }
+
+        if (core.StartsWith("lvl.")) return new LevelConstraintBlock { Payload = DecompileSingle(core.Substring(4)) };
+
+        if (core.StartsWith("ch.")) return new ChoosableContextBlock { Payload = DecompileSingle(core.Substring(3)) };
+        if (core.StartsWith("ph.")) return new PhaseContextBlock { Payload = DecompileSingle(core.Substring(3)) };
+        if (core.StartsWith("phi."))
+        {
+            int nextDot = core.IndexOf('.', 4);
+            string target = nextDot > 4 ? core.Substring(4, nextDot - 4) : "";
+            string payload = nextDot > 4 ? core.Substring(nextDot + 1) : "";
+            return new IndexedPhaseContextBlock { Target = target, Payload = DecompileSingle(payload) };
+        }
+        if (core.StartsWith("phmp.")) return new ModPickContextBlock { Payload = DecompileSingle(core.Substring(5)) };
+
+        string lowerCore = core.ToLower();
+        foreach (GlobalCommandBlock.GlobalType gType in Enum.GetValues(typeof(GlobalCommandBlock.GlobalType)))
+        {
+            string expectedStr = gType switch
+            {
+                GlobalCommandBlock.GlobalType.LevelUp => "level up",
+                GlobalCommandBlock.GlobalType.NoFlee => "no flee",
+                GlobalCommandBlock.GlobalType.SkipAll => "skip all",
+                GlobalCommandBlock.GlobalType.ClearParty => "clear party",
+                GlobalCommandBlock.GlobalType.AddFight => "add fight",
+                GlobalCommandBlock.GlobalType.Add10Fights => "add 10 fights",
+                GlobalCommandBlock.GlobalType.Add100Fights => "add 100 fights",
+                GlobalCommandBlock.GlobalType.MinusFight => "minus fight",
+                GlobalCommandBlock.GlobalType.CursemodeLoopdiff => "cursemode loopdiff",
+                GlobalCommandBlock.GlobalType.DoubleMonsters => "double monsters",
+                GlobalCommandBlock.GlobalType.SkipRewards => "skip rewards",
+                _ => gType.ToString().ToLower()
+            };
+            if (lowerCore == expectedStr) return new GlobalCommandBlock { Type = gType };
+        }
+
+        if (core.StartsWith("add.")) return new AddEntityBlock { Entity = core.Substring(4) };
+        if (core.StartsWith("fight.")) return new FightBlock { Monsters = SplitOuter(core.Substring(6), '+').Select(s => s.Trim()).ToList() };
+        if (core.StartsWith("party.")) return new PartyBlock { Heroes = SplitOuter(core.Substring(6), '+').Select(s => s.Trim()).ToList() };
+        if (core.StartsWith("itempool.")) return new PoolBlock { Type = PoolBlock.PoolType.Item, Entities = SplitOuter(core.Substring(9), '+').Select(s => s.Trim()).ToList() };
+        if (core.StartsWith("heropool.")) return new PoolBlock { Type = PoolBlock.PoolType.Hero, Entities = SplitOuter(core.Substring(9), '+').Select(s => s.Trim()).ToList() };
+        if (core.StartsWith("monsterpool.")) return new PoolBlock { Type = PoolBlock.PoolType.Monster, Entities = SplitOuter(core.Substring(12), '+').Select(s => s.Trim()).ToList() };
+        if (core.StartsWith("allitem.")) return new AllItemBlock { Equipped = false, Pools = SplitOuter(core.Substring(8), '+').Select(s => s.Trim()).ToList() };
+        if (core.StartsWith("alliteme.")) return new AllItemBlock { Equipped = true, Pools = SplitOuter(core.Substring(9), '+').Select(s => s.Trim()).ToList() };
+        if (core.StartsWith("zone.")) return new ZoneBlock { Value = core.Substring(5) };
+        if (core.StartsWith("diff.")) return new DifficultyBlock { Value = core.Substring(5) };
+        if (core.StartsWith("replace.")) return new ReplaceCommandBlock { TargetNode = DecompileSingle(core.Substring(8)) };
+
+        if (core.StartsWith("!"))
+        {
+            var sc = new Phase_SimpleChoiceBlock();
+            string data = core.Substring(1);
+            int semiIdx = data.IndexOf(';');
+            if (semiIdx >= 0)
+            {
+                sc.Title = data.Substring(0, semiIdx);
+                data = data.Substring(semiIdx + 1);
+            }
+            var opts = SplitOuter(data, '@');
+            foreach (var opt in opts)
+            {
+                string cleanOpt = opt.StartsWith("3") ? opt.Substring(1) : opt;
+                sc.Choices.Add(DecompileSingle(cleanOpt));
+            }
+            return sc;
+        }
+
+        if (core.StartsWith("s"))
+        {
+            var seq = new Phase_SequenceBlock();
+            var parts = SplitOuter(core.Substring(1), '@');
+
+            if (parts.Count > 0) seq.SequenceMessage = parts[0];
+
+            SequenceOptionBlock currentOpt = null;
+            bool hasOpt = false;
+
+            for (int i = 1; i < parts.Count; i++)
+            {
+                string p = parts[i];
+                if (p.StartsWith("1"))
+                {
+                    if (hasOpt) seq.Options.Add(currentOpt);
+                    currentOpt = new SequenceOptionBlock
+                    {
+                        ButtonText = p.Substring(1),
+                        Actions = new List<ITextmodNode>()
+                    };
+                    hasOpt = true;
+                }
+                else if (p.StartsWith("2") && hasOpt)
+                {
+                    currentOpt.Actions.Add(DecompileSingle(p.Substring(1)));
+                }
+            }
+            if (hasOpt) seq.Options.Add(currentOpt);
+            return seq;
+        }
+
+        if (core.StartsWith("b"))
+        {
+            var bp = new Phase_Boolean1Block();
+            var parts = SplitOuter(core.Substring(1), ';');
+            if (parts.Count >= 3)
+            {
+                bp.VariableName = parts[0];
+                int.TryParse(parts[1], out bp.Threshold);
+
+                var branches = SplitOuter(parts[2], '@');
+                if (branches.Count > 0)
+                    bp.TrueBranch = DecompileSingle(branches[0].StartsWith("2") ? branches[0].Substring(1) : branches[0]);
+
+                if (branches.Count > 1)
+                    bp.FalseBranch = DecompileSingle(branches[1].StartsWith("2") ? branches[1].Substring(1) : branches[1]);
+            }
+            return bp;
+        }
+
+        if (core.StartsWith("z"))
+        {
+            var b2 = new Phase_Boolean2Block();
+            var parts = SplitOuter(core.Substring(1), '@');
+
+            if (parts.Count > 0) b2.VariableName = parts[0];
+
+            if (parts.Count > 1 && parts[1].StartsWith("6"))
+                int.TryParse(parts[1].Substring(1), out b2.Threshold);
+
+            if (parts.Count > 2 && parts[2].StartsWith("7"))
+                b2.TrueBranch = DecompileSingle(parts[2].Substring(1));
+
+            if (parts.Count > 3 && parts[3].StartsWith("7"))
+                b2.FalseBranch = DecompileSingle(parts[3].Substring(1));
+
+            return b2;
+        }
+
+        if (core.StartsWith("c"))
+        {
+            var c = new Phase_ChoiceBlock();
+            string data = core.Substring(1);
+            int semiIdx = data.IndexOf(';');
+            if (semiIdx >= 0)
+            {
+                var configParts = data.Substring(0, semiIdx).Split('#');
+                c.ChoiceType = configParts[0];
+                if (configParts.Length > 1) int.TryParse(configParts[1], out c.NumChoices);
+                data = data.Substring(semiIdx + 1);
+            }
+            var opts = SplitOuter(data, '@');
+
+            if (opts.Count > 0)
+            {
+                var lastOptParts = SplitOuter(opts[opts.Count - 1], ';');
+                if (lastOptParts.Count > 1)
+                {
+                    c.Title = lastOptParts[lastOptParts.Count - 1];
+                    lastOptParts.RemoveAt(lastOptParts.Count - 1);
+                    opts[opts.Count - 1] = string.Join(";", lastOptParts);
+                }
+            }
+
+            foreach (var opt in opts)
+            {
+                string cleanOpt = opt.StartsWith("3") ? opt.Substring(1) : opt;
+                c.Options.Add(DecompileSingle(cleanOpt));
+            }
+            return c;
+        }
+
+        if (core.StartsWith("t"))
+        {
+            var tp = new Phase_TradeBlock();
+            var parts = SplitOuter(core.Substring(1), '@');
+            if (parts.Count > 0) tp.Item1 = DecompileSingle(parts[0]);
+            if (parts.Count > 1) tp.Item2 = DecompileSingle(parts[1].StartsWith("3") ? parts[1].Substring(1) : parts[1]);
+            return tp;
+        }
+
+        if (core.StartsWith("l"))
+        {
+            var lp = new Phase_LinkedBlock();
+            var parts = SplitOuter(core.Substring(1), '@');
+            foreach (var p in parts)
+            {
+                string clean = p.StartsWith("1") ? p.Substring(1) : p;
+                lp.Phases.Add(DecompileSingle(clean));
+            }
+            return lp;
+        }
+
+        if (core.StartsWith("4"))
+        {
+            var msg = new Phase_MessageBlock();
+            var parts = SplitOuter(core.Substring(1), ';');
+            if (parts.Count > 0) msg.Message = parts[0];
+            if (parts.Count > 1) msg.ButtonText = parts[1];
+            return msg;
+        }
+
+        if (core.StartsWith("2") && core.Contains("ps:["))
+        {
+            var lep = new Phase_LevelEndBlock();
+            int start = core.IndexOf("ps:[") + 4;
+            int end = core.LastIndexOf("]");
+            if (start > 3 && end > start)
+            {
+                string inner = core.Substring(start, end - start);
+                var innerPhases = SplitOuter(inner, ',');
+                foreach (var p in innerPhases) lep.EndScreenData.Add(DecompileSingle(p));
+            }
+            return lep;
+        }
+
+        if (core.StartsWith("9"))
+        {
+            var chp = new Phase_ChallengeBlock();
+            Match mMonsters = Regex.Match(core, @"\""extraMonsters\""\s*:\s*\[(.*?)\]");
+            if (mMonsters.Success)
+            {
+                foreach (var m in mMonsters.Groups[1].Value.Split(','))
+                {
+                    string clean = m.Trim().Trim('"', '\\');
+                    if (!string.IsNullOrEmpty(clean)) chp.ExtraMonsters.Add(clean);
+                }
+            }
+            Match mData = Regex.Match(core, @"\""data\""\s*:\s*\""(.*?)\""");
+            if (mData.Success) chp.RewardPayload = DecompileSingle(mData.Groups[1].Value);
+            return chp;
+        }
+
+        if (core.StartsWith("5") && core.Length >= 2) return new Phase_HeroChangeBlock { HeroPositionIndex = core[1] - '0', IsRandomClass = (core.Length > 2 && core[2] == '0') };
+        if (core.StartsWith("7")) return new Phase_ItemCombineBlock { Rule = core.Substring(1) == "ZeroToThreeToSingle" ? Phase_ItemCombineBlock.CombineRule.ZeroToThreeToSingle : Phase_ItemCombineBlock.CombineRule.SecondHighestToTierThrees };
+        if (core.StartsWith("8") && core.Length >= 3) return new Phase_PositionSwapBlock { IndexA = core[1] - '0', IndexB = core[2] - '0' };
+        if (core.StartsWith("g")) return new Phase_GenerateScreenBlock { Type = (core.Length > 1 && core[1] == 'h') ? Phase_GenerateScreenBlock.ScreenType.LevelUp : Phase_GenerateScreenBlock.ScreenType.Item };
+        if (core.Length == 1 && "013d6e".Contains(core[0])) return new Phase_StaticBlock { Phase = (Phase_StaticBlock.StaticPhase)core[0] };
+        if (core.StartsWith("r") && !core.Contains("~")) return new Phase_RandomRevealBlock { RewardData = DecompileSingle(core.Substring(1)) };
+
+        if ((core.StartsWith("r") || core.StartsWith("q")) && core.Contains("~"))
+        {
+            var rb = new Reward_RandomBlock();
+            var parts = SplitOuter(core.Substring(1), '~');
+
+            if (core.StartsWith("r") && parts.Count >= 3)
+            {
+                int.TryParse(parts[0], out rb.MinTier); rb.MaxTier = rb.MinTier;
+                int.TryParse(parts[1], out rb.Amount); rb.RewardTypeFlag = parts[2];
+            }
+            else if (core.StartsWith("q") && parts.Count >= 4)
+            {
+                int.TryParse(parts[0], out rb.MinTier); int.TryParse(parts[1], out rb.MaxTier);
+                int.TryParse(parts[2], out rb.Amount); rb.RewardTypeFlag = parts[3];
+            }
+            return rb;
+        }
+
+        if (core.StartsWith("o") && core.Contains("@4"))
+        {
+            var ob = new Reward_ChoiceBlock();
+            foreach (var p in SplitOuter(core.Substring(1), '@'))
+            {
+                string clean = p.StartsWith("4") ? p.Substring(1) : p;
+                ob.Options.Add(DecompileSingle(clean));
+            }
+            return ob;
+        }
+
+        if (core.StartsWith("v"))
+        {
+            var vb = new Reward_ValueModifyBlock();
+            string data = core.Substring(1);
+            int vIdx = data.LastIndexOf('V');
+            if (vIdx >= 1)
+            {
+                vb.VariableName = data.Substring(0, vIdx);
+                int.TryParse(data.Substring(vIdx + 1), out vb.ValueToAdd);
+            }
+            else vb.VariableName = data;
+
+            return vb;
+        }
+
+        if (core.StartsWith("p"))
+        {
+            var rep = new Reward_ReplaceBlock();
+            string data = core.Substring(1);
+            if (data.StartsWith(" m") || data.StartsWith("m"))
+            {
+                rep.IsModifierReplacement = true;
+                var parts = SplitOuter(data.StartsWith(" m") ? data.Substring(2) : data.Substring(1), '~');
+                if (parts.Count > 0) rep.TargetToReplace = parts[0];
+                if (parts.Count > 1) rep.NewValue = parts[1];
+            }
+            else rep.TargetToReplace = data;
+
+            return rep;
+        }
+
+        if (core.StartsWith("e") && core.Contains("RandoKeyword")) return new Reward_EnumItemBlock { EnumName = core.Substring(1) };
+        if (core == "s") return new Reward_SkipBlock();
+
+        if (Regex.IsMatch(core, @"^[imgl]"))
+            return new Reward_StandardBlock { Type = (Reward_StandardBlock.RewardType)core[0], TargetEntity = core.Substring(1) };
+
+        return new RawTextNode(core);
+    }
+
+    private static string ExtractTagValue(ref string properties, string tag)
+    {
+        string search = "." + tag + ".";
+        int start = properties.IndexOf(search);
+        if (start == -1) return null;
+
+        int depth = 0;
+        int end = start + search.Length;
+        while (end < properties.Length)
+        {
+            char c = properties[end];
+            if (c == '(' || c == '[' || c == '{') depth++;
+            else if (c == ')' || c == ']' || c == '}') depth--;
+            else if (depth == 0 && c == '.') break;
+            end++;
+        }
+
+        string value = properties.Substring(start + search.Length, end - (start + search.Length));
+        properties = properties.Remove(start, end - start);
+        return value;
+    }
+
+    private static string Unwrap(string text)
+    {
+        text = text.Trim();
+        while (text.StartsWith("(") && text.EndsWith(")"))
+        {
+            int depth = 0;
+            bool matching = true;
+            for (int i = 0; i < text.Length - 1; i++)
+            {
+                if (text[i] == '(') depth++;
+                else if (text[i] == ')') depth--;
+                if (depth == 0) { matching = false; break; }
+            }
+            if (matching && depth == 1) text = text.Substring(1, text.Length - 2).Trim();
+            else break;
+        }
+        return text;
+    }
+
+    private static List<string> SplitOuter(string str, char delimiter)
+    {
+        List<string> result = new List<string>();
+        int paren = 0, brk = 0, brc = 0, start = 0;
+        for (int i = 0; i < str.Length; i++)
+        {
+            char c = str[i];
+            if (c == '(') paren++;
+            else if (c == ')') paren--;
+            else if (c == '[') brk++;
+            else if (c == ']') brk--;
+            else if (c == '{') brc++;
+            else if (c == '}') brc--;
+            else if (c == delimiter && paren == 0 && brk == 0 && brc == 0)
+            {
+                result.Add(str.Substring(start, i - start));
+                start = i + 1;
+            }
+        }
+        if (start <= str.Length) result.Add(str.Substring(start));
+        return result;
+    }
+}
+#endregion
+
+#region 7. SYSTEM ATTRIBUTES & INTERFACES
+[AttributeUsage(AttributeTargets.Class)]
+public class BlockMetaAttribute : Attribute
+{
+    public string MenuName { get; }
+    public Type UIType { get; }
+
+    public BlockMetaAttribute(string menuName, Type uiType)
+    {
+        MenuName = menuName;
+        UIType = uiType;
+    }
+}
+
+public interface IBlockContainer : ITextmodNode
+{
+    List<ITextmodNode> ChildNodes { get; set; }
+}
+
+public interface IBlockWrapper : ITextmodNode
+{
+    ITextmodNode PayloadNode { get; set; }
+}
+
+public static class BlockRegistry
+{
+    public static readonly List<string> MenuOptions = new List<string>();
+
+    private static readonly Dictionary<string, Type> _nameToNode = new Dictionary<string, Type>();
+    private static readonly Dictionary<Type, string> _nodeToName = new Dictionary<Type, string>();
+    private static readonly Dictionary<Type, Type> _nodeToUI = new Dictionary<Type, Type>();
+
+    static BlockRegistry()
+    {
+        var types = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(a => a.GetTypes())
+            .Where(t => t.IsClass && !t.IsAbstract && typeof(ITextmodNode).IsAssignableFrom(t));
+
+        foreach (var t in types)
+        {
+            var attr = (BlockMetaAttribute)Attribute.GetCustomAttribute(t, typeof(BlockMetaAttribute));
+            if (attr != null)
+            {
+                if (!string.IsNullOrEmpty(attr.MenuName))
+                {
+                    _nameToNode[attr.MenuName] = t;
+                    _nodeToName[t] = attr.MenuName;
+                    MenuOptions.Add(attr.MenuName);
+                }
+                _nodeToUI[t] = attr.UIType;
+            }
+        }
+    }
+
+    public static ITextmodNode CreateNode(string name) =>
+        _nameToNode.TryGetValue(name, out var type) ? (ITextmodNode)Activator.CreateInstance(type) : null;
+
+    public static string GetNodeName(ITextmodNode node) =>
+        node != null && _nodeToName.TryGetValue(node.GetType(), out var name) ? name : "GENERIC BLOCK";
+
+    public static UIBlockNode CreateUI(ITextmodNode node) =>
+        node != null && _nodeToUI.TryGetValue(node.GetType(), out var uiType)
+            ? (UIBlockNode)Activator.CreateInstance(uiType, node)
+            : new DefaultBlockUI(node);
+}
+#endregion
+
+#region Node Definitions
+
+[BlockMeta("Chain: Comma (Top Level AND)", typeof(DefaultBlockUI))]
+public class CommaChainBlock : IBlockContainer
 {
     public List<ITextmodNode> Nodes = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Nodes; set => Nodes = value; }
+
     public string Compile() => string.Join(",", Nodes.Select(n => n?.Compile()).Where(s => !string.IsNullOrEmpty(s)));
 }
 
-public class AndChainBlock : ITextmodNode
+[BlockMeta("Chain: Ampersand (Nested AND)", typeof(DefaultBlockUI))]
+public class AndChainBlock : IBlockContainer
 {
     public List<ITextmodNode> Nodes = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Nodes; set => Nodes = value; }
+
     public string Compile() => string.Join("&", Nodes.Select(n => n?.Compile()).Where(s => !string.IsNullOrEmpty(s)));
 }
 
-public class FloorConditionBlock : ITextmodNode
+/// <summary>
+/// Wraps a modifier in a conditional timeline constraint.
+/// </summary>
+/// <remarks>
+/// <para><b>TIMELINE CONSTRAINTS:</b></para>
+/// <list type="bullet">
+/// <item><description><c>lvl.modifier</c>: Constrains the modifier to occur only during a specific floor.</description></item>
+/// <item><description><c>lvl-lvl.modifier</c>: Constrains the modifier to apply across a designated range of floors (e.g. <c>8-16.Monster Blank</c> applies "Monster Blank" during floors 8 to 16).</description></item>
+/// <item><description><c>t#.modifier</c>: Activates the mutator only during a designated combat turn index of a floor.</description></item>
+/// <item><description><c>e###.modifier</c>: Fires the mutator payload every X completed fights.</description></item>
+/// <item><description><c>et#.modifier</c>: Fires the mutator payload on every X turns of a fight.</description></item>
+/// </list>
+/// </remarks>
+[BlockMeta("Wrapper: Floor Condition", typeof(FloorConditionBlockUI))]
+public class FloorConditionBlock : IBlockWrapper
 {
     public enum ConditionType { Single, Range, EveryX }
     public ConditionType Type = ConditionType.Single;
@@ -857,7 +1428,9 @@ public class FloorConditionBlock : ITextmodNode
     public int EndFloor = 5;
     public int Interval = 2;
     public int Offset = 0;
+
     public ITextmodNode Payload;
+    public ITextmodNode PayloadNode { get => Payload; set => Payload = value; }
 
     public string Compile()
     {
@@ -872,20 +1445,42 @@ public class FloorConditionBlock : ITextmodNode
     }
 }
 
-public class MultiplierBlock : ITextmodNode
+[BlockMeta("Wrapper: Multiplier (xN)", typeof(DefaultBlockUI))]
+public class MultiplierBlock : IBlockWrapper
 {
     public int Multiplier = 2;
+
     public ITextmodNode Payload;
+    public ITextmodNode PayloadNode { get => Payload; set => Payload = value; }
+
     public string Compile() => Multiplier <= 1 ? Payload?.Compile() : $"x{Multiplier}.{Payload?.Compile()}";
 }
 
-public class ContextWrapperBlock : ITextmodNode
+[BlockMeta("Command: Level Constraint (lvl.)", typeof(DefaultBlockUI))]
+public class LevelConstraintBlock : TextmodBlock, IBlockWrapper
+{
+    public ITextmodNode Payload;
+    public ITextmodNode PayloadNode { get => Payload; set => Payload = value; }
+
+    public override string CompileCore() => $"lvl.{SafeCompile(Payload)}";
+}
+
+/// <summary>
+/// Wraps a reward tag in a context. 
+/// "ch." (Choosable): Directly grants a reward silently. More efficient, but less flexible. 
+/// "ph." (Implied Phase): Often used with ! (SimpleChoicePhase) to pop up a screen.
+/// "phi." (Indexed Phase): Generates specific base-game phases (0=Levelup, 1=Loot, 9=Cursed Chest, etc).
+/// "phmp." (Mod Pick Phase): Generates a modifier selection screen.
+/// </summary>
+public abstract class ContextWrapperBlock : ITextmodNode, IBlockWrapper
 {
     public string Prefix;
     public string Target = "";
-    public ITextmodNode Payload;
 
-    public ContextWrapperBlock(string prefix) { Prefix = prefix; }
+    public ITextmodNode Payload;
+    public ITextmodNode PayloadNode { get => Payload; set => Payload = value; }
+
+    protected ContextWrapperBlock(string prefix) { Prefix = prefix; }
 
     public string Compile()
     {
@@ -894,49 +1489,95 @@ public class ContextWrapperBlock : ITextmodNode
     }
 }
 
+[BlockMeta("Context: Implied Phase (ph.)", typeof(ContextWrapperBlockUI))]
+public class PhaseContextBlock : ContextWrapperBlock
+{
+    public PhaseContextBlock() : base("ph") { }
+}
+
+[BlockMeta("Context: Indexed Game Phase (phi.)", typeof(ContextWrapperBlockUI))]
+public class IndexedPhaseContextBlock : ContextWrapperBlock
+{
+    public IndexedPhaseContextBlock() : base("phi") { }
+}
+
+[BlockMeta("Context: Modifier Pick Phase (phmp.)", typeof(ContextWrapperBlockUI))]
+public class ModPickContextBlock : ContextWrapperBlock
+{
+    public ModPickContextBlock() : base("phmp") { }
+}
+
+[BlockMeta("Context: Choosable Reward (ch.)", typeof(ContextWrapperBlockUI))]
+public class ChoosableContextBlock : ContextWrapperBlock
+{
+    public ChoosableContextBlock() : base("ch") { }
+}
+
+[BlockMeta("Command: Add Entity (add.)", typeof(DefaultBlockUI))]
 public class AddEntityBlock : TextmodBlock
 {
     public string Entity = "";
     public override string CompileCore() => $"add.{Entity}";
 }
 
+/// <summary>
+/// Overrides a floor's standard procedural monster configuration with a hardcoded list of monsters.
+/// </summary>
+/// <remarks>
+/// Combine this with floor constraints (<c>lvl.fight.Monster+Monster...</c>) to design bespoke boss fights 
+/// or hand-crafted level encounters.
+/// </remarks>
+[BlockMeta("Command: Fight Encounter (fight.)", typeof(FightBlockUI))]
 public class FightBlock : TextmodBlock
 {
     public List<string> Monsters = new List<string>();
     public override string CompileCore() => $"fight.{string.Join("+", Monsters)}";
 }
 
+[BlockMeta("Command: Set Party (party.)", typeof(PartyBlockUI))]
 public class PartyBlock : TextmodBlock
 {
     public List<string> Heroes = new List<string>();
     public override string CompileCore() => $"party.{string.Join("+", Heroes)}";
 }
 
-public class ReplaceCommandBlock : TextmodBlock
+[BlockMeta("Command: Replace Entity (replace.)", typeof(DefaultBlockUI))]
+public class ReplaceCommandBlock : TextmodBlock, IBlockWrapper
 {
     public ITextmodNode TargetNode;
+    public ITextmodNode PayloadNode { get => TargetNode; set => TargetNode = value; }
+
     public override string CompileCore() => $"replace.{SafeCompile(TargetNode)}";
 }
 
+/// <summary>
+/// Defines a gameplay pool override for Heroes, Items, or Monsters.
+/// </summary>
+/// <remarks>
+/// Pools dictate what entities are eligible to spawn as reward drops or tier-upgrade options during a run.
+/// <para><b>POOL SYNTAX CONSTRAINTS:</b></para>
+/// <list type="bullet">
+/// <item><description>Defined as comma-separated lists prefixed by pool type (e.g., <c>heropool.Hero+Hero...</c>).</description></item>
+/// <item><description>There is a character limit of approximately <b>5000 characters</b> per defined pool string.</description></item>
+/// <item><description>Multiple pools of the same type can be declared together to bypass limit structures.</description></item>
+/// </list>
+/// </remarks>
+[BlockMeta("Command: Add to Pool (item/hero/monster)", typeof(PoolBlockUI))]
 public class PoolBlock : TextmodBlock
 {
     public enum PoolType { Item, Hero, Monster }
     public PoolType Type = PoolType.Hero;
     public List<string> Entities = new List<string>();
 
-    public int Part = -1;
-
     public override string CompileCore()
     {
         string core = $"{Type.ToString().ToLower()}pool.{string.Join("+", Entities)}";
-
-        if (Part >= 0)
-            core += $".part.{Part}";
-
+        if (Part >= 0) core += $".part.{Part}";
         return core;
     }
 }
 
+[BlockMeta("Command: Grant All Items (allitem/alliteme)", typeof(DefaultBlockUI))]
 public class AllItemBlock : TextmodBlock
 {
     public bool Equipped = false;
@@ -944,20 +1585,40 @@ public class AllItemBlock : TextmodBlock
     public override string CompileCore() => (Equipped ? "alliteme." : "allitem.") + string.Join("+", Pools);
 }
 
-public class SimpleValueBlock : TextmodBlock
+/// <summary>
+/// Custom Mode Difficulty and Value Parameters.
+/// </summary>
+/// <remarks>
+/// Dictates starting variables and modifier rules. Valid difficulties accepted by the engine are:
+/// <c>Heaven, Easy, Normal, Hard, Unfair, Brutal, Hell</c>.
+/// </remarks>
+public abstract class SimpleValueBlock : TextmodBlock
 {
-    private string Prefix;
+    public string Prefix { get; }
     public string Value = "";
-    public SimpleValueBlock(string prefix) { Prefix = prefix; }
+
+    protected SimpleValueBlock(string prefix) { Prefix = prefix; }
     public override string CompileCore() => $"{Prefix}.{Value}";
 }
 
-public class LevelConstraintBlock : TextmodBlock
+[BlockMeta("Command: Set Zone (zone.)", typeof(DefaultBlockUI))]
+public class ZoneBlock : SimpleValueBlock
 {
-    public ITextmodNode Payload;
-    public override string CompileCore() => $"lvl.{SafeCompile(Payload)}";
+    public ZoneBlock() : base("zone") { }
 }
 
+[BlockMeta("Command: Set Difficulty (diff.)", typeof(DefaultBlockUI))]
+public class DifficultyBlock : SimpleValueBlock
+{
+    public DifficultyBlock() : base("diff") { }
+}
+
+/// <summary>
+/// Hidden global modifiers added in v3.1.
+/// Useful for custom modes (e.g. Skip All removes all events, Clear Party removes the team).
+/// Cursemode Loopdiff causes level 21 and level 1 to have the same enemy balance.
+/// </summary>
+[BlockMeta("Global Command", typeof(GlobalCommandBlockUI))]
 public class GlobalCommandBlock : TextmodBlock
 {
     public enum GlobalType
@@ -988,10 +1649,19 @@ public class GlobalCommandBlock : TextmodBlock
     }
 }
 
-public class Phase_SimpleChoiceBlock : TextmodBlock
+/// <summary>
+/// Simple Choice Phase (!): Pops up a screen allowing the player to pick a reward.
+/// Delimiter: '@3'. 
+/// Unlike Choosables, SCPhase can be constrained by 'lvl.' and creates a visual UI.
+/// </summary>
+/// <example>ph.!Example Title;iCorset@3iBallet Shoes@3s</example>
+[BlockMeta("Phase: Simple Choice (!)", typeof(Phase_SimpleChoiceBlockUI))]
+public class Phase_SimpleChoiceBlock : TextmodBlock, IBlockContainer
 {
     public string Title = "";
     public List<ITextmodNode> Choices = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Choices; set => Choices = value; }
+
     public override string CompileCore()
     {
         string opts = string.Join("@3", Choices.Select(c => SafeCompile(c)));
@@ -999,19 +1669,40 @@ public class Phase_SimpleChoiceBlock : TextmodBlock
     }
 }
 
-public class Phase_LevelEndBlock : TextmodBlock
+/// <summary>
+/// Level End Phase (2): Appends phases to the between-levels screen. 
+/// As of v3.1, custom modes usually restrict this to 1 phase, but Paste mode allows multiple.
+/// </summary>
+/// <example>ph.2{ps:[tr-1~1~m@3r1~4~i,!lPriestess@3lSparky]}</example>
+[BlockMeta("Phase: Level End Screen (2)", typeof(Phase_LevelEndBlockUI))]
+public class Phase_LevelEndBlock : TextmodBlock, IBlockContainer
 {
     public List<ITextmodNode> EndScreenData = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => EndScreenData; set => EndScreenData = value; }
+
     public override string CompileCore() => $"2ps:[{string.Join(",", EndScreenData.Select(SafeCompile))}]";
 }
 
+/// <summary>
+/// Message Phase (4): Sends a message with custom contents. 
+/// Colors can be changed using bracket tags (e.g. [orange]), images using entity names (e.g. [Thief]), 
+/// and tracked Values using [val(variable)].
+/// </summary>
+/// <example>ph.4You currently have [valgold] gold.;Ok</example>
+[BlockMeta("Phase: Message Popup (4)", typeof(Phase_MessageBlockUI))]
 public class Phase_MessageBlock : TextmodBlock
 {
     public string Message = "";
     public string ButtonText = "Ok";
-    public override string CompileCore() => $"4{Message};{ButtonText}";
+    public override string CompileCore() => (string.IsNullOrEmpty(ButtonText) || ButtonText == "Ok") ? $"4{Message}" : $"4{Message};{ButtonText}";
 }
 
+/// <summary>
+/// Hero Change Phase (5): Rerolls a hero based on a top-down zero-indexed position (0-4).
+/// Type 0 = Random Class, Type 1 = Generated Hero.
+/// </summary>
+/// <example>ph.501 (Replace the top hero with a generated one)</example>
+[BlockMeta("Phase: Hero Change Offer (5)", typeof(Phase_HeroChangeBlockUI))]
 public class Phase_HeroChangeBlock : TextmodBlock
 {
     public int HeroPositionIndex = 0;
@@ -1019,6 +1710,12 @@ public class Phase_HeroChangeBlock : TextmodBlock
     public override string CompileCore() => $"5{HeroPositionIndex}{(IsRandomClass ? "0" : "1")}";
 }
 
+/// <summary>
+/// Item Combine Phase (7): 
+/// SecondHighestToTierThrees: Smashes the 2nd highest tier item into multiple tier 3s.
+/// ZeroToThreeToSingle: Combines all tier 0-3 items into a single higher tier item.
+/// </summary>
+[BlockMeta("Phase: Item Combine / Smithing (7)", typeof(Phase_ItemCombineBlockUI))]
 public class Phase_ItemCombineBlock : TextmodBlock
 {
     public enum CombineRule { SecondHighestToTierThrees, ZeroToThreeToSingle }
@@ -1026,6 +1723,11 @@ public class Phase_ItemCombineBlock : TextmodBlock
     public override string CompileCore() => $"7{Rule}";
 }
 
+/// <summary>
+/// Position Swap Phase (8): Swaps two heroes based on top-down zero-indexed positions (0-4).
+/// </summary>
+/// <example>ph.801 (Swaps top hero and the one below it)</example>
+[BlockMeta("Phase: Position Swap (8)", typeof(Phase_PositionSwapBlockUI))]
 public class Phase_PositionSwapBlock : TextmodBlock
 {
     public int IndexA = 0;
@@ -1033,10 +1735,17 @@ public class Phase_PositionSwapBlock : TextmodBlock
     public override string CompileCore() => $"8{IndexA}{IndexB}";
 }
 
-public class Phase_ChallengeBlock : TextmodBlock
+/// <summary>
+/// Challenge Phase (9): Offers extra monsters in exchange for rewards.
+/// Requires strict internal JSON formatting.
+/// </summary>
+/// <example>ph.9{"reward":{"data":"iMonocle"},"type":{"extraMonsters":["Militia"]}}</example>
+[BlockMeta("Phase: Challenge Phase (9)", typeof(Phase_ChallengeBlockUI))]
+public class Phase_ChallengeBlock : TextmodBlock, IBlockWrapper
 {
     public List<string> ExtraMonsters = new List<string>();
     public ITextmodNode RewardPayload;
+    public ITextmodNode PayloadNode { get => RewardPayload; set => RewardPayload = value; }
 
     public override string CompileCore()
     {
@@ -1045,23 +1754,36 @@ public class Phase_ChallengeBlock : TextmodBlock
     }
 }
 
+/// <summary>
+/// Boolean Phase (b): Checks a previously set Value (via 'v' tag) and chooses between two branches.
+/// Delimiters: ';' and '@2'. Cannot be nested directly in the middle due to collisions.
+/// </summary>
+/// <example>ph.bSeed;3;!m1.fight.Boar@2!m1.fight.Goblin</example>
+[BlockMeta("Phase: Boolean Check 1 (b)", typeof(Phase_Boolean1BlockUI))]
 public class Phase_Boolean1Block : TextmodBlock
 {
     public string VariableName = "";
     public int Threshold = 1;
     public ITextmodNode TrueBranch;
     public ITextmodNode FalseBranch;
-
-    public override string CompileCore()
-        => $"b{VariableName};{Threshold};{SafeCompile(TrueBranch)}@2{SafeCompile(FalseBranch)}";
+    public override string CompileCore() => $"b{VariableName};{Threshold};{SafeCompile(TrueBranch)}@2{SafeCompile(FalseBranch)}";
 }
 
-public class Phase_ChoiceBlock : TextmodBlock
+/// <summary>
+/// Choice Phase (c): Similar to SimpleChoicePhase but accepts 4 unique rule types.
+/// PointBuy: uses modifier/item/hero tiers to add to total. Number: Exact amount.
+/// UpToNumber: Flexible amount. Optional: Take all or nothing.
+/// Delimiters: ';' and '@3'.
+/// </summary>
+/// <example>ph.cUpToNumber#2;iPowdered Mana@3iCan</example>
+[BlockMeta("Phase: Choice Screen (c)", typeof(Phase_ChoiceBlockUI))]
+public class Phase_ChoiceBlock : TextmodBlock, IBlockContainer
 {
     public string ChoiceType = "i";
     public int NumChoices = 1;
     public string Title = "";
     public List<ITextmodNode> Options = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Options; set => Options = value; }
 
     public override string CompileCore()
     {
@@ -1071,32 +1793,66 @@ public class Phase_ChoiceBlock : TextmodBlock
     }
 }
 
-public class Phase_LinkedBlock : TextmodBlock
+/// <summary>
+/// Linked Phase (l): Forces multiple phases to take place one after another without logic collisions.
+/// Delimiter: '@1'.
+/// </summary>
+/// <example>ph.l4Message1@1l4Message2@14Message3</example>
+[BlockMeta("Phase: Linked Events (l)", typeof(Phase_LinkedBlockUI))]
+public class Phase_LinkedBlock : TextmodBlock, IBlockContainer
 {
     public List<ITextmodNode> Phases = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Phases; set => Phases = value; }
     public override string CompileCore() => $"l{string.Join("@1", Phases.Select(SafeCompile))}";
 }
 
-public class Phase_RandomRevealBlock : TextmodBlock
+/// <summary>
+/// Random Reveal Phase (r): Shows a popup stating "Gained: X" but doesn't actually grant the reward.
+/// Great for flavor text or notifying players of hidden Choosable grants.
+/// </summary>
+[BlockMeta("Phase: Random Reveal Popup (r)", typeof(Phase_RandomRevealBlockUI))]
+public class Phase_RandomRevealBlock : TextmodBlock, IBlockWrapper
 {
     public ITextmodNode RewardData;
+    public ITextmodNode PayloadNode { get => RewardData; set => RewardData = value; }
     public override string CompileCore() => $"r{SafeCompile(RewardData)}";
 }
 
-public class Phase_SequenceBlock : TextmodBlock
+/// <summary>
+/// Sequence Phase (s): Creates complex dialogue/choice trees.
+/// Delimiters: '@1' separates options, '@2' separates the phases that follow the option.
+/// </summary>
+/// <example>ph.sMessage@1Btn1@2Act1@1Btn2@2Act2</example>
+[BlockMeta("Phase: Story Sequence (s)", typeof(Phase_SequenceBlockUI))]
+public class Phase_SequenceBlock : TextmodBlock, IBlockContainer
 {
     public string SequenceMessage = "";
-    public struct SequenceStep { public string ButtonText; public ITextmodNode Action; }
-    public List<SequenceStep> Steps = new List<SequenceStep>();
+    public List<ITextmodNode> Options = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Options; set => Options = value; }
+
+    public override string CompileCore() => $"s{SequenceMessage}{string.Join("", Options.Select(o => o?.Compile() ?? ""))}";
+}
+
+[BlockMeta("Sequence Option Fork", typeof(SequenceOptionBlockUI))]
+public class SequenceOptionBlock : TextmodBlock, IBlockContainer
+{
+    public string ButtonText = "Option";
+    public List<ITextmodNode> Actions = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Actions; set => Actions = value; }
 
     public override string CompileCore()
     {
-        string res = $"s{SequenceMessage}";
-        foreach (var step in Steps) res += $"@1{step.ButtonText}@2{SafeCompile(step.Action)}";
-        return res;
+        string acts = string.Join("", Actions.Select(a => $"@2{SafeCompile(a)}"));
+        return $"@1{ButtonText}{acts}";
     }
 }
 
+/// <summary>
+/// Trade Phase (t): Functions identically to a cursed chest.
+/// Offers a trade where both rewards are accepted or declined together. Delimiter: '@3'.
+/// </summary>
+/// <example>ph.tr1~4~i@3r-1~1~m (4 random T1 items for 1 random T-1 curse)</example>
+[BlockMeta("Phase: Cursed Chest Trade (t)", typeof(Phase_TradeBlockUI))]
 public class Phase_TradeBlock : TextmodBlock
 {
     public ITextmodNode Item1;
@@ -1104,6 +1860,11 @@ public class Phase_TradeBlock : TextmodBlock
     public override string CompileCore() => $"t{SafeCompile(Item1)}@3{SafeCompile(Item2)}";
 }
 
+/// <summary>
+/// Phase Generator Transform Phase (g): Quickly generates base-game choice screens.
+/// 'gh' = Hero Levelup, 'gi' = Item screen. Can be nested inside Sequence or Linked phases.
+/// </summary>
+[BlockMeta("Phase: Generate Screen (g)", typeof(Phase_GenerateScreenBlockUI))]
 public class Phase_GenerateScreenBlock : TextmodBlock
 {
     public enum ScreenType { LevelUp = 'h', Item = 'i' }
@@ -1111,17 +1872,28 @@ public class Phase_GenerateScreenBlock : TextmodBlock
     public override string CompileCore() => $"g{(char)Type}";
 }
 
+/// <summary>
+/// Boolean Phase 2 (z): Identical logic to Boolean 1, but uses different delimiters 
+/// allowing it to be chained alongside SeqPhase or Boolean 1 without collision.
+/// Delimiters: '@6' for threshold, '@7' for branches.
+/// </summary>
+[BlockMeta("Phase: Boolean Check 2 (z)", typeof(Phase_Boolean2BlockUI))]
 public class Phase_Boolean2Block : TextmodBlock
 {
     public string VariableName = "";
     public int Threshold = 1;
     public ITextmodNode TrueBranch;
     public ITextmodNode FalseBranch;
-
-    public override string CompileCore()
-        => $"z{VariableName}@6{Threshold}@7{SafeCompile(TrueBranch)}@7{SafeCompile(FalseBranch)}";
+    public override string CompileCore() => $"z{VariableName}@6{Threshold}@7{SafeCompile(TrueBranch)}@7{SafeCompile(FalseBranch)}";
 }
 
+/// <summary>
+/// Static / Event Phases (0,1,3,d,6,e).
+/// Includes combat phases (Rolling, Targeting, Damage) which can produce strange results if modified.
+/// Notably includes '6' (ResetPhase) which resets Cursed mode (de-levels heroes, removes items),
+/// and 'e' (RunEndPhase) which immediately ends the run.
+/// </summary>
+[BlockMeta("Phase: Static (0,1,3,d,6,e)", typeof(Phase_StaticBlockUI))]
 public class Phase_StaticBlock : TextmodBlock
 {
     public enum StaticPhase { PlayerRolling = '0', Targeting = '1', EnemyRolling = '3', Damage = 'd', Reset = '6', RunEnd = 'e' }
@@ -1129,6 +1901,13 @@ public class Phase_StaticBlock : TextmodBlock
     public override string CompileCore() => $"{(char)Phase}";
 }
 
+/// <summary>
+/// Standard Reward Tags: Grants a specific entity directly.
+/// 'i' = Item, 'm' = Modifier, 'g' = Add Hero, 'l' = Levelup Hero.
+/// Note: 'l' targets an existing hero (defaults to topmost if no match), 'g' generates a new one.
+/// </summary>
+/// <example>ch.mBone Math (Adds Bone Math mod), ph.!gRuffian (Adds Ruffian hero)</example>
+[BlockMeta("Reward: Standard (i/m/g/l)", typeof(Reward_StandardBlockUI))]
 public class Reward_StandardBlock : TextmodBlock
 {
     public enum RewardType { Item = 'i', Modifier = 'm', Hero = 'g', LevelUp = 'l' }
@@ -1137,6 +1916,14 @@ public class Reward_StandardBlock : TextmodBlock
     public override string CompileCore() => $"{(char)Type}{TargetEntity}";
 }
 
+/// <summary>
+/// Random Reward Tags (r / q).
+/// 'r' selects a random reward from a specific tier. Syntax: r[Tier]~[Amount]~[Tag].
+/// 'q' selects a random reward from a tier range. Syntax: q[Min]~[Max]~[Amount]~[Tag].
+/// Note: Heroes and Levelups usually force Amount to 1.
+/// </summary>
+/// <example>ch.r1~2~m (2 random Tier 1 modifiers)</example>
+[BlockMeta("Reward: Random Reward (r/q)", typeof(Reward_RandomBlockUI))]
 public class Reward_RandomBlock : TextmodBlock
 {
     public int MinTier = 1;
@@ -1151,18 +1938,39 @@ public class Reward_RandomBlock : TextmodBlock
     }
 }
 
-public class Reward_ChoiceBlock : TextmodBlock
+/// <summary>
+/// Or Tag (o): Grants a random reward chosen from a custom list.
+/// Extremely useful for custom modes requiring controlled randomness. Delimiter: '@4'.
+/// </summary>
+/// <example>ch.omadd.Bones@4mWurst</example>
+[BlockMeta("Reward: Random Choice (o)", typeof(Reward_ChoiceBlock))]
+public class Reward_ChoiceBlock : TextmodBlock, IBlockContainer
 {
     public List<ITextmodNode> Options = new List<ITextmodNode>();
+    public List<ITextmodNode> ChildNodes { get => Options; set => Options = value; }
     public override string CompileCore() => $"o{string.Join("@4", Options.Select(SafeCompile))}";
 }
 
+/// <summary>
+/// Enum Tag (e): Grants "random keyword on X sides" items.
+/// RandoKeywordT1Item = Rightmost.
+/// RandoKeywordT5Item = Left, Top/Bot, or Right 3.
+/// RandoKeywordT7Item = All sides.
+/// </summary>
+[BlockMeta("Reward: Enum Item (e)", typeof(Reward_EnumItemBlockUI))]
 public class Reward_EnumItemBlock : TextmodBlock
 {
     public string EnumName = "RandoKeywordT1Item";
     public override string CompileCore() => $"e{EnumName}";
 }
 
+/// <summary>
+/// Value Tag (v): Adds or subtracts from a custom hidden variable.
+/// Can be viewed later using [val(VariableName)] in a Message phase, 
+/// or evaluated using Boolean phases (ph.b / ph.z).
+/// </summary>
+/// <example>ch.vGoldV50 (Adds 50 Gold)</example>
+[BlockMeta("Reward: Modify Variable (v)", typeof(Reward_ValueModifyBlockUI))]
 public class Reward_ValueModifyBlock : TextmodBlock
 {
     public string VariableName = "";
@@ -1170,6 +1978,13 @@ public class Reward_ValueModifyBlock : TextmodBlock
     public override string CompileCore() => $"v{VariableName}V{ValueToAdd}";
 }
 
+/// <summary>
+/// Replace Tag (p/pm): Only works for replacing Modifiers!
+/// Removes the targeted modifier (if the player has it) and grants a new reward.
+/// Used commonly in Curse modes to "upgrade" curses.
+/// </summary>
+/// <example>ph.!pmWurst~gPaladin (Removes Wurst curse, grants Paladin hero)</example>
+[BlockMeta("Reward: Replace Reward (p)", typeof(Reward_ReplaceBlockUI))]
 public class Reward_ReplaceBlock : TextmodBlock
 {
     public bool IsModifierReplacement = false;
@@ -1183,125 +1998,94 @@ public class Reward_ReplaceBlock : TextmodBlock
     }
 }
 
+/// <summary>
+/// Skip Tag (s): Adds the option to do nothing and dismiss a prompt.
+/// Highly useful for populating "Decline" or "Leave" options in Choice phases (@3).
+/// </summary>
+[BlockMeta("Reward: Skip (s)", typeof(Reward_SkipBlockUI))]
 public class Reward_SkipBlock : TextmodBlock
 {
     public override string CompileCore() => "s";
 }
+
 #endregion
 
-// =====================================================================
-// BESPOKE UI NODES (Based on your Mod Structure Context)
-// =====================================================================
+#region UI Definitions
 
-public class GlobalCommandBlockUI : UIBlockNode
+// =====================================================================
+// 1. DEFAULT & WRAPPER UIs
+// =====================================================================
+public class DefaultBlockUI : UIBlockNode
 {
-    private GlobalCommandBlock _node;
-    private readonly string[] _globalOptions = System.Enum.GetNames(typeof(GlobalCommandBlock.GlobalType));
+    private ITextmodNode _rawNode;
+    public DefaultBlockUI(ITextmodNode node) : base(node) { _rawNode = node; }
 
-    public GlobalCommandBlockUI(GlobalCommandBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle()
+    {
+        if (_rawNode == null) return "GENERIC BLOCK";
+        string typeName = _rawNode.GetType().Name;
+        if (typeName.EndsWith("Block")) typeName = typeName.Substring(0, typeName.Length - 5);
+        return typeName.ToUpper();
+    }
 
-    public override string GetBlockTitle() => "GLOBAL COMMAND";
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblWIP", "<i>Specific properties managed via nested workspace drops.</i>", 1f))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r) { }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r) { }
+}
+
+public class FloorConditionBlockUI : UIBlockNode
+{
+    private FloorConditionBlock _node;
+    private readonly string[] _typeOptions = { "Single Floor", "Range", "Every X Floors" };
+
+    public FloorConditionBlockUI(FloorConditionBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "FLOOR CONDITION WRAPPER";
 
     protected override List<GridRowSpec> GetSpecificRowSpecs()
     {
         return new List<GridRowSpec>
         {
             new GridRowSpec(
-                GridCellSpec.CreateLabel("LblCmd", "Command Type:", 0.35f),
-                GridCellSpec.CreateDropdown("DropGlobalCommand", "", 0.65f, _globalOptions, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropGlobalCommand", out var drop))
-        {
-            drop.onValueChanged.AddListener(val => _node.Type = (GlobalCommandBlock.GlobalType)val);
-        }
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropGlobalCommand", out var drop))
-        {
-            drop.value = (int)_node.Type;
-        }
-    }
-}
-
-public class FightBlockUI : UIBlockNode
-{
-    private FightBlock _node;
-
-    public FightBlockUI(FightBlock node) : base(node) { _node = node; }
-
-    public override string GetBlockTitle() => "FIGHT ENCOUNTER OVERRIDE";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
+                GridCellSpec.CreateLabel("LblType", "Condition Type:", 0.4f),
+                GridCellSpec.CreateDropdown("DropType", "", 0.6f, _typeOptions, null)
+            ),
             new GridRowSpec(
-                GridCellSpec.CreateLabel("LblMonsters", "Monsters (+ split):", 0.35f),
-                GridCellSpec.CreateInput("InpMonsters", "e.g. Goblin+Orc", 0.65f, null)
-            )
+                GridCellSpec.CreateLabel("LblStart", "Start/Floor:", 0.25f),
+                GridCellSpec.CreateInput("InpStart", "1", 0.25f, null),
+                GridCellSpec.CreateLabel("LblEnd", "End/Interval:", 0.25f),
+                GridCellSpec.CreateInput("InpEnd", "5", 0.25f, null)
+            ),
+            new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop a modifier or phase inside this wrapper.</i>", 1f))
         };
     }
 
     protected override void BindSpecificUI(RectTransform container, GridReferences refs)
     {
-        if (refs.Inputs.TryGetValue("InpMonsters", out var inp))
-            inp.onValueChanged.AddListener(v => _node.Monsters = v.Split('+').Select(s => s.Trim()).ToList());
+        if (refs.Dropdowns.TryGetValue("DropType", out var drop))
+            drop.onValueChanged.AddListener(val => _node.Type = (FloorConditionBlock.ConditionType)val);
+
+        if (refs.Inputs.TryGetValue("InpStart", out var iStart))
+            iStart.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.StartFloor = i; });
+
+        if (refs.Inputs.TryGetValue("InpEnd", out var iEnd))
+            iEnd.onValueChanged.AddListener(v => {
+                if (int.TryParse(v, out int i)) { _node.EndFloor = i; _node.Interval = i; }
+            });
     }
 
     protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
     {
-        if (refs.Inputs.TryGetValue("InpMonsters", out var inp))
-            inp.text = string.Join("+", _node.Monsters);
+        if (refs.Dropdowns.TryGetValue("DropType", out var drop)) drop.value = (int)_node.Type;
+        if (refs.Inputs.TryGetValue("InpStart", out var iStart)) iStart.text = _node.StartFloor.ToString();
+        if (refs.Inputs.TryGetValue("InpEnd", out var iEnd)) iEnd.text = _node.Type == FloorConditionBlock.ConditionType.EveryX ? _node.Interval.ToString() : _node.EndFloor.ToString();
     }
 }
-
-public class PartyBlockUI : UIBlockNode
-{
-    private PartyBlock _node;
-
-    public PartyBlockUI(PartyBlock node) : base(node) { _node = node; }
-
-    public override string GetBlockTitle() => "SET PARTY OVERRIDE";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblHeroes", "Heroes (+ split):", 0.35f),
-                GridCellSpec.CreateInput("InpHeroes", "e.g. Thief+Fighter", 0.65f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpHeroes", out var inp))
-            inp.onValueChanged.AddListener(v => _node.Heroes = v.Split('+').Select(s => s.Trim()).ToList());
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpHeroes", out var inp))
-            inp.text = string.Join("+", _node.Heroes);
-    }
-}
-
-// =====================================================================
-// CONTEXT & PHASE WRAPPERS
-// =====================================================================
 
 public class ContextWrapperBlockUI : UIBlockNode
 {
     private ContextWrapperBlock _node;
-
     public ContextWrapperBlockUI(ContextWrapperBlock node) : base(node) { _node = node; }
 
     public override string GetBlockTitle()
@@ -1319,7 +2103,6 @@ public class ContextWrapperBlockUI : UIBlockNode
     protected override List<GridRowSpec> GetSpecificRowSpecs()
     {
         var rows = new List<GridRowSpec>();
-
         if (_node.Prefix == "phi" || _node.Prefix == "phmp")
         {
             rows.Add(new GridRowSpec(
@@ -1329,9 +2112,8 @@ public class ContextWrapperBlockUI : UIBlockNode
         }
         else
         {
-            rows.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop a Reward Tag block inside this wrapper in the workspace.</i>", 1f)));
+            rows.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop a Reward Tag block inside this wrapper.</i>", 1f)));
         }
-
         return rows;
     }
 
@@ -1340,7 +2122,6 @@ public class ContextWrapperBlockUI : UIBlockNode
         if (refs.Inputs.TryGetValue("InpTarget", out var inpTarget))
             inpTarget.onValueChanged.AddListener(v => _node.Target = v);
     }
-
     protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
     {
         if (refs.Inputs.TryGetValue("InpTarget", out var inpTarget))
@@ -1348,96 +2129,525 @@ public class ContextWrapperBlockUI : UIBlockNode
     }
 }
 
-public class Phase_SimpleChoiceBlockUI : UIBlockNode
+// =====================================================================
+// 2. COMMANDS & OVERRIDES UIs
+// =====================================================================
+
+public class GlobalCommandBlockUI : UIBlockNode
 {
-    private Phase_SimpleChoiceBlock _node;
+    private GlobalCommandBlock _node;
+    private readonly string[] _globalOptions = Enum.GetNames(typeof(GlobalCommandBlock.GlobalType));
 
-    public Phase_SimpleChoiceBlockUI(Phase_SimpleChoiceBlock node) : base(node) { _node = node; }
+    public GlobalCommandBlockUI(GlobalCommandBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "GLOBAL COMMAND";
 
-    public override string GetBlockTitle() => "SIMPLE CHOICE PHASE (ph.!)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblCmd", "Command Type:", 0.35f),
+            GridCellSpec.CreateDropdown("DropGlobalCommand", "", 0.65f, _globalOptions, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
     {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblTitleStr", "Screen Title (Optional):", 0.4f),
-                GridCellSpec.CreateInput("InpTitle", "e.g. Choose a Curse!", 0.6f, null)
-            ),
-            new GridRowSpec(GridCellSpec.CreateLabel("LblChildInfo", "<i>Drop Reward options inside this block to populate the choice screen (@3).</i>", 1f))
-        };
+        if (r.Dropdowns.TryGetValue("DropGlobalCommand", out var drop)) drop.onValueChanged.AddListener(val => _node.Type = (GlobalCommandBlock.GlobalType)val);
     }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
     {
-        if (refs.Inputs.TryGetValue("InpTitle", out var inp))
-            inp.onValueChanged.AddListener(v => _node.Title = v);
+        if (r.Dropdowns.TryGetValue("DropGlobalCommand", out var drop)) drop.value = (int)_node.Type;
     }
+}
 
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
+public class FightBlockUI : UIBlockNode
+{
+    private FightBlock _node;
+    public FightBlockUI(FightBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "FIGHT ENCOUNTER OVERRIDE";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblMonsters", "Monsters (+ split):", 0.35f),
+            GridCellSpec.CreateInput("InpMonsters", "e.g. Goblin+Orc", 0.65f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
     {
-        if (refs.Inputs.TryGetValue("InpTitle", out var inp))
-            inp.text = _node.Title;
+        if (r.Inputs.TryGetValue("InpMonsters", out var inp)) inp.onValueChanged.AddListener(v => _node.Monsters = v.Split('+').Select(s => s.Trim()).ToList());
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpMonsters", out var inp)) inp.text = string.Join("+", _node.Monsters);
+    }
+}
+
+public class PartyBlockUI : UIBlockNode
+{
+    private PartyBlock _node;
+    public PartyBlockUI(PartyBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "SET PARTY OVERRIDE";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblHeroes", "Heroes (+ split):", 0.35f),
+            GridCellSpec.CreateInput("InpHeroes", "e.g. Thief+Fighter", 0.65f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpHeroes", out var inp)) inp.onValueChanged.AddListener(v => _node.Heroes = v.Split('+').Select(s => s.Trim()).ToList());
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpHeroes", out var inp)) inp.text = string.Join("+", _node.Heroes);
+    }
+}
+
+public class PoolBlockUI : UIBlockNode
+{
+    private PoolBlock _node;
+    public PoolBlockUI(PoolBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => $"{_node.Type.ToString().ToUpper()} POOL";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblEnt", "Entities (+ split):", 0.35f),
+            GridCellSpec.CreateInput("InpEntities", "", 0.65f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpEntities", out var inpEnt)) inpEnt.onValueChanged.AddListener(v => _node.Entities = v.Split('+').Select(s => s.Trim()).ToList());
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpEntities", out var inpEnt)) inpEnt.text = string.Join("+", _node.Entities);
     }
 }
 
 // =====================================================================
-// REWARD TAGS
+// 3. PHASE UIs
+// =====================================================================
+
+public class Phase_SimpleChoiceBlockUI : UIBlockNode
+{
+    private Phase_SimpleChoiceBlock _node;
+    public Phase_SimpleChoiceBlockUI(Phase_SimpleChoiceBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "SIMPLE CHOICE PHASE (!)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblTitleStr", "Screen Title (Optional):", 0.4f),
+            GridCellSpec.CreateInput("InpTitle", "e.g. Choose a Curse!", 0.6f, null)
+        ),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblChildInfo", "<i>Drop Reward options inside to populate choices (@3).</i>", 1f))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpTitle", out var inp)) inp.onValueChanged.AddListener(v => _node.Title = v);
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpTitle", out var inp)) inp.text = _node.Title;
+    }
+}
+
+public class Phase_MessageBlockUI : UIBlockNode
+{
+    private Phase_MessageBlock _node;
+    public Phase_MessageBlockUI(Phase_MessageBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "MESSAGE PHASE (4)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblMsg", "Message Content:", 0.35f),
+            GridCellSpec.CreateInput("InpMsg", "e.g. Hello World", 0.65f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblBtn", "Button Text:", 0.35f),
+            GridCellSpec.CreateInput("InpBtn", "Ok", 0.65f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpMsg", out var inpMsg)) inpMsg.onValueChanged.AddListener(v => _node.Message = v);
+        if (r.Inputs.TryGetValue("InpBtn", out var inpBtn)) inpBtn.onValueChanged.AddListener(v => _node.ButtonText = v);
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpMsg", out var inpMsg)) inpMsg.text = _node.Message;
+        if (r.Inputs.TryGetValue("InpBtn", out var inpBtn)) inpBtn.text = _node.ButtonText;
+    }
+}
+
+public class Phase_HeroChangeBlockUI : UIBlockNode
+{
+    private Phase_HeroChangeBlock _node;
+    private readonly string[] _typeOptions = { "Generated Hero (1)", "Random Class (0)" };
+    public Phase_HeroChangeBlockUI(Phase_HeroChangeBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "HERO CHANGE PHASE (5)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblPos", "Hero Position Index:", 0.5f),
+            GridCellSpec.CreateInput("InpPos", "e.g. 0 for top", 0.5f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblType", "Change Type:", 0.5f),
+            GridCellSpec.CreateDropdown("DropType", "", 0.5f, _typeOptions, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpPos", out var inp)) inp.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.HeroPositionIndex = i; });
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.onValueChanged.AddListener(val => _node.IsRandomClass = (val == 1));
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpPos", out var inp)) inp.text = _node.HeroPositionIndex.ToString();
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.value = _node.IsRandomClass ? 1 : 0;
+    }
+}
+
+public class Phase_ItemCombineBlockUI : UIBlockNode
+{
+    private Phase_ItemCombineBlock _node;
+    private readonly string[] _rules = { "2nd Highest -> Tier 3s", "Tier 0-3 -> Single Item" };
+    public Phase_ItemCombineBlockUI(Phase_ItemCombineBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "ITEM COMBINE PHASE (7)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblRule", "Combine Rule:", 0.4f), GridCellSpec.CreateDropdown("DropRule", "", 0.6f, _rules, null))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropRule", out var drop)) drop.onValueChanged.AddListener(val => _node.Rule = (Phase_ItemCombineBlock.CombineRule)val);
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropRule", out var drop)) drop.value = (int)_node.Rule;
+    }
+}
+
+public class Phase_PositionSwapBlockUI : UIBlockNode
+{
+    private Phase_PositionSwapBlock _node;
+    public Phase_PositionSwapBlockUI(Phase_PositionSwapBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "POSITION SWAP PHASE (8)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblA", "Hero Index A:", 0.5f), GridCellSpec.CreateInput("InpA", "0", 0.5f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblB", "Hero Index B:", 0.5f), GridCellSpec.CreateInput("InpB", "1", 0.5f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpA", out var inpA)) inpA.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.IndexA = i; });
+        if (r.Inputs.TryGetValue("InpB", out var inpB)) inpB.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.IndexB = i; });
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpA", out var inpA)) inpA.text = _node.IndexA.ToString();
+        if (r.Inputs.TryGetValue("InpB", out var inpB)) inpB.text = _node.IndexB.ToString();
+    }
+}
+
+public class Phase_ChallengeBlockUI : UIBlockNode
+{
+    private Phase_ChallengeBlock _node;
+    public Phase_ChallengeBlockUI(Phase_ChallengeBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "CHALLENGE PHASE (9)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblMon", "Extra Monsters (+ split):", 0.4f), GridCellSpec.CreateInput("InpMon", "e.g. Militia+Militia", 0.6f, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop the Reward inside this block.</i>", 1f))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpMon", out var inp)) inp.onValueChanged.AddListener(v => _node.ExtraMonsters = v.Split('+').Select(s => s.Trim()).ToList());
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpMon", out var inp)) inp.text = string.Join("+", _node.ExtraMonsters);
+    }
+}
+
+public class Phase_Boolean1BlockUI : UIBlockNode
+{
+    private Phase_Boolean1Block _node;
+    public Phase_Boolean1BlockUI(Phase_Boolean1Block node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "BOOLEAN PHASE (b)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblVar", "Variable to Check:", 0.4f),
+            GridCellSpec.CreateInput("InpVar", "e.g. Seed", 0.6f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblThresh", "Threshold (>=):", 0.4f),
+            GridCellSpec.CreateInput("InpThresh", "1", 0.6f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblTrue", "True Branch (Raw):", 0.4f),
+            GridCellSpec.CreateInput("InpTrue", "e.g. !m1.fight.Boar", 0.6f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblFalse", "False Branch (Raw):", 0.4f),
+            GridCellSpec.CreateInput("InpFalse", "e.g. !s", 0.6f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpVar", out var iVar)) iVar.onValueChanged.AddListener(v => _node.VariableName = v);
+        if (r.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.Threshold = i; });
+        if (r.Inputs.TryGetValue("InpTrue", out var iTrue)) iTrue.onValueChanged.AddListener(v => _node.TrueBranch = new RawTextNode(v));
+        if (r.Inputs.TryGetValue("InpFalse", out var iFalse)) iFalse.onValueChanged.AddListener(v => _node.FalseBranch = new RawTextNode(v));
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpVar", out var iVar)) iVar.text = _node.VariableName;
+        if (r.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.text = _node.Threshold.ToString();
+        if (r.Inputs.TryGetValue("InpTrue", out var iTrue)) iTrue.text = (_node.TrueBranch as RawTextNode)?.Text ?? "";
+        if (r.Inputs.TryGetValue("InpFalse", out var iFalse)) iFalse.text = (_node.FalseBranch as RawTextNode)?.Text ?? "";
+    }
+}
+
+public class Phase_Boolean2BlockUI : UIBlockNode
+{
+    private Phase_Boolean2Block _node;
+    public Phase_Boolean2BlockUI(Phase_Boolean2Block node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "BOOLEAN PHASE 2 (z)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblVar", "Variable to Check:", 0.4f), GridCellSpec.CreateInput("InpVar", "e.g. gold", 0.6f, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblThresh", "Threshold (>=):", 0.4f), GridCellSpec.CreateInput("InpThresh", "1", 0.6f, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblTrue", "True Branch (Raw):", 0.4f), GridCellSpec.CreateInput("InpTrue", "e.g. !vgoldV-400", 0.6f, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblFalse", "False Branch (Raw):", 0.4f), GridCellSpec.CreateInput("InpFalse", "e.g. 4You can't afford that!", 0.6f, null))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpVar", out var iVar)) iVar.onValueChanged.AddListener(v => _node.VariableName = v);
+        if (r.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.Threshold = i; });
+        if (r.Inputs.TryGetValue("InpTrue", out var iTrue)) iTrue.onValueChanged.AddListener(v => _node.TrueBranch = new RawTextNode(v));
+        if (r.Inputs.TryGetValue("InpFalse", out var iFalse)) iFalse.onValueChanged.AddListener(v => _node.FalseBranch = new RawTextNode(v));
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpVar", out var iVar)) iVar.text = _node.VariableName;
+        if (r.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.text = _node.Threshold.ToString();
+        if (r.Inputs.TryGetValue("InpTrue", out var iTrue)) iTrue.text = (_node.TrueBranch as RawTextNode)?.Text ?? "";
+        if (r.Inputs.TryGetValue("InpFalse", out var iFalse)) iFalse.text = (_node.FalseBranch as RawTextNode)?.Text ?? "";
+    }
+}
+
+public class Phase_ChoiceBlockUI : UIBlockNode
+{
+    private Phase_ChoiceBlock _node;
+    private readonly string[] _types = { "PointBuy", "Number", "UpToNumber", "Optional" };
+    public Phase_ChoiceBlockUI(Phase_ChoiceBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "CHOICE PHASE (c)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblType", "Choice Type:", 0.4f), GridCellSpec.CreateDropdown("DropType", "", 0.6f, _types, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblNum", "Number/Limit:", 0.4f), GridCellSpec.CreateInput("InpNum", "1", 0.6f, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblTitle", "Title (Optional):", 0.4f), GridCellSpec.CreateInput("InpTitle", "", 0.6f, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Reward tags inside to populate choices (@3)</i>", 1f))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.onValueChanged.AddListener(v => _node.ChoiceType = _types[v]);
+        if (r.Inputs.TryGetValue("InpNum", out var inpNum)) inpNum.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.NumChoices = i; });
+        if (r.Inputs.TryGetValue("InpTitle", out var inpT)) inpT.onValueChanged.AddListener(v => _node.Title = v);
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.value = Array.IndexOf(_types, _node.ChoiceType);
+        if (r.Inputs.TryGetValue("InpNum", out var inpNum)) inpNum.text = _node.NumChoices.ToString();
+        if (r.Inputs.TryGetValue("InpTitle", out var inpT)) inpT.text = _node.Title;
+    }
+}
+
+public class Phase_TradeBlockUI : UIBlockNode
+{
+    private Phase_TradeBlock _node;
+    public Phase_TradeBlockUI(Phase_TradeBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "TRADE / CURSED CHEST (t)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblItem1", "Reward 1 (Raw):", 0.4f), GridCellSpec.CreateInput("InpItem1", "e.g. r1~4~i", 0.6f, null)),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblItem2", "Reward 2 (Raw):", 0.4f), GridCellSpec.CreateInput("InpItem2", "e.g. r-1~1~m", 0.6f, null))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpItem1", out var i1)) i1.onValueChanged.AddListener(v => _node.Item1 = new RawTextNode(v));
+        if (r.Inputs.TryGetValue("InpItem2", out var i2)) i2.onValueChanged.AddListener(v => _node.Item2 = new RawTextNode(v));
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpItem1", out var i1)) i1.text = (_node.Item1 as RawTextNode)?.Text ?? "";
+        if (r.Inputs.TryGetValue("InpItem2", out var i2)) i2.text = (_node.Item2 as RawTextNode)?.Text ?? "";
+    }
+}
+
+public class Phase_GenerateScreenBlockUI : UIBlockNode
+{
+    private Phase_GenerateScreenBlock _node;
+    private readonly string[] _options = { "Item Screen (i)", "LevelUp Screen (h)" };
+    public Phase_GenerateScreenBlockUI(Phase_GenerateScreenBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "GENERATE SCREEN (g)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblType", "Screen Type:", 0.4f), GridCellSpec.CreateDropdown("DropType", "", 0.6f, _options, null))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.onValueChanged.AddListener(v => _node.Type = v == 0 ? Phase_GenerateScreenBlock.ScreenType.Item : Phase_GenerateScreenBlock.ScreenType.LevelUp);
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.value = _node.Type == Phase_GenerateScreenBlock.ScreenType.Item ? 0 : 1;
+    }
+}
+
+public class Phase_StaticBlockUI : UIBlockNode
+{
+    private Phase_StaticBlock _node;
+    private readonly string[] _options = Enum.GetNames(typeof(Phase_StaticBlock.StaticPhase));
+    public Phase_StaticBlockUI(Phase_StaticBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "STATIC / EVENT PHASE";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblType", "Phase Type:", 0.4f), GridCellSpec.CreateDropdown("DropType", "", 0.6f, _options, null))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.onValueChanged.AddListener(v => _node.Phase = (Phase_StaticBlock.StaticPhase)Enum.GetValues(typeof(Phase_StaticBlock.StaticPhase)).GetValue(v));
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Dropdowns.TryGetValue("DropType", out var drop)) drop.value = Array.IndexOf(Enum.GetValues(typeof(Phase_StaticBlock.StaticPhase)), _node.Phase);
+    }
+}
+
+public class Phase_SequenceBlockUI : UIBlockNode
+{
+    private Phase_SequenceBlock _node;
+    public Phase_SequenceBlockUI(Phase_SequenceBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "STORY SEQUENCE PHASE (s)";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblMsg", "Initial Message:", 0.35f),
+            GridCellSpec.CreateInput("InpMsg", _node.SequenceMessage, 0.65f, null)
+        ),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop 'Sequence Option Fork' blocks below to add buttons.</i>", 1f))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpMsg", out var inp)) inp.onValueChanged.AddListener(v => _node.SequenceMessage = v);
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpMsg", out var inp)) inp.text = _node.SequenceMessage;
+    }
+}
+
+public class SequenceOptionBlockUI : UIBlockNode
+{
+    private SequenceOptionBlock _node;
+    public SequenceOptionBlockUI(SequenceOptionBlock node) : base(node) { _node = node; }
+    public override string GetBlockTitle() => "SEQUENCE OPTION FORK";
+
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblBtn", "Button Text:", 0.35f),
+            GridCellSpec.CreateInput("InpBtn", _node.ButtonText, 0.65f, null)
+        ),
+        new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Actions for this button into this block.</i>", 1f))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpBtn", out var inp)) inp.onValueChanged.AddListener(v => _node.ButtonText = v);
+    }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
+    {
+        if (r.Inputs.TryGetValue("InpBtn", out var inp)) inp.text = _node.ButtonText;
+    }
+}
+
+// Container blocks requiring just info text
+public class Phase_LinkedBlockUI : UIBlockNode
+{
+    public Phase_LinkedBlockUI(Phase_LinkedBlock node) : base(node) { }
+    public override string GetBlockTitle() => "LINKED PHASES (l)";
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> { new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Phases inside to link them sequentially (@1)</i>", 1f)) };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r) { }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r) { }
+}
+
+public class Phase_LevelEndBlockUI : UIBlockNode
+{
+    public Phase_LevelEndBlockUI(Phase_LevelEndBlock node) : base(node) { }
+    public override string GetBlockTitle() => "LEVEL END PHASE (2)";
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> { new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Phases inside to attach them to the end screen</i>", 1f)) };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r) { }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r) { }
+}
+
+public class Phase_RandomRevealBlockUI : UIBlockNode
+{
+    public Phase_RandomRevealBlockUI(Phase_RandomRevealBlock node) : base(node) { }
+    public override string GetBlockTitle() => "RANDOM REVEAL POPUP (r)";
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> { new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop a Reward Tag inside this block.</i>", 1f)) };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r) { }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r) { }
+}
+
+// =====================================================================
+// 4. REWARD TAG UIs
 // =====================================================================
 
 public class Reward_StandardBlockUI : UIBlockNode
 {
     private Reward_StandardBlock _node;
     private readonly string[] _typeOptions = { "Item (i)", "Modifier (m)", "Hero (g)", "LevelUp (l)" };
-
     public Reward_StandardBlockUI(Reward_StandardBlock node) : base(node) { _node = node; }
-
     public override string GetBlockTitle() => "STANDARD REWARD TAG";
 
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblType", "Reward Type:", 0.35f),
+            GridCellSpec.CreateDropdown("DropRewardType", "", 0.65f, _typeOptions, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblTarget", "Entity Name:", 0.35f),
+            GridCellSpec.CreateInput("InpTarget", "e.g. Mana Jelly", 0.65f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
     {
-        return new List<GridRowSpec>
+        if (r.Dropdowns.TryGetValue("DropRewardType", out var drop))
         {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblType", "Reward Type:", 0.35f),
-                GridCellSpec.CreateDropdown("DropRewardType", "", 0.65f, _typeOptions, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblTarget", "Entity Name:", 0.35f),
-                GridCellSpec.CreateInput("InpTarget", "e.g. Mana Jelly", 0.65f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropRewardType", out var drop))
-        {
-            drop.onValueChanged.AddListener(val =>
-            {
+            drop.onValueChanged.AddListener(val => {
                 if (val == 0) _node.Type = Reward_StandardBlock.RewardType.Item;
                 else if (val == 1) _node.Type = Reward_StandardBlock.RewardType.Modifier;
                 else if (val == 2) _node.Type = Reward_StandardBlock.RewardType.Hero;
                 else if (val == 3) _node.Type = Reward_StandardBlock.RewardType.LevelUp;
             });
         }
-
-        if (refs.Inputs.TryGetValue("InpTarget", out var inp))
-            inp.onValueChanged.AddListener(v => _node.TargetEntity = v);
+        if (r.Inputs.TryGetValue("InpTarget", out var inp)) inp.onValueChanged.AddListener(v => _node.TargetEntity = v);
     }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
     {
-        if (refs.Dropdowns.TryGetValue("DropRewardType", out var drop))
+        if (r.Dropdowns.TryGetValue("DropRewardType", out var drop))
         {
             if (_node.Type == Reward_StandardBlock.RewardType.Item) drop.value = 0;
             else if (_node.Type == Reward_StandardBlock.RewardType.Modifier) drop.value = 1;
             else if (_node.Type == Reward_StandardBlock.RewardType.Hero) drop.value = 2;
             else if (_node.Type == Reward_StandardBlock.RewardType.LevelUp) drop.value = 3;
         }
-
-        if (refs.Inputs.TryGetValue("InpTarget", out var inp))
-            inp.text = _node.TargetEntity;
+        if (r.Inputs.TryGetValue("InpTarget", out var inp)) inp.text = _node.TargetEntity;
     }
 }
 
@@ -1445,49 +2655,35 @@ public class Reward_RandomBlockUI : UIBlockNode
 {
     private Reward_RandomBlock _node;
     private readonly string[] _flagOptions = { "Item (i)", "Modifier (m)", "Hero (g)", "LevelUp (l)" };
-
     public Reward_RandomBlockUI(Reward_RandomBlock node) : base(node) { _node = node; }
-
     public override string GetBlockTitle() => "RANDOM REWARD TAG (r/q)";
 
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblMin", "Min Tier:", 0.35f),
+            GridCellSpec.CreateInput("InpMin", "1", 0.65f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblMax", "Max Tier:", 0.35f),
+            GridCellSpec.CreateInput("InpMax", "1", 0.65f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblAmt", "Amount:", 0.35f),
+            GridCellSpec.CreateInput("InpAmt", "1", 0.65f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblFlag", "Target Type:", 0.35f),
+            GridCellSpec.CreateDropdown("DropFlag", "", 0.65f, _flagOptions, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
     {
-        return new List<GridRowSpec>
+        if (r.Inputs.TryGetValue("InpMin", out var inpMin)) inpMin.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.MinTier = i; });
+        if (r.Inputs.TryGetValue("InpMax", out var inpMax)) inpMax.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.MaxTier = i; });
+        if (r.Inputs.TryGetValue("InpAmt", out var inpAmt)) inpAmt.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.Amount = i; });
+        if (r.Dropdowns.TryGetValue("DropFlag", out var drop))
         {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblMin", "Min Tier:", 0.35f),
-                GridCellSpec.CreateInput("InpMin", "1", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblMax", "Max Tier:", 0.35f),
-                GridCellSpec.CreateInput("InpMax", "1", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblAmt", "Amount:", 0.35f),
-                GridCellSpec.CreateInput("InpAmt", "1", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblFlag", "Target Type:", 0.35f),
-                GridCellSpec.CreateDropdown("DropFlag", "", 0.65f, _flagOptions, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpMin", out var inpMin))
-            inpMin.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.MinTier = i; });
-
-        if (refs.Inputs.TryGetValue("InpMax", out var inpMax))
-            inpMax.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.MaxTier = i; });
-
-        if (refs.Inputs.TryGetValue("InpAmt", out var inpAmt))
-            inpAmt.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.Amount = i; });
-
-        if (refs.Dropdowns.TryGetValue("DropFlag", out var drop))
-        {
-            drop.onValueChanged.AddListener(val =>
-            {
+            drop.onValueChanged.AddListener(val => {
                 if (val == 0) _node.RewardTypeFlag = "i";
                 else if (val == 1) _node.RewardTypeFlag = "m";
                 else if (val == 2) _node.RewardTypeFlag = "g";
@@ -1495,14 +2691,12 @@ public class Reward_RandomBlockUI : UIBlockNode
             });
         }
     }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
     {
-        if (refs.Inputs.TryGetValue("InpMin", out var inpMin)) inpMin.text = _node.MinTier.ToString();
-        if (refs.Inputs.TryGetValue("InpMax", out var inpMax)) inpMax.text = _node.MaxTier.ToString();
-        if (refs.Inputs.TryGetValue("InpAmt", out var inpAmt)) inpAmt.text = _node.Amount.ToString();
-
-        if (refs.Dropdowns.TryGetValue("DropFlag", out var drop))
+        if (r.Inputs.TryGetValue("InpMin", out var inpMin)) inpMin.text = _node.MinTier.ToString();
+        if (r.Inputs.TryGetValue("InpMax", out var inpMax)) inpMax.text = _node.MaxTier.ToString();
+        if (r.Inputs.TryGetValue("InpAmt", out var inpAmt)) inpAmt.text = _node.Amount.ToString();
+        if (r.Dropdowns.TryGetValue("DropFlag", out var drop))
         {
             if (_node.RewardTypeFlag == "i") drop.value = 0;
             else if (_node.RewardTypeFlag == "m") drop.value = 1;
@@ -1516,613 +2710,100 @@ public class Reward_EnumItemBlockUI : UIBlockNode
 {
     private Reward_EnumItemBlock _node;
     private readonly string[] _enumOptions = { "RandoKeywordT1Item", "RandoKeywordT5Item", "RandoKeywordT7Item" };
-
     public Reward_EnumItemBlockUI(Reward_EnumItemBlock node) : base(node) { _node = node; }
-
     public override string GetBlockTitle() => "ENUM ITEM TAG (e)";
 
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(GridCellSpec.CreateLabel("LblEnum", "Enum Type:", 0.35f), GridCellSpec.CreateDropdown("DropEnum", "", 0.65f, _enumOptions, null))
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
     {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblEnum", "Enum Type:", 0.35f),
-                GridCellSpec.CreateDropdown("DropEnum", "", 0.65f, _enumOptions, null)
-            )
-        };
+        if (r.Dropdowns.TryGetValue("DropEnum", out var drop)) drop.onValueChanged.AddListener(val => _node.EnumName = _enumOptions[val]);
     }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
     {
-        if (refs.Dropdowns.TryGetValue("DropEnum", out var drop))
-            drop.onValueChanged.AddListener(val => _node.EnumName = _enumOptions[val]);
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropEnum", out var drop))
-            drop.value = System.Array.IndexOf(_enumOptions, _node.EnumName);
+        if (r.Dropdowns.TryGetValue("DropEnum", out var drop)) drop.value = Array.IndexOf(_enumOptions, _node.EnumName);
     }
 }
 
 public class Reward_ValueModifyBlockUI : UIBlockNode
 {
     private Reward_ValueModifyBlock _node;
-
     public Reward_ValueModifyBlockUI(Reward_ValueModifyBlock node) : base(node) { _node = node; }
-
     public override string GetBlockTitle() => "MODIFY VARIABLE TAG (v)";
 
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblVar", "Variable Name:", 0.4f),
+            GridCellSpec.CreateInput("InpVar", "e.g. Gold", 0.6f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblVal", "Value Added (V):", 0.4f),
+            GridCellSpec.CreateInput("InpVal", "e.g. 50", 0.6f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
     {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblVar", "Variable Name:", 0.4f),
-                GridCellSpec.CreateInput("InpVar", "e.g. Gold", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblVal", "Value Added (V):", 0.4f),
-                GridCellSpec.CreateInput("InpVal", "e.g. 50", 0.6f, null)
-            )
-        };
+        if (r.Inputs.TryGetValue("InpVar", out var inpVar)) inpVar.onValueChanged.AddListener(v => _node.VariableName = v);
+        if (r.Inputs.TryGetValue("InpVal", out var inpVal)) inpVal.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.ValueToAdd = i; });
     }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
     {
-        if (refs.Inputs.TryGetValue("InpVar", out var inpVar))
-            inpVar.onValueChanged.AddListener(v => _node.VariableName = v);
-
-        if (refs.Inputs.TryGetValue("InpVal", out var inpVal))
-            inpVal.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.ValueToAdd = i; });
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpVar", out var inpVar)) inpVar.text = _node.VariableName;
-        if (refs.Inputs.TryGetValue("InpVal", out var inpVal)) inpVal.text = _node.ValueToAdd.ToString();
+        if (r.Inputs.TryGetValue("InpVar", out var inpVar)) inpVar.text = _node.VariableName;
+        if (r.Inputs.TryGetValue("InpVal", out var inpVal)) inpVal.text = _node.ValueToAdd.ToString();
     }
 }
 
 public class Reward_ReplaceBlockUI : UIBlockNode
 {
     private Reward_ReplaceBlock _node;
-
     public Reward_ReplaceBlockUI(Reward_ReplaceBlock node) : base(node) { _node = node; }
-
     public override string GetBlockTitle() => "REPLACE TAG (p)";
 
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> {
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblModFlag", "Is Modifier Removal (pm):", 0.7f),
+            GridCellSpec.CreateToggle("TglModFlag", "", 0.3f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblTarget", "Target to Remove:", 0.35f),
+            GridCellSpec.CreateInput("InpTarget", "e.g. Wurst", 0.65f, null)
+        ),
+        new GridRowSpec(
+            GridCellSpec.CreateLabel("LblNew", "New Reward (Raw):", 0.35f),
+            GridCellSpec.CreateInput("InpNew", "e.g. gPaladin", 0.65f, null)
+        )
+    };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r)
     {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblModFlag", "Is Modifier Removal (pm):", 0.7f),
-                GridCellSpec.CreateToggle("TglModFlag", "", 0.3f, null) // Assuming UI Gen supports Toggle, else use Dropdown
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblTarget", "Target to Remove:", 0.35f),
-                GridCellSpec.CreateInput("InpTarget", "e.g. Wurst", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblNew", "New Reward (Raw):", 0.35f),
-                GridCellSpec.CreateInput("InpNew", "e.g. gPaladin", 0.65f, null)
-            )
-        };
+        if (r.Toggles != null && r.Toggles.TryGetValue("TglModFlag", out var tgl)) tgl.onValueChanged.AddListener(v => _node.IsModifierReplacement = v);
+        if (r.Inputs.TryGetValue("InpTarget", out var inpTarget)) inpTarget.onValueChanged.AddListener(v => _node.TargetToReplace = v);
+        if (r.Inputs.TryGetValue("InpNew", out var inpNew)) inpNew.onValueChanged.AddListener(v => _node.NewValue = v);
     }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r)
     {
-        // Fallback to text inputs parsing bools if Toggles aren't in your FullScreenUIGenerator yet
-        if (refs.Toggles != null && refs.Toggles.TryGetValue("TglModFlag", out var tgl))
-            tgl.onValueChanged.AddListener(v => _node.IsModifierReplacement = v);
-
-        if (refs.Inputs.TryGetValue("InpTarget", out var inpTarget))
-            inpTarget.onValueChanged.AddListener(v => _node.TargetToReplace = v);
-
-        if (refs.Inputs.TryGetValue("InpNew", out var inpNew))
-            inpNew.onValueChanged.AddListener(v => _node.NewValue = v);
+        if (r.Toggles != null && r.Toggles.TryGetValue("TglModFlag", out var tgl)) tgl.isOn = _node.IsModifierReplacement;
+        if (r.Inputs.TryGetValue("InpTarget", out var inpTarget)) inpTarget.text = _node.TargetToReplace;
+        if (r.Inputs.TryGetValue("InpNew", out var inpNew)) inpNew.text = _node.NewValue;
     }
+}
 
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Toggles != null && refs.Toggles.TryGetValue("TglModFlag", out var tgl))
-            tgl.isOn = _node.IsModifierReplacement;
-
-        if (refs.Inputs.TryGetValue("InpTarget", out var inpTarget)) inpTarget.text = _node.TargetToReplace;
-        if (refs.Inputs.TryGetValue("InpNew", out var inpNew)) inpNew.text = _node.NewValue;
-    }
+public class Reward_ChoiceBlockUI : UIBlockNode
+{
+    public Reward_ChoiceBlockUI(Reward_ChoiceBlock node) : base(node) { }
+    public override string GetBlockTitle() => "RANDOM CHOICE (o)";
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> { new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Reward options inside this block (@4).</i>", 1f)) };
+    protected override void BindSpecificUI(RectTransform c, GridReferences r) { }
+    protected override void RestoreSpecificState(RectTransform c, GridReferences r) { }
 }
 
 public class Reward_SkipBlockUI : UIBlockNode
 {
     public Reward_SkipBlockUI(Reward_SkipBlock node) : base(node) { }
     public override string GetBlockTitle() => "SKIP TAG (s)";
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec> {
-            new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>The Skip tag has no configuration properties.</i>", 1f))
-        };
-    }
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs) { }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs) { }
-}
-
-// =====================================================================
-// PHASE BLOCKS
-// =====================================================================
-
-public class Phase_MessageBlockUI : UIBlockNode
-{
-    private Phase_MessageBlock _node;
-
-    public Phase_MessageBlockUI(Phase_MessageBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "MESSAGE PHASE (ph.4)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblMsg", "Message Content:", 0.35f),
-                GridCellSpec.CreateInput("InpMsg", "e.g. Hello World", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblBtn", "Button Text:", 0.35f),
-                GridCellSpec.CreateInput("InpBtn", "Ok", 0.65f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpMsg", out var inpMsg))
-            inpMsg.onValueChanged.AddListener(v => _node.Message = v);
-        if (refs.Inputs.TryGetValue("InpBtn", out var inpBtn))
-            inpBtn.onValueChanged.AddListener(v => _node.ButtonText = v);
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpMsg", out var inpMsg)) inpMsg.text = _node.Message;
-        if (refs.Inputs.TryGetValue("InpBtn", out var inpBtn)) inpBtn.text = _node.ButtonText;
-    }
-}
-
-public class Phase_HeroChangeBlockUI : UIBlockNode
-{
-    private Phase_HeroChangeBlock _node;
-    private readonly string[] _typeOptions = { "Generated Hero (1)", "Random Class (0)" };
-
-    public Phase_HeroChangeBlockUI(Phase_HeroChangeBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "HERO CHANGE PHASE (ph.5)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblPos", "Hero Position Index:", 0.5f),
-                GridCellSpec.CreateInput("InpPos", "e.g. 0 for top", 0.5f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblType", "Change Type:", 0.5f),
-                GridCellSpec.CreateDropdown("DropType", "", 0.5f, _typeOptions, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpPos", out var inp))
-            inp.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.HeroPositionIndex = i; });
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop))
-            drop.onValueChanged.AddListener(val => _node.IsRandomClass = (val == 1));
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpPos", out var inp)) inp.text = _node.HeroPositionIndex.ToString();
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop)) drop.value = _node.IsRandomClass ? 1 : 0;
-    }
-}
-
-public class Phase_ItemCombineBlockUI : UIBlockNode
-{
-    private Phase_ItemCombineBlock _node;
-    private readonly string[] _rules = { "2nd Highest -> Tier 3s", "Tier 0-3 -> Single Item" };
-
-    public Phase_ItemCombineBlockUI(Phase_ItemCombineBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "ITEM COMBINE PHASE (ph.7)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec> {
-            new GridRowSpec(GridCellSpec.CreateLabel("LblRule", "Combine Rule:", 0.4f), GridCellSpec.CreateDropdown("DropRule", "", 0.6f, _rules, null))
-        };
-    }
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropRule", out var drop))
-            drop.onValueChanged.AddListener(val => _node.Rule = (Phase_ItemCombineBlock.CombineRule)val);
-    }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropRule", out var drop)) drop.value = (int)_node.Rule;
-    }
-}
-
-public class Phase_PositionSwapBlockUI : UIBlockNode
-{
-    private Phase_PositionSwapBlock _node;
-
-    public Phase_PositionSwapBlockUI(Phase_PositionSwapBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "POSITION SWAP PHASE (ph.8)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblA", "Hero Index A:", 0.5f), GridCellSpec.CreateInput("InpA", "0", 0.5f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblB", "Hero Index B:", 0.5f), GridCellSpec.CreateInput("InpB", "1", 0.5f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpA", out var inpA)) inpA.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.IndexA = i; });
-        if (refs.Inputs.TryGetValue("InpB", out var inpB)) inpB.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.IndexB = i; });
-    }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpA", out var inpA)) inpA.text = _node.IndexA.ToString();
-        if (refs.Inputs.TryGetValue("InpB", out var inpB)) inpB.text = _node.IndexB.ToString();
-    }
-}
-
-public class Phase_ChoiceBlockUI : UIBlockNode
-{
-    private Phase_ChoiceBlock _node;
-    private readonly string[] _types = { "PointBuy", "Number", "UpToNumber", "Optional" };
-
-    public Phase_ChoiceBlockUI(Phase_ChoiceBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "CHOICE PHASE (ph.c)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(GridCellSpec.CreateLabel("LblType", "Choice Type:", 0.4f), GridCellSpec.CreateDropdown("DropType", "", 0.6f, _types, null)),
-            new GridRowSpec(GridCellSpec.CreateLabel("LblNum", "Number/Limit:", 0.4f), GridCellSpec.CreateInput("InpNum", "1", 0.6f, null)),
-            new GridRowSpec(GridCellSpec.CreateLabel("LblTitle", "Title (Optional):", 0.4f), GridCellSpec.CreateInput("InpTitle", "", 0.6f, null)),
-            new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Reward tags inside to populate choices (@3)</i>", 1f))
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop)) drop.onValueChanged.AddListener(v => _node.ChoiceType = _types[v]);
-        if (refs.Inputs.TryGetValue("InpNum", out var inpNum)) inpNum.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.NumChoices = i; });
-        if (refs.Inputs.TryGetValue("InpTitle", out var inpT)) inpT.onValueChanged.AddListener(v => _node.Title = v);
-    }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop)) drop.value = System.Array.IndexOf(_types, _node.ChoiceType);
-        if (refs.Inputs.TryGetValue("InpNum", out var inpNum)) inpNum.text = _node.NumChoices.ToString();
-        if (refs.Inputs.TryGetValue("InpTitle", out var inpT)) inpT.text = _node.Title;
-    }
-}
-
-public class Phase_StaticBlockUI : UIBlockNode
-{
-    private Phase_StaticBlock _node;
-    private readonly string[] _options = System.Enum.GetNames(typeof(Phase_StaticBlock.StaticPhase));
-
-    public Phase_StaticBlockUI(Phase_StaticBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "STATIC / EVENT PHASE";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec> {
-            new GridRowSpec(GridCellSpec.CreateLabel("LblType", "Phase Type:", 0.4f), GridCellSpec.CreateDropdown("DropType", "", 0.6f, _options, null))
-        };
-    }
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop))
-            drop.onValueChanged.AddListener(v => _node.Phase = (Phase_StaticBlock.StaticPhase)System.Enum.GetValues(typeof(Phase_StaticBlock.StaticPhase)).GetValue(v));
-    }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop))
-            drop.value = System.Array.IndexOf(System.Enum.GetValues(typeof(Phase_StaticBlock.StaticPhase)), _node.Phase);
-    }
-}
-
-public class Phase_GenerateScreenBlockUI : UIBlockNode
-{
-    private Phase_GenerateScreenBlock _node;
-    private readonly string[] _options = { "Item Screen (i)", "LevelUp Screen (h)" };
-
-    public Phase_GenerateScreenBlockUI(Phase_GenerateScreenBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "GENERATE SCREEN (ph.g)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec> {
-            new GridRowSpec(GridCellSpec.CreateLabel("LblType", "Screen Type:", 0.4f), GridCellSpec.CreateDropdown("DropType", "", 0.6f, _options, null))
-        };
-    }
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop))
-            drop.onValueChanged.AddListener(v => _node.Type = v == 0 ? Phase_GenerateScreenBlock.ScreenType.Item : Phase_GenerateScreenBlock.ScreenType.LevelUp);
-    }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Dropdowns.TryGetValue("DropType", out var drop))
-            drop.value = _node.Type == Phase_GenerateScreenBlock.ScreenType.Item ? 0 : 1;
-    }
-}
-
-// Container blocks requiring just info text
-public class Phase_LinkedBlockUI : UIBlockNode
-{
-    public Phase_LinkedBlockUI(Phase_LinkedBlock node) : base(node) { }
-    public override string GetBlockTitle() => "LINKED PHASES (ph.l)";
-    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> { new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Phases inside to link them sequentially (@1)</i>", 1f)) };
+    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> { new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>The Skip tag has no configuration properties.</i>", 1f)) };
     protected override void BindSpecificUI(RectTransform c, GridReferences r) { }
     protected override void RestoreSpecificState(RectTransform c, GridReferences r) { }
 }
 
-public class Phase_LevelEndBlockUI : UIBlockNode
-{
-    public Phase_LevelEndBlockUI(Phase_LevelEndBlock node) : base(node) { }
-    public override string GetBlockTitle() => "LEVEL END PHASE (ph.2)";
-    protected override List<GridRowSpec> GetSpecificRowSpecs() => new List<GridRowSpec> { new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop Phases inside to attach them to the end screen</i>", 1f)) };
-    protected override void BindSpecificUI(RectTransform c, GridReferences r) { }
-    protected override void RestoreSpecificState(RectTransform c, GridReferences r) { }
-}
-
-public class Phase_ChallengeBlockUI : UIBlockNode
-{
-    private Phase_ChallengeBlock _node;
-    public Phase_ChallengeBlockUI(Phase_ChallengeBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "CHALLENGE PHASE (ph.9)";
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec> {
-            new GridRowSpec(GridCellSpec.CreateLabel("LblMon", "Extra Monsters (+ split):", 0.4f), GridCellSpec.CreateInput("InpMon", "e.g. Militia+Militia", 0.6f, null)),
-            new GridRowSpec(GridCellSpec.CreateLabel("LblInfo", "<i>Drop the Reward inside this block.</i>", 1f))
-        };
-    }
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpMon", out var inp)) inp.onValueChanged.AddListener(v => _node.ExtraMonsters = v.Split('+').Select(s => s.Trim()).ToList());
-    }
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpMon", out var inp)) inp.text = string.Join("+", _node.ExtraMonsters);
-    }
-}
-
-// =====================================================================
-// COMPLEX BRANCHING PHASES (Stopgap Text Input UIs)
-// =====================================================================
-
-public class Phase_Boolean1BlockUI : UIBlockNode
-{
-    private Phase_Boolean1Block _node;
-
-    public Phase_Boolean1BlockUI(Phase_Boolean1Block node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "BOOLEAN PHASE (ph.b)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblVar", "Variable to Check:", 0.4f),
-                GridCellSpec.CreateInput("InpVar", "e.g. Seed", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblThresh", "Threshold (>=):", 0.4f),
-                GridCellSpec.CreateInput("InpThresh", "1", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblTrue", "True Branch (Raw):", 0.4f),
-                GridCellSpec.CreateInput("InpTrue", "e.g. !m1.fight.Boar", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblFalse", "False Branch (Raw):", 0.4f),
-                GridCellSpec.CreateInput("InpFalse", "e.g. !s", 0.6f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpVar", out var iVar)) iVar.onValueChanged.AddListener(v => _node.VariableName = v);
-        if (refs.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.Threshold = i; });
-
-        if (refs.Inputs.TryGetValue("InpTrue", out var iTrue))
-            iTrue.onValueChanged.AddListener(v => _node.TrueBranch = new RawTextNode(v));
-
-        if (refs.Inputs.TryGetValue("InpFalse", out var iFalse))
-            iFalse.onValueChanged.AddListener(v => _node.FalseBranch = new RawTextNode(v));
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpVar", out var iVar)) iVar.text = _node.VariableName;
-        if (refs.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.text = _node.Threshold.ToString();
-        if (refs.Inputs.TryGetValue("InpTrue", out var iTrue)) iTrue.text = (_node.TrueBranch as RawTextNode)?.Text ?? "";
-        if (refs.Inputs.TryGetValue("InpFalse", out var iFalse)) iFalse.text = (_node.FalseBranch as RawTextNode)?.Text ?? "";
-    }
-}
-
-public class Phase_Boolean2BlockUI : UIBlockNode
-{
-    private Phase_Boolean2Block _node;
-
-    public Phase_Boolean2BlockUI(Phase_Boolean2Block node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "BOOLEAN PHASE 2 (ph.z)";
-
-    // Shares identical layout with Boolean 1, just binds to the Boolean 2 AST node
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblVar", "Variable to Check:", 0.4f),
-                GridCellSpec.CreateInput("InpVar", "e.g. gold", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblThresh", "Threshold (>=):", 0.4f),
-                GridCellSpec.CreateInput("InpThresh", "1", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblTrue", "True Branch (Raw):", 0.4f),
-                GridCellSpec.CreateInput("InpTrue", "e.g. !vgoldV-400", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblFalse", "False Branch (Raw):", 0.4f),
-                GridCellSpec.CreateInput("InpFalse", "e.g. 4You can't afford that!", 0.6f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpVar", out var iVar)) iVar.onValueChanged.AddListener(v => _node.VariableName = v);
-        if (refs.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.onValueChanged.AddListener(v => { if (int.TryParse(v, out int i)) _node.Threshold = i; });
-        if (refs.Inputs.TryGetValue("InpTrue", out var iTrue)) iTrue.onValueChanged.AddListener(v => _node.TrueBranch = new RawTextNode(v));
-        if (refs.Inputs.TryGetValue("InpFalse", out var iFalse)) iFalse.onValueChanged.AddListener(v => _node.FalseBranch = new RawTextNode(v));
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpVar", out var iVar)) iVar.text = _node.VariableName;
-        if (refs.Inputs.TryGetValue("InpThresh", out var iThr)) iThr.text = _node.Threshold.ToString();
-        if (refs.Inputs.TryGetValue("InpTrue", out var iTrue)) iTrue.text = (_node.TrueBranch as RawTextNode)?.Text ?? "";
-        if (refs.Inputs.TryGetValue("InpFalse", out var iFalse)) iFalse.text = (_node.FalseBranch as RawTextNode)?.Text ?? "";
-    }
-}
-
-public class Phase_TradeBlockUI : UIBlockNode
-{
-    private Phase_TradeBlock _node;
-
-    public Phase_TradeBlockUI(Phase_TradeBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "TRADE / CURSED CHEST (ph.t)";
-
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblItem1", "Reward 1 (Raw):", 0.4f),
-                GridCellSpec.CreateInput("InpItem1", "e.g. r1~4~i", 0.6f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblItem2", "Reward 2 (Raw):", 0.4f),
-                GridCellSpec.CreateInput("InpItem2", "e.g. r-1~1~m", 0.6f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpItem1", out var i1)) i1.onValueChanged.AddListener(v => _node.Item1 = new RawTextNode(v));
-        if (refs.Inputs.TryGetValue("InpItem2", out var i2)) i2.onValueChanged.AddListener(v => _node.Item2 = new RawTextNode(v));
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpItem1", out var i1)) i1.text = (_node.Item1 as RawTextNode)?.Text ?? "";
-        if (refs.Inputs.TryGetValue("InpItem2", out var i2)) i2.text = (_node.Item2 as RawTextNode)?.Text ?? "";
-    }
-}
-
-public class Phase_SequenceBlockUI : UIBlockNode
-{
-    private Phase_SequenceBlock _node;
-
-    public Phase_SequenceBlockUI(Phase_SequenceBlock node) : base(node) { _node = node; }
-    public override string GetBlockTitle() => "SEQUENCE PHASE (ph.s)";
-
-    // As a stopgap for lists, we'll hardcode inputs for exactly 2 steps.
-    protected override List<GridRowSpec> GetSpecificRowSpecs()
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblMsg", "Initial Message:", 0.35f),
-                GridCellSpec.CreateInput("InpMsg", "e.g. Choose a Party", 0.65f, null)
-            ),
-            new GridRowSpec(GridCellSpec.CreateLabel("LblS1", "<b>--- Step 1 ---</b>", 1f)),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblBtn1", "Button 1 Text:", 0.35f),
-                GridCellSpec.CreateInput("InpBtn1", "e.g. [Scoundrel]...", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblAct1", "Action 1 (Raw):", 0.35f),
-                GridCellSpec.CreateInput("InpAct1", "e.g. !mparty.Scoundrel", 0.65f, null)
-            ),
-            new GridRowSpec(GridCellSpec.CreateLabel("LblS2", "<b>--- Step 2 ---</b>", 1f)),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblBtn2", "Button 2 Text:", 0.35f),
-                GridCellSpec.CreateInput("InpBtn2", "e.g. [Dabble]...", 0.65f, null)
-            ),
-            new GridRowSpec(
-                GridCellSpec.CreateLabel("LblAct2", "Action 2 (Raw):", 0.35f),
-                GridCellSpec.CreateInput("InpAct2", "e.g. !mparty.Dabble", 0.65f, null)
-            )
-        };
-    }
-
-    protected override void BindSpecificUI(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpMsg", out var iMsg)) iMsg.onValueChanged.AddListener(v => _node.SequenceMessage = v);
-
-        // We rebuild the list whenever a value changes to keep it synchronized
-        UnityEngine.Events.UnityAction rebuildList = () =>
-        {
-            _node.Steps.Clear();
-            string btn1 = refs.Inputs["InpBtn1"].text;
-            string act1 = refs.Inputs["InpAct1"].text;
-            if (!string.IsNullOrEmpty(btn1))
-                _node.Steps.Add(new Phase_SequenceBlock.SequenceStep { ButtonText = btn1, Action = new RawTextNode(act1) });
-
-            string btn2 = refs.Inputs["InpBtn2"].text;
-            string act2 = refs.Inputs["InpAct2"].text;
-            if (!string.IsNullOrEmpty(btn2))
-                _node.Steps.Add(new Phase_SequenceBlock.SequenceStep { ButtonText = btn2, Action = new RawTextNode(act2) });
-        };
-
-        if (refs.Inputs.TryGetValue("InpBtn1", out var iB1)) iB1.onValueChanged.AddListener(_ => rebuildList());
-        if (refs.Inputs.TryGetValue("InpAct1", out var iA1)) iA1.onValueChanged.AddListener(_ => rebuildList());
-        if (refs.Inputs.TryGetValue("InpBtn2", out var iB2)) iB2.onValueChanged.AddListener(_ => rebuildList());
-        if (refs.Inputs.TryGetValue("InpAct2", out var iA2)) iA2.onValueChanged.AddListener(_ => rebuildList());
-    }
-
-    protected override void RestoreSpecificState(RectTransform container, GridReferences refs)
-    {
-        if (refs.Inputs.TryGetValue("InpMsg", out var iMsg)) iMsg.text = _node.SequenceMessage;
-
-        if (_node.Steps.Count > 0)
-        {
-            if (refs.Inputs.TryGetValue("InpBtn1", out var iB1)) iB1.text = _node.Steps[0].ButtonText;
-            if (refs.Inputs.TryGetValue("InpAct1", out var iA1)) iA1.text = (_node.Steps[0].Action as RawTextNode)?.Text ?? "";
-        }
-        if (_node.Steps.Count > 1)
-        {
-            if (refs.Inputs.TryGetValue("InpBtn2", out var iB2)) iB2.text = _node.Steps[1].ButtonText;
-            if (refs.Inputs.TryGetValue("InpAct2", out var iA2)) iA2.text = (_node.Steps[1].Action as RawTextNode)?.Text ?? "";
-        }
-    }
-}
+#endregion

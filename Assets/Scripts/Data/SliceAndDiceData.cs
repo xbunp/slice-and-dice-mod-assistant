@@ -1967,13 +1967,21 @@ public static class DefaultDiceData
 };
 }
 
-
+/// <summary>
+/// Utility class governing dice side alignments, target masks, and alignment aliases.
+/// </summary>
 public static class DiceTargetHelper
 {
-    // Indices: 0:left, 1:mid, 2:top, 3:bot, 4:right, 5:rightmost
+    /// <summary>
+    /// Layout indices representing the physical faces of a die.
+    /// 0: Left, 1: Middle, 2: Top, 3: Bottom, 4: Right, 5: Rightmost.
+    /// </summary>
     public static readonly string[] FaceNames = { "left", "mid", "top", "bot", "right", "rightmost" };
 
-    // Bitmask mapping based on indices: Left(1), Mid(2), Top(4), Bot(8), Right(16), Rightmost(32)
+    /// <summary>
+    /// Bitmask values mapping face groupings based on their index values:
+    /// Left (1), Mid (2), Top (4), Bot (8), Right (16), Rightmost (32).
+    /// </summary>
     public static readonly (string name, int mask)[] TargetAliases = new (string, int)[]
     {
         ("all", 63),       // 1+2+4+8+16+32 = 63
@@ -1993,6 +2001,9 @@ public static class DiceTargetHelper
         ("left", 1)        // 1
     };
 
+    /// <summary>
+    /// Formats internal lowercase target codes into standard display names.
+    /// </summary>
     public static string FormatAliasName(string rawName)
     {
         return rawName switch
@@ -2085,8 +2096,6 @@ public static class DiceTargetHelper
             _ => new List<int>()
         };
     }
-
-
 }
 
 public static class MonsterHelper
