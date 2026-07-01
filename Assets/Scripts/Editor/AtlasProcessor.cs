@@ -312,6 +312,7 @@ public class AtlasProcessor : AssetPostprocessor
         public string leafName;
         public Rect rect;
         public int assignedId = -1;
+        public int fileIndex;
     }
 
     // A stateless helper to strip structural folders, ensuring items match across both configurations
@@ -559,7 +560,8 @@ public class AtlasProcessor : AssetPostprocessor
                     normalizedPath = normalizedPath,
                     prefix = prefix,
                     leafName = spriteSubName,
-                    rect = new Rect(x, AtlasHeight - y - h, w, h)
+                    rect = new Rect(x, AtlasHeight - y - h, w, h),
+                    fileIndex = i
                 });
             }
         }
@@ -569,7 +571,9 @@ public class AtlasProcessor : AssetPostprocessor
             int orderA = GetGroupOrder(a.originalPath);
             int orderB = GetGroupOrder(b.originalPath);
             if (orderA != orderB) return orderA.CompareTo(orderB);
-            return a.normalizedPath.CompareTo(b.normalizedPath);
+
+            // Sort by exact appearance in the text file instead of alphabet:
+            return a.fileIndex.CompareTo(b.fileIndex);
         });
 
         SpriteRegistry.Load();

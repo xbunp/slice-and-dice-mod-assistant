@@ -25,6 +25,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     protected int currentDiceTab = 0;
     protected int _currentPoolIndex = 0;
     protected bool isDrawingUI = false;
+    protected bool _needsRebuild = false;
 
     protected DiceSideData diceClipboard = null;
 
@@ -42,13 +43,16 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             var entity = ModPackage.Instance.GetActiveEntity<T>();
             if (entity == null)
             {
-                ModPackage.Instance.LoadEntityForEditing(new T());
+                ModPackage.Instance.LoadEntityForEditing(CreateDefaultEntity());
                 entity = ModPackage.Instance.GetActiveEntity<T>();
             }
 
             return entity;
         }
     }
+
+    // Virtualized to allow HeroUI to call .InitializeAsDefault()
+    protected virtual T CreateDefaultEntity() => new T();
 
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
@@ -76,6 +80,32 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         }
     }
 
+    protected virtual void Update()
+    {
+        if (_needsRebuild && IsTabVisible())
+        {
+            _needsRebuild = false;
+            RebuildStatsUI();
+            RebuildDiceScrollView();
+        }
+    }
+
+    protected virtual void OnEnable()
+    {
+        if (_needsRebuild)
+        {
+            _needsRebuild = false;
+            RebuildStatsUI();
+            RebuildDiceScrollView();
+        }
+    }
+
+    protected virtual bool IsTabVisible()
+    {
+        RectTransform rootWrapper = GetRootWrapper();
+        return rootWrapper != null && rootWrapper.gameObject.activeInHierarchy;
+    }
+
     // =====================================================================
     // ABSTRACT & VIRTUAL SPECIFICS
     // =====================================================================
@@ -94,7 +124,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     // =====================================================================
     // PORTRAIT / ICON MODAL SELECTION
     // =====================================================================
-    protected void UpdateIcon(int index)
+    protected virtual void UpdateIcon(int index)
     {
         if (portraitPreview == null) return;
 
@@ -122,7 +152,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     // =====================================================================
     // STATE TO VIEW
     // =====================================================================
-    protected void OnStateChanged(object sender)
+    protected virtual void OnStateChanged(object sender)
     {
         if (object.ReferenceEquals(sender, this))
         {
@@ -130,7 +160,16 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             return;
         }
 
-        UpdateUIFromData();
+        if (sender != null) return;
+
+        if (!IsTabVisible())
+        {
+            _needsRebuild = true;
+            return;
+        }
+
+        RebuildStatsUI();
+        RebuildDiceScrollView();
     }
 
     protected virtual void UpdateUIFromData()
@@ -249,16 +288,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
                 if (AllowFacades() && diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
                 {
-                    // THE FIX: Directly query the static helper. This guarantees that if the 
-                    // PortraitPreview found it, the UI button will also find it, completely 
-                    // bypassing any broken overrides inside MonsterUI.
-                    Sprite s = EntityUIHelpers.GetFacadeSprite(face.facadeID);
-
-                    if (s == null)
-                    {
-                        s = GetFacadeDiceSprite(face.facadeID); // Absolute last resort fallback
-                    }
-
+                    Sprite s = GetFacadeDiceSprite(face.facadeID);
                     SetButtonIcon(facBtn, s);
                 }
             }
@@ -280,10 +310,12 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     {
         if (uiGenerator.colorPicker == null) return;
 
+        uiGenerator.colorPicker.onColorChange.RemoveAllListeners();
+
         uiGenerator.colorPicker.gameObject.SetActive(true);
+
         uiGenerator.colorPicker.SetColor(initialColor);
 
-        uiGenerator.colorPicker.onColorChange.RemoveAllListeners();
         uiGenerator.colorPicker.onColorChange.AddListener(new UnityEngine.Events.UnityAction<Color>(onColorChanged));
     }
 
@@ -372,7 +404,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
     protected void ResetToDefault()
     {
-        ModPackage.Instance.UpdateActiveEntityClone<T>(new T());
+        ModPackage.Instance.UpdateActiveEntityClone<T>(CreateDefaultEntity());
         showCustomImagePanel = false;
         _currentPoolIndex = 0;
 
@@ -386,6 +418,13 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     {
         if (diceClipboard == null) return;
         CurrentEntity.diceSides[index] = diceClipboard.Clone();
+        NotifyStateChanged();
+        RebuildDiceScrollView();
+    }
+
+    protected void ClearDiceFace(int index)
+    {
+        CurrentEntity.diceSides[index] = new DiceSideData();
         NotifyStateChanged();
         RebuildDiceScrollView();
     }
@@ -416,6 +455,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
     protected void UpdateEntityHsvData(int componentIndex, int value)
     {
+        if (isDrawingUI) return;
+
         if (componentIndex == 0) CurrentEntity.h = value;
         else if (componentIndex == 1) CurrentEntity.s = value;
         else if (componentIndex == 2) CurrentEntity.v = value;
@@ -485,7 +526,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         var entities = ModPackage.Instance.loadedMod.GetAll<T>();
         if (index > 0 && (index - 1) < entities.Count) ModPackage.Instance.LoadEntityForEditing(entities[index - 1]);
-        else ModPackage.Instance.LoadEntityForEditing(new T());
+        else ModPackage.Instance.LoadEntityForEditing(CreateDefaultEntity());
 
         ModPackage.Instance.NotifyActiveEntityChanged<T>(this);
     }
@@ -506,7 +547,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     // =====================================================================
     // UI GENERATION & LAYOUTS
     // =====================================================================
-    protected List<GridRowSpec> GenerateDiceLayout(int tabIndex)
+    protected virtual List<GridRowSpec> GenerateDiceLayout(int tabIndex)
     {
         var layout = new List<GridRowSpec>();
         string[] keywordOptions = EntityUIHelpers.GetKeywordOptions();
@@ -536,7 +577,10 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 layout.Add(new GridRowSpec(
                     GridCellSpec.CreateLabel("Base:", 0.15f),
                     GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.10f, () => OpenBaseModal(index)),
-                    GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { face.effectID = id; NotifyStateChanged(); } }),
+                    GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => {
+                        if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; NotifyStateChanged(); }
+                        else if (int.TryParse(val, out int id)) { face.effectID = id; NotifyStateChanged(); }
+                    }),
                     GridCellSpec.CreateLabel("Facade:", 0.15f),
                     GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.10f, () => OpenFacadeModal(index)),
                     GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.30f, (val) => { face.facadeID = val; NotifyStateChanged(); })
@@ -548,15 +592,31 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     GridCellSpec.CreateLabel("Base:", 0.25f),
                     GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.20f, () => OpenBaseModal(index)),
                     GridCellSpec.CreateLabel("ID:", 0.15f),
-                    GridCellSpec.CreateInput($"ID_{index}", "ID", 0.40f, (val) => { if (int.TryParse(val, out int id)) { face.effectID = id; NotifyStateChanged(); } })
+                    GridCellSpec.CreateInput($"ID_{index}", "ID", 0.40f, (val) => {
+                        if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; NotifyStateChanged(); }
+                        else if (int.TryParse(val, out int id)) { face.effectID = id; NotifyStateChanged(); }
+                    })
                 ));
             }
 
             layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Pips:", 0.25f),
-                GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => { if (int.TryParse(val, out int p)) { face.pips = p; NotifyStateChanged(); } }),
-                GridCellSpec.CreateButton($"BtnPipDown_{index}", "🡇", 0.20f, () => { face.pips = Mathf.Max(0, face.pips - 1); NotifyStateChanged(); }),
-                GridCellSpec.CreateButton($"BtnPipUp_{index}", "🡅", 0.20f, () => { face.pips++; NotifyStateChanged(); })
+                GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => {
+                    if (string.IsNullOrWhiteSpace(val)) { face.pips = 0; NotifyStateChanged(); }
+                    else if (int.TryParse(val, out int p)) { face.pips = p; NotifyStateChanged(); }
+                }),
+                GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => {
+                    face.pips--;
+                    if (diceUI != null && diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                        input.SetTextWithoutNotify(face.pips.ToString());
+                    NotifyStateChanged();
+                }),
+                GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => {
+                    face.pips++;
+                    if (diceUI != null && diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                        input.SetTextWithoutNotify(face.pips.ToString());
+                    NotifyStateChanged();
+                })
             ));
 
             if (AllowFacades())
@@ -574,7 +634,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 layout.Add(new GridRowSpec(
                     GridCellSpec.CreateLabel("Val:", 0.30f),
                     GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 2, Mathf.RoundToInt(val))),
-                    GridCellSpec.CreateInput($"FacV_{index}", "🡇", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateFaceHsv(index, 2, v); })
+                    GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateFaceHsv(index, 2, v); })
                 ));
             }
 
@@ -594,8 +654,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
 
             layout.Add(new GridRowSpec(
-                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => CopyDiceFace(index)),
-                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => PasteDiceFace(index))
+                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.33f, () => CopyDiceFace(index)),
+                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.33f, () => PasteDiceFace(index)),
+                GridCellSpec.CreateButton($"BtnClear_{index}", "Clear Dice", 0.33f, () => ClearDiceFace(index))
             ));
 
             if (tabIndex == 0 && index < 5) layout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
@@ -633,7 +694,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     _persistentCustomImageReceiver = dummyReceiver;
                     _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
                     {
-                        // Assume T supports image override (common in EntityData export logic)
                         CurrentEntity.GetType().GetProperty("imageOverride")?.SetValue(CurrentEntity, encodedStr);
 
                         _customImageString = encodedStr;
@@ -666,6 +726,10 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     protected void RebuildDiceScrollView()
     {
         if (diceScrollRect == null) return;
+
+        bool wasDrawing = isDrawingUI;
+        isDrawingUI = true;
+
         diceUI = uiGenerator.RebuildGrid(diceScrollRect.content, GenerateDiceLayout(currentDiceTab));
 
         float extraHeight = 0f;
@@ -678,6 +742,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         }
 
         diceScrollRect.content.sizeDelta = new Vector2(0, diceUI.TotalHeight + extraHeight);
+
+        isDrawingUI = wasDrawing;
         Canvas.ForceUpdateCanvases();
         UpdateUIFromData();
     }
@@ -788,6 +854,26 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         syntaxHighlighterText.autoSizeTextContainer = false;
         syntaxHighlighterText.richText = true;
 
+        rawTextOutput.onValueChanged.AddListener((val) =>
+        {
+            if (syntaxHighlighterText != null)
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(val);
+        });
+
+        rawTextOutput.onEndEdit.AddListener((val) =>
+        {
+            if (string.IsNullOrWhiteSpace(val)) return;
+            if (val == ExportEntity(CurrentEntity)) return;
+            try
+            {
+                OnPasteEntityString(val);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"Could not parse manual edits to string: {ex.Message}");
+            }
+        });
+
         FullScreenUIGenerator.SetAnchors(inputObj.GetComponent<RectTransform>(), 0.0f, 0.08f, 1.0f, 0.58f);
 
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
@@ -847,14 +933,12 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         rt.offsetMax = new Vector2(0f, -topOffset);
     }
 
-    // Generic collection helper exposed for subclass generator
     protected void AppendCollectionSelector<U>(
         List<GridRowSpec> layout, string label, string uniqueKey,
         IReadOnlyList<U> availableChoices, List<U> currentActiveItems,
         Func<U, string> getKey, Func<U, string> getDisplay,
         Action<U> onAdd, Action<U> onRemove)
     {
-        // 1. Create selection dropdown row with a blank default option
         List<string> dropdownOptions = new List<string> { "" };
         dropdownOptions.AddRange(availableChoices.Select(getDisplay));
 
@@ -869,7 +953,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             })
         ));
 
-        // 2. Generate rows with delete buttons for all currently active items in the list
         for (int i = 0; i < currentActiveItems.Count; i++)
         {
             U item = currentActiveItems[i];
@@ -882,4 +965,5 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             ));
         }
     }
+
 }
