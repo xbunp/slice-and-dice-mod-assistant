@@ -223,7 +223,10 @@ public abstract class EntityData : SDData, IPayloadContainer
 
     protected void AppendColorModifier(StringBuilder sb)
     {
-        // Always place targeted hue (thue) directly before HSV/Hue
+        if (phue != null && phue.colorRange != 0) // Prevents adding empty payloads if unassigned
+        {
+            sb.Append($".{PackPHue(phue)}");
+        }
         if (thue != null && (thue.colorRange != 0 || thue.colorOffset != 0))
         {
             sb.Append($".{PackTHue(thue)}");

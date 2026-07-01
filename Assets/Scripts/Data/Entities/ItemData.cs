@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 
@@ -144,8 +145,23 @@ public class ItemMechanic
         if (PerTier) parts.Add("pertier");
         if (Unpack) parts.Add("unpack");
         if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
+
         string corePayload = PayloadString;
-        if (ChainedKeywords.Count > 0) corePayload += "#" + string.Join("#", ChainedKeywords);
+        if (ChainedKeywords.Count > 0)
+        {
+            string chains = "#" + string.Join("#", ChainedKeywords);
+
+            // Inject chained keywords inside parens if the payload is a wrapped group (e.g. hat data)
+            if (corePayload.StartsWith("(") && corePayload.EndsWith(")"))
+            {
+                corePayload = corePayload.Substring(0, corePayload.Length - 1) + chains + ")";
+            }
+            else
+            {
+                corePayload += chains;
+            }
+        }
+
         if (!string.IsNullOrEmpty(corePayload)) parts.Add(corePayload);
         if (PartIndex.HasValue) parts.Add($"part.{PartIndex.Value}");
         if (Multiplier != 1) parts.Add($"m{Multiplier}");
@@ -263,6 +279,7 @@ public class ItemData : SDData
     private void PropertiesClear()
     {
         thue = new Thue();
+        phue = new Phue();
         entityName = string.Empty; imageOverride = string.Empty; Tier = null; DocumentedDescription = string.Empty;
         HsvShift = null; SimpleHue = null; PaletteOverride = string.Empty;
         BorderColorCode = string.Empty; UiDrawInstructions = string.Empty; UiRectInstructions = string.Empty;
@@ -435,7 +452,6 @@ public class ItemData : SDData
         if (HsvShift.HasValue) chainParts.Add($"hsv.{HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
         if (SimpleHue.HasValue) chainParts.Add($"hue.{SimpleHue.Value}");
 
-        //if (!string.IsNullOrEmpty(TargetedHue)) chainParts.Add($"thue.{TargetedHue}");
         if (this.thue != null && this.thue.colorOffset != 0) chainParts.Add($".{PackTHue(this.thue)}");
 
         if (!string.IsNullOrEmpty(PaletteOverride)) chainParts.Add($"p.{PaletteOverride}");
@@ -446,11 +462,86 @@ public class ItemData : SDData
         if (ClearIcon) chainParts.Add("clearicon");
 
         foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({cont.Value})");
-        foreach (var mech in Mechanics) chainParts.Add(mech.Export());
+
+        // Run optimization and append the mechanics to chainParts
+        OptimizeAndExportMechanics(chainParts);
 
         StringBuilder sb = new StringBuilder(string.Join(".", chainParts));
         foreach (var tag in GlobalTags) sb.Append($"&{tag}");
+
         return sb.ToString();
+    }
+
+    private void OptimizeAndExportMechanics(List<string> chainParts)
+    {
+        List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();
+        foreach (var mech in Mechanics)
+        {
+            // Clone to prevent mutating original memory references during export operations
+            ItemMechanic clonedMech = CloneMechanic(mech);
+
+            // Case 1: Direct loose Tog Items
+            if (string.IsNullOrEmpty(clonedMech.Prefix) && ItemDomainRules.TogItems.Contains(clonedMech.PayloadString))
+            {
+                var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == clonedMech.Targets.Count && m.Targets.All(t => clonedMech.Targets.Contains(t)));
+                if (prev != null)
+                {
+                    prev.ChainedKeywords.Add(clonedMech.PayloadString);
+                    continue;
+                }
+            }
+
+            // Case 2: Tog Items wrapped inside of an inherent (i) Item Pack tuple
+            if (clonedMech.Prefix == "i" && clonedMech.PayloadData is ItemData nestedItem)
+            {
+                bool onlyTog = nestedItem.Mechanics.Count > 0 && nestedItem.Mechanics.All(m => string.IsNullOrEmpty(m.Prefix) && ItemDomainRules.TogItems.Contains(m.PayloadString));
+                if (onlyTog)
+                {
+                    bool allMerged = true;
+                    foreach (var innerMech in nestedItem.Mechanics)
+                    {
+                        var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
+                        if (prev != null)
+                        {
+                            prev.ChainedKeywords.Add(innerMech.PayloadString);
+                        }
+                        else
+                        {
+                            allMerged = false;
+                        }
+                    }
+
+                    // Skip appending this '.i' node if we successfully merged all its contents natively
+                    if (allMerged) continue;
+                }
+            }
+
+            optimizedMechanics.Add(clonedMech);
+        }
+
+        foreach (var mech in optimizedMechanics)
+        {
+            chainParts.Add(mech.Export());
+        }
+    }
+
+    private ItemMechanic CloneMechanic(ItemMechanic original)
+    {
+        return new ItemMechanic
+        {
+            Targets = new List<string>(original.Targets),
+            Prefix = original.Prefix,
+            PayloadString = original.PayloadString,
+            PayloadData = original.PayloadData, // Shallow reference copy is fine
+            Multiplier = original.Multiplier,
+            MergedItem = original.MergedItem,
+            SplicedItem = original.SplicedItem,
+            ChainedKeywords = new List<string>(original.ChainedKeywords),
+            RepeatTimes = original.RepeatTimes,
+            PerTier = original.PerTier,
+            Unpack = original.Unpack,
+            PartIndex = original.PartIndex
+        };
     }
 
     public void DebugContentsToConsole(string indent = "")

@@ -7,9 +7,18 @@ using UnityEngine;
 [System.Serializable]
 public class Thue
 {
-    public Color colorHex;
+    //thue syntax: .img.thue.<hex>:int:int.
+    public Color colorHex = Color.white;
     public int colorRange;
     public int colorOffset;
+}
+
+public class Phue
+{
+    //phue syntax: .img.p.<hex>:<hex>:int.
+    public Color colorStart = Color.white;
+    public Color colorDestination = Color.white;
+    public int colorRange;
 }
 
 [System.Serializable]
@@ -23,6 +32,7 @@ public abstract class SDData
     public int hue;
     public string p, b, draw, rect;
     public Thue thue = new Thue();
+    public Phue phue = new Phue();
 
     [Header("Deep Payloads")]
     public List<CustomPayload> customPayloads = new List<CustomPayload>();
@@ -88,8 +98,8 @@ public abstract class SDData
             case "hue": if (int.TryParse(nextVal, out int hVal)) hue = hVal; break;
 
             case "thue": thue = UnpackTHue(nextVal); break;
+            case "p": phue = UnpackPHue(nextVal); break;
 
-            case "p": p = nextVal; break;
             case "b": b = nextVal; break;
             case "draw": draw = nextVal; break;
             case "rect": rect = nextVal; break;
@@ -98,28 +108,44 @@ public abstract class SDData
         i++; // Consume the value token
         return true;
     }
-    protected static string FormatName(string name) => name?.Replace(" ", "") ?? "";
+
+    //protected static string FormatName(string name) => name?.Replace(" ", "") ?? "";
+    protected static string FormatName(string name) => name?.Trim() ?? ""; //spaces are allowed.
+
+    protected static string PackPHue(Phue phue)
+    {
+        if (phue == null) return string.Empty;
+
+        string hexStart = ColorToHex(phue.colorStart);
+        string hexDest = ColorToHex(phue.colorDestination);
+        string rangeStr = phue.colorRange.ToString("D2");
+        return $"phue.{hexStart}:{hexDest}:{rangeStr}";
+    }
+
+    protected static Phue UnpackPHue(string phue)
+    {
+        if (string.IsNullOrWhiteSpace(phue)) return null;
+
+        string payload = phue.Trim();
+        if (payload.StartsWith("p.", System.StringComparison.OrdinalIgnoreCase))
+            payload = payload.Substring(2);
+
+        string[] parts = payload.Split(':');
+        if (parts.Length < 3) return null;
+
+        Phue result = new Phue();
+        result.colorStart = ParseColor(parts[0]);
+        result.colorDestination = ParseColor(parts[1]);
+        if (int.TryParse(parts[2].Trim(), out int range)) result.colorRange = range;
+
+        return result;
+    }
 
     protected static string PackTHue(Thue thue)
     {
         if (thue == null) return string.Empty;
 
-        int r = UnityEngine.Mathf.RoundToInt(thue.colorHex.r * 255f);
-        int g = UnityEngine.Mathf.RoundToInt(thue.colorHex.g * 255f);
-        int b = UnityEngine.Mathf.RoundToInt(thue.colorHex.b * 255f);
-
-        string hex;
-        // Hex double-digit pairs (0x00, 0x11, ... 0xFF) are always multiples of 17 (0, 17, ... 255)
-        if (r % 17 == 0 && g % 17 == 0 && b % 17 == 0)
-        {
-            hex = $"{(r / 17):x}{(g / 17):x}{(b / 17):x}";
-        }
-        else
-        {
-            hex = UnityEngine.ColorUtility.ToHtmlStringRGB(thue.colorHex).ToLower();
-        }
-
-        // FIX: Pad the middle range value to always be 2 characters (e.g., 5 becomes "05")
+        string hex = ColorToHex(thue.colorHex);
         string rangeStr = thue.colorRange.ToString("D2");
 
         return $"thue.{hex}:{rangeStr}:{thue.colorOffset}";
@@ -129,43 +155,40 @@ public abstract class SDData
     {
         if (string.IsNullOrWhiteSpace(thue)) return null;
 
-        // Strip hidden spaces from copy-pasting
         string payload = thue.Trim();
-
         if (payload.StartsWith("thue.", System.StringComparison.OrdinalIgnoreCase))
-        {
             payload = payload.Substring(5);
-        }
 
         string[] parts = payload.Split(':');
         if (parts.Length < 3) return null;
 
         Thue result = new Thue();
+        result.colorHex = ParseColor(parts[0]);
+        if (int.TryParse(parts[1].Trim(), out int range)) result.colorRange = range;
+        if (int.TryParse(parts[2].Trim(), out int offset)) result.colorOffset = offset;
 
-        // 1. Safely Parse Color
-        string hexStr = parts[0].Trim();
+        return result;
+    }
+
+    protected static Color ParseColor(string hexStr)
+    {
+        hexStr = hexStr.Trim();
         if (!hexStr.StartsWith("#")) hexStr = "#" + hexStr;
 
         if (UnityEngine.ColorUtility.TryParseHtmlString(hexStr, out UnityEngine.Color parsedColor))
-        {
-            result.colorHex = parsedColor;
-        }
+            return parsedColor;
+        return UnityEngine.Color.white;
+    }
+
+    protected static string ColorToHex(Color colorHex)
+    {
+        int r = UnityEngine.Mathf.RoundToInt(colorHex.r * 255f);
+        int g = UnityEngine.Mathf.RoundToInt(colorHex.g * 255f);
+        int b = UnityEngine.Mathf.RoundToInt(colorHex.b * 255f);
+
+        if (r % 17 == 0 && g % 17 == 0 && b % 17 == 0)
+            return $"{(r / 17):x}{(g / 17):x}{(b / 17):x}";
         else
-        {
-            result.colorHex = UnityEngine.Color.white;
-        }
-
-        // 2. Safely Parse Range and Offset
-        if (int.TryParse(parts[1].Trim(), out int range))
-        {
-            result.colorRange = range;
-        }
-
-        if (int.TryParse(parts[2].Trim(), out int offset))
-        {
-            result.colorOffset = offset;
-        }
-
-        return result;
+            return UnityEngine.ColorUtility.ToHtmlStringRGB(colorHex).ToLower();
     }
 }

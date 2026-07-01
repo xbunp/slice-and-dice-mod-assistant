@@ -407,6 +407,9 @@ public class HeroUI : RootUI
         if (statsUI.Inputs.TryGetValue("HeroFacS", out var hS)) hS.SetTextWithoutNotify(CurrentHero.s.ToString());
         if (statsUI.Inputs.TryGetValue("HeroFacV", out var hV)) hV.SetTextWithoutNotify(CurrentHero.v.ToString());
 
+        if (statsUI.Sliders.TryGetValue("PhueRangeSlider", out var phueRangeSlider))
+            phueRangeSlider.SetValueWithoutNotify(CurrentHero.phue.colorRange);
+
         if (statsUI.Sliders.TryGetValue("ThueRangeSlider", out var thueRangeSlider))
             thueRangeSlider.SetValueWithoutNotify(CurrentHero.thue.colorRange);
 
@@ -474,6 +477,7 @@ public class HeroUI : RootUI
 
             portraitPreview.SetPortraitHSV(CurrentHero.h, CurrentHero.s, CurrentHero.v);
             portraitPreview.SetPortraitTHue(CurrentHero.thue);
+            portraitPreview.SetPortraitPHue(CurrentHero.phue);
         }
 
         if (statsUI != null && statsUI.Buttons != null)
@@ -488,20 +492,23 @@ public class HeroUI : RootUI
                 Sprite s = EntityUIHelpers.GetSpriteForPortrait(CurrentHero.imageOverride);
                 SetButtonIcon(overrideBtn, s);
             }
-        }
-        /*
-        if (statsUI.Buttons.TryGetValue("ThueColorBtn", out var thueColorBtn))
-        {
-            if (ColorUtility.TryParseHtmlString(CurrentHero.thue.colorHex, out Color thueColor))
+
+            if (statsUI.Buttons.TryGetValue("PhueStartBtn", out var phueStartBtn))
             {
-                thueColorBtn.image.color = thueColor;
+                Color c = CurrentHero.phue != null ? CurrentHero.phue.colorStart : Color.white;
+                SetButtonColorPreview(phueStartBtn, c);
             }
-            else
+            if (statsUI.Buttons.TryGetValue("PhueDestBtn", out var phueDestBtn))
             {
-                thueColorBtn.image.color = Color.white;
+                Color c = CurrentHero.phue != null ? CurrentHero.phue.colorDestination : Color.white;
+                SetButtonColorPreview(phueDestBtn, c);
+            }
+            if (statsUI.Buttons.TryGetValue("ThueColorBtn", out var thueColorBtn))
+            {
+                Color c = CurrentHero.thue != null ? CurrentHero.thue.colorHex : Color.white;
+                SetButtonColorPreview(thueColorBtn, c);
             }
         }
-        */
 
         int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
         int endIndex = (currentDiceTab == 0) ? 6 : currentDiceTab;
@@ -609,6 +616,12 @@ public class HeroUI : RootUI
     {
         if (diceClipboard == null) return;
         CurrentHero.diceSides[index] = diceClipboard.Clone();
+        NotifyStateChanged();
+        RebuildDiceScrollView();
+    }
+    private void ClearDiceFace(int index)
+    {
+        CurrentHero.diceSides[index] = new DiceSideData();
         NotifyStateChanged();
         RebuildDiceScrollView();
     }
@@ -856,45 +869,79 @@ public class HeroUI : RootUI
         ));
 
         layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("T-Hue Color:", 0.35f),
-                    GridCellSpec.CreateButton("ThueColorBtn", "Pick Color", 0.65f, () => {
-                        if (uiGenerator.colorPicker == null)
-                        {
-                            Debug.LogWarning("FlexibleColorPicker reference is missing from the scene.");
-                            return;
-                        }
+            GridCellSpec.CreateLabel("P-Hue Swap:", 0.30f),
+            GridCellSpec.CreateButton("PhueStartBtn", "Target", 0.35f, () => {
+                if (uiGenerator.colorPicker == null) return;
 
-                        Color initialColor = Color.white;
-                        if (CurrentHero.thue != null)
-                        {
-                            initialColor = CurrentHero.thue.colorHex;
-                        }
+                Color initialColor = CurrentHero.phue != null ? CurrentHero.phue.colorStart : Color.white;
 
-                        OpenColorPicker(initialColor, (color) => {
-                            if (CurrentHero.thue == null)
-                            {
-                                CurrentHero.thue = new Thue { colorRange = 0, colorOffset = 0 };
-                            }
+                OpenColorPicker(initialColor, (color) => {
+                    if (CurrentHero.phue == null) CurrentHero.phue = new Phue();
+                    CurrentHero.phue.colorStart = color;
+                    NotifyStateChanged();
+                });
+            }),
+            GridCellSpec.CreateButton("PhueDestBtn", "Replace", 0.35f, () => {
+                if (uiGenerator.colorPicker == null) return;
 
-                            CurrentHero.thue.colorHex = color;
-                            NotifyStateChanged();
-                        });
-                    })
-                ));
+                Color initialColor = CurrentHero.phue != null ? CurrentHero.phue.colorDestination : Color.white;
+
+                OpenColorPicker(initialColor, (color) => {
+                    if (CurrentHero.phue == null) CurrentHero.phue = new Phue();
+                    CurrentHero.phue.colorDestination = color;
+                    NotifyStateChanged();
+                });
+            })
+        ));
 
         layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("T-Hue Range:", 0.20f),
-                    GridCellSpec.CreateSlider("ThueRangeSlider", 0, 99, true, 0.30f, (val) => {
-                        CurrentHero.thue.colorRange = Mathf.RoundToInt(val);
-                        NotifyStateChanged();
-                    }),
-                    GridCellSpec.CreateLabel("T-Hue Shift:", 0.20f),
-                    GridCellSpec.CreateSlider("ThueOffsetSlider", -99, 99, true, 0.30f, (val) => {
-                        CurrentHero.thue.colorOffset = Mathf.RoundToInt(val);
-                        NotifyStateChanged();
-                    })
-                ));
-        // ------------------------------------
+            GridCellSpec.CreateLabel("P-Hue Range:", 0.30f),
+            GridCellSpec.CreateSlider("PhueRangeSlider", 0, 99, true, 0.70f, (val) => {
+                if (CurrentHero.phue == null) CurrentHero.phue = new Phue();
+                CurrentHero.phue.colorRange = Mathf.RoundToInt(val);
+                NotifyStateChanged();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("T-Hue Color:", 0.35f),
+            GridCellSpec.CreateButton("ThueColorBtn", "Pick Color", 0.65f, () => {
+                if (uiGenerator.colorPicker == null)
+                {
+                    Debug.LogWarning("FlexibleColorPicker reference is missing from the scene.");
+                    return;
+                }
+
+                Color initialColor = Color.white;
+                if (CurrentHero.thue != null)
+                {
+                    initialColor = CurrentHero.thue.colorHex;
+                }
+
+                OpenColorPicker(initialColor, (color) => {
+                    if (CurrentHero.thue == null)
+                    {
+                        CurrentHero.thue = new Thue { colorRange = 0, colorOffset = 0 };
+                    }
+
+                    CurrentHero.thue.colorHex = color;
+                    NotifyStateChanged();
+                });
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("T-Hue Range:", 0.20f),
+            GridCellSpec.CreateSlider("ThueRangeSlider", 0, 99, true, 0.30f, (val) => {
+                CurrentHero.thue.colorRange = Mathf.RoundToInt(val);
+                NotifyStateChanged();
+            }),
+            GridCellSpec.CreateLabel("T-Hue Shift:", 0.20f),
+            GridCellSpec.CreateSlider("ThueOffsetSlider", -99, 99, true, 0.30f, (val) => {
+                CurrentHero.thue.colorOffset = Mathf.RoundToInt(val);
+                NotifyStateChanged();
+            })
+        ));
 
         HeroColorOption currentOption = SDColors.GetOptionFromColorCode(CurrentHero.colorClass);
         string currentFormattedName = SDColors.GetFormattedColorName(currentOption);
@@ -1240,7 +1287,20 @@ public class HeroUI : RootUI
             layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Base:", 0.15f),
                 GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.10f, () => OpenBaseModal(index)),
-                GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { face.effectID = id; NotifyStateChanged(); } }),
+                //GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { face.effectID = id; NotifyStateChanged(); } }),
+                GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => {
+                    if (string.IsNullOrWhiteSpace(val))
+                    {
+                        face.effectID = 0;
+                        NotifyStateChanged();
+                    }
+                    else if (int.TryParse(val, out int id))
+                    {
+                        face.effectID = id;
+                        NotifyStateChanged();
+                    }
+                }),
+
                 GridCellSpec.CreateLabel("Facade:", 0.15f),
                 GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.10f, () => OpenFacadeModal(index)),
                 GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.30f, (val) => { face.facadeID = val; NotifyStateChanged(); })
@@ -1248,7 +1308,20 @@ public class HeroUI : RootUI
 
             layout.Add(new GridRowSpec(
                             GridCellSpec.CreateLabel("Pips:", 0.25f),
-                            GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => { if (int.TryParse(val, out int p)) { face.pips = p; NotifyStateChanged(); } }),
+                            //GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => { if (int.TryParse(val, out int p)) { face.pips = p; NotifyStateChanged(); } }),
+                            GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => {
+                                if (string.IsNullOrWhiteSpace(val))
+                                {
+                                    face.pips = 0;
+                                    NotifyStateChanged();
+                                }
+                                else if (int.TryParse(val, out int p))
+                                {
+                                    face.pips = p;
+                                    NotifyStateChanged();
+                                }
+                            }),
+
                             GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => {
                                 face.pips--; // Removed Mathf.Max restriction to allow negative values
 
@@ -1308,8 +1381,9 @@ public class HeroUI : RootUI
             }
 
             layout.Add(new GridRowSpec(
-                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => CopyDiceFace(index)),
-                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => PasteDiceFace(index))
+                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.33f, () => CopyDiceFace(index)),
+                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.33f, () => PasteDiceFace(index)),
+                GridCellSpec.CreateButton($"BtnPaste_{index}", "Clear Dice", 0.33f, () => ClearDiceFace(index))
             ));
 
             if (tabIndex == 0 && index < 5)
@@ -1320,6 +1394,7 @@ public class HeroUI : RootUI
 
         return layout;
     }
+
     private void RebuildStatsUI()
     {
         // Safety check to ensure the scroll container exists before generating
@@ -1815,5 +1890,38 @@ public class HeroUI : RootUI
         }
 
         return facadeID;
+    }
+
+    private void SetButtonColorPreview(Button btn, Color color)
+    {
+        if (btn == null) return;
+
+        // Reset the main button background to white to fix the "button turned black/invisible" issue
+        if (btn.image != null) btn.image.color = Color.white;
+
+        Transform preview = btn.transform.Find("ColorPreview");
+        Image previewImg;
+        if (preview == null)
+        {
+            // Dynamically instantiate a rect with a blank image
+            GameObject go = new GameObject("ColorPreview", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(btn.transform, false);
+            previewImg = go.GetComponent<Image>();
+
+            // Anchor it as a neat little square on the right side of the button
+            RectTransform rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.80f, 0.20f);
+            rt.anchorMax = new Vector2(0.95f, 0.80f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+        else
+        {
+            previewImg = preview.GetComponent<Image>();
+        }
+
+        // Force alpha to 1 so the preview box is always fully opaque
+        color.a = 1f;
+        previewImg.color = color;
     }
 }

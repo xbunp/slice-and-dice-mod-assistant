@@ -270,13 +270,41 @@ public class PortraitPreviewUI : MonoBehaviour
         }
     }
 
+    // Add this method to PortraitPreviewUI
+    public void SetPortraitPHue(Phue phue)
+    {
+        if (portrait != null && portrait.material != null)
+        {
+            if (phue != null)
+            {
+                portrait.material.SetColor("_PColor", phue.colorStart);
+                portrait.material.SetColor("_PReplaceColor", phue.colorDestination);
+                portrait.material.SetFloat("_PRange", phue.colorRange);
+            }
+            else
+            {
+                // Zero it out if the phue data is cleared
+                portrait.material.SetFloat("_PRange", 0);
+            }
+        }
+    }
+
+    // Update your existing THue method to this (so it safely zeroes out when cleared)
     public void SetPortraitTHue(Thue thue)
     {
-        if (portrait != null && portrait.material != null && thue != null && thue.colorOffset != 0)
+        if (portrait != null && portrait.material != null)
         {
-            portrait.material.SetColor("_THueColor", thue.colorHex);
-            portrait.material.SetFloat("_THueRange", thue.colorRange);
-            portrait.material.SetFloat("_THueShift", thue.colorOffset);
+            if (thue != null && (thue.colorRange != 0 || thue.colorOffset != 0))
+            {
+                portrait.material.SetColor("_THueColor", thue.colorHex);
+                portrait.material.SetFloat("_THueRange", thue.colorRange);
+                portrait.material.SetFloat("_THueShift", thue.colorOffset);
+            }
+            else
+            {
+                portrait.material.SetFloat("_THueRange", 0);
+                portrait.material.SetFloat("_THueShift", 0);
+            }
         }
     }
 

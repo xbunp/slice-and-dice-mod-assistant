@@ -1189,7 +1189,7 @@ public class EquippableNodeDef : AuthoringNodeDef
         Debug.Log($"[EquipInspectorDebug] HSVButtonIcon not found. Falling back to button's background image: '{btn.image?.name ?? "null"}'");
         return btn.image;
     }
-    private void ApplyMaterialAdjustments(Image img, ItemData data)
+    private void ApplyMaterialAdjustments(Image img, ItemData data) // Or whatever data class calls this
     {
         if (img == null || data == null) return;
 
@@ -1198,10 +1198,9 @@ public class EquippableNodeDef : AuthoringNodeDef
         // 1. Force the material to be a unique runtime instance
         if (img.material == null || img.material == img.defaultMaterial)
         {
-            Shader shader = Shader.Find("UI/Thue_HSV_Adjustment") ??
-                            Shader.Find("Thue_HSV_Adjustment") ??
-                            Shader.Find("Custom/Thue_HSV_Adjustment") ??
-                            Shader.Find("Sprites/Thue_HSV_Adjustment");
+            Shader shader = Shader.Find("UI/Custom/P_THUE_HSV_Adjustment") ?? // Updated shader path hint just in case
+                            Shader.Find("UI/P_Thue_HSV_Adjustment") ??
+                            Shader.Find("P_Thue_HSV_Adjustment");
             if (shader != null)
             {
                 img.material = new Material(shader);
@@ -1226,6 +1225,15 @@ public class EquippableNodeDef : AuthoringNodeDef
             if (baseMat.HasProperty("_Saturation")) baseMat.SetFloat("_Saturation", s);
             if (baseMat.HasProperty("_Value")) baseMat.SetFloat("_Value", v);
 
+            // Apply PHue
+            if (data.phue != null)
+            {
+                if (baseMat.HasProperty("_PColor")) baseMat.SetColor("_PColor", data.phue.colorStart);
+                if (baseMat.HasProperty("_PReplaceColor")) baseMat.SetColor("_PReplaceColor", data.phue.colorDestination);
+                if (baseMat.HasProperty("_PRange")) baseMat.SetFloat("_PRange", data.phue.colorRange);
+            }
+
+            // Apply THue
             if (data.thue != null)
             {
                 if (baseMat.HasProperty("_THueColor")) baseMat.SetColor("_THueColor", data.thue.colorHex);
@@ -1242,6 +1250,15 @@ public class EquippableNodeDef : AuthoringNodeDef
             if (renderMat.HasProperty("_Saturation")) renderMat.SetFloat("_Saturation", s);
             if (renderMat.HasProperty("_Value")) renderMat.SetFloat("_Value", v);
 
+            // Apply PHue
+            if (data.phue != null)
+            {
+                if (renderMat.HasProperty("_PColor")) renderMat.SetColor("_PColor", data.phue.colorStart);
+                if (renderMat.HasProperty("_PReplaceColor")) renderMat.SetColor("_PReplaceColor", data.phue.colorDestination);
+                if (renderMat.HasProperty("_PRange")) renderMat.SetFloat("_PRange", data.phue.colorRange);
+            }
+
+            // Apply THue
             if (data.thue != null)
             {
                 if (renderMat.HasProperty("_THueColor")) renderMat.SetColor("_THueColor", data.thue.colorHex);

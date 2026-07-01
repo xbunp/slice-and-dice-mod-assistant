@@ -243,6 +243,70 @@ public class MonsterUI : EntityUI<MonsterData>
             GridCellSpec.CreateInput("EntityFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateEntityHsvData(2, v); })
         ));
 
+        // ==========================================
+        // ADDED: P-HUE & T-HUE LAYOUTS
+        // ==========================================
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("P-Hue Swap:", 0.30f),
+            GridCellSpec.CreateButton("PhueStartBtn", "Target", 0.35f, () => {
+                if (uiGenerator.colorPicker == null) return;
+                Color initialColor = CurrentEntity.phue != null ? CurrentEntity.phue.colorStart : Color.white;
+                OpenColorPicker(initialColor, (color) => {
+                    if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
+                    CurrentEntity.phue.colorStart = color;
+                    NotifyStateChanged();
+                });
+            }),
+            GridCellSpec.CreateButton("PhueDestBtn", "Replace", 0.35f, () => {
+                if (uiGenerator.colorPicker == null) return;
+                Color initialColor = CurrentEntity.phue != null ? CurrentEntity.phue.colorDestination : Color.white;
+                OpenColorPicker(initialColor, (color) => {
+                    if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
+                    CurrentEntity.phue.colorDestination = color;
+                    NotifyStateChanged();
+                });
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("P-Hue Range:", 0.30f),
+            GridCellSpec.CreateSlider("PhueRangeSlider", 0, 99, true, 0.70f, (val) => {
+                if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
+                CurrentEntity.phue.colorRange = Mathf.RoundToInt(val);
+                NotifyStateChanged();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("T-Hue Color:", 0.35f),
+            GridCellSpec.CreateButton("ThueColorBtn", "Pick Color", 0.65f, () => {
+                if (uiGenerator.colorPicker == null) return;
+                Color initialColor = CurrentEntity.thue != null ? CurrentEntity.thue.colorHex : Color.white;
+                OpenColorPicker(initialColor, (color) => {
+                    if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue { colorRange = 0, colorOffset = 0 };
+                    CurrentEntity.thue.colorHex = color;
+                    NotifyStateChanged();
+                });
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("T-Hue Range:", 0.20f),
+            GridCellSpec.CreateSlider("ThueRangeSlider", 0, 99, true, 0.30f, (val) => {
+                if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue();
+                CurrentEntity.thue.colorRange = Mathf.RoundToInt(val);
+                NotifyStateChanged();
+            }),
+            GridCellSpec.CreateLabel("T-Hue Shift:", 0.20f),
+            GridCellSpec.CreateSlider("ThueOffsetSlider", -99, 99, true, 0.30f, (val) => {
+                if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue();
+                CurrentEntity.thue.colorOffset = Mathf.RoundToInt(val);
+                NotifyStateChanged();
+            })
+        ));
+        // ==========================================
+
+
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Doc:", 0.20f),
             GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val.SanitizeRichInput(); NotifyStateChanged(); })

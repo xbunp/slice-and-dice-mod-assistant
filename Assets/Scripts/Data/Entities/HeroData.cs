@@ -73,7 +73,7 @@ public class HeroData : EntityData
     {
         entityName = null; imageOverride = null; baseReplica = null; colorClass = null;
         hp = 0; h = 0; s = 0; v = 0; tier = 0; hue = 0;
-        p = null; b = null; rect = null; draw = null; thue = null; doc = null; speech = null; adj = null;
+        p = null; b = null; rect = null; draw = null; thue = null; doc = null; speech = null; adj = null; phue = null;
 
         items = new List<string>();
         traits = new List<string>();
@@ -86,6 +86,7 @@ public class HeroData : EntityData
         customTriggerHPs = new List<TriggerHPData>(); 
         customPayloads = new List<CustomPayload>();
         thue = new Thue();
+        phue = new Phue();
 
         diceSides = new DiceSideData[6];
         for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData { effectID = 0, pips = 0, facadeID = null, keywords = new List<string>() };
@@ -184,7 +185,7 @@ public class HeroData : EntityData
                 {
                     string peek = tokens[endIndex].ToLower();
                     // Stop collecting if we hit another hero property/item boundary
-                    if (HeroDomainRules.HeroItemBoundaryKeys.Contains(peek)) break;
+                    if (HeroDomainRules.HeroPropertyKeys.Contains(peek)) break; // <-- Changed this line
                     endIndex++;
                 }
 
@@ -298,7 +299,6 @@ public class HeroData : EntityData
         if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
 
         if (hasImageOverride) { heroSb.Append($".img.{FormatName(imageOverride)}"); AppendColorModifier(heroSb); }
-        heroSb.Append(")");
 
         StringBuilder thoseSb = new StringBuilder();
         if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) thoseSb.Append($".i.t.{FormatName(t)}");
@@ -316,8 +316,10 @@ public class HeroData : EntityData
             }
         }
 
-        // Generate the base hero string (with modifiers, traits, and items if any)
-        string baseHeroString = thoseSb.Length == 0 ? heroSb.ToString() : $"({heroSb.ToString()}{thoseSb.ToString()})";
+        heroSb.Append(thoseSb.ToString());
+        heroSb.Append(")");
+
+        string baseHeroString = heroSb.ToString();
 
         // Append custom abilities on the outside of the base hero structure
         if (customAbilityData != null && customAbilityData.Count > 0)

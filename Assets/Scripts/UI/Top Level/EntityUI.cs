@@ -153,6 +153,15 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (statsUI.Inputs.TryGetValue("EntityFacS", out var hS)) hS.SetTextWithoutNotify(CurrentEntity.s.ToString());
         if (statsUI.Inputs.TryGetValue("EntityFacV", out var hV)) hV.SetTextWithoutNotify(CurrentEntity.v.ToString());
 
+        if (statsUI.Sliders.TryGetValue("PhueRangeSlider", out var phueRangeSlider))
+            phueRangeSlider.SetValueWithoutNotify(CurrentEntity.phue.colorRange);
+
+        if (statsUI.Sliders.TryGetValue("ThueRangeSlider", out var thueRangeSlider))
+            thueRangeSlider.SetValueWithoutNotify(CurrentEntity.thue.colorRange);
+
+        if (statsUI.Sliders.TryGetValue("ThueOffsetSlider", out var thueOffsetSlider))
+            thueOffsetSlider.SetValueWithoutNotify(CurrentEntity.thue.colorOffset);
+
         UpdateSpecificUIFromData();
 
         int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
@@ -196,7 +205,29 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             portraitPreview.SetHPText(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
 
             UpdateSpecificVisuals();
+
             portraitPreview.SetPortraitHSV(CurrentEntity.h, CurrentEntity.s, CurrentEntity.v);
+            portraitPreview.SetPortraitTHue(CurrentEntity.thue);
+            portraitPreview.SetPortraitPHue(CurrentEntity.phue);
+        }
+
+        if (statsUI != null && statsUI.Buttons != null)
+        {
+            if (statsUI.Buttons.TryGetValue("PhueStartBtn", out var phueStartBtn))
+            {
+                Color c = CurrentEntity.phue != null ? CurrentEntity.phue.colorStart : Color.white;
+                SetButtonColorPreview(phueStartBtn, c);
+            }
+            if (statsUI.Buttons.TryGetValue("PhueDestBtn", out var phueDestBtn))
+            {
+                Color c = CurrentEntity.phue != null ? CurrentEntity.phue.colorDestination : Color.white;
+                SetButtonColorPreview(phueDestBtn, c);
+            }
+            if (statsUI.Buttons.TryGetValue("ThueColorBtn", out var thueColorBtn))
+            {
+                Color c = CurrentEntity.thue != null ? CurrentEntity.thue.colorHex : Color.white;
+                SetButtonColorPreview(thueColorBtn, c);
+            }
         }
 
         int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
@@ -243,6 +274,54 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
             }
         }
+    }
+
+    protected void OpenColorPicker(Color initialColor, Action<Color> onColorChanged)
+    {
+        if (uiGenerator.colorPicker == null) return;
+
+        uiGenerator.colorPicker.gameObject.SetActive(true);
+        uiGenerator.colorPicker.SetColor(initialColor);
+
+        uiGenerator.colorPicker.onColorChange.RemoveAllListeners();
+        uiGenerator.colorPicker.onColorChange.AddListener(new UnityEngine.Events.UnityAction<Color>(onColorChanged));
+    }
+
+    protected void CloseColorPicker()
+    {
+        if (uiGenerator.colorPicker != null)
+        {
+            uiGenerator.colorPicker.gameObject.SetActive(false);
+        }
+    }
+
+    protected void SetButtonColorPreview(Button btn, Color color)
+    {
+        if (btn == null) return;
+
+        if (btn.image != null) btn.image.color = Color.white;
+
+        Transform preview = btn.transform.Find("ColorPreview");
+        Image previewImg;
+        if (preview == null)
+        {
+            GameObject go = new GameObject("ColorPreview", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(btn.transform, false);
+            previewImg = go.GetComponent<Image>();
+
+            RectTransform rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.80f, 0.20f);
+            rt.anchorMax = new Vector2(0.95f, 0.80f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+        else
+        {
+            previewImg = preview.GetComponent<Image>();
+        }
+
+        color.a = 1f;
+        previewImg.color = color;
     }
 
     protected void SetButtonIcon(Button btn, Sprite sprite)

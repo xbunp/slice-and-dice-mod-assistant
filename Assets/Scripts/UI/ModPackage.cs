@@ -1,7 +1,9 @@
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
-using Newtonsoft.Json;
 
 public class ModPackage : MonoBehaviour
 {
@@ -222,7 +224,8 @@ public class ModPackage : MonoBehaviour
         var settings = new JsonSerializerSettings
         {
             ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-            TypeNameHandling = TypeNameHandling.Auto
+            TypeNameHandling = TypeNameHandling.Auto,
+            ContractResolver = new UnityStructResolver()
         };
 
         string json = JsonConvert.SerializeObject(source, settings);
@@ -264,4 +267,20 @@ public class ModPackage : MonoBehaviour
             OnActiveEntityChanged?.Invoke(type, newClone);
         }
     }
+
+    public class UnityStructResolver : DefaultContractResolver
+    {
+        protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
+        {
+            JsonProperty property = base.CreateProperty(member, memberSerialization);
+
+            // Prevent infinite loops in Unity's Color and Vector types
+            if (property.DeclaringType == typeof(Color) && (property.PropertyName == "linear" || property.PropertyName == "gamma"))
+            {
+                property.ShouldSerialize = _ => false;
+            }
+            return property;
+        }
+    }
 }
+

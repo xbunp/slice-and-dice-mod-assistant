@@ -7,8 +7,6 @@ using UnityEngine.UI;
 
 public class ItemUI : RootUI
 {
-
-
     private readonly string[] _nodeDropdownOptions = new string[]
     {
         "-- Add Logic Node --",
@@ -695,7 +693,7 @@ public class ItemUI : RootUI
         }
 
         UpdateCompilerOutput();
-    }
+    }   
     private List<GridRowSpec> GetAppearanceRows(float rowHeight)
     {
         var layout = new List<GridRowSpec>
@@ -809,7 +807,6 @@ public class ItemUI : RootUI
 
         PopulateMainPanelFromData();
     }
-
     private List<GridRowSpec> GetEquippableRows(float rowHeight)
     {
         var layout = new List<GridRowSpec>
@@ -884,7 +881,6 @@ public class ItemUI : RootUI
             }))
         };
     }
-
     private List<GridRowSpec> GetBaseItemRows(float rowHeight, ItemMechanic mech)
     {
         var layout = GetTargetSelectionRows(rowHeight, mech);
@@ -902,7 +898,6 @@ public class ItemUI : RootUI
         layout.Add(new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_BaseItemStr", "Or Custom String:", 1.0f, (val) => { mech.PayloadString = val; UpdateCompilerOutput(); })));
         return layout;
     }
-
     private List<GridRowSpec> GetHatRows(float rowHeight, ItemMechanic mech)
     {
         var layout = GetTargetSelectionRows(rowHeight, mech);
@@ -917,7 +912,6 @@ public class ItemUI : RootUI
         ));
         return layout;
     }
-
     private List<GridRowSpec> GetStickerRows(float rowHeight, ItemMechanic mech)
     {
         var layout = GetTargetSelectionRows(rowHeight, mech);
@@ -932,7 +926,6 @@ public class ItemUI : RootUI
         ));
         return layout;
     }
-
     private List<GridRowSpec> GetRawStringRows(float rowHeight, ItemMechanic mech)
     {
         mech.Prefix = "";
@@ -964,6 +957,7 @@ public class ItemUI : RootUI
         return layout;
     }
     */
+    /*
     private List<GridRowSpec> GetPartRows(float rowHeight, ItemMechanic mech)
     {
         mech.Prefix = "";
@@ -992,4 +986,5 @@ public class ItemUI : RootUI
             new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("LBL_UnpackDesc", "Strips conditional activation requirements from a base item.", 1.0f))
         };
     }
+    */
 }
