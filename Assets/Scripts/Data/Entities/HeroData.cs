@@ -142,6 +142,8 @@ public class HeroData : EntityData
 
             if (TryProcessCollections(tokens, ref i, tokenLower)) continue;
 
+            // trying to fix some shit 
+            /*
             if (tokenLower == "i")
             {
                 int startIndex = i + 1;
@@ -208,6 +210,108 @@ public class HeroData : EntityData
                     }
                 }
                 continue;
+            }
+            */
+
+            if (tokenLower == "i")
+            {
+                int startIndex = i + 1;
+                if (startIndex >= tokens.Count) continue;
+
+                string subToken = tokens[startIndex].ToLower();
+
+                // 1. Find where this entire segment ends (at the next metadata key or end of string)
+                int endIndex = startIndex;
+                while (endIndex < tokens.Count && !HeroDomainRules.HeroPropertyKeys.Contains(tokens[endIndex].ToLower()))
+                {
+                    endIndex++;
+                }
+
+                int count = endIndex - startIndex;
+                if (count > 0)
+                {
+                    List<string> subTokens = tokens.GetRange(startIndex, count);
+                    i = endIndex - 1; // Advance the parser's main loop past this parsed segment
+
+                    // 2. Route Traits / Curses (.i.t.traitName or .i.t.jinx.curseName)
+                    if (subToken == "t")
+                    {
+                        if (subTokens.Count > 1 && subTokens[1].ToLower() == "jinx")
+                        {
+                            curses.AddRange(StaticBranchTracing.TopLevelSplit(string.Join(".", subTokens.Skip(2)), '#'));
+                        }
+                        else
+                        {
+                            traits.AddRange(StaticBranchTracing.TopLevelSplit(string.Join(".", subTokens.Skip(1)), '#'));
+                        }
+                    }
+                    // 3. Route Abilities (.i.learn.abilityName)
+                    else if (subToken == "learn")
+                    {
+                        baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(string.Join(".", subTokens.Skip(1)), '#'));
+                    }
+                    // 4. Route Dice Face Modifiers (Check indices using your helper class)
+                    else if (DiceTargetHelper.GetIndicesForTarget(subToken).Count > 0)
+                    {
+                        List<int> targetFaces = DiceTargetHelper.GetIndicesForTarget(subToken);
+                        string modPayload = string.Join(".", subTokens.Skip(1));
+                        ApplyDiceModifiers(targetFaces, modPayload);
+                    }
+                    // 5. Default: Route Items
+                    else
+                    {
+                        string itemString = string.Join(".", subTokens);
+                        if (itemString.Contains("("))
+                        {
+                            ItemData customItem = new ItemData();
+                            customItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
+                            customPayloads.Add(new CustomPayload { Prefix = "i", Data = customItem });
+                        }
+                        else
+                        {
+                            items.Add(itemString);
+                        }
+                    }
+                }
+                continue;
+            }
+
+        }
+    }
+
+    private void ApplyDiceModifiers(List<int> targetFaces, string modPayload)
+    {
+        string[] chunks = modPayload.Split('#');
+        foreach (int faceIdx in targetFaces)
+        {
+            if (faceIdx < 0 || faceIdx >= diceSides.Length) continue;
+            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+
+            foreach (string chunk in chunks)
+            {
+                if (string.IsNullOrWhiteSpace(chunk)) continue;
+                string[] parts = chunk.Split(new char[] { '.' }, 2);
+                if (parts.Length < 2) continue;
+
+                string type = parts[0].ToLower();
+                string value = parts[1];
+
+                if (type == "k")
+                {
+                    if (!diceSides[faceIdx].keywords.Contains(value))
+                        diceSides[faceIdx].keywords.Add(value);
+                }
+                else if (type == "facade")
+                {
+                    string[] facadeParts = value.Split(':');
+                    diceSides[faceIdx].facadeID = facadeParts[0];
+                    if (facadeParts.Length > 1)
+                    {
+                        // FIX: Replace any missing values between double colons with "0"
+                        var cleanColorParts = facadeParts.Skip(1).Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p);
+                        diceSides[faceIdx].facadeColor = string.Join(":", cleanColorParts);
+                    }
+                }
             }
         }
     }

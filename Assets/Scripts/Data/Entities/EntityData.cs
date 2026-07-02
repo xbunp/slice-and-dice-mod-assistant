@@ -91,11 +91,17 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
 
-                // FIX: Force the mandatory HSV zeroing if no color is provided
+                // FIX: Trim leading colons and replace internal double colons with ":0:"
                 if (!string.IsNullOrWhiteSpace(face.facadeColor))
-                    facStr += $":{face.facadeColor}";
+                {
+                    string cleanColor = face.facadeColor.Trim(':');
+                    while (cleanColor.Contains("::")) cleanColor = cleanColor.Replace("::", ":0:");
+                    facStr += $":{cleanColor}";
+                }
                 else
+                {
                     facStr += ":0";
+                }
 
                 chunks.Add(facStr);
             }

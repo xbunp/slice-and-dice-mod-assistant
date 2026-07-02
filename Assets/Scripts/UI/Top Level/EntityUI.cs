@@ -493,7 +493,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         }
 
-        string[] partsColor = (face.facadeColor ?? "").Split(':');
+        // FIX: Remove empty entries so empty strings don't occupy slot 0
+        string[] partsColor = (face.facadeColor ?? "").Split(new char[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
         List<string> hsv = new List<string>(partsColor);
         while (hsv.Count < 3) hsv.Add("0");
 

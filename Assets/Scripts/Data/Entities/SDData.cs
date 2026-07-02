@@ -119,7 +119,7 @@ public abstract class SDData
         string hexStart = ColorToHex(phue.colorStart);
         string hexDest = ColorToHex(phue.colorDestination);
         string rangeStr = phue.colorRange.ToString("D2");
-        return $"phue.{hexStart}:{hexDest}:{rangeStr}";
+        return $"p.{hexStart}:{hexDest}:{rangeStr}";
     }
 
     protected static Phue UnpackPHue(string phue)
