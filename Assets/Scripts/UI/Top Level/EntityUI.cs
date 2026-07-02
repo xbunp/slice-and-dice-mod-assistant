@@ -499,7 +499,15 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         while (hsv.Count < 3) hsv.Add("0");
 
         hsv[componentIndex] = value.ToString();
-        face.facadeColor = string.Join(":", hsv);
+
+        if (hsv[0] == "0" && hsv[1] == "0" && hsv[2] == "0")
+        {
+            face.facadeColor = null;
+        }
+        else
+        {
+            face.facadeColor = $"{hsv[0]}:{hsv[1]}:{hsv[2]}";
+        }
 
         string inputKey = componentIndex == 0 ? $"FacH_{faceIndex}" : (componentIndex == 1 ? $"FacS_{faceIndex}" : $"FacV_{faceIndex}");
         if (diceUI != null && diceUI.Inputs.TryGetValue(inputKey, out var input))

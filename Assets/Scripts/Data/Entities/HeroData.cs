@@ -305,11 +305,26 @@ public class HeroData : EntityData
                 {
                     string[] facadeParts = value.Split(':');
                     diceSides[faceIdx].facadeID = facadeParts[0];
+
                     if (facadeParts.Length > 1)
                     {
-                        // FIX: Replace any missing values between double colons with "0"
-                        var cleanColorParts = facadeParts.Skip(1).Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p);
-                        diceSides[faceIdx].facadeColor = string.Join(":", cleanColorParts);
+                        var colorParts = facadeParts.Skip(1)
+                                                    .Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim())
+                                                    .ToList();
+
+                        if (colorParts.Count == 0 || colorParts.All(p => p == "0"))
+                        {
+                            diceSides[faceIdx].facadeColor = null;
+                        }
+                        else
+                        {
+                            while (colorParts.Count < 3) colorParts.Add("0");
+                            diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
+                        }
+                    }
+                    else
+                    {
+                        diceSides[faceIdx].facadeColor = null;
                     }
                 }
             }
