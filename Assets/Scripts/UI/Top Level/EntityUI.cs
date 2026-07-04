@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
+using static UnityEngine.ParticleSystem;
 
 // =====================================================================
 // GENERIC BASE ENTITY UI
@@ -145,8 +146,11 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         T importedEntity = ParseEntity(pastedString);
 
         ModPackage.Instance.UpdateActiveEntityClone<T>(importedEntity);
+
+        RebuildStatsUI();
+        RebuildDiceScrollView();
+
         ModPackage.Instance.NotifyActiveEntityChanged<T>(this);
-        UpdateUIFromData();
     }
 
     // =====================================================================
@@ -943,10 +947,10 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     }
 
     protected void AppendCollectionSelector<U>(
-        List<GridRowSpec> layout, string label, string uniqueKey,
-        IReadOnlyList<U> availableChoices, List<U> currentActiveItems,
-        Func<U, string> getKey, Func<U, string> getDisplay,
-        Action<U> onAdd, Action<U> onRemove)
+            List<GridRowSpec> layout, string label, string uniqueKey,
+            IReadOnlyList<U> availableChoices, List<string> currentActiveItems,
+            Func<U, string> getKey, Func<U, string> getDisplay,
+            Action<U> onAdd, Action<string> onRemove)
     {
         List<string> dropdownOptions = new List<string> { "" };
         dropdownOptions.AddRange(availableChoices.Select(getDisplay));
@@ -962,16 +966,19 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             })
         ));
 
-        for (int i = 0; i < currentActiveItems.Count; i++)
+        if (currentActiveItems != null)
         {
-            U item = currentActiveItems[i];
-            string key = getKey(item);
-            string display = getDisplay(item);
+            for (int i = 0; i < currentActiveItems.Count; i++)
+            {
+                string activeItemName = currentActiveItems[i];
+                string rowKey = $"Active_{uniqueKey}_{i}_{activeItemName}";
+                string delKey = $"Del_{uniqueKey}_{i}_{activeItemName}";
 
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"Active_{uniqueKey}_{i}_{key}", display, 0.80f),
-                GridCellSpec.CreateButton($"Del_{uniqueKey}_{i}_{key}", "[X]", 0.20f, () => onRemove?.Invoke(item))
-            ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel(rowKey, activeItemName, 0.80f),
+                    GridCellSpec.CreateButton(delKey, "[X]", 0.20f, () => onRemove?.Invoke(activeItemName))
+                ));
+            }
         }
     }
 

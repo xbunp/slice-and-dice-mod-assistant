@@ -9,6 +9,8 @@ public class DiceSideData
     public string facadeColor = "";
     public List<string> keywords = new List<string>();
     public string rawModifications = "";
+    public string sticker = "";
+    public string cast = "";
 
     public DiceSideData Clone()
     {
@@ -19,7 +21,9 @@ public class DiceSideData
             facadeID = this.facadeID,
             facadeColor = this.facadeColor,
             keywords = new List<string>(this.keywords),
-            rawModifications = this.rawModifications
+            rawModifications = this.rawModifications,
+            sticker = this.sticker,
+            cast = this.cast
         };
     }
 }

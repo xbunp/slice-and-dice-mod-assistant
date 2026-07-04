@@ -52,7 +52,7 @@ public abstract class AuthoringNodeDef
     // Core Behaviors
     //public abstract string Compile(EntityCard card);
 
-    public abstract void DrawInspector(StringAuthoringUIManager ui, EntityCard card);
+    public abstract void DrawInspector(ItemUI ui, EntityCard card);
 }
 
 public class HatNodeDef : AuthoringNodeDef
@@ -103,6 +103,7 @@ public class HatNodeDef : AuthoringNodeDef
         return $"{prefix}{hatCore}";
     }
     */
+    /*
     public static string GetHatDiceString(HeroData heroData)
     {
         StringBuilder sb = new StringBuilder();
@@ -156,7 +157,71 @@ public class HatNodeDef : AuthoringNodeDef
 
         return sb.ToString();
     }
+    */
 
+    public static string GetHatDiceString(HeroData heroData)
+    {
+        StringBuilder sb = new StringBuilder();
+
+        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Statue" : heroData.baseReplica;
+        sb.Append(baseName);
+
+        // 1. Append the .sd. block
+        int lastActiveIndex = -1;
+        for (int i = 0; i < 6; i++)
+        {
+            if (heroData.diceSides[i] != null && (heroData.diceSides[i].effectID != 0 || heroData.diceSides[i].pips != 0))
+            {
+                lastActiveIndex = i;
+            }
+        }
+
+        if (lastActiveIndex != -1)
+        {
+            sb.Append(".sd.");
+            for (int i = 0; i <= lastActiveIndex; i++)
+            {
+                var side = heroData.diceSides[i];
+                if (side == null || (side.effectID == 0 && side.pips == 0))
+                {
+                    sb.Append("0");
+                }
+                else
+                {
+                    if (side.pips == 0) sb.Append(side.effectID);
+                    else sb.Append($"{side.effectID}-{side.pips}");
+                }
+
+                if (i < lastActiveIndex) sb.Append(":");
+            }
+        }
+
+        // 2. Append standard Facades, HSV, and Keywords
+        string faceModifiers = heroData.BuildFaceModifiers(allowFacade: true);
+        if (!string.IsNullOrEmpty(faceModifiers))
+        {
+            sb.Append(faceModifiers);
+        }
+
+        // 3. NATIVE STICKER APPENDING: Automatically output sticker modifiers per side
+        string[] sideTargets = new string[] { "left", "right", "top", "bot", "mid", "rightmost" };
+        for (int i = 0; i < 6; i++)
+        {
+            DiceSideData side = heroData.diceSides[i];
+            if (side != null && !string.IsNullOrWhiteSpace(side.sticker))
+            {
+                string cleanSticker = side.sticker.Trim();
+                // Wrap in brackets if it's a complex item syntax, otherwise keep clean
+                if (!cleanSticker.StartsWith("(") && (cleanSticker.Contains(".") || cleanSticker.Contains("#") || cleanSticker.Contains(":")))
+                {
+                    cleanSticker = $"({cleanSticker})";
+                }
+                sb.Append($".{sideTargets[i]}.sticker.{cleanSticker}");
+            }
+        }
+
+        return sb.ToString();
+    }
     public override string GetTitle(EntityCard card)
     {
         string targets = card.MechanicData.Targets.Count > 0 ? string.Join(".", card.MechanicData.Targets) : "mid";
@@ -167,7 +232,7 @@ public class HatNodeDef : AuthoringNodeDef
         return $"[{targets}] Hat (Empty)";
     }
 
-    public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
+    public override void DrawInspector(ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null) return;
@@ -260,7 +325,7 @@ public class HatNodeDef : AuthoringNodeDef
 
     // --- GRID GENERATOR & DATA SYNCHRONIZATION ---
 
-    private void RebuildHatDiceGrid(StringAuthoringUIManager ui, EntityCard card, HeroData heroData)
+    private void RebuildHatDiceGrid(ItemUI ui, EntityCard card, HeroData heroData)
     {
         if (_diceGridTarget == null) return;
 
@@ -282,7 +347,7 @@ public class HatNodeDef : AuthoringNodeDef
         UpdateHatDiceUIFromData(heroData);
     }
 
-    private List<GridRowSpec> GenerateHatDiceLayout(StringAuthoringUIManager ui, EntityCard card, HeroData heroData, int tabIndex)
+    private List<GridRowSpec> GenerateHatDiceLayout(ItemUI ui, EntityCard card, HeroData heroData, int tabIndex)
     {
         var layout = new List<GridRowSpec>();
         string[] keywordOptions = EntityUIHelpers.GetKeywordOptions();
@@ -361,6 +426,19 @@ public class HatNodeDef : AuthoringNodeDef
             ));
 
             layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Sticker Item:", 0.30f),
+                GridCellSpec.CreateInput($"Sticker_{index}", face.sticker ?? "", 0.70f, (val) => {
+                    face.sticker = val;
+                    ui.AutoCompile();
+                })
+            ));
+
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
+                GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddHatKeywordToFace(ui, card, heroData, index, val))
+            ));
+
+            layout.Add(new GridRowSpec(
                 GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
                 GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddHatKeywordToFace(ui, card, heroData, index, val))
             ));
@@ -418,6 +496,8 @@ public class HatNodeDef : AuthoringNodeDef
             if (_diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
             if (_diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
             if (_diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.SetTextWithoutNotify(face.facadeID);
+
+            if (_diceUI.Inputs.TryGetValue($"Sticker_{i}", out var dStk)) dStk.SetTextWithoutNotify(face.sticker ?? "");
 
             int h = 0, s = 0, v = 0;
             string[] hsvParts = (face.facadeColor ?? "").Split(':');
@@ -598,7 +678,7 @@ public class HatNodeDef : AuthoringNodeDef
         _diceClipboard = heroData.diceSides[index].Clone();
     }
 
-    private void PasteHatDiceFace(StringAuthoringUIManager ui, EntityCard card, HeroData heroData, int index)
+    private void PasteHatDiceFace(ItemUI ui, EntityCard card, HeroData heroData, int index)
     {
         if (_diceClipboard == null) return;
         heroData.diceSides[index] = _diceClipboard.Clone();
@@ -606,7 +686,7 @@ public class HatNodeDef : AuthoringNodeDef
         RebuildHatDiceGrid(ui, card, heroData);
     }
 
-    private void AddHatKeywordToFace(StringAuthoringUIManager ui, EntityCard card, HeroData heroData, int faceIndex, int dropdownValue)
+    private void AddHatKeywordToFace(ItemUI ui, EntityCard card, HeroData heroData, int faceIndex, int dropdownValue)
     {
         if (dropdownValue <= 0) return;
         string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
@@ -621,7 +701,7 @@ public class HatNodeDef : AuthoringNodeDef
         }
     }
 
-    private void RemoveHatKeywordFromFace(StringAuthoringUIManager ui, EntityCard card, HeroData heroData, int faceIndex, string keyword)
+    private void RemoveHatKeywordFromFace(ItemUI ui, EntityCard card, HeroData heroData, int faceIndex, string keyword)
     {
         var face = heroData.diceSides[faceIndex];
         if (face.keywords.Remove(keyword))
@@ -631,7 +711,7 @@ public class HatNodeDef : AuthoringNodeDef
         }
     }
 
-    private void UpdateHatFaceHsv(StringAuthoringUIManager ui, HeroData heroData, int faceIndex, int componentIndex, int value)
+    private void UpdateHatFaceHsv(ItemUI ui, HeroData heroData, int faceIndex, int componentIndex, int value)
     {
         var face = heroData.diceSides[faceIndex];
         if (string.IsNullOrEmpty(face.facadeID))
@@ -662,7 +742,7 @@ public class HatNodeDef : AuthoringNodeDef
         UpdateHatDiceUIFromData(heroData);
     }
 
-    private void CreateTargetDropdown(Transform parent, StringAuthoringUIManager ui, EntityCard card)
+    private void CreateTargetDropdown(Transform parent, ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null || fsg.dropdownPrefab == null) return;
@@ -909,7 +989,7 @@ public class EquippableNodeDef : AuthoringNodeDef
         }
         return imageName;
     }
-    public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
+    public override void DrawInspector(ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null) return;
@@ -1085,7 +1165,7 @@ public class EquippableNodeDef : AuthoringNodeDef
     // HELPER METHODS FOR FACADE PICKING
     // ==========================================================
 
-    private void OpenFacadeModal(EntityCard card, StringAuthoringUIManager ui, GridReferences refs)
+    private void OpenFacadeModal(EntityCard card, ItemUI ui, GridReferences refs)
     {
         var iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
         if (iconPicker == null) return;
@@ -1408,7 +1488,7 @@ public class BaseItemNodeDef : AuthoringNodeDef
     // INSPECTOR ORCHESTRATION
     // ==========================================
 
-    public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
+    public override void DrawInspector(ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null) return;
@@ -1592,7 +1672,7 @@ public class BaseItemNodeDef : AuthoringNodeDef
     // BACKEND PARSING & SAVING
     // ==========================================
 
-    private void SaveState(EntityCard card, List<BaseItemEntry> entries, StringAuthoringUIManager ui, bool forceInspectorRebuild)
+    private void SaveState(EntityCard card, List<BaseItemEntry> entries, ItemUI ui, bool forceInspectorRebuild)
     {
         List<string> parts = new List<string>();
 
@@ -1607,15 +1687,8 @@ public class BaseItemNodeDef : AuthoringNodeDef
                 case BasePackEntryType.Ritemx:
                 case BasePackEntryType.Ritem:
                     string prefix = "";
-                    if (e.PerTier)
-                    {
-                        prefix += "pertier.";
-                    }
-                    else if (e.Repeats != 1 && e.Repeats != 0)
-                    {
-                        prefix += $"x{e.Repeats}.";
-                    }
-
+                    if (e.PerTier) prefix += "pertier.";
+                    else if (e.Repeats != 1 && e.Repeats != 0) prefix += $"x{e.Repeats}.";
                     if (e.Unpack) prefix += "unpack.";
 
                     s = prefix + e.ItemName;
@@ -1634,7 +1707,14 @@ public class BaseItemNodeDef : AuthoringNodeDef
                     break;
             }
 
-            s = $"({s})";
+            // SMART WRAPPING: Only wrap in brackets if the item contains sub-properties or complex modifiers
+            // Simple atomic items like 'togtarg' or 'ritemx.0' stay bracket-free!
+            bool needsBrackets = s.Contains(".part.") || s.Contains(".m.") || s.Contains("pertier.") || s.Contains("unpack.");
+            if (needsBrackets && !s.StartsWith("("))
+            {
+                s = $"({s})";
+            }
+
             if (i < entries.Count - 1) s += e.NextOp;
 
             parts.Add(s);
@@ -1775,7 +1855,7 @@ public class RawStringNodeDef : AuthoringNodeDef
     /*
     public override string Compile(EntityCard card) => card.MechanicData.PayloadString;
     */
-    public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
+    public override void DrawInspector(ItemUI ui, EntityCard card)
     {
         ui.CreateInspectorTextArea("Raw Payload", card.MechanicData.PayloadString, v => { card.MechanicData.PayloadString = v; ui.AutoCompile(); });
     }
@@ -1809,7 +1889,7 @@ public class OperatorNodeDef : AuthoringNodeDef
         string op = string.IsNullOrEmpty(card.MechanicData.PayloadString) ? "#" : card.MechanicData.PayloadString;
         return NodeOperatorUtility.GetLabel(op);
     }
-    public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
+    public override void DrawInspector(ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null)
@@ -1860,7 +1940,7 @@ public class ManualBracketNodeDef : AuthoringNodeDef
 
     public override string GetTitle(EntityCard card)
     {
-        string compiledChildren = StringAuthoringUIManager.CompileZone(card.PayloadPort?.Entrants.Cast<EntityCard>());
+        string compiledChildren = ItemUI.CompileZone(card.PayloadPort?.Entrants.Cast<EntityCard>());
 
         if (string.IsNullOrWhiteSpace(compiledChildren))
             return "[ Group (Empty) ]";
@@ -1883,7 +1963,7 @@ public class ManualBracketNodeDef : AuthoringNodeDef
         return $"({compiledChildren})";
     }
     */
-    public override void DrawInspector(StringAuthoringUIManager ui, EntityCard card)
+    public override void DrawInspector(ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null) return;

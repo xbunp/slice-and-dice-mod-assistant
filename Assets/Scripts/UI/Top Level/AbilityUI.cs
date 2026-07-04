@@ -131,8 +131,8 @@ public class AbilityUI : RootUI
 
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = EntityUIHelpers.AllActionSprites,
-            IsValid = (index, sprite) => sprite != null && (EntityUIHelpers.IsSpriteValid(sprite) || (sprite.rect.width == 10 && sprite.rect.height == 10)),
+            Sprites = EntityUIHelpers.CommunitySprites,
+            IsValid = (index, sprite) => sprite != null,
             GetSearchName = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
             GetTooltip = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
             OnSelectionMade = (index, sprite) =>
@@ -270,7 +270,7 @@ public class AbilityUI : RootUI
 
         // Update Dice Side fields dynamically 
         UpdateFaceUIElements(0); // Primary
-        //UpdateFaceUIElements(1); // Secondary
+                                 //UpdateFaceUIElements(1); // Secondary
 
         if (abilityDataUI.Dropdowns.TryGetValue("ModeDrop", out var modeDrop))
         {
@@ -278,7 +278,24 @@ public class AbilityUI : RootUI
             if (CurrentAbility is TacticData) modeIdx = 1;
             else if (CurrentAbility is OnHitData) modeIdx = 2;
             else if (CurrentAbility is TriggerHPData) modeIdx = 3;
+            else if (CurrentAbility is OrbData) modeIdx = 4;
             modeDrop.SetValueWithoutNotify(modeIdx);
+        }
+
+        if (CurrentAbility is OrbData orb)
+        {
+            if (abilityDataUI.Dropdowns.TryGetValue("OrbTypeDrop", out var orbTypeDrop))
+                orbTypeDrop.SetValueWithoutNotify(orb.isHardcoded ? 1 : 0);
+
+            if (abilityDataUI.Dropdowns.TryGetValue("BaseOrbDrop", out var baseOrbDrop))
+            {
+                var baseOrbsList = OrbData.ValidBaseOrbs.ToList();
+                int idx = baseOrbsList.FindIndex(o => string.Equals(o, orb.hardcodedAbilityName, StringComparison.OrdinalIgnoreCase));
+                baseOrbDrop.SetValueWithoutNotify(idx >= 0 ? idx : 0);
+            }
+
+            if (abilityDataUI.Inputs.TryGetValue("CarrierPrefixInput", out var carrierIn))
+                carrierIn.SetTextWithoutNotify(string.IsNullOrEmpty(orb.carrierPrefix) ? "sthief.abilitydata" : orb.carrierPrefix);
         }
 
         if (CurrentAbility is SpellData spell)
@@ -376,7 +393,10 @@ public class AbilityUI : RootUI
 
         if (rawTextOutput != null)
         {
-            string exportedString = $"abilitydata.{CurrentAbility.ExportWrapped()}";
+            string exportedString = CurrentAbility is OrbData orb
+                ? orb.ExportAsTrait(useITPrefix: true)
+                : $"abilitydata.{CurrentAbility.ExportWrapped()}";
+
             rawTextOutput.SetTextWithoutNotify(exportedString);
 
             if (syntaxHighlighterText != null)
@@ -612,129 +632,6 @@ public class AbilityUI : RootUI
 
         return layout;
     }
-    /*
-    private List<GridRowSpec> GenerateAbilityLayout()
-    {
-        var layout = new List<GridRowSpec>();
-        bool isSpell = CurrentAbility is SpellData;
-        var validKeywords = GetFilteredFaceKeywords();
-        //validKeywords.Insert(0, ""); // empty for dropdown
-
-        // 1. TACTIC OR SPELL TOGGLE
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateButton("BtnToggleMode", isSpell ? "MODE: SPELL" : "MODE: TACTIC", 1.0f, ToggleAbilityMode)
-        ));
-        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer", "", 1.0f)));
-
-        // 2. PRIMARY EFFECT (Side 0)
-        var pFace = CurrentAbility.diceSides[0];
-        //string targetHint = pFace.effectID == 56 || pFace.effectID == 103 ? "(Targets: ALLIES)" : "(Targets: ENEMIES)"; // Simplistic targeting hint
-        string targetHint = "Target ally or enemy.";
-
-        var primBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgPrim", 1.0f)) { isBackground = true, rowSpan = 3 + pFace.keywords.Count };
-        layout.Add(primBg);
-
-        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblPrim", $"PRIMARY EFFECT {targetHint}", 1.0f)));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDiceButton($"BaseBtn_0", "B", 0.10f, () => OpenEffectBaseModal(0, true)),
-            GridCellSpec.CreateInput($"ID_0", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { pFace.effectID = id; NotifyStateChanged(); } }),
-            GridCellSpec.CreateLabel("Pips:", 0.20f),
-            GridCellSpec.CreateInput($"Pips_0", "Pips", 0.20f, (val) => { if (int.TryParse(val, out int p)) { pFace.pips = p; NotifyStateChanged(); } }),
-            GridCellSpec.CreateButton($"BtnPUp_0", "▲", 0.15f, () => { pFace.pips++; NotifyStateChanged(); UpdateUIFromData(); }),
-            GridCellSpec.CreateButton($"BtnPDn_0", "▼", 0.15f, () => { pFace.pips = Mathf.Max(0, pFace.pips - 1); NotifyStateChanged(); UpdateUIFromData(); })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 0.35f),
-            GridCellSpec.CreateFilteredDropdown($"KwDrop_0", "", 0.65f, validKeywords.ToArray(), (val) => AddKeywordToFace(0, val))
-        ));
-
-        foreach (var kw in pFace.keywords)
-        {
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"KwTag_0_{kw}", EntityUIHelpers.GetColoredKeywordLabel(kw), 0.80f),
-                GridCellSpec.CreateButton($"KwDel_0_{kw}", "[X]", 0.20f, () => RemoveKeywordFromFace(0, kw))
-            ));
-        }
-        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer2", "", 1.0f)));
-
-        // 3. SECONDARY EFFECT (Side 1)
-        var sFace = CurrentAbility.diceSides[1];
-        var secBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgSec", 1.0f)) { isBackground = true, rowSpan = 3 + sFace.keywords.Count };
-        layout.Add(secBg);
-
-        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblSec", "SECONDARY EFFECT (Untargeted)", 1.0f)));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDiceButton($"BaseBtn_1", "B", 0.10f, () => OpenEffectBaseModal(1, false)),
-            GridCellSpec.CreateInput($"ID_1", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { sFace.effectID = id; NotifyStateChanged(); } }),
-            GridCellSpec.CreateLabel("Pips:", 0.20f),
-            GridCellSpec.CreateInput($"Pips_1", "Pips", 0.20f, (val) => { if (int.TryParse(val, out int p)) { sFace.pips = p; NotifyStateChanged(); } }),
-            GridCellSpec.CreateButton($"BtnPUp_1", "▲", 0.15f, () => { sFace.pips++; NotifyStateChanged(); UpdateUIFromData(); }),
-            GridCellSpec.CreateButton($"BtnPDn_1", "▼", 0.15f, () => { sFace.pips = Mathf.Max(0, sFace.pips - 1); NotifyStateChanged(); UpdateUIFromData(); })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 0.35f),
-            GridCellSpec.CreateFilteredDropdown($"KwDrop_1", "", 0.65f, validKeywords.ToArray(), (val) => AddKeywordToFace(1, val))
-        ));
-
-        foreach (var kw in sFace.keywords)
-        {
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"KwTag_1_{kw}", EntityUIHelpers.GetColoredKeywordLabel(kw), 0.80f),
-                GridCellSpec.CreateButton($"KwDel_1_{kw}", "[X]", 0.20f, () => RemoveKeywordFromFace(1, kw))
-            ));
-        }
-        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer3", "", 1.0f)));
-
-        // 4. SPELL MANA OR TACTIC COSTS
-        var costBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgCost", 1.0f)) { isBackground = true, rowSpan = isSpell ? 2 : 4 };
-        layout.Add(costBg);
-
-        if (isSpell)
-        {
-            var spell = CurrentAbility as SpellData;
-            layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblCost", "SPELL MANA COST", 1.0f)));
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Cost:", 0.30f),
-                GridCellSpec.CreateInput("ManaPips", spell.manaCost.ToString(), 0.30f, (val) => { if (int.TryParse(val, out int p)) { spell.manaCost = p; NotifyStateChanged(); } }),
-                GridCellSpec.CreateButton($"BtnCostUp", "▲", 0.20f, () => { spell.manaCost++; NotifyStateChanged(); UpdateUIFromData(); }),
-                GridCellSpec.CreateButton($"BtnCostDn", "▼", 0.20f, () => { spell.manaCost = Mathf.Max(0, spell.manaCost - 1); NotifyStateChanged(); UpdateUIFromData(); })
-            ));
-        }
-        else
-        {
-            var tactic = CurrentAbility as TacticData;
-            layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblCost", "TACTIC COSTS (Up to 3)", 1.0f)));
-
-            // Tactic Cost 1 (Top Side / Index 2)
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateDropdown("TacDrop_2", "", 0.45f, TacticCostOptions, (val) => ApplyTacticCost(2, val, tactic.TacticCostTop.pips)),
-                GridCellSpec.CreateLabel("Pips:", 0.15f),
-                GridCellSpec.CreateInput("TacPip_2", tactic.TacticCostTop.pips.ToString(), 0.20f, (val) => { if (int.TryParse(val, out int p)) { ApplyTacticCost(2, GetTacticCostDropdownIndex(tactic.TacticCostTop), p); } })
-            ));
-
-            // Tactic Cost 2 (Bottom Side / Index 3)
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateDropdown("TacDrop_3", "", 0.45f, TacticCostOptions, (val) => ApplyTacticCost(3, val, tactic.TacticCostBottom.pips)),
-                GridCellSpec.CreateLabel("Pips:", 0.15f),
-                GridCellSpec.CreateInput("TacPip_3", tactic.TacticCostBottom.pips.ToString(), 0.20f, (val) => { if (int.TryParse(val, out int p)) { ApplyTacticCost(3, GetTacticCostDropdownIndex(tactic.TacticCostBottom), p); } })
-            ));
-
-            // Tactic Cost 3 (Rightmost Side / Index 5)
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateDropdown("TacDrop_5", "", 0.45f, TacticCostOptions, (val) => ApplyTacticCost(5, val, tactic.TacticCostRightmost.pips)),
-                GridCellSpec.CreateLabel("Pips:", 0.15f),
-                GridCellSpec.CreateInput("TacPip_5", tactic.TacticCostRightmost.pips.ToString(), 0.20f, (val) => { if (int.TryParse(val, out int p)) { ApplyTacticCost(5, GetTacticCostDropdownIndex(tactic.TacticCostRightmost), p); } })
-            ));
-        }
-
-        return layout;
-    }
-    */
-    // =====================================================================
-    // REFACTORED ABILITY LAYOUT ENGINE
-    // =====================================================================
 
     private List<GridRowSpec> GenerateAbilityLayout()
     {
@@ -745,8 +642,9 @@ public class AbilityUI : RootUI
         if (CurrentAbility is TacticData) currentModeIndex = 1;
         else if (CurrentAbility is OnHitData) currentModeIndex = 2;
         else if (CurrentAbility is TriggerHPData) currentModeIndex = 3;
+        else if (CurrentAbility is OrbData) currentModeIndex = 4; // ADDED
 
-        string[] modeOptions = new string[] { "Spell", "Tactic", "On Hit", "Trigger HP" };
+        string[] modeOptions = new string[] { "Spell", "Tactic", "On Hit", "Trigger HP", "Orb" }; // ADDED "Orb"
 
         // 1. Ability Mode Selection Dropdown
         layout.Add(new GridRowSpec(
@@ -757,27 +655,72 @@ public class AbilityUI : RootUI
         ));
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer", "", 1.0f)));
 
-        // 2. Build Primary Left Dice Face (Shared across all modes)
+        // 2. Build Primary Left Dice Face
         BuildPrimaryFaceLayout(layout, currentModeIndex, validKeywords);
 
         // 3. Delegate to specialized layout builder
         switch (currentModeIndex)
         {
-            case 0:
-                BuildSpellLayout(layout, validKeywords);
-                break;
-            case 1:
-                BuildTacticLayout(layout, validKeywords);
-                break;
-            case 2:
-                BuildOnHitLayout(layout);
-                break;
-            case 3:
-                BuildTriggerHPLayout(layout);
-                break;
+            case 0: BuildSpellLayout(layout, validKeywords); break;
+            case 1: BuildTacticLayout(layout, validKeywords); break;
+            case 2: BuildOnHitLayout(layout); break;
+            case 3: BuildTriggerHPLayout(layout); break;
+            case 4: BuildOrbLayout(layout, validKeywords); break; // ADDED
         }
 
         return layout;
+    }
+
+    private void BuildOrbLayout(List<GridRowSpec> layout, List<string> validKeywords)
+    {
+        var orbData = CurrentAbility as OrbData;
+
+        var orbBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgCost", 1.0f)) { isBackground = true, rowSpan = 3 };
+        layout.Add(orbBg);
+
+        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblCost", "ORB TRIGGER SETTINGS (ON DEATH)", 1.0f)));
+
+        string[] orbTypeOptions = new string[] { "Custom Ability Payload", "Hardcoded Base Game Ability" };
+        int selectedTypeIdx = orbData.isHardcoded ? 1 : 0;
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Orb Type:", 0.35f),
+            GridCellSpec.CreateDropdown("OrbTypeDrop", orbTypeOptions[selectedTypeIdx], 0.65f, orbTypeOptions, (val) => {
+                orbData.isHardcoded = (val == 1);
+                NotifyStateChanged();
+                RebuildAbilityScrollView();
+            })
+        ));
+
+        if (orbData.isHardcoded)
+        {
+            var baseOrbsList = OrbData.ValidBaseOrbs.ToList();
+            int currentBaseIdx = baseOrbsList.FindIndex(o => string.Equals(o, orbData.hardcodedAbilityName, StringComparison.OrdinalIgnoreCase));
+            if (currentBaseIdx < 0) currentBaseIdx = 0;
+
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Base Ability:", 0.35f),
+                GridCellSpec.CreateDropdown("BaseOrbDrop", baseOrbsList[currentBaseIdx], 0.65f, baseOrbsList.ToArray(), (val) => {
+                    if (val >= 0 && val < baseOrbsList.Count)
+                    {
+                        orbData.hardcodedAbilityName = baseOrbsList[val];
+                        orbData.entityName = baseOrbsList[val];
+                        NotifyStateChanged();
+                        UpdateUIFromData();
+                    }
+                })
+            ));
+        }
+        else
+        {
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Carrier Prefix:", 0.35f),
+                GridCellSpec.CreateInput("CarrierPrefixInput", string.IsNullOrEmpty(orbData.carrierPrefix) ? "sthief.abilitydata" : orbData.carrierPrefix, 0.65f, (val) => {
+                    orbData.carrierPrefix = string.IsNullOrWhiteSpace(val) ? "sthief.abilitydata" : val;
+                    NotifyStateChanged();
+                })
+            ));
+        }
     }
 
     private void BuildPrimaryFaceLayout(List<GridRowSpec> layout, int modeIndex, List<string> validKeywords)
@@ -1356,6 +1299,11 @@ public class AbilityUI : RootUI
                 newAbility = new TriggerHPData();
                 ((TriggerHPData)newAbility).hp = 1;
                 ((TriggerHPData)newAbility).colorClass = SDColors.GetColorCode(HeroColorOption.Grey);
+                break;
+            case 4: 
+                newAbility = new OrbData();
+                ((OrbData)newAbility).isHardcoded = false;
+                ((OrbData)newAbility).carrierPrefix = "sthief.abilitydata";
                 break;
             case 0:
             default: newAbility = new SpellData(); break;

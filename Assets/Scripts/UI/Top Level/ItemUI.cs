@@ -1,990 +1,1249 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using TMPro;
+using TMPro; // Assuming TextMeshPro is used for clarity, replace with standard Text if needed
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using static UnityEngine.Rendering.VolumeComponent;
 
+// DO NOT FORGET: CRITICAL
+// YOU CANNOT WORK IN THIS CLASS WITHOUT SEEING ItemSyntaxCompiler.CS
+// AND ITEMDATA.CS
+// AND STRATEGYPATTERNNODES.CS WHICH CONTAINS AuthoringNodeDef
+
+public enum ItemNodeType
+{
+    None,
+    Appearance,
+    Equippable,
+    BaseItem,
+    Operator,
+    Hat,
+    Bracket,
+    RawString
+
+    // old shit, temporarily removed until needed
+    /*
+    Equippable, Sticker, Splice, Merge, Unpack, ItemPart,
+    Hero, Monster, Modifier, Ability,
+
+    ItemRoot,
+    FaceModifier,
+    TriggeredAbility,
+    EntityPayload,
+    RawString
+    */
+}
+
+// 1. The refined EntityCard retains strong typing.
+public class EntityCard : ReorderableItem, IPointerClickHandler
+{
+    public ItemNodeType NodeType;
+    public string CustomPrefix = "";
+
+    // Strongly-Typed Backend References
+    public ItemData RootData = new ItemData();
+    public ItemMechanic MechanicData = new ItemMechanic();
+    public SDData SemanticData;
+
+    public ReorderableZone PayloadPort { get; set; }
+
+    public string CardName => NodeRegistry.Get(NodeType).GetTitle(this);
+
+    public void OnPointerClick(UnityEngine.EventSystems.PointerEventData eventData)
+    {
+        if (eventData.dragging) return;
+        ItemUI.Instance?.SelectCard(this);
+    }
+
+    public string Compile()
+    {
+        // Simply hand this card to the global compiler
+        string rawStr = ItemSyntaxCompiler.CompileCard(this);
+
+        // Visual overlay rich-text pass
+        if (ItemUI.IsCompilingRichText && !string.IsNullOrWhiteSpace(rawStr))
+        {
+            Color nodeColor = NodeRegistry.Get(NodeType).GetColor();
+            nodeColor = nodeColor * 1.5f;
+            string hex = ColorUtility.ToHtmlStringRGB(nodeColor);
+
+            return $"<color=#{hex}>{rawStr}</color>";
+        }
+
+        return rawStr;
+    }
+
+    // Safely extracts compiled strings from children
+    public IEnumerable<string> GetChildCompilations()
+    {
+        if (PayloadPort == null || PayloadPort.Entrants.Count == 0) yield break;
+        foreach (var child in PayloadPort.Entrants.Cast<EntityCard>())
+        {
+            string childStr = child.Compile();
+            if (!string.IsNullOrWhiteSpace(childStr)) yield return childStr;
+        }
+    }
+}
+
+[RequireComponent(typeof(Canvas), typeof(GraphicRaycaster))]
 public class ItemUI : RootUI
 {
-    private readonly string[] _nodeDropdownOptions = new string[]
+    // Small utility to keep the card title text up to date
+    public class UpdateTitleUtility : MonoBehaviour
     {
-        "-- Add Logic Node --",
-        "Equippable Item (Root Metadata)",
-        "Base / Ritem",
-        "(Hat) Set Dice Faces",
-        "Sticker",
-        "(#) Chain Items",
-        "Splice Item",
-        "Merge Item",
-        "Unpack Item",
-        "Item Part",
-        "Raw String"
-    };
-
-    private class WorkspaceItem : ReorderableItem
-    {
-        public ItemNodeType Type;
-        public string NodeLabel = "Generic Logic Node";
-        public ItemMechanic Mechanic = new ItemMechanic(); // Used for mechanic-based nodes
+        EntityCard card; TMPro.TextMeshProUGUI txt;
+        public void Init(EntityCard c, TMPro.TextMeshProUGUI t) { card = c; txt = t; }
+        void Update() { if (card != null && txt != null) txt.text = card.CardName; }
     }
+
     public static ItemUI Instance { get; private set; }
+    private TextMeshProUGUI _sidebarText;
+    private RectTransform _rootCanvasRect;
+    private Canvas _cachedCanvas;
+    private TMPro.TMP_InputField _compiledOutputField;
 
-    // Icon Picker & Custom Image State
-    private IconPickerModal iconPicker;
-    private bool showCustomImagePanel = false;
-    private string _customImageString;
-    private Texture2D _customImageTexture;
-    private ImageReceiver _persistentCustomImageReceiver;
-    private Sprite _customImageCachedSprite;
+    private GameObject inputFieldPrefab => FullScreenUIGenerator.Instance.inputFieldPrefab;
+    private GameObject buttonPrefab => FullScreenUIGenerator.Instance.buttonPrefab;
+    private GameObject dropdownPrefab => FullScreenUIGenerator.Instance.dropdownPrefab;
 
-    // SINGLE SOURCE OF TRUTH
-    private ItemData currentItem;
+    private List<ItemNodeType> _dropdownNodeTypes = new List<ItemNodeType>();
 
-    [Header("Layout & Containers")]
-    private ReorderableZone _rootWorkspaceZone;
-    private WorkspaceItem _selectedWorkspaceItem;
+    // References to our major panels
+    public RectTransform BreadcrumbPanel { get; private set; }
+    public RectTransform SidebarContent { get; private set; }
+    public RectTransform MainCanvasContent { get; private set; }
+    public RectTransform InspectorContent { get; private set; }
 
-    private ScrollRect _workspaceScroll;
-    private Transform _workspaceContent;
+    [Header("Configuration")]
+    public float topBarHeight = 50f;
+    public float sidebarWidth = 300f;
+    public float inspectorWidth = 400f;
 
-    // Top Bar UI
-    private TMP_InputField _finalStringInput;
-    private TextMeshProUGUI _englishTranslationText;
+    private ReorderableZone _rootZone;
+    private TMPro.TMP_Dropdown _loadDropdown;
+    private bool _isUpdatingDropdown = false;
+    private EntityCard _selectedCard;
+    private TextMeshProUGUI _syntaxHighlighterText;
+    public static bool IsCompilingRichText = false;
 
-    // Merged Main Properties Editor
-    private ScrollRect _mainScroll;
-    private GridReferences _mainRefs;
-
-    private bool _isLoading = false;
-
-    public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
+    private void Awake()
     {
         Instance = this;
-        currentItem = new ItemData();
-
-        if (iconPicker == null)
-            iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
-
-        base.Initialize(uiGeneratorRef);
     }
+    private void OnDestroy()
+    {
+        if (ModPackage.Instance != null)
+        {
+            ModPackage.Instance.OnModLoaded -= PopulateLoadDropdown;
+        }
+        if (_rootZone != null)
+        {
+            _rootZone.OnZoneChanged -= RefreshSidebar;
+        }
+    }
+    public void Start()
+    {
+        // 1. Ensure we have an event system for drag logic
+        if (FindObjectOfType<EventSystem>() == null)
+        {
+            var es = new GameObject("EventSystem");
+            es.AddComponent<EventSystem>();
+            es.AddComponent<StandaloneInputModule>();
+        }
+
+        // 2. Build the visual workspace structure immediately (safe, purely layout)
+        //BuildWorkspace();
+
+        // 3. Defer database connections until ModPackage is awake and loaded
+        StartCoroutine(WaitForModPackage());
+    }
+
     protected override void BuildUIAndBind()
     {
-        float totalHeight = 600f;
-        if (uiGenerator != null && uiGenerator.canvas != null)
+        // 1. Generate standard screen mapping to supply the root wrapper to RootUI
+        List<ColumnSpec> columns = new List<ColumnSpec>();
+        generatedScreen = uiGenerator.SetupScreen(columns, false);
+        _rootCanvasRect = generatedScreen.RootWrapper;
+        _cachedCanvas = FullScreenUIGenerator.Instance.canvas;
+
+        // 2. Build out internal layout frames nested inside the generated wrapper
+        BuildTopBar();
+        BuildSidebar();
+        BuildMainCanvas();
+        BuildInspector();
+
+        // Setup the root drop zone for the main canvas
+        SetupRootWorkspaceZone();
+    }
+    private System.Collections.IEnumerator WaitForModPackage()
+    {
+        // Poll and wait until ModPackage is instantiated in memory
+        while (ModPackage.Instance == null)
         {
-            RectTransform canvasRt = uiGenerator.canvas.GetComponent<RectTransform>();
-            if (canvasRt != null) totalHeight = canvasRt.rect.height;
+            yield return null;
         }
 
-        float rowHeight = uiGenerator != null ? uiGenerator.rowHeight : 40f;
-        float spacing = uiGenerator != null ? uiGenerator.rowSpacing : 8f;
-        float topBarHeight = 75f;
-
-        float dynamicScrollHeight = Mathf.Max(300f, totalHeight - topBarHeight - (rowHeight * 2f) - (spacing * 3f));
-        float mainScrollHeight = Mathf.Max(300f, totalHeight - topBarHeight - spacing);
-
-        List<ColumnSpec> columns = new List<ColumnSpec>
+        // Wait until ModPackage has finished creating/loading its mod database
+        while (!ModPackage.Instance.isModLoaded)
         {
-            BuildWorkspaceColumn(rowHeight, dynamicScrollHeight, topBarHeight),
-            new ColumnSpec("Main_Column", 0.3f, 1.0f, new List<GridRowSpec>
+            yield return null;
+        }
+
+        // Now that the ModPackage is 100% ready, populate and initialize editing
+        InitializeDataOnStart();
+    }
+    private void InitializeDataOnStart()
+    {
+        // Populate dropdown from loaded mod items
+        PopulateLoadDropdown();
+
+        // Subscribe to global mod loaded events
+        ModPackage.Instance.OnModLoaded += PopulateLoadDropdown;
+
+        // Initialize the workspace with a blank item to start authoring right away
+        CreateNewItem();
+    }
+    private void BuildTopBar()
+    {
+        // Container
+        BreadcrumbPanel = CreateRect("ToolbarBar", _rootCanvasRect);
+        SetAnchors(BreadcrumbPanel, 0, 1, 1, 1);
+        BreadcrumbPanel.pivot = new Vector2(0.5f, 1);
+        BreadcrumbPanel.offsetMin = new Vector2(0, -topBarHeight);
+        BreadcrumbPanel.offsetMax = Vector2.zero;
+        AddColor(BreadcrumbPanel, new Color(0.15f, 0.15f, 0.15f));
+
+        // Output Field (Using Prefab)
+        if (inputFieldPrefab != null)
+        {
+            GameObject outputObj = Instantiate(inputFieldPrefab, BreadcrumbPanel);
+            RectTransform outputRect = outputObj.GetComponent<RectTransform>();
+            outputRect.anchorMin = new Vector2(0.02f, 0.1f);
+            outputRect.anchorMax = new Vector2(0.98f, 0.9f);
+            outputRect.offsetMin = Vector2.zero;
+            outputRect.offsetMax = Vector2.zero;
+
+            _compiledOutputField = outputObj.GetComponent<TMPro.TMP_InputField>();
+            _compiledOutputField.readOnly = true;
+
+            // Make interactive input text transparent so overlay remains visible
+            _compiledOutputField.textComponent.color = Color.clear;
+            _compiledOutputField.richText = false;
+
+            GameObject highlighterObj = new GameObject("SyntaxHighlighter", typeof(RectTransform));
+            highlighterObj.transform.SetParent(_compiledOutputField.textComponent.transform.parent, false);
+
+            _syntaxHighlighterText = highlighterObj.AddComponent<TMPro.TextMeshProUGUI>();
+
+            CanvasGroup canvasGroup = highlighterObj.AddComponent<CanvasGroup>();
+            canvasGroup.blocksRaycasts = false;
+            canvasGroup.interactable = false;
+
+            RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
+            RectTransform textCompRt = _compiledOutputField.textComponent.GetComponent<RectTransform>();
+            highlightRt.anchorMin = textCompRt.anchorMin;
+            highlightRt.anchorMax = textCompRt.anchorMax;
+            highlightRt.offsetMin = textCompRt.offsetMin;
+            highlightRt.offsetMax = textCompRt.offsetMax;
+            highlightRt.pivot = textCompRt.pivot;
+
+            _syntaxHighlighterText.enableAutoSizing = false;
+            _syntaxHighlighterText.fontSize = _compiledOutputField.textComponent.fontSize;
+            _syntaxHighlighterText.alignment = _compiledOutputField.textComponent.alignment;
+            _syntaxHighlighterText.margin = _compiledOutputField.textComponent.margin;
+            _syntaxHighlighterText.enableWordWrapping = _compiledOutputField.textComponent.enableWordWrapping;
+            _syntaxHighlighterText.richText = true;
+        }
+    }
+
+    private void BuildSidebar()
+    {
+        // Main Sidebar Container
+        RectTransform sidebarBG = CreateRect("SidebarArea", _rootCanvasRect);
+        SetAnchors(sidebarBG, 0, 0, 0, 1);
+        sidebarBG.pivot = new Vector2(0, 1);
+        sidebarBG.offsetMin = Vector2.zero;
+        sidebarBG.offsetMax = new Vector2(sidebarWidth, -topBarHeight);
+        AddColor(sidebarBG, new Color(0.1f, 0.1f, 0.1f));
+
+        float toolbarHeight = 110;
+
+        // Delegate Toolbar creation
+        BuildSidebarToolbar(sidebarBG, toolbarHeight);
+
+        // Sidebar Content Scroll View (Offset below the toolbar)
+        RectTransform sidebarScrollView = CreateRect("SidebarScrollViewContainer", sidebarBG);
+        SetAnchors(sidebarScrollView, 0, 0, 1, 1);
+        sidebarScrollView.offsetMin = Vector2.zero;
+        sidebarScrollView.offsetMax = new Vector2(0, -toolbarHeight - 10f);
+
+        SidebarContent = CreateScrollView(sidebarScrollView, "SidebarScrollView");
+
+        // Format the tree layout
+        var sidebarLayout = SidebarContent.gameObject.GetComponent<VerticalLayoutGroup>();
+        sidebarLayout.padding = new RectOffset(15, 15, 15, 15);
+        sidebarLayout.spacing = 5;
+        sidebarLayout.childControlHeight = true;
+        sidebarLayout.childControlWidth = true;
+        sidebarLayout.childForceExpandHeight = false;
+
+        var sidebarFitter = SidebarContent.gameObject.AddComponent<ContentSizeFitter>();
+        sidebarFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+    }
+    private void BuildSidebarToolbar(RectTransform parentBG, float toolbarHeight)
+    {
+        RectTransform sidebarToolbar = CreateRect("SidebarToolbar", parentBG);
+        SetAnchors(sidebarToolbar, 0, 1, 1, 1);
+        sidebarToolbar.pivot = new Vector2(0.5f, 1);
+        sidebarToolbar.offsetMin = new Vector2(10, -toolbarHeight);
+        sidebarToolbar.offsetMax = new Vector2(-10, -5);
+
+        var toolLayout = sidebarToolbar.gameObject.AddComponent<VerticalLayoutGroup>();
+        toolLayout.spacing = 6;
+        toolLayout.childControlWidth = true; toolLayout.childControlHeight = true;
+        toolLayout.childForceExpandWidth = true; toolLayout.childForceExpandHeight = false;
+
+        // --- ROW 1: Load Mod Dropdown ---
+        if (dropdownPrefab != null)
+        {
+            GameObject ddObj = Instantiate(dropdownPrefab, sidebarToolbar);
+            _loadDropdown = ddObj.GetComponent<TMPro.TMP_Dropdown>();
+            _loadDropdown.ClearOptions();
+
+            _loadDropdown.onValueChanged.AddListener((idx) =>
             {
-                new GridRowSpec(topBarHeight, GridCellSpec.CreateLabel("Main_Spacer", "", 1.0f)),
-                new GridRowSpec(mainScrollHeight, GridCellSpec.CreateScrollView("MainScrollArea", 1.0f))
-            })
-        };
+                if (_isUpdatingDropdown || idx == 0) return;
 
-        generatedScreen = uiGenerator.SetupScreen(columns, useMargins: true);
+                ItemData selectedItem = ModPackage.Instance.Items[idx - 1];
+                ModPackage.Instance.LoadEntityForEditing(selectedItem);
 
-        if (generatedScreen.RootWrapper != null)
-        {
-            generatedScreen.RootWrapper.offsetMin = Vector2.zero;
-            generatedScreen.RootWrapper.offsetMax = Vector2.zero;
+                ItemData activeClone = ModPackage.Instance.GetActiveEntity<ItemData>();
+                if (activeClone != null) LoadItemIntoUI(activeClone);
+            });
+
+            var ddLayout = ddObj.GetComponent<LayoutElement>() ?? ddObj.AddComponent<LayoutElement>();
+            ddLayout.preferredHeight = 30f;
         }
 
-        BuildTopCompilerBar(topBarHeight);
+        // --- ROW 2: Save / New Buttons ---
+        RectTransform buttonRow = CreateRect("ButtonRow", sidebarToolbar);
+        var buttonRowLayout = buttonRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+        buttonRowLayout.spacing = 6;
+        buttonRowLayout.childControlWidth = true; buttonRowLayout.childControlHeight = true;
+        buttonRowLayout.childForceExpandWidth = true; buttonRowLayout.childForceExpandHeight = true;
 
-        if (generatedScreen.ColumnRefs.TryGetValue("Main_Column", out GridReferences mainCol) &&
-            mainCol.ScrollViews.TryGetValue("MainScrollArea", out _mainScroll))
+        var rowLayoutElem = buttonRow.gameObject.AddComponent<LayoutElement>();
+        rowLayoutElem.preferredHeight = 30f;
+        rowLayoutElem.flexibleHeight = 0f;
+
+        if (buttonPrefab != null)
         {
-            RebuildMainEditorPanel();
+            GameObject saveObj = Instantiate(buttonPrefab, buttonRow);
+            var saveBtn = saveObj.GetComponent<UnityEngine.UI.Button>();
+            var saveText = saveObj.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (saveText != null) { saveText.text = "Save"; saveText.fontSize = 14; }
+
+            // FIX: Linked to actual Save logic
+            saveBtn.onClick.RemoveAllListeners();
+            saveBtn.onClick.AddListener(() => SaveActiveItem());
         }
 
-        ConfigureWorkspace();
-        UpdateCompilerOutput();
-        ApplyDynamicLayoutConstraints();
-
-        Canvas.ForceUpdateCanvases();
-    }
-
-    #region CORE DATA FLOW & UI BINDING
-    private void SetInputValue(GridReferences refs, string key, string value)
-    {
-        if (refs != null && refs.Inputs.TryGetValue(key, out var input))
-            input.SetTextWithoutNotify(value ?? "");
-    }
-    private void SetToggleValue(GridReferences refs, string key, bool value)
-    {
-        if (refs != null && refs.Toggles.TryGetValue(key, out var toggle))
-            toggle.SetIsOnWithoutNotify(value);
-    }
-    private void PopulateMainPanelFromData()
-    {
-        if (_mainRefs == null || currentItem == null || _selectedWorkspaceItem == null) return;
-
-        bool prev = _isLoading;
-        _isLoading = true;
-
-        if (_selectedWorkspaceItem.Type == ItemNodeType.Equippable)
+        if (buttonPrefab != null)
         {
-            SetInputValue(_mainRefs, "In_Name", currentItem.entityName);
-            SetInputValue(_mainRefs, "In_Tier", currentItem.Tier?.ToString() ?? "");
-            SetInputValue(_mainRefs, "In_Doc", currentItem.DocumentedDescription);
+            GameObject newObj = Instantiate(buttonPrefab, buttonRow);
+            var newBtn = newObj.GetComponent<UnityEngine.UI.Button>();
+            var newText = newObj.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (newText != null) { newText.text = "New"; newText.fontSize = 14; }
 
-            SetInputValue(_mainRefs, "In_Img", currentItem.imageOverride);
-
-            int h = currentItem.HsvShift?.Hue ?? 0;
-            int s = currentItem.HsvShift?.Saturation ?? 0;
-            int v = currentItem.HsvShift?.Value ?? 0;
-            SetInputValue(_mainRefs, "In_H", h.ToString());
-            SetInputValue(_mainRefs, "In_S", s.ToString());
-            SetInputValue(_mainRefs, "In_V", v.ToString());
-
-            SetInputValue(_mainRefs, "In_Hue", currentItem.SimpleHue?.ToString() ?? "");
-            //SetInputValue(_mainRefs, "In_THue", currentItem.TargetedHue);
-            SetInputValue(_mainRefs, "In_P", currentItem.PaletteOverride);
-            SetInputValue(_mainRefs, "In_B", currentItem.BorderColorCode);
-
-            SetInputValue(_mainRefs, "In_Rect", currentItem.UiRectInstructions);
-            SetInputValue(_mainRefs, "In_Draw", currentItem.UiDrawInstructions);
-
-            SetToggleValue(_mainRefs, "Tgl_ClearIcon", currentItem.ClearIcon);
-            SetToggleValue(_mainRefs, "Tgl_ClearDesc", currentItem.ClearDescription);
+            // FIX: Linked to actual New logic
+            newBtn.onClick.RemoveAllListeners();
+            newBtn.onClick.AddListener(() => CreateNewItem());
         }
 
-        _isLoading = prev;
-    }
-    /*
-    private void RebuildMainEditorPanel()
-    {
-        if (_mainScroll == null || _mainScroll.content == null) return;
-        float rowHeight = uiGenerator != null ? uiGenerator.rowHeight : 40f;
-
-        _mainRefs = uiGenerator.RebuildGrid(_mainScroll.content, GetMainEditorRows(rowHeight), useMargins: true);
-
-        float extraH = CalculateScrollExtraHeight(_mainScroll.content);
-        _mainScroll.content.sizeDelta = new Vector2(0, _mainRefs.TotalHeight + extraH);
-
-        PopulateMainPanelFromData();
-    }
-    */
-    private void UpdateCompilerOutput()
-    {
-        if (_isLoading) return;
-
-        currentItem.Mechanics.Clear();
-
-        if (_rootWorkspaceZone != null)
+        // Import Button
+        if (buttonPrefab != null)
         {
-            foreach (WorkspaceItem instance in _rootWorkspaceZone.Entrants)
+            GameObject importObj = Instantiate(buttonPrefab, buttonRow);
+            var importBtn = importObj.GetComponent<UnityEngine.UI.Button>();
+            var importText = importObj.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (importText != null) { importText.text = "Import"; importText.fontSize = 14; }
+
+            importBtn.onClick.AddListener(() => ImportFromClipboard());
+        }
+
+        // --- ROW 3: Add Logic Node Dropdown ---
+        if (dropdownPrefab != null)
+        {
+            GameObject ddObj = Instantiate(dropdownPrefab, sidebarToolbar);
+            var nodeDropdown = ddObj.GetComponent<TMPro.TMP_Dropdown>();
+            nodeDropdown.ClearOptions();
+
+            // Prepare the lists for dropdown data
+            List<string> options = new List<string> { "-- Add Logic Node --" };
+
+            _dropdownNodeTypes.Clear();
+            _dropdownNodeTypes.Add(ItemNodeType.None); // Placeholder for index 0
+
+            // Populate from Registry
+            foreach (AuthoringNodeDef nodeDef in NodeRegistry.GetAll())
             {
-                // Only nodes that map to an ItemMechanic get added to the mechanics list
-                if (instance.Mechanic != null && IsMechanicNode(instance.Type))
+                options.Add(nodeDef.NodeNiceName);
+                _dropdownNodeTypes.Add(nodeDef.NodeType);
+            }
+            nodeDropdown.AddOptions(options);
+
+            // Bind listener
+            nodeDropdown.onValueChanged.AddListener((idx) => OnAddNodeSelected(idx, nodeDropdown));
+            var ddLayout = ddObj.GetComponent<LayoutElement>() ?? ddObj.AddComponent<LayoutElement>();
+            ddLayout.preferredHeight = 30f;
+        }
+    }
+    public void ClearWorkspace()
+    {
+        // 1. Clear the Inspector Content (Right Panel)
+        if (InspectorContent != null)
+        {
+            foreach (Transform child in InspectorContent)
+            {
+                Destroy(child.gameObject);
+            }
+        }
+
+        // 2. Clear the visual Cards from the Main Canvas (Middle Panel)
+        if (MainCanvasContent != null)
+        {
+            // Clear the logical entrants tracking list
+            if (_rootZone != null)
+            {
+                _rootZone.Entrants.Clear();
+            }
+
+            foreach (Transform child in MainCanvasContent)
+            {
+                // We only destroy game objects representing visual cards.
+                // We must NOT destroy the scroll view's structural layout elements.
+                if (child.GetComponent<EntityCard>() != null)
                 {
-                    currentItem.Mechanics.Add(instance.Mechanic);
+                    Destroy(child.gameObject);
                 }
             }
         }
 
-        string rawExport = currentItem.Export();
-        string englishOutput = $"Item '{currentItem.entityName ?? "New Item"}' placeholder translation.";
-
-        if (_finalStringInput != null) _finalStringInput.text = rawExport;
-        if (_englishTranslationText != null) _englishTranslationText.text = englishOutput;
-    }
-    private bool IsMechanicNode(ItemNodeType type)
-    {
-        // Meta-nodes don't export to currentItem.Mechanics directly, they edit fields on currentItem
-        return type != ItemNodeType.BaseItem && type != ItemNodeType.Equippable;
-    }
-    #endregion
-
-    #region LAYOUT DEFINITIONS
-    private ColumnSpec BuildWorkspaceColumn(float rowHeight, float dynamicScrollHeight, float topBarHeight)
-    {
-        List<GridRowSpec> rows = new List<GridRowSpec>
+        // 3. Reset compiler text field
+        if (_compiledOutputField != null)
         {
-            new GridRowSpec(topBarHeight, GridCellSpec.CreateLabel("Left_Spacer", "", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateDropdown("Drop_AddNode", "", 1.0f, _nodeDropdownOptions, OnNodeDropdownSelected)),
-            new GridRowSpec(dynamicScrollHeight, GridCellSpec.CreateScrollView("WorkspaceScrollArea", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateButton("BtnClearWorkspace", "Clear Nodes", 1f, ClearWorkspace))
-        };
-
-        return new ColumnSpec("Workspace_Column", 0.0f, 0.3f, rows);
+            _compiledOutputField.text = string.Empty;
+        }
     }
-    private List<GridRowSpec> GetMainEditorRows(float rowHeight)
+    public void PopulateLoadDropdown()
     {
-        if (_selectedWorkspaceItem == null)
+        if (_loadDropdown == null || ModPackage.Instance == null) return;
+
+        _isUpdatingDropdown = true;
+        _loadDropdown.ClearOptions();
+
+        var options = new System.Collections.Generic.List<string> { "Load Saved Item..." };
+        foreach (var item in ModPackage.Instance.Items)
         {
-            return new List<GridRowSpec>
+            string displayName = string.IsNullOrEmpty(item.entityName) ? "Unnamed Item" : item.entityName;
+            if (item.Tier.HasValue) displayName += $" (Tier {item.Tier})";
+            options.Add(displayName);
+        }
+
+        _loadDropdown.AddOptions(options);
+        _loadDropdown.SetValueWithoutNotify(0);
+        _isUpdatingDropdown = false;
+    }
+    /// <summary>
+    /// Generates a blank item session and resets the workspace.
+    /// </summary>
+    public void CreateNewItem()
+    {
+        // FIX: Guard against running before MainCanvasContent has been instantiated in BuildMainCanvas()
+        if (MainCanvasContent == null) return;
+
+        // 1. Create a blank backend editing session
+        ItemData newItem = new ItemData();
+        ModPackage.Instance.LoadEntityForEditing(newItem);
+
+        // 2. Clear the workspace canvas UI
+        ClearWorkspace();
+
+        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
+        if (rootZone != null)
+        {
+            EntityCard equipCard = CreateEntityCard(ItemNodeType.Equippable) as EntityCard;
+            if (equipCard != null) // Guard against null cards
             {
-                new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("LBL_Empty", "Select a node from the workspace to edit its properties.", 1.0f))
-            };
-        }
-
-        ItemMechanic mech = _selectedWorkspaceItem.Mechanic;
-
-        switch (_selectedWorkspaceItem.Type)
-        {
-            case ItemNodeType.Equippable: return GetEquippableRows(rowHeight);
-            case ItemNodeType.BaseItem: return GetBaseItemRows(rowHeight, mech);
-            case ItemNodeType.Hat: return GetHatRows(rowHeight, mech);
-            //case ItemNodeType.Sticker: return GetStickerRows(rowHeight, mech);
-            //case ItemNodeType.Chain: return GetPlaceholderRows(rowHeight, "Chain Items (#)");
-            //case ItemNodeType.Splice: return GetSuffixNodeRows(rowHeight, mech, "Splice Item (.splice.X)");
-            //case ItemNodeType.Merge: return GetSuffixNodeRows(rowHeight, mech, "Merge Item (.mrg.X)");
-            //case ItemNodeType.Unpack: return GetUnpackRows(rowHeight, mech);
-            //case ItemNodeType.ItemPart: return GetPartRows(rowHeight, mech);
-            case ItemNodeType.RawString: return GetRawStringRows(rowHeight, mech);
-            default: return new List<GridRowSpec>();
-        }
-    }
-    private List<GridRowSpec> GetBaseItemRows(float rowHeight)
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_Meta", "--- Core Metadata ---", 1.0f)),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Name", "Item Name (n)", 0.7f, (val) => { currentItem.entityName = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_Tier", "Tier (tier)", 0.3f, OnTierChanged)
-            ),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_Doc", "Documented Description (doc)", 1.0f, (val) => { currentItem.DocumentedDescription = val; UpdateCompilerOutput(); }))
-        };
-    }
-    /*
-    private List<GridRowSpec> GetAppearanceRows(float rowHeight)
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_Colors", "--- Aesthetics & Colors ---", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_Img", "Icon Override Ref (img)", 1.0f, (val) => { currentItem.imageOverride = val; UpdateCompilerOutput(); })),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("LBL_HSV", "HSV Shift:", 0.25f),
-                GridCellSpec.CreateInput("In_H", "Hue", 0.25f, (val) => UpdateHsvShift()),
-                GridCellSpec.CreateInput("In_S", "Sat", 0.25f, (val) => UpdateHsvShift()),
-                GridCellSpec.CreateInput("In_V", "Val", 0.25f, (val) => UpdateHsvShift())
-            ),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Hue", "Simple Hue (hue)", 0.33f, OnHueChanged),
-                //GridCellSpec.CreateInput("In_THue", "Target Hue (thue)", 0.33f, (val) => { currentItem.TargetedHue = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_P", "Palette Override (p)", 0.34f, (val) => { currentItem.PaletteOverride = val; UpdateCompilerOutput(); })
-            ),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_B", "Border Color Code (b)", 1.0f, (val) => { currentItem.BorderColorCode = val; UpdateCompilerOutput(); })),
-
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_UI", "--- UI & Rendering Overrides ---", 1.0f)),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Rect", "Rect Layout (rect)", 0.5f, (val) => { currentItem.UiRectInstructions = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_Draw", "Draw Mode (draw)", 0.5f, (val) => { currentItem.UiDrawInstructions = val; UpdateCompilerOutput(); })
-            ),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateToggle("Tgl_ClearIcon", "Clear Base Icon", 0.5f, (val) => { currentItem.ClearIcon = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateToggle("Tgl_ClearDesc", "Clear Base Desc", 0.5f, (val) => { currentItem.ClearDescription = val; UpdateCompilerOutput(); })
-            )
-        };
-    }
-    */
-    private List<GridRowSpec> GetPlaceholderRows(float rowHeight, string title)
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_PH", $"--- {title} ---", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("PH_Desc", "UI elements for this node have not been mapped yet.", 1.0f))
-        };
-    }
-
-    #endregion
-
-    #region WORKSPACE HIERARCHY LOGIC
-    private void ConfigureWorkspace()
-    {
-        if (generatedScreen == null || !generatedScreen.ColumnRefs.TryGetValue("Workspace_Column", out GridReferences refs)) return;
-
-        if (refs.ScrollViews.TryGetValue("WorkspaceScrollArea", out _workspaceScroll))
-        {
-            _workspaceContent = _workspaceScroll.content;
-
-            VerticalLayoutGroup layout = _workspaceContent.gameObject.GetComponent<VerticalLayoutGroup>() ?? _workspaceContent.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 8f;
-            layout.padding = new RectOffset(8, 8, 8, 8);
-            layout.childAlignment = TextAnchor.UpperCenter;
-            layout.childControlHeight = true;
-            layout.childControlWidth = true;
-            layout.childForceExpandHeight = false;
-            layout.childForceExpandWidth = true;
-
-            ContentSizeFitter fitter = _workspaceContent.gameObject.GetComponent<ContentSizeFitter>() ?? _workspaceContent.gameObject.AddComponent<ContentSizeFitter>();
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            _rootWorkspaceZone = _workspaceContent.gameObject.GetComponent<ReorderableZone>() ?? _workspaceContent.gameObject.AddComponent<ReorderableZone>();
-        }
-    }
-    private void OnNodeDropdownSelected(int index)
-    {
-        if (index <= 0) return;
-
-        ItemNodeType selectedType = (ItemNodeType)(index - 1);
-        string nodeLabel = _nodeDropdownOptions[index];
-
-        AddNodeToWorkspace(selectedType, nodeLabel);
-
-        // Reset the dropdown visually
-        if (generatedScreen.ColumnRefs.TryGetValue("Workspace_Column", out GridReferences refs) && refs.Dropdowns.TryGetValue("Drop_AddNode", out TMP_Dropdown dropdown))
-        {
-            dropdown.SetValueWithoutNotify(0);
-        }
-    }
-    private void AddNodeToWorkspace(ItemNodeType type, string label)
-    {
-        if (_workspaceContent == null || _rootWorkspaceZone == null) return;
-
-        GameObject btnGo = Instantiate(uiGenerator.buttonPrefab);
-        btnGo.name = $"WorkspaceBtn_{type}";
-
-        WorkspaceItem workspaceItem = btnGo.AddComponent<WorkspaceItem>();
-        workspaceItem.Type = type;
-        workspaceItem.NodeLabel = label;
-        workspaceItem.Mechanic = IsMechanicNode(type) ? new ItemMechanic() : null;
-
-        TextMeshProUGUI btnText = btnGo.GetComponentInChildren<TextMeshProUGUI>();
-        if (btnText != null)
-        {
-            btnText.text = label;
-            btnText.margin = new Vector4(8f, 0f, 32f, 0f);
-        }
-
-        Button selectBtn = btnGo.GetComponent<Button>();
-        if (selectBtn != null) selectBtn.onClick.AddListener(() => SelectWorkspaceBlock(workspaceItem));
-
-        _rootWorkspaceZone.AddEntrant(workspaceItem);
-
-        // Delete Button setup
-        GameObject deleteBtnGo = Instantiate(uiGenerator.buttonPrefab, btnGo.transform);
-        deleteBtnGo.name = "DeleteBtn";
-
-        LayoutElement lay = deleteBtnGo.GetComponent<LayoutElement>() ?? deleteBtnGo.AddComponent<LayoutElement>();
-        lay.ignoreLayout = true;
-
-        RectTransform delRt = deleteBtnGo.GetComponent<RectTransform>();
-        delRt.anchorMin = new Vector2(1f, 0.5f);
-        delRt.anchorMax = new Vector2(1f, 0.5f);
-        delRt.pivot = new Vector2(1f, 0.5f);
-        delRt.anchoredPosition = new Vector2(-6f, 0f);
-        delRt.sizeDelta = new Vector2(24f, 24f);
-
-        TextMeshProUGUI delText = deleteBtnGo.GetComponentInChildren<TextMeshProUGUI>();
-        if (delText != null) { delText.text = "X"; delText.fontSize = 12; delText.color = Color.red; }
-
-        Button delBtn = deleteBtnGo.GetComponent<Button>();
-        if (delBtn != null)
-        {
-            delBtn.onClick.RemoveAllListeners();
-            delBtn.onClick.AddListener(() => RemoveBlockFromWorkspace(workspaceItem));
-        }
-
-        Canvas.ForceUpdateCanvases();
-        if (_workspaceScroll != null) _workspaceScroll.verticalNormalizedPosition = 0f;
-
-        SelectWorkspaceBlock(workspaceItem); // Auto-select when adding
-        UpdateCompilerOutput();
-    }
-    private void SelectWorkspaceBlock(WorkspaceItem instance)
-    {
-        _selectedWorkspaceItem = instance;
-        RebuildMainEditorPanel();
-    }
-    private void RemoveBlockFromWorkspace(WorkspaceItem item)
-    {
-        if (item == null) return;
-
-        if (_rootWorkspaceZone != null && _rootWorkspaceZone.Entrants != null)
-            _rootWorkspaceZone.Entrants.Remove(item);
-
-        if (_selectedWorkspaceItem == item)
-        {
-            _selectedWorkspaceItem = null;
-            RebuildMainEditorPanel();
-        }
-
-        // Clean up currentItem if a meta-node is deleted
-        if (item.Type == ItemNodeType.BaseItem)
-        {
-            currentItem.entityName = string.Empty;
-            currentItem.Tier = null;
-            currentItem.DocumentedDescription = string.Empty;
-        }
-        else if (item.Type == ItemNodeType.Equippable)
-        {
-            currentItem.imageOverride = string.Empty;
-            currentItem.HsvShift = null;
-            currentItem.SimpleHue = null;
-            currentItem.thue = new Thue();
-            currentItem.PaletteOverride = string.Empty;
-            currentItem.BorderColorCode = string.Empty;
-            currentItem.UiDrawInstructions = string.Empty;
-            currentItem.UiRectInstructions = string.Empty;
-            currentItem.ClearDescription = false;
-            currentItem.ClearIcon = false;
-        }
-
-        Destroy(item.gameObject);
-        StartCoroutine(ExecuteRecompileNextFrame());
-    }
-    private void ClearWorkspace()
-    {
-        _selectedWorkspaceItem = null;
-        if (_workspaceContent != null)
-        {
-            foreach (Transform child in _workspaceContent) Destroy(child.gameObject);
-        }
-        if (_rootWorkspaceZone != null && _rootWorkspaceZone.Entrants != null)
-            _rootWorkspaceZone.Entrants.Clear();
-
-        currentItem = new ItemData();
-        RebuildMainEditorPanel();
-        UpdateCompilerOutput();
-    }
-    private System.Collections.IEnumerator ExecuteRecompileNextFrame()
-    {
-        yield return null;
-        UpdateCompilerOutput();
-    }
-    #endregion
-
-    #region TOP BAR & CONTROLS
-    private void BuildTopCompilerBar(float height)
-    {
-        GameObject topBar = new GameObject("TopCompilerBar", typeof(RectTransform), typeof(Image));
-        RectTransform rt = topBar.GetComponent<RectTransform>();
-
-        if (generatedScreen.RootWrapper != null) rt.SetParent(generatedScreen.RootWrapper, false);
-        rt.anchorMin = new Vector2(0f, 1f);
-        rt.anchorMax = new Vector2(1f, 1f);
-        rt.pivot = new Vector2(0.5f, 1f);
-        rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta = new Vector2(0f, height);
-        topBar.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.12f, 0.98f);
-
-        List<GridRowSpec> rows = new List<GridRowSpec>
-        {
-            new GridRowSpec(25f, GridCellSpec.CreateLabel("Lbl_English", "[English Translation Engine Placeholder]", 1.0f)),
-            new GridRowSpec(40f,
-                GridCellSpec.CreateDropdown("Drop_Load", "Load...", 0.12f, new string[] { "Load Saved Item" }, OnSelectLoadItem),
-                GridCellSpec.CreateButton("Btn_Save", "Save Item To Mod", 0.1f, OnClickSaveItem),
-                GridCellSpec.CreateButton("Btn_New", "New Item +", 0.08f, OnClickNewItem),
-
-                GridCellSpec.CreateInput("Input_RawString", "Compiled text output...", 0.6f, null, InputAlignment.Center),
-                GridCellSpec.CreateButton("Btn_Copy", "COPY", 0.1f, CopyToClipboard)
-            )
-        };
-
-        GridReferences topRefs = uiGenerator.RebuildGrid(rt, rows, useMargins: true);
-        _englishTranslationText = topBar.GetComponentInChildren<TextMeshProUGUI>();
-        topRefs.Inputs.TryGetValue("Input_RawString", out _finalStringInput);
-    }
-    private void OnClickNewItem() { ClearWorkspace(); }
-    private void OnClickSaveItem() { Debug.Log("Save Item Logic Pipeline Needed"); }
-    private void OnSelectLoadItem(int index) { if (index > 0) Debug.Log("Load Item Logic Pipeline Needed"); }
-    private void CopyToClipboard()
-    {
-        if (_finalStringInput != null && !string.IsNullOrEmpty(_finalStringInput.text))
-        {
-            GUIUtility.systemCopyBuffer = _finalStringInput.text;
-            uiGenerator.CreatePopup("Successfully compiled item string and copied to system clipboard!");
-        }
-    }
-    #endregion
-
-    #region PARSING & VALUE CHANGERS
-    private void OnTierChanged(string text)
-    {
-        if (_isLoading) return;
-        if (int.TryParse(text, out int val)) currentItem.Tier = val;
-        else currentItem.Tier = null;
-        UpdateCompilerOutput();
-    }
-    private void OnHueChanged(string text)
-    {
-        if (_isLoading) return;
-        if (int.TryParse(text, out int val)) currentItem.SimpleHue = val;
-        else currentItem.SimpleHue = null;
-        UpdateCompilerOutput();
-    }
-    private void UpdateHsvShift()
-    {
-        if (_isLoading || _mainRefs == null) return;
-
-        int.TryParse(_mainRefs.Inputs["In_H"].text, out int h);
-        int.TryParse(_mainRefs.Inputs["In_S"].text, out int s);
-        int.TryParse(_mainRefs.Inputs["In_V"].text, out int v);
-
-        if (h == 0 && s == 0 && v == 0) currentItem.HsvShift = null;
-        else currentItem.HsvShift = new ItemHsvShift(h, s, v);
-
-        UpdateCompilerOutput();
-    }
-    #endregion
-
-    #region BOILERPLATE LAYOUT UTILS
-    private float CalculateScrollExtraHeight(RectTransform content)
-    {
-        float extraHeight = 0f;
-        var layoutGroup = content.GetComponent<VerticalLayoutGroup>();
-        if (layoutGroup != null)
-        {
-            int childCount = content.childCount;
-            if (childCount > 1) extraHeight += layoutGroup.spacing * (childCount - 1);
-            extraHeight += layoutGroup.padding.top + layoutGroup.padding.bottom;
-        }
-        return extraHeight;
-    }
-    private void ConfigureFlexibleLayout(RectTransform target)
-    {
-        if (target == null) return;
-        var layoutElement = target.GetComponent<LayoutElement>() ?? target.gameObject.AddComponent<LayoutElement>();
-        layoutElement.preferredHeight = -1;
-        layoutElement.flexibleHeight = 1f;
-    }
-    private void StretchToParent(RectTransform rt, float topOffset, float bottomOffset)
-    {
-        if (rt == null) return;
-        rt.anchorMin = new Vector2(0f, 0f);
-        rt.anchorMax = new Vector2(1f, 1f);
-        rt.offsetMin = new Vector2(0f, bottomOffset);
-        rt.offsetMax = new Vector2(0f, -topOffset);
-    }
-    private void ApplyDynamicLayoutConstraints()
-    {
-        float rowHeight = uiGenerator != null ? uiGenerator.rowHeight : 40f;
-        float spacing = uiGenerator != null ? uiGenerator.rowSpacing : 8f;
-        float topBarHeight = 75f;
-
-        if (generatedScreen.ColumnRefs.TryGetValue("Workspace_Column", out GridReferences leftRefs))
-        {
-            if (leftRefs.ScrollViews.TryGetValue("WorkspaceScrollArea", out ScrollRect scroll))
-            {
-                RectTransform scrollRt = scroll.GetComponent<RectTransform>();
-                RectTransform rowContainerRt = scrollRt.parent as RectTransform;
-
-                float topOffset = topBarHeight + rowHeight + (spacing * 2f);
-                float bottomOffset = rowHeight + (spacing * 2f);
-
-                ConfigureFlexibleLayout(rowContainerRt);
-                ConfigureFlexibleLayout(scrollRt);
-                StretchToParent(rowContainerRt, topOffset, bottomOffset);
-                StretchToParent(scrollRt, 0f, 0f);
+                equipCard.RootData.entityName = "New Item";
+                rootZone.AddEntrant(equipCard);
             }
         }
 
-        if (generatedScreen.ColumnRefs.TryGetValue("Main_Column", out GridReferences mainRefs) &&
-            mainRefs.ScrollViews.TryGetValue("MainScrollArea", out ScrollRect mainScroll))
-        {
-            RectTransform scrollRt = mainScroll.GetComponent<RectTransform>();
-            RectTransform rowContainerRt = scrollRt.parent as RectTransform;
+        // 4. Force a UI layout update and output compilation
+        RefreshSidebar();
+        AutoCompile();
+    }
+    /// <summary>
+    /// Compiles the visual tree back into the active clone and saves it to ModPackage.
+    /// </summary>
+    public void SaveActiveItem()
+    {
+        ItemData activeClone = ModPackage.Instance?.GetActiveEntity<ItemData>();
+        if (activeClone == null) return;
 
-            ConfigureFlexibleLayout(rowContainerRt);
-            ConfigureFlexibleLayout(scrollRt);
-            StretchToParent(rowContainerRt, topBarHeight + spacing, 0f);
-            StretchToParent(scrollRt, 0f, 0f);
+        // Ensure the visual canvas is fully synced to the backend clone
+        AutoCompile();
+
+        // Commit the session changes
+        ModPackage.Instance.SaveActiveEntity<ItemData>();
+
+        // Refresh load list in case the item was renamed
+        PopulateLoadDropdown();
+        Debug.Log($"Successfully saved item: {activeClone.entityName ?? "Unnamed Item"}");
+    }
+    /// <summary>
+    /// Clears the workspace and recursively reconstructs the visual tree from ItemData.
+    /// </summary>
+    /// <summary>
+    /// Clears the workspace and reconstructs the visual tree with only top-level visual nodes.
+    /// </summary>
+    public void LoadItemIntoUI(ItemData item)
+    {
+        ClearWorkspace();
+
+        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
+        if (rootZone == null) return;
+
+        Debug.Log($"<color=cyan>[UI Load]</color> Loading Item. Mechanics: {item.Mechanics.Count}");
+
+        // Mechanics are dropped directly onto the Workspace Canvas. No root card wrapper!
+        foreach (var mechanic in item.Mechanics)
+        {
+            LoadMechanicIntoUI(mechanic, rootZone);
+        }
+
+        RefreshSidebar();
+        AutoCompile();
+    }
+    /// <summary>
+    /// Spawns the visual mechanic card. Sub-payloads are left to the inspector.
+    /// </summary>
+    private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone)
+    {
+        ItemNodeType type = ItemNodeType.BaseItem;
+        if (mechanic.Prefix == "hat") type = ItemNodeType.Hat;
+        //else if (mechanic.Prefix == "sticker") type = ItemNodeType.Sticker;
+        //else if (mechanic.Unpack) type = ItemNodeType.Unpack;
+        //else if (mechanic.PartIndex.HasValue) type = ItemNodeType.ItemPart;
+        //else if (!string.IsNullOrEmpty(mechanic.SplicedItem)) type = ItemNodeType.Splice;
+        //else if (!string.IsNullOrEmpty(mechanic.MergedItem)) type = ItemNodeType.Merge;
+
+        EntityCard mechCard = CreateEntityCard(type) as EntityCard;
+        mechCard.MechanicData = mechanic;
+        targetZone.AddEntrant(mechCard);
+
+        // NOTICE: We do not unpack mechanic.PayloadData or mechanic.PayloadString.
+        // They are parameters of this mechanic node, edited via the Inspector panel.
+    }
+    /// <summary>
+    /// Evaluates the metadata and flags on a mechanic instance, spawns its card UI representation, 
+    /// and proceeds to identify and pass on its sub-payload elements.
+    /// </summary>
+    /// 
+    private void BuildMainCanvas()
+    {
+        RectTransform mainAreaBG = CreateRect("MainCanvasArea", _rootCanvasRect);
+        SetAnchors(mainAreaBG, 0, 0, 1, 1);
+        mainAreaBG.pivot = new Vector2(0, 1);
+        mainAreaBG.offsetMin = new Vector2(sidebarWidth, 0);
+        mainAreaBG.offsetMax = new Vector2(-inspectorWidth, -topBarHeight);
+        AddColor(mainAreaBG, new Color(0.2f, 0.2f, 0.2f));
+
+        MainCanvasContent = CreateScrollView(mainAreaBG, "MainScrollView", true);
+
+        var mainLayout = MainCanvasContent.gameObject.GetComponent<VerticalLayoutGroup>();
+        mainLayout.padding = new RectOffset(40, 40, 40, 40);
+        mainLayout.spacing = 20;
+    }
+    private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
+    {
+        string indent = new string(' ', depth * 4);
+
+        ItemNodeType type = ItemNodeType.BaseItem;
+
+        // Map mechanics to visual node strategies
+        if (mechanic.Prefix == "hat") type = ItemNodeType.Hat;
+        //else if (mechanic.Prefix == "sticker") type = ItemNodeType.Sticker;
+        //else if (mechanic.Unpack) type = ItemNodeType.Unpack;
+        //else if (mechanic.PartIndex.HasValue) type = ItemNodeType.ItemPart;
+        //else if (!string.IsNullOrEmpty(mechanic.SplicedItem)) type = ItemNodeType.Splice;
+        //else if (!string.IsNullOrEmpty(mechanic.MergedItem)) type = ItemNodeType.Merge;
+        else if (mechanic.Prefix == "facade" || mechanic.Prefix == "sidesc" || mechanic.Prefix == "img" || mechanic.Prefix == "doc")
+            type = ItemNodeType.Appearance; // <-- Map to new Appearance node
+
+        EntityCard mechCard = CreateEntityCard(type) as EntityCard;
+        mechCard.MechanicData = mechanic;
+        targetZone.AddEntrant(mechCard);
+
+        if (mechanic.PayloadData != null)
+        {
+            LoadDataPayloadIntoUI(mechanic.PayloadData, "", mechCard.PayloadPort, depth + 1);
+        }
+        else if (!string.IsNullOrEmpty(mechanic.PayloadString) && type != ItemNodeType.Appearance)
+        {
+            // Notice we skip unpacking RawStrings if it's an Appearance node. 
+            // Appearance values (like "Che5:89") just belong in the inspector, not as child nodes.
+            string cleanPayload = mechanic.PayloadString.Trim();
+
+            EntityCard rawCard = CreateEntityCard(ItemNodeType.RawString) as EntityCard;
+            if (cleanPayload.StartsWith("(") && cleanPayload.EndsWith(")"))
+                cleanPayload = cleanPayload.Substring(1, cleanPayload.Length - 2);
+
+            rawCard.MechanicData.PayloadString = cleanPayload;
+            mechCard.PayloadPort.AddEntrant(rawCard);
         }
     }
-    #endregion
-
-    private void OpenFacadeModal()
+    private void LoadDataPayloadIntoUI(object payloadData, string prefix, ReorderableZone targetZone, int depth = 0)
     {
-        if (iconPicker == null) return;
+        if (payloadData == null) return;
 
-        IconPickerConfig config = new IconPickerConfig
+        if (payloadData is ItemData nestedItem)
         {
-            Sprites = EntityUIHelpers.AllActionSprites, // Valid item facades
-            IsValid = (index, sprite) => EntityUIHelpers.IsSpriteValid(sprite),
-            GetSearchName = (index, sprite) => sprite.name,
-            GetTooltip = (index, sprite) => sprite.name,
-            OnSelectionMade = (index, sprite) =>
+            // Removed the IsPurelyCosmetic check. If there's an ItemData wrapper, it gets a node!
+            EntityCard nestedEquip = CreateEntityCard(ItemNodeType.Equippable) as EntityCard;
+            nestedEquip.RootData = nestedItem;
+            nestedEquip.CustomPrefix = prefix;
+            targetZone.AddEntrant(nestedEquip);
+
+            foreach (var childMech in nestedItem.Mechanics)
             {
-                if (sprite != null)
+                LoadMechanicIntoUI(childMech, nestedEquip.PayloadPort, depth + 1);
+            }
+        }
+        // ... (rest of method remains the same)
+    }
+    private void BuildInspector()
+    {
+        RectTransform inspectorBG = CreateRect("InspectorArea", _rootCanvasRect);
+        SetAnchors(inspectorBG, 1, 0, 1, 1);
+        inspectorBG.pivot = new Vector2(1, 1);
+        inspectorBG.offsetMin = new Vector2(-inspectorWidth, 0);
+        inspectorBG.offsetMax = new Vector2(0, -topBarHeight);
+        AddColor(inspectorBG, new Color(0.12f, 0.12f, 0.12f));
+
+        InspectorContent = CreateScrollView(inspectorBG, "InspectorScrollView");
+
+        var inspLayout = InspectorContent.GetComponent<VerticalLayoutGroup>();
+        inspLayout.padding = new RectOffset(20, 20, 20, 20);
+        inspLayout.spacing = 15;
+    }
+    private void SetupRootWorkspaceZone()
+    {
+        _rootZone = MainCanvasContent.gameObject.AddComponent<ReorderableZone>();
+        _rootZone.SetCanvas(_cachedCanvas);
+        _rootZone.OnZoneChanged += RefreshSidebar;
+    }
+    public void CreateInspectorInputField(string label, string initialValue, UnityEngine.Events.UnityAction<string> onValueChanged)
+    {
+        // Container
+        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
+        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
+        layout.childControlHeight = true; layout.childControlWidth = true;
+        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
+
+        // Label
+        RectTransform labelRect = CreateRect("Label", container);
+        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        labelText.text = label;
+        labelText.fontSize = 14;
+        labelText.color = Color.grey;
+        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
+
+        // Clean Input Field Initialization
+        if (inputFieldPrefab != null)
+        {
+            GameObject inputObj = Instantiate(inputFieldPrefab, container);
+            var inputField = inputObj.GetComponent<TMPro.TMP_InputField>();
+
+            var inputLayout = inputObj.GetComponent<LayoutElement>() ?? inputObj.AddComponent<LayoutElement>();
+            inputLayout.flexibleWidth = 1f;
+
+            inputField.text = initialValue;
+            inputField.onValueChanged.RemoveAllListeners();
+            inputField.onValueChanged.AddListener(onValueChanged);
+        }
+    }
+    public void ImportFromClipboard()
+    {
+        string clip = GUIUtility.systemCopyBuffer;
+        if (string.IsNullOrWhiteSpace(clip))
+        {
+            Debug.LogWarning("Clipboard is empty.");
+            return;
+        }
+
+        ItemData importedItem = new ItemData();
+        try
+        {
+            importedItem.Parse(clip);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to parse clipboard string as ItemData: {e.Message}");
+            return;
+        }
+
+        // Load it into the active ModPackage session so saves work seamlessly
+        ModPackage.Instance.LoadEntityForEditing(importedItem);
+
+        ItemData activeClone = ModPackage.Instance.GetActiveEntity<ItemData>();
+        if (activeClone != null)
+        {
+            LoadItemIntoUI(activeClone);
+        }
+    }
+    private RectTransform CreateRect(string name, Transform parent)
+    {
+        GameObject go = new GameObject(name);
+        RectTransform rect = go.AddComponent<RectTransform>();
+        if (parent != null) rect.SetParent(parent, false);
+        return rect;
+    }
+    private void SetAnchors(RectTransform rect, float minX, float minY, float maxX, float maxY)
+    {
+        rect.anchorMin = new Vector2(minX, minY);
+        rect.anchorMax = new Vector2(maxX, maxY);
+    }
+    private void AddColor(RectTransform rect, Color color)
+    {
+        Image img = rect.gameObject.AddComponent<Image>();
+        img.color = color;
+    }
+    private RectTransform CreateScrollView(RectTransform parent, string name, bool useHorizontal = false)
+    {
+        // ScrollRect setup
+        RectTransform scrollRoot = CreateRect(name, parent);
+        SetAnchors(scrollRoot, 0, 0, 1, 1);
+        scrollRoot.offsetMin = Vector2.zero; scrollRoot.offsetMax = Vector2.zero;
+        ScrollRect scrollRect = scrollRoot.gameObject.AddComponent<ScrollRect>();
+        scrollRect.horizontal = useHorizontal;
+        scrollRect.vertical = true;
+        scrollRect.scrollSensitivity = 0.18f;
+
+        // Viewport (Masking)
+        RectTransform viewport = CreateRect("Viewport", scrollRoot);
+        SetAnchors(viewport, 0, 0, 1, 1);
+        viewport.offsetMin = Vector2.zero; viewport.offsetMax = Vector2.zero;
+        viewport.pivot = new Vector2(0, 1);
+        Image vpImage = viewport.gameObject.AddComponent<Image>();
+        vpImage.color = new Color(1, 1, 1, 0.01f); // nearly invisible mask
+        Mask mask = viewport.gameObject.AddComponent<Mask>();
+        mask.showMaskGraphic = false;
+
+        // Content
+        RectTransform content = CreateRect("Content", viewport);
+        SetAnchors(content, 0, 1, 1, 1); // Anchored to top, stretches width
+        content.pivot = new Vector2(0.5f, 1);
+        content.offsetMin = Vector2.zero; content.offsetMax = Vector2.zero;
+
+        var vLayout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+        vLayout.childControlHeight = true;
+        vLayout.childControlWidth = true;
+        vLayout.childForceExpandHeight = false;
+
+        var fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        scrollRect.viewport = viewport;
+        scrollRect.content = content;
+
+        return content;
+    }
+    public void RefreshSidebar()
+    {
+        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
+
+        // 1. VALIDATE FIRST: Recursively ensure the canvas has all required operators before drawing
+        if (rootZone != null)
+        {
+            ValidateWorkspaceOperatorsRecursive(rootZone);
+        }
+
+        // 2. CLEAR: Wipe the old sidebar UI
+        foreach (Transform child in SidebarContent) Destroy(child.gameObject);
+
+        // 3. HEADER: Build Workspace Header
+        RectTransform headerRect = CreateRect("TreeHeader", SidebarContent);
+        var layout = headerRect.gameObject.AddComponent<HorizontalLayoutGroup>();
+        layout.childAlignment = TextAnchor.MiddleLeft;
+        headerRect.gameObject.AddComponent<LayoutElement>().minHeight = 30f;
+
+        var headerBg = headerRect.gameObject.AddComponent<UnityEngine.UI.Image>();
+        headerBg.color = new Color(1, 1, 1, 0.05f);
+        var headerBtn = headerRect.gameObject.AddComponent<UnityEngine.UI.Button>();
+
+        var headerText = CreateRect("Label", headerRect).gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        ItemData activeClone = ModPackage.Instance?.GetActiveEntity<ItemData>();
+        string title = string.IsNullOrEmpty(activeClone?.entityName) ? "Item Hierarchy" : activeClone.entityName;
+        headerText.text = $"<b>{title}</b>";
+        headerText.fontSize = 16;
+        headerText.color = new Color(0.8f, 0.6f, 0.2f); // Gold
+        headerText.alignment = TextAlignmentOptions.Center;
+
+        // 4. DRAW: Loop through the newly validated list to build the rows
+        if (rootZone != null)
+        {
+            foreach (var entrant in rootZone.Entrants)
+            {
+                if (entrant is EntityCard card) AppendToSidebar(card, 1);
+            }
+        }
+
+        // 5. COMPILE: Force the raw text string to update to match the validated layout
+        AutoCompile();
+    }
+    private void AppendToSidebar(EntityCard card, int indentLevel)
+    {
+        // Create a clickable row for this item
+        RectTransform rowRect = CreateRect($"Row_{card.CardName}", SidebarContent);
+        var layout = rowRect.gameObject.AddComponent<HorizontalLayoutGroup>();
+        layout.childAlignment = TextAnchor.MiddleLeft;
+
+        // Push the text to the right based on how deep we are nested
+        layout.padding = new RectOffset(indentLevel * 10, 0, 0, 0);
+
+        rowRect.gameObject.AddComponent<LayoutElement>().minHeight = 25f;
+
+        // Make the row background a clickable button
+        var bgImage = rowRect.gameObject.AddComponent<UnityEngine.UI.Image>();
+        bgImage.color = new Color(1, 1, 1, 0.05f); // Very faint background
+        var button = rowRect.gameObject.AddComponent<UnityEngine.UI.Button>();
+
+        // When clicked, send this card to the right-side inspector
+        button.onClick.AddListener(() =>
+        {
+            SelectCard(card);
+        });
+
+        // Add the text label
+        RectTransform textRect = CreateRect("Label", rowRect);
+        var text = textRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        string prefix = indentLevel == 0 ? " ■ " : " - ";
+        text.text = $"{prefix}{card.CardName}";
+        text.fontSize = 14;
+        text.color = new Color(0.8f, 0.8f, 0.8f);
+
+        // Recursively add children found in this card's payload port
+        if (card.PayloadPort != null)
+        {
+            foreach (var childItem in card.PayloadPort.Entrants)
+            {
+                if (childItem is EntityCard childCard)
                 {
-                    string filename = sprite.name;
-                    string[] parts = filename.Split('_');
-
-                    if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
-                    {
-                        string prefix = parts[0].ToLower();
-                        string facadeStr;
-
-                        // Legacy translation layer alignment
-                        if (prefix == "big" && parsedId >= 0 && parsedId <= 31)
-                        {
-                            facadeStr = $"bas{188 + parsedId}";
-                        }
-                        else if (prefix == "hug" && parsedId >= 0 && parsedId <= 27)
-                        {
-                            facadeStr = $"bas{220 + parsedId}";
-                        }
-                        else if (prefix == "tin" && parsedId >= 0 && parsedId <= 17)
-                        {
-                            facadeStr = $"bas{248 + parsedId}";
-                        }
-                        else
-                        {
-                            facadeStr = $"{parts[0]}{parts[1]}";
-                        }
-
-                        currentItem.imageOverride = facadeStr;
-                    }
-                    else
-                    {
-                        currentItem.imageOverride = filename;
-                    }
-
-                    UpdateCompilerOutput();
-                    RebuildMainEditorPanel();
+                    AppendToSidebar(childCard, indentLevel + 1);
                 }
             }
-        };
-
-        iconPicker.OpenModal(config);
+        }
     }
-    private void ToggleCustomImagePanel()
-    {
-        showCustomImagePanel = !showCustomImagePanel;
-        RebuildMainEditorPanel();
-    }
-    private void UpdateItemHsvData(int componentIndex, int value)
-    {
-        int h = currentItem.HsvShift?.Hue ?? 0;
-        int s = currentItem.HsvShift?.Saturation ?? 0;
-        int v = currentItem.HsvShift?.Value ?? 0;
 
-        if (componentIndex == 0) h = value;
-        else if (componentIndex == 1) s = value;
-        else if (componentIndex == 2) v = value;
+    public void AutoCompile()
+    {
+        if (_compiledOutputField == null || MainCanvasContent == null) return;
+        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
 
-        if (h == 0 && s == 0 && v == 0)
+        if (rootZone == null) return;
+
+        var cards = rootZone.Entrants.Cast<EntityCard>();
+
+        // 1. Compile plain text
+        IsCompilingRichText = false;
+        _compiledOutputField.text = ItemSyntaxCompiler.CompileZone(cards);
+
+        // 2. Compile rich text
+        if (_syntaxHighlighterText != null)
         {
-            currentItem.HsvShift = null;
+            IsCompilingRichText = true;
+            _syntaxHighlighterText.text = ItemSyntaxCompiler.CompileZone(cards);
+            IsCompilingRichText = false;
+        }
+    }
+
+    private void OnAddNodeSelected(int index, TMPro.TMP_Dropdown dropdown)
+    {
+        // Safety checks: skip if placeholder is selected or workspace zone is missing
+        if (index == 0 || _rootZone == null) return;
+
+        // Safety check: ensure index is within the bounds of the dynamic list
+        if (index < 0 || index >= _dropdownNodeTypes.Count) return;
+
+        // Retrieve the correct enum type dynamically from our mapped list
+        ItemNodeType type = _dropdownNodeTypes[index];
+
+        // Create the card and drop it onto the main canvas workspace
+        EntityCard newCard = CreateEntityCard(type) as EntityCard;
+        if (newCard != null)
+        {
+            _rootZone.AddEntrant(newCard);
+        }
+
+        // Reset the dropdown visually so it can be used again
+        dropdown.SetValueWithoutNotify(0);
+        RefreshSidebar();
+    }
+    public void CreateInspectorDropdown(string label, List<string> options, int currentIndex, UnityEngine.Events.UnityAction<int> onValueChanged)
+    {
+        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
+        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
+        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
+
+        RectTransform labelRect = CreateRect("Label", container);
+        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        labelText.text = label; labelText.fontSize = 14; labelText.color = Color.grey;
+        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
+
+        if (dropdownPrefab != null)
+        {
+            GameObject ddObj = Instantiate(dropdownPrefab, container);
+            var dropdown = ddObj.GetComponent<TMPro.TMP_Dropdown>();
+            dropdown.ClearOptions();
+            dropdown.AddOptions(options);
+            dropdown.value = currentIndex;
+            dropdown.onValueChanged.AddListener(onValueChanged);
+        }
+    }
+    public void CreateInspectorTextArea(string label, string initialValue, UnityEngine.Events.UnityAction<string> onValueChanged)
+    {
+        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
+        var layout = container.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.spacing = 5;
+        layout.childControlHeight = true; layout.childControlWidth = true;
+
+        RectTransform labelRect = CreateRect("Label", container);
+        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        labelText.text = label;
+        labelText.fontSize = 14;
+        labelText.color = Color.grey;
+        labelRect.gameObject.AddComponent<LayoutElement>().minHeight = 20f;
+
+        if (inputFieldPrefab != null)
+        {
+            GameObject inputObj = Instantiate(inputFieldPrefab, container);
+            var inputField = inputObj.GetComponent<TMPro.TMP_InputField>();
+            inputField.lineType = TMPro.TMP_InputField.LineType.MultiLineNewline;
+
+            var inputLayout = inputObj.GetComponent<LayoutElement>() ?? inputObj.AddComponent<LayoutElement>();
+            inputLayout.preferredHeight = 100f;
+
+            inputField.text = initialValue;
+            inputField.onValueChanged.AddListener(onValueChanged);
+        }
+    }
+    public void SelectCard(EntityCard card)
+    {
+        _selectedCard = card;
+        foreach (Transform child in InspectorContent) Destroy(child.gameObject);
+
+        if (card != null)
+        {
+            NodeRegistry.Get(card.NodeType).DrawInspector(this, card);
+        }
+    }
+    public void DeleteCard(EntityCard card)
+    {
+        if (card == null) return;
+
+        // 1. If we are deleting the card currently loaded in the inspector, clear it.
+        if (_selectedCard == card)
+        {
+            _selectedCard = null;
+            foreach (Transform child in InspectorContent) Destroy(child.gameObject);
+        }
+
+        // 2. Remove the card from its parent drop zone's internal entrants list
+        var parentZone = card.transform.parent != null ? card.transform.parent.GetComponent<ReorderableZone>() : null;
+        if (parentZone != null)
+        {
+            parentZone.Entrants.Remove(card);
+        }
+        else if (_rootZone != null)
+        {
+            _rootZone.Entrants.Remove(card);
+        }
+
+        // 3. Destroy the physical game object
+        Destroy(card.gameObject);
+
+        // 4. Update workspace layout and auto-compile
+        RefreshSidebar();
+        AutoCompile();
+    }
+    public static string CompileZone(IEnumerable<EntityCard> cards)
+    {
+        if (cards == null) return "";
+
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        EntityCard prevCard = null;
+
+        foreach (var card in cards)
+        {
+            string part = card.Compile();
+            if (string.IsNullOrWhiteSpace(part)) continue;
+
+            part = part.Trim();
+
+            if (prevCard != null)
+            {
+                var prevDef = NodeRegistry.Get(prevCard.NodeType);
+                var currDef = NodeRegistry.Get(card.NodeType);
+
+                bool prevIsOp = prevDef.IsOperator;
+                bool currIsOp = currDef.IsOperator;
+
+                // Smart chaining: Inject dots natively between elements where appropriate
+                if (!prevIsOp && !currIsOp)
+                {
+                    string currentStr = sb.ToString();
+                    if (!currentStr.EndsWith(".") && !currentStr.EndsWith("#") &&
+                        !currentStr.EndsWith(".mrg.") && !currentStr.EndsWith(".splice.") && !currentStr.EndsWith(".i.") &&
+                        !part.StartsWith(".") && !part.StartsWith("#"))
+                    {
+                        sb.Append(".");
+                    }
+                }
+            }
+
+            sb.Append(part);
+            prevCard = card;
+        }
+
+        string result = sb.ToString();
+
+        // Fallback cleanup to catch anything that slipped out of raw strings
+        while (result.Contains("..")) result = result.Replace("..", ".");
+        result = result.Replace(".#", "#").Replace("#.", "#");
+
+        return result;
+    }
+
+    private bool ValidateWorkspaceOperators(ReorderableZone zone)
+    {
+        if (zone == null) return false;
+        bool layoutChanged = false;
+
+        bool IsValidOpTarget(AuthoringNodeDef def) => def != null && (def.IsEntity || def.NodeType == ItemNodeType.Bracket || def.NodeType == ItemNodeType.RawString || def.NodeType == ItemNodeType.Hat || def.NodeType == ItemNodeType.BaseItem);
+
+        // PASS 1: Only clean up severely dangling operators at the absolute bounds of the list
+        for (int i = zone.Entrants.Count - 1; i >= 0; i--)
+        {
+            if (zone.Entrants[i] is EntityCard card && card.NodeType == ItemNodeType.Operator)
+            {
+                bool isFirst = (i == 0);
+                bool isLast = (i == zone.Entrants.Count - 1);
+
+                if (isFirst || isLast)
+                {
+                    zone.Entrants.RemoveAt(i);
+                    Destroy(card.gameObject);
+                    layoutChanged = true;
+                }
+            }
+        }
+
+        // PASS 2: Auto-Spawn default operators ONLY if no operator currently separates two entity nodes
+        for (int i = 0; i < zone.Entrants.Count - 1; i++)
+        {
+            if (zone.Entrants[i] is EntityCard card1 && zone.Entrants[i + 1] is EntityCard card2)
+            {
+                var def1 = NodeRegistry.Get(card1.NodeType);
+                var def2 = NodeRegistry.Get(card2.NodeType);
+
+                // If two entity-like structures are side-by-side without an operator between them, inject #
+                if (IsValidOpTarget(def1) && IsValidOpTarget(def2))
+                {
+                    EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                    opCard.MechanicData.PayloadString = "#";
+
+                    opCard.transform.SetParent(zone.transform, false);
+                    opCard.transform.SetSiblingIndex(card2.transform.GetSiblingIndex());
+
+                    zone.Entrants.Insert(i + 1, opCard);
+                    layoutChanged = true;
+                    i++; // Skip over the newly inserted operator
+                }
+            }
+        }
+
+        return layoutChanged;
+    }
+
+    private void ValidateWorkspaceOperatorsRecursive(ReorderableZone zone)
+    {
+        if (zone == null) return;
+        ValidateWorkspaceOperators(zone);
+
+        var entrantsCopy = zone.Entrants.ToList();
+        foreach (var entrant in entrantsCopy)
+        {
+            if (entrant is EntityCard card && card.PayloadPort != null)
+            {
+                ValidateWorkspaceOperatorsRecursive(card.PayloadPort);
+            }
+        }
+    }
+
+    public ReorderableItem CreateEntityCard(ItemNodeType nodeType)
+    {
+        var def = NodeRegistry.Get(nodeType);
+
+        // 1. Create the base card layout and components
+        EntityCard entityCard = CreateRootCard(nodeType, def.GetColor());
+        RectTransform cardRect = entityCard.GetComponent<RectTransform>();
+
+        // 2. Construct the header container
+        RectTransform headerRow = CreateHeaderRow(cardRect);
+
+        // 3. Populate header elements
+        AddTitle(headerRow, entityCard);
+
+        if (nodeType == ItemNodeType.Hat)
+        {
+            entityCard.MechanicData.PayloadData = new HeroData();
+            (entityCard.MechanicData.PayloadData as HeroData).InitializeDiceFaces();
+            entityCard.MechanicData.Prefix = "hat"; // Ensure the prefix is correct
+        }
+
+        if (def.HasDeleteButton)
+        {
+            AddDeleteButton(headerRow, entityCard);
+        }
+
+        // 4. Setup payload drop zone if required
+        if (def.HasPayloadPort)
+        {
+            AddPayloadPort(cardRect, entityCard);
+        }
+
+        return entityCard;
+    }
+    private EntityCard CreateRootCard(ItemNodeType nodeType, Color backgroundColor)
+    {
+        RectTransform cardRect = CreateRect($"Card_{nodeType}", null);
+        cardRect.sizeDelta = new Vector2(280f, 80f);
+        cardRect.localScale = Vector3.one;
+
+        AddColor(cardRect, backgroundColor);
+
+        // CanvasGroup initialization
+        var canvasGroup = cardRect.gameObject.AddComponent<CanvasGroup>();
+        canvasGroup.alpha = 1f;
+        canvasGroup.blocksRaycasts = true;
+        canvasGroup.interactable = true;
+
+        var entityCard = cardRect.gameObject.AddComponent<EntityCard>();
+        entityCard.NodeType = nodeType;
+
+        // Outer layout settings
+        var vLayout = cardRect.gameObject.AddComponent<VerticalLayoutGroup>();
+        vLayout.padding = new RectOffset(10, 10, 10, 10);
+        vLayout.spacing = 10;
+        vLayout.childControlHeight = true;
+        vLayout.childControlWidth = true;
+
+        var fitter = cardRect.gameObject.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        return entityCard;
+    }
+    private RectTransform CreateHeaderRow(RectTransform parent)
+    {
+        RectTransform headerRow = CreateRect("HeaderRow", parent);
+        var hLayout = headerRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hLayout.childControlWidth = true;
+        hLayout.childControlHeight = true;
+        hLayout.childForceExpandWidth = false;
+        hLayout.childForceExpandHeight = false;
+        hLayout.spacing = 10;
+
+        return headerRow;
+    }
+    private void AddTitle(RectTransform headerRow, EntityCard entityCard)
+    {
+        RectTransform titleRect = CreateRect("Title", headerRow);
+        var titleText = titleRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        titleText.fontSize = 18;
+        titleText.color = Color.white;
+        titleText.fontStyle = TMPro.FontStyles.Bold;
+
+        var titleLayout = titleRect.gameObject.AddComponent<LayoutElement>();
+        titleLayout.flexibleWidth = 1f;
+
+        entityCard.gameObject.AddComponent<UpdateTitleUtility>().Init(entityCard, titleText);
+    }
+    private void AddDeleteButton(RectTransform headerRow, EntityCard entityCard)
+    {
+        GameObject deleteBtnObj;
+        if (buttonPrefab != null)
+        {
+            deleteBtnObj = Instantiate(buttonPrefab, headerRow);
+            var img = deleteBtnObj.GetComponent<Image>();
+            if (img != null)
+            {
+                img.color = new Color(0.7f, 0.2f, 0.2f);
+            }
         }
         else
         {
-            currentItem.HsvShift = new ItemHsvShift(h, s, v);
+            deleteBtnObj = new GameObject("DeleteBtn");
+            deleteBtnObj.transform.SetParent(headerRow, false);
+            var img = deleteBtnObj.AddComponent<Image>();
+            img.color = new Color(0.7f, 0.2f, 0.2f);
         }
 
-        // Synchronize Input UI component
-        string inputKey = componentIndex == 0 ? "In_H" : (componentIndex == 1 ? "In_S" : "In_V");
-        if (_mainRefs != null && _mainRefs.Inputs.TryGetValue(inputKey, out var input))
+        var btnLayout = deleteBtnObj.GetComponent<LayoutElement>() ?? deleteBtnObj.AddComponent<LayoutElement>();
+        btnLayout.preferredWidth = 25f;
+        btnLayout.preferredHeight = 25f;
+        btnLayout.flexibleWidth = 0;
+        btnLayout.flexibleHeight = 0;
+
+        var deleteBtn = deleteBtnObj.GetComponent<UnityEngine.UI.Button>() ?? deleteBtnObj.AddComponent<UnityEngine.UI.Button>();
+
+        var btnText = deleteBtnObj.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+        if (btnText == null)
         {
-            input.SetTextWithoutNotify(value.ToString());
+            var textGo = new GameObject("Text");
+            textGo.transform.SetParent(deleteBtnObj.transform, false);
+            btnText = textGo.AddComponent<TMPro.TextMeshProUGUI>();
         }
+        btnText.text = " X";
+        btnText.fontSize = 12;
+        btnText.color = Color.white;
+        btnText.fontStyle = TMPro.FontStyles.Bold;
+        btnText.alignment = TMPro.TextAlignmentOptions.Center;
 
-        // Synchronize Slider UI component
-        string sliderKey = componentIndex == 0 ? "Sld_H" : (componentIndex == 1 ? "Sld_S" : "Sld_V");
-        if (_mainRefs != null && _mainRefs.Sliders.TryGetValue(sliderKey, out var slider))
-        {
-            slider.SetValueWithoutNotify(value);
-        }
-
-        UpdateCompilerOutput();
-    }   
-    private List<GridRowSpec> GetAppearanceRows(float rowHeight)
-    {
-        var layout = new List<GridRowSpec>
-        {
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_Colors", "--- Aesthetics & Colors ---", 1.0f)),
-
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Icon Override:", 0.30f),
-                GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, OpenFacadeModal),
-                GridCellSpec.CreateInput("In_Img", "None", 0.35f, (val) => { currentItem.imageOverride = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
-            )
-        };
-
-        if (showCustomImagePanel)
-        {
-            layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
-        }
-
-        layout.AddRange(new List<GridRowSpec>
-        {
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Hue:", 0.30f),
-                GridCellSpec.CreateSlider("Sld_H", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(0, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput("In_H", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateItemHsvData(0, h); })
-            ),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Saturation:", 0.30f),
-                GridCellSpec.CreateSlider("Sld_S", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(1, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput("In_S", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateItemHsvData(1, s); })
-            ),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Value:", 0.30f),
-                GridCellSpec.CreateSlider("Sld_V", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(2, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput("In_V", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateItemHsvData(2, v); })
-            ),
-            /*
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Hue", "Simple Hue (hue)", 0.33f, OnHueChanged),
-                //GridCellSpec.CreateInput("In_THue", "Target Hue (thue)", 0.33f, (val) => { currentItem.hue = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_P", "Palette Override (p)", 0.34f, (val) => { currentItem.PaletteOverride = val; UpdateCompilerOutput(); })
-            ),
-            */
-            /*
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_B", "Border Color Code (b)", 1.0f, (val) => { currentItem.BorderColorCode = val; UpdateCompilerOutput(); })),
-            */
-            /*
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_UI", "--- UI & Rendering Overrides ---", 1.0f)),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Rect", "Rect Layout (rect)", 0.5f, (val) => { currentItem.UiRectInstructions = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_Draw", "Draw Mode (draw)", 0.5f, (val) => { currentItem.UiDrawInstructions = val; UpdateCompilerOutput(); })
-            ),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateToggle("Tgl_ClearIcon", "Clear Base Icon", 0.5f, (val) => { currentItem.ClearIcon = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateToggle("Tgl_ClearDesc", "Clear Base Desc", 0.5f, (val) => { currentItem.ClearDescription = val; UpdateCompilerOutput(); })
-            )
-            */
-        });
-
-        return layout;
+        deleteBtn.onClick.RemoveAllListeners();
+        deleteBtn.onClick.AddListener(() => DeleteCard(entityCard));
     }
-    private void RebuildMainEditorPanel()
+    private void AddPayloadPort(RectTransform parent, EntityCard entityCard)
     {
-        if (_mainScroll == null || _mainScroll.content == null) return;
-        float rowHeight = uiGenerator != null ? uiGenerator.rowHeight : 40f;
+        RectTransform portRect = CreateRect("PayloadPort", parent);
+        AddColor(portRect, new Color(0, 0, 0, 0.3f));
 
-        _mainRefs = uiGenerator.RebuildGrid(_mainScroll.content, GetMainEditorRows(rowHeight), useMargins: true);
+        var portLayout = portRect.gameObject.AddComponent<VerticalLayoutGroup>();
+        portLayout.padding = new RectOffset(15, 15, 15, 15);
+        portLayout.spacing = 5;
+        portLayout.childControlHeight = true;
+        portLayout.childControlWidth = true;
 
-        float extraH = CalculateScrollExtraHeight(_mainScroll.content);
-        _mainScroll.content.sizeDelta = new Vector2(0, _mainRefs.TotalHeight + extraH);
+        var portFitter = portRect.gameObject.AddComponent<ContentSizeFitter>();
+        portFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        portRect.gameObject.AddComponent<LayoutElement>().minHeight = 40f;
 
-        if (_selectedWorkspaceItem != null && _selectedWorkspaceItem.Type == ItemNodeType.Equippable)
-        {
-            if (showCustomImagePanel)
-            {
-                if (_mainRefs.CustomImgImporter.TryGetValue("CustomImgPanel", out ImageReceiver dummyReceiver))
-                {
-                    if (_persistentCustomImageReceiver == null)
-                    {
-                        _persistentCustomImageReceiver = dummyReceiver;
-                        _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
-                        {
-                            currentItem.imageOverride = encodedStr;
-                            _customImageString = encodedStr;
-                            _customImageTexture = tex;
+        var zone = portRect.gameObject.AddComponent<ReorderableZone>();
+        zone.SetCanvas(_cachedCanvas);
+        zone.OnZoneChanged += RefreshSidebar;
 
-                            if (_customImageCachedSprite != null) Destroy(_customImageCachedSprite);
-                            _customImageCachedSprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
-
-                            UpdateCompilerOutput();
-                        };
-                    }
-                    else
-                    {
-                        Transform placeholderParent = dummyReceiver.transform.parent;
-                        Destroy(dummyReceiver.gameObject);
-
-                        _persistentCustomImageReceiver.transform.SetParent(placeholderParent, false);
-                        _persistentCustomImageReceiver.gameObject.SetActive(true);
-
-                        RectTransform rt = _persistentCustomImageReceiver.GetComponent<RectTransform>();
-                        FullScreenUIGenerator.SetAnchors(rt, 0, 0, 1, 1);
-                    }
-                }
-            }
-            else if (_persistentCustomImageReceiver != null)
-            {
-                _persistentCustomImageReceiver.gameObject.SetActive(false);
-            }
-        }
-
-        PopulateMainPanelFromData();
+        entityCard.PayloadPort = zone;
     }
-    private List<GridRowSpec> GetEquippableRows(float rowHeight)
-    {
-        var layout = new List<GridRowSpec>
-        {
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_Meta", "--- EQUIPPABLE METADATA ---", 1.0f)),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Name", "Item Name (n)", 0.7f, (val) => { currentItem.entityName = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_Tier", "Tier (tier)", 0.3f, OnTierChanged)
-            ),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_Doc", "Documented Description (doc)", 1.0f, (val) => { currentItem.DocumentedDescription = val; UpdateCompilerOutput(); })),
-
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_Colors", "--- AESTHETICS & COLORS ---", 1.0f)),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Icon Override:", 0.30f),
-                GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, OpenFacadeModal),
-                GridCellSpec.CreateInput("In_Img", "None", 0.35f, (val) => { currentItem.imageOverride = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
-            )
-        };
-
-        if (showCustomImagePanel) layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
-
-        layout.AddRange(new List<GridRowSpec>
-        {
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Hue:", 0.30f),
-                GridCellSpec.CreateSlider("Sld_H", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(0, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput("In_H", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateItemHsvData(0, h); })
-            ),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Saturation:", 0.30f),
-                GridCellSpec.CreateSlider("Sld_S", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(1, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput("In_S", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateItemHsvData(1, s); })
-            ),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateLabel("Value:", 0.30f),
-                GridCellSpec.CreateSlider("Sld_V", -99, 99, true, 0.50f, (val) => UpdateItemHsvData(2, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput("In_V", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateItemHsvData(2, v); })
-            ),
-            /*
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Hue", "Simple Hue (hue)", 0.33f, (val) => { if (int.TryParse(val, out int parsedHue)) currentItem.SimpleHue = parsedHue; else currentItem.SimpleHue = null; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_THue", "Target Hue (thue)", 0.33f, (val) => { currentItem.TargetedHue = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_P", "Palette Override (p)", 0.34f, (val) => { currentItem.PaletteOverride = val; UpdateCompilerOutput(); })
-            ),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_B", "Border Color Code (b)", 1.0f, (val) => { currentItem.BorderColorCode = val; UpdateCompilerOutput(); })),
-
-            new GridRowSpec(30f, GridCellSpec.CreateLabel("Header_UI", "--- UI & RENDERING OVERRIDES ---", 1.0f)),
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateInput("In_Rect", "Rect Layout (rect)", 0.5f, (val) => { currentItem.UiRectInstructions = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateInput("In_Draw", "Draw Mode (draw)", 0.5f, (val) => { currentItem.UiDrawInstructions = val; UpdateCompilerOutput(); })
-            ),
-            */
-            new GridRowSpec(rowHeight,
-                GridCellSpec.CreateToggle("Tgl_ClearIcon", "Clear Base Icon", 0.5f, (val) => { currentItem.ClearIcon = val; UpdateCompilerOutput(); }),
-                GridCellSpec.CreateToggle("Tgl_ClearDesc", "Clear Base Desc", 0.5f, (val) => { currentItem.ClearDescription = val; UpdateCompilerOutput(); })
-            )
-        });
-
-        return layout;
-    }
-
-    // Reusable UI for selecting where the mechanic applies (topbot, left2, all, etc.)
-    private List<GridRowSpec> GetTargetSelectionRows(float rowHeight, ItemMechanic mech)
-    {
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Targ", "1. Execution Targets (e.g., topbot, left, all)", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_Targets", "Target string (comma separated)", 1.0f, (val) => {
-                mech.Targets = val.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
-                UpdateCompilerOutput();
-            }))
-        };
-    }
-    private List<GridRowSpec> GetBaseItemRows(float rowHeight, ItemMechanic mech)
-    {
-        var layout = GetTargetSelectionRows(rowHeight, mech);
-        mech.Prefix = ""; // Base items have no prefix, just the name
-
-        layout.Add(new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_BaseItem", "2. Base Item Payload", 1.0f)));
-        layout.Add(new GridRowSpec(rowHeight,
-            GridCellSpec.CreateDropdown("Drop_BaseItem", "Select Base Item:", 1.0f, Enum.GetNames(typeof(BaseItems)), (idx) => {
-                mech.PayloadString = Enum.GetNames(typeof(BaseItems))[idx];
-                UpdateCompilerOutput();
-            })
-        ));
-
-        // Manual override for custom items from ModPackage
-        layout.Add(new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_BaseItemStr", "Or Custom String:", 1.0f, (val) => { mech.PayloadString = val; UpdateCompilerOutput(); })));
-        return layout;
-    }
-    private List<GridRowSpec> GetHatRows(float rowHeight, ItemMechanic mech)
-    {
-        var layout = GetTargetSelectionRows(rowHeight, mech);
-        mech.Prefix = "hat"; // Sets the compiler prefix to 'hat.'
-
-        layout.Add(new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Hat", "2. Hat Payload (HeroData / MonsterData String)", 1.0f)));
-        layout.Add(new GridRowSpec(rowHeight,
-            GridCellSpec.CreateInput("In_HatPayload", "Paste Entity String (e.g. egg.Slimelet)", 1.0f, (val) => {
-                mech.PayloadString = val;
-                UpdateCompilerOutput();
-            })
-        ));
-        return layout;
-    }
-    private List<GridRowSpec> GetStickerRows(float rowHeight, ItemMechanic mech)
-    {
-        var layout = GetTargetSelectionRows(rowHeight, mech);
-        mech.Prefix = "sticker";
-
-        layout.Add(new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Sticker", "2. Sticker Payload (ItemData String)", 1.0f)));
-        layout.Add(new GridRowSpec(rowHeight,
-            GridCellSpec.CreateInput("In_StickerPayload", "Paste Item String to apply as sticker", 1.0f, (val) => {
-                mech.PayloadString = val;
-                UpdateCompilerOutput();
-            })
-        ));
-        return layout;
-    }
-    private List<GridRowSpec> GetRawStringRows(float rowHeight, ItemMechanic mech)
-    {
-        mech.Prefix = "";
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Raw", "Raw AST String Injector", 1.0f)),
-            new GridRowSpec(rowHeight * 3f, GridCellSpec.CreateInput("In_RawPayload", "(replica.Thief.i.(all...))", 1.0f, (val) => {
-                mech.PayloadString = val;
-                UpdateCompilerOutput();
-            }))
-        };
-    }
-
-    /*
-    private List<GridRowSpec> GetSuffixNodeRows(float rowHeight, ItemMechanic mech, string header)
-    {
-        mech.Prefix = ""; // No prefix, we are writing to the suffix properties
-        mech.PayloadString = "";
-
-        var layout = new List<GridRowSpec>
-        {
-            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Suf", $"--- {header} ---", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_SuffixValue", "Item to Splice/Merge", 1.0f, (val) => {
-                if (_selectedWorkspaceItem.Type == ItemNodeType.Splice) mech.SplicedItem = val;
-                else if (_selectedWorkspaceItem.Type == ItemNodeType.Merge) mech.MergedItem = val;
-                UpdateCompilerOutput();
-            }))
-        };
-        return layout;
-    }
-    */
-    /*
-    private List<GridRowSpec> GetPartRows(float rowHeight, ItemMechanic mech)
-    {
-        mech.Prefix = "";
-        mech.PayloadString = "";
-
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Part", "--- Item Part Extraction (.part.X) ---", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateInput("In_PartIdx", "Index (e.g. 0, 1, 2)", 1.0f, (val) => {
-                if (int.TryParse(val, out int idx)) mech.PartIndex = idx;
-                else mech.PartIndex = null;
-                UpdateCompilerOutput();
-            }))
-        };
-    }
-
-    private List<GridRowSpec> GetUnpackRows(float rowHeight, ItemMechanic mech)
-    {
-        mech.Prefix = "";
-        mech.PayloadString = "";
-        mech.Unpack = true; // Hardcoded true for this node type
-
-        return new List<GridRowSpec>
-        {
-            new GridRowSpec(22f, GridCellSpec.CreateLabel("LBL_Unpack", "--- Unpack Item (.unpack) ---", 1.0f)),
-            new GridRowSpec(rowHeight, GridCellSpec.CreateLabel("LBL_UnpackDesc", "Strips conditional activation requirements from a base item.", 1.0f))
-        };
-    }
-    */
 }

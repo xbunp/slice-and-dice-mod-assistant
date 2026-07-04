@@ -10,6 +10,13 @@ public class AtlasProcessor : AssetPostprocessor
     private readonly string[] TargetFileNames = { "base_atlas_image.png", "community_atlas_image.png" };
     private const int AtlasHeight = 1024;
 
+    // Declarative domain ownership: Maps exact parent directories to their authoritative atlas.
+    // Prevents duplicate processing across overlapping atlases without relying on arbitrary string matching.
+    private static readonly Dictionary<string, string> DirectoryAtlasOwnership = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "spells", "community_atlas_image.png" }
+    };
+
     // Explicit database mapping definitions to ensure accurate engine IDs
     // Explicit database mapping definitions to ensure accurate engine IDs
     // Note: All keys are lowercase to ensure matches against lowercased NormalizePath()
@@ -436,6 +443,14 @@ public class AtlasProcessor : AssetPostprocessor
             Database[prefix][normalizedPath] = nextId;
             return nextId;
         }
+
+        public static void Evict(string prefix, string normalizedPath)
+        {
+            if (Database.ContainsKey(prefix))
+            {
+                Database[prefix].Remove(normalizedPath);
+            }
+        }
     }
 
     // --- INSIDE AtlasProcessor.cs ---
@@ -503,9 +518,36 @@ public class AtlasProcessor : AssetPostprocessor
                 originalPath = originalPath.Substring("3dlink/".Length);
             }
 
+            // Exclude the base atlas's ability/spell/ paths to prevent collision with community atlas extra/spells/
+            if (fileName == "base_atlas_image.png" && originalPath.StartsWith("ability/spell/", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             string normalizedPath = NormalizePath(originalPath);
-            string[] pathParts = originalPath.Split('/');
+            string[] pathParts = normalizedPath.Split('/');
             string spriteSubName = pathParts[pathParts.Length - 1];
+
+            // Scan path segments to find any registered authoritative domain
+            string matchedDomain = null;
+            foreach (var part in pathParts)
+            {
+                if (DirectoryAtlasOwnership.ContainsKey(part))
+                {
+                    matchedDomain = part;
+                    break;
+                }
+            }
+
+            // If a domain is matched, enforce its authoritative ownership
+            if (matchedDomain != null)
+            {
+                string authoritativeAtlas = DirectoryAtlasOwnership[matchedDomain];
+                if (!string.Equals(fileName, authoritativeAtlas, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue; // Skip processing: Current atlas does not own this domain
+                }
+            }
 
             string prefix = "Atm";
             if (originalPath.StartsWith("reg/face/")) prefix = "bas";
@@ -520,6 +562,12 @@ public class AtlasProcessor : AssetPostprocessor
                 string folderName = pathParts[pathParts.Length - 2].Trim();
                 if (folderName.Length < 3) folderName = folderName.PadRight(3, '_');
                 prefix = folderName.Substring(0, 3);
+            }
+
+            // Permanently ban the base atlas from generating any sprite with the "spe" prefix
+            if (fileName == "base_atlas_image.png" && prefix.Equals("spe", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
             }
 
             int x = 0, y = 0, w = 0, h = 0;
@@ -635,7 +683,8 @@ public class AtlasProcessor : AssetPostprocessor
                 if (sprite.assignedId == -1)
                 {
                     // Spells strictly use alphabetical indexing and bypass the chronological registry
-                    if (sprite.prefix == "spe")
+                    // Ensure only actual spells claim sequential spell IDs, allowing other "spe" prefixes to use the normal registry
+                    if (sprite.prefix == "spe" && sprite.normalizedPath.StartsWith("spells/"))
                     {
                         sprite.assignedId = i;
                     }
@@ -646,7 +695,22 @@ public class AtlasProcessor : AssetPostprocessor
                 }
             }
 
+            // NEW: Filter out bas188 to bas203 leftovers specifically from the community atlas
+            var finalList = new List<ParsedSprite>();
             foreach (var sprite in validList)
+            {
+                if (fileName == "community_atlas_image.png" &&
+                    sprite.prefix == "bas" &&
+                    sprite.assignedId >= 188 &&
+                    sprite.assignedId <= 203)
+                {
+                    SpriteRegistry.Evict(sprite.prefix, sprite.normalizedPath);
+                    continue; // Skip adding to the final sprite collection
+                }
+                finalList.Add(sprite);
+            }
+
+            foreach (var sprite in finalList)
             {
                 int width = Mathf.RoundToInt(sprite.rect.width);
                 int height = Mathf.RoundToInt(sprite.rect.height);
@@ -666,5 +730,4 @@ public class AtlasProcessor : AssetPostprocessor
         dataProvider.SetSpriteRects(spriteRects.ToArray());
         dataProvider.Apply();
     }
-
 }

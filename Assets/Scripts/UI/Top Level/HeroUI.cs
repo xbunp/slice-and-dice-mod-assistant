@@ -471,19 +471,28 @@ public class HeroUI : EntityUI<HeroData>
         ));
 
         AppendCollectionSelector<BaseAbility>(
-            layout: layout, label: "Add Ability:", uniqueKey: "BaseAbility",
-            availableChoices: BaseAbilityDatabase.Abilities,
-            currentActiveItems: CurrentEntity.baseAbilityData ?? new List<string>(),
-            getKey: (ability) => ability.name,
-            getDisplay: (ability) => $"{ability.name} ({ability.cost}): {(ability.effect ?? "").Replace("\n", " | ")}",
-            onAdd: (abilityName) => {
-                if (CurrentEntity.baseAbilityData == null) CurrentEntity.baseAbilityData = new List<string>();
-                if (!CurrentEntity.baseAbilityData.Contains(abilityName)) { CurrentEntity.baseAbilityData.Add(abilityName); NotifyStateChanged(); RebuildStatsUI(); }
-            },
-            onRemove: (abilityName) => {
-                if (CurrentEntity.baseAbilityData != null && CurrentEntity.baseAbilityData.Remove(abilityName)) { NotifyStateChanged(); RebuildStatsUI(); }
-            }
-        );
+                    layout: layout, label: "Add Ability:", uniqueKey: "BaseAbility",
+                    availableChoices: BaseAbilityDatabase.Abilities,
+                    currentActiveItems: CurrentEntity.baseAbilityData ?? new List<string>(),
+                    getKey: (ability) => ability.name,
+                    getDisplay: (ability) => $"{ability.name} ({ability.cost}): {(ability.effect ?? "").Replace("\n", " | ")}",
+                    onAdd: (ability) => {
+                        if (CurrentEntity.baseAbilityData == null) CurrentEntity.baseAbilityData = new List<string>();
+                        if (!CurrentEntity.baseAbilityData.Contains(ability.name))
+                        {
+                            CurrentEntity.baseAbilityData.Add(ability.name);
+                            NotifyStateChanged();
+                            RebuildStatsUI();
+                        }
+                    },
+                    onRemove: (abilityName) => {
+                        if (CurrentEntity.baseAbilityData != null && CurrentEntity.baseAbilityData.Remove(abilityName))
+                        {
+                            NotifyStateChanged();
+                            RebuildStatsUI();
+                        }
+                    }
+                );
 
         var customAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
         AppendCollectionSelector<string>(
@@ -611,6 +620,75 @@ public class HeroUI : EntityUI<HeroData>
                 if (CurrentEntity.curses != null && CurrentEntity.curses.Remove(curseName)) { NotifyStateChanged(); RebuildStatsUI(); }
             }
         );
+
+        // ==========================================
+        // ADDED: ORB SELECTORS FOR HERO UI
+        // ==========================================
+        AppendCollectionSelector<string>(
+            layout: layout, label: "Add Base Orb:", uniqueKey: "BaseOrb",
+            availableChoices: OrbData.ValidBaseOrbs.ToList(),
+            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && o.isHardcoded).Select(o => o.hardcodedAbilityName).ToList() ?? new List<string>(),
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (orbName) => {
+                if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
+                bool alreadyExists = CurrentEntity.customOrbs.Any(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase));
+                if (!alreadyExists)
+                {
+                    OrbData newOrb = new OrbData();
+                    newOrb.Parse($"orb.{orbName}");
+                    CurrentEntity.customOrbs.Add(newOrb);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (orbName) => {
+                if (CurrentEntity.customOrbs == null) return;
+                var target = CurrentEntity.customOrbs.FirstOrDefault(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase));
+                if (target != null && CurrentEntity.customOrbs.Remove(target))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+
+        var customOrbAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
+        AppendCollectionSelector<string>(
+            layout: layout, label: "Add Custom Orb:", uniqueKey: "CustomOrb",
+            availableChoices: customAbilityNames,
+            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && !o.isHardcoded).Select(o => o.entityName).ToList() ?? new List<string>(),
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (abilityName) => {
+                if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
+                bool alreadyExists = CurrentEntity.customOrbs.Any(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+                if (!alreadyExists)
+                {
+                    var template = ModPackage.Instance.CustomAbilities?.FirstOrDefault(a => string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+                    if (template != null)
+                    {
+                        string json = JsonUtility.ToJson(template);
+                        OrbData clonedOrb = JsonUtility.FromJson<OrbData>(json);
+                        clonedOrb.isHardcoded = false;
+                        clonedOrb.carrierPrefix = "sthief.abilitydata";
+                        CurrentEntity.customOrbs.Add(clonedOrb);
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
+                }
+            },
+            onRemove: (abilityName) => {
+                if (CurrentEntity.customOrbs == null) return;
+                var target = CurrentEntity.customOrbs.FirstOrDefault(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+                if (target != null && CurrentEntity.customOrbs.Remove(target))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+        // ==========================================
 
         return layout;
     }

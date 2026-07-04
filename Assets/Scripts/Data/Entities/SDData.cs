@@ -89,7 +89,15 @@ public abstract class SDData
         switch (tokenLower)
         {
             case "n": entityName = nextVal; break;
-            case "img": imageOverride = nextVal; break;
+            case "img":
+                {
+                    if (TryParseSpecialOrNormalImage(tokens, ref i, out string parsedImg))
+                    {
+                        imageOverride = parsedImg;
+                    }
+                    return true;
+                }
+                break;
             case "doc": doc = nextVal; break;
             case "hsv":
                 string[] hsvParts = nextVal.Split(':');
@@ -190,5 +198,66 @@ public abstract class SDData
             return $"{(r / 17):x}{(g / 17):x}{(b / 17):x}";
         else
             return UnityEngine.ColorUtility.ToHtmlStringRGB(colorHex).ToLower();
+    }
+
+    /// <summary>
+    /// Converts short/special names (e.g. "b1", "jinx") to their full name override ("b1.75", "jinx.uhh").
+    /// </summary>
+    public static string FormatSpecialImageName(string rawName)
+    {
+        if (string.IsNullOrWhiteSpace(rawName)) return rawName;
+        string trimmed = rawName.Trim();
+        if (NameFixes.SpecialNameOverrides.TryGetValue(trimmed, out string overrideName))
+        {
+            return overrideName;
+        }
+        return trimmed;
+    }
+
+    /// NAME FIXES
+
+    /// <summary>
+    /// Parses image/replica tokens, safely consuming 2 tokens if they form a dotted override name like "b1.75".
+    /// </summary>
+    /// <summary>
+    /// Parses image/replica tokens, reverse-looking up exported override names ("n1.75") back to UI lookup keys ("n1").
+    /// </summary>
+    protected bool TryParseSpecialOrNormalImage(List<string> tokens, ref int index, out string resultImageName)
+    {
+        resultImageName = null;
+        if (index + 1 >= tokens.Count) return false;
+
+        string firstToken = tokens[index + 1];
+
+        // 1. Check if firstToken + "." + secondToken matches an exported override value (e.g. "n1" + "." + "75" == "n1.75")
+        if (index + 2 < tokens.Count)
+        {
+            string combinedDot = $"{firstToken}.{tokens[index + 2]}";
+            foreach (var kvp in NameFixes.SpecialNameOverrides)
+            {
+                if (string.Equals(kvp.Value, combinedDot, StringComparison.OrdinalIgnoreCase))
+                {
+                    resultImageName = kvp.Key; // Return UI shorthand key ("n1")
+                    index += 2; // Consume both tokens ("n1" and "75")
+                    return true;
+                }
+            }
+        }
+
+        // 2. Check if firstToken matches a single-token exported override value (e.g. "deathSigil" -> returns "totemdeath")
+        foreach (var kvp in NameFixes.SpecialNameOverrides)
+        {
+            if (string.Equals(kvp.Value, firstToken, StringComparison.OrdinalIgnoreCase))
+            {
+                resultImageName = kvp.Key; // Return UI shorthand key
+                index += 1;
+                return true;
+            }
+        }
+
+        // 3. Standard single-token image name (or already a shorthand key like "n1")
+        resultImageName = firstToken;
+        index += 1;
+        return true;
     }
 }

@@ -58,6 +58,9 @@ public class MonsterData : EntityData
         if (hasImageOverride) { sb.Append($".img.{FormatName(monster.imageOverride)}"); monster.AppendColorModifier(sb); }
 
         if (monster.traits != null) foreach (var t in monster.traits) if (!string.IsNullOrEmpty(t)) sb.Append($".t.{FormatName(t)}");
+        if (monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) sb.Append($".{orb.ExportAsTrait(useITPrefix: false)}"); // Added
+        if (monster.items != null) foreach (var i in monster.items) if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
+
         if (monster.items != null) foreach (var i in monster.items) if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
 
         if (monster.customPayloads != null)

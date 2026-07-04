@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -123,5 +125,87 @@ public class TriggerHPData : AbilityData
     public override string ExportWrapped()
     {
         return $"({Export()})";
+    }
+}
+
+[System.Serializable]
+public class OrbData : AbilityData
+{
+    // List of valid base-game targetless abilities defined in the request
+    public static readonly HashSet<string> ValidBaseOrbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Restore", "Gaze", "Slice", "Balance", "Circle", "Glow", "Infuse", "Pray", "Scald", "Burn",
+        "Foretell", "Drop", "Clink", "Operate", "Soothe", "Blades", "Crush", "Aid", "Invoke", "Mana",
+        "Waste", "Wings", "Heat", "Hack", "Invest", "Luck", "Devoid", "Formation"
+    };
+
+    public bool isHardcoded = false;
+    public string hardcodedAbilityName = "";
+    public string carrierPrefix = "sthief.abilitydata";
+
+    public OrbData() : base()
+    {
+        InitializeDiceFaces();
+    }
+
+    public override void Parse(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data)) return;
+        string clean = data.Trim();
+
+        // Strip prefix elements to process nested custom ability structure cleanly
+        if (clean.StartsWith("i.t.", StringComparison.OrdinalIgnoreCase))
+            clean = clean.Substring(4);
+        else if (clean.StartsWith("t.", StringComparison.OrdinalIgnoreCase))
+            clean = clean.Substring(2);
+
+        if (clean.StartsWith("orb.", StringComparison.OrdinalIgnoreCase))
+            clean = clean.Substring(4);
+
+        int openParen = clean.IndexOf('(');
+        int closeParen = clean.LastIndexOf(')');
+
+        if (openParen >= 0 && closeParen > openParen)
+        {
+            isHardcoded = false;
+            string prefix = clean.Substring(0, openParen).TrimEnd('.');
+            if (!string.IsNullOrEmpty(prefix))
+            {
+                carrierPrefix = prefix;
+            }
+            string innerPayload = clean.Substring(openParen + 1, closeParen - openParen - 1);
+            base.Parse(innerPayload);
+        }
+        else
+        {
+            isHardcoded = true;
+            hardcodedAbilityName = clean;
+            entityName = clean;
+            baseReplica = clean;
+        }
+    }
+
+    public override string Export()
+    {
+        if (isHardcoded) return hardcodedAbilityName.ToLower();
+        return ExportInner();
+    }
+
+    public override string ExportWrapped()
+    {
+        if (isHardcoded) return hardcodedAbilityName.ToLower();
+        return $"({ExportInner()})";
+    }
+
+    public string ExportAsTrait(bool useITPrefix = true)
+    {
+        string prefix = useITPrefix ? "i.t.orb." : "t.orb.";
+        if (isHardcoded)
+        {
+            string name = !string.IsNullOrEmpty(hardcodedAbilityName) ? hardcodedAbilityName.ToLower() : (entityName?.ToLower() ?? "slice");
+            return $"{prefix}{name}";
+        }
+        string carrier = !string.IsNullOrEmpty(carrierPrefix) ? carrierPrefix : "sthief.abilitydata";
+        return $"{prefix}{carrier}.({ExportInner()})";
     }
 }

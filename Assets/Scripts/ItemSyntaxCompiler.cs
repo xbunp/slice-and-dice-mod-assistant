@@ -9,7 +9,11 @@ public static class ItemSyntaxCompiler
     /// <summary>
     /// Compiles a list of sibling cards, automatically injecting dots or operators where needed.
     /// </summary>
-    public static string CompileZone(IEnumerable<EntityCard> cards)
+    /// <summary>
+    /// Compiles a list of sibling cards, automatically injecting dots or operators where needed.
+    /// Guaranteed to prepend 'i.' at the root level if missing.
+    /// </summary>
+    public static string CompileZone(IEnumerable<EntityCard> cards, bool isRoot = true)
     {
         if (cards == null) return string.Empty;
 
@@ -31,7 +35,7 @@ public static class ItemSyntaxCompiler
                 bool prevIsOp = prevDef.IsOperator;
                 bool currIsOp = currDef.IsOperator;
 
-                // If neither node is an operator, and the string doesn't already have a natural joiner, inject a dot.
+                // If neither node is an operator, inject a natural dot separator
                 if (!prevIsOp && !currIsOp)
                 {
                     string currentStr = sb.ToString();
@@ -48,7 +52,58 @@ public static class ItemSyntaxCompiler
             prevCard = card;
         }
 
-        return CleanupSyntax(sb.ToString());
+        string compiled = CleanupSyntax(sb.ToString());
+
+        // AUTOMATIC i. PREFIX ENFORCEMENT AT ROOT LEVEL
+        if (isRoot && !string.IsNullOrWhiteSpace(compiled))
+        {
+            if (compiled.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+            {
+                return compiled;
+            }
+            if (compiled.StartsWith("(", StringComparison.Ordinal))
+            {
+                return $"i.{compiled}";
+            }
+            return $"i.{compiled}";
+        }
+
+        return compiled;
+    }
+
+    /// <summary>
+    /// Evaluates whether an expression requires enclosing brackets. Simple atomic strings,
+    /// standard item names, and clean identifiers bypass unnecessary wrapping.
+    /// </summary>
+    private static string WrapIfNeeded(string expr)
+    {
+        if (string.IsNullOrWhiteSpace(expr)) return string.Empty;
+        expr = expr.Trim();
+
+        // Already wrapped cleanly
+        if (expr.StartsWith("(") && expr.EndsWith(")") && IsBalanced(expr))
+            return expr;
+
+        // Wrap if the expression contains operators or complex internal chaining that would bleed out
+        char[] complexDelimiters = new char[] { '#', ':', '-' };
+        if (expr.IndexOfAny(complexDelimiters) >= 0 || expr.Contains(".mrg.") || expr.Contains(".splice.") || expr.Contains(".i."))
+        {
+            return $"({expr})";
+        }
+
+        return expr;
+    }
+
+    private static bool IsBalanced(string input)
+    {
+        int depth = 0;
+        for (int i = 0; i < input.Length; i++)
+        {
+            if (input[i] == '(') depth++;
+            else if (input[i] == ')') depth--;
+            if (depth == 0 && i < input.Length - 1) return false; // Closed too early
+        }
+        return depth == 0;
     }
 
     /// <summary>
@@ -58,11 +113,12 @@ public static class ItemSyntaxCompiler
     {
         if (card == null) return string.Empty;
 
-        // Recursively compile children first
+        //Recursively compile children first
         string childrenCompiled = string.Empty;
         if (card.PayloadPort != null && card.PayloadPort.Entrants.Count > 0)
         {
-            childrenCompiled = CompileZone(card.PayloadPort.Entrants.Cast<EntityCard>());
+            // Pass false for isRoot when compiling child/payload ports!
+            childrenCompiled = CompileZone(card.PayloadPort.Entrants.Cast<EntityCard>(), false);
         }
 
         // Delegate to specific node formatters
@@ -95,8 +151,8 @@ public static class ItemSyntaxCompiler
 
         if (!string.IsNullOrWhiteSpace(childrenCompiled))
         {
-            // Unconditionally wrap the entire inner payload in parentheses
-            baseExpr = $"({childrenCompiled})";
+            // Only wrap in brackets if the inner structure is complex enough to demand it
+            baseExpr = WrapIfNeeded(childrenCompiled);
 
             string firstToken = childrenCompiled.Split(new char[] { '.', '#', '(', ')', ' ' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
             baseItemName = firstToken ?? "Custom";
@@ -107,12 +163,11 @@ public static class ItemSyntaxCompiler
         {
             string descMod = card.RootData.ClearDescription ? "#cleardesc" : "";
             string iconMod = card.RootData.ClearIcon ? "#clearicon" : "";
-            baseExpr = $"({baseExpr}{descMod}{iconMod})";
+            baseExpr = WrapIfNeeded($"{baseExpr}{descMod}{iconMod}");
         }
 
         List<string> parts = new List<string> { baseExpr };
 
-        // FIX: Ensure "None" (case-insensitive) is ignored as a valid image override
         bool hasImage = !string.IsNullOrEmpty(card.RootData.imageOverride) &&
                         !card.RootData.imageOverride.Trim().Equals("None", StringComparison.OrdinalIgnoreCase);
 
@@ -151,7 +206,6 @@ public static class ItemSyntaxCompiler
         }
         else if (card.RootData.HsvShift.HasValue)
         {
-            // Fallback to only printing HSV if an HSV shift exists with no image override
             parts.Add(FormatHsv(card.RootData.HsvShift.Value));
         }
 
@@ -160,30 +214,6 @@ public static class ItemSyntaxCompiler
         if (!string.IsNullOrEmpty(card.RootData.entityName)) parts.Add($"n.{card.RootData.entityName}");
 
         return string.Join(".", parts);
-    }
-
-    private static string BuildHat(EntityCard card, string childrenCompiled)
-    {
-        if (!(card.MechanicData.PayloadData is HeroData heroData)) return "";
-
-        // FIX 2: Safely filter out empty strings in the targets list to guarantee fallback to 'left'
-        var validTargets = card.MechanicData.Targets?.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
-        string targets = (validTargets != null && validTargets.Count > 0) ? string.Join(".", validTargets) : "left";
-
-        string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
-
-        string hatCore = $"hat.({HatNodeDef.GetHatDiceString(heroData)})";
-
-        if (!string.IsNullOrWhiteSpace(childrenCompiled))
-        {
-            string inner = childrenCompiled;
-            if (inner.StartsWith(".")) inner = inner.Substring(1);
-
-            // Already explicitly bracketed by .i.() rule
-            return $"{prefix}{hatCore}.i.({inner})";
-        }
-
-        return $"{prefix}{hatCore}";
     }
 
     private static string BuildBaseItem(EntityCard card, string childrenCompiled)
@@ -196,20 +226,41 @@ public static class ItemSyntaxCompiler
             string inner = childrenCompiled;
             string op = "";
 
-            // FIX 3: If a child begins with an operator, it must sit OUTSIDE the bracket 
-            // e.g., turning "Sword" + "#Shield" into (Sword)#(Shield) instead of (Sword).(#Shield)
             if (inner.StartsWith("#")) { op = "#"; inner = inner.Substring(1); }
             else if (inner.StartsWith(".mrg.")) { op = ".mrg."; inner = inner.Substring(5); }
             else if (inner.StartsWith(".splice.")) { op = ".splice."; inner = inner.Substring(8); }
             else if (inner.StartsWith(".i.")) { op = ".i."; inner = inner.Substring(3); }
             else if (inner.StartsWith(".")) { op = "."; inner = inner.Substring(1); }
-            else { op = "."; } // Fallback generic attachment
+            else { op = "."; }
 
-            // Bracket the internal payload, attach the operator, then bracket the inner payload
-            return $"({internalPayload}){op}({inner})";
+            // Use WrapIfNeeded to keep atomic elements clean
+            return $"{WrapIfNeeded(internalPayload)}{op}{WrapIfNeeded(inner)}";
         }
 
         return internalPayload;
+    }
+
+    private static string BuildHat(EntityCard card, string childrenCompiled)
+    {
+        if (!(card.MechanicData.PayloadData is HeroData heroData)) return "";
+
+        // FIX 2: Safely filter out empty strings in the targets list to guarantee fallback to 'left'
+        var validTargets = card.MechanicData.Targets?.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+        string targets = (validTargets != null && validTargets.Count > 0) ? string.Join(".", validTargets) : "left";
+
+        string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
+        string hatDice = HatNodeDef.GetHatDiceString(heroData);
+
+        if (!string.IsNullOrWhiteSpace(childrenCompiled))
+        {
+            string inner = childrenCompiled;
+            if (inner.StartsWith(".")) inner = inner.Substring(1);
+
+            // Inject the child compilation INSIDE the hat's parenthesis
+            return $"{prefix}hat.({hatDice}.i.{inner})";
+        }
+
+        return $"{prefix}hat.({hatDice})";
     }
 
     private static string BuildBracket(string childrenCompiled)

@@ -16,6 +16,7 @@ public static class EntityUIHelpers
 
     public static Sprite[] BaseActionSprites { get; private set; }
     public static Sprite[] AllActionSprites { get; private set; }
+    public static Sprite[] CommunitySprites { get; private set; }
 
     public static void Initialize()
     {
@@ -51,6 +52,20 @@ public static class EntityUIHelpers
             }
         }
 
+        List<Sprite> commSp = new List<Sprite>();
+        if (commAtlas != null)
+        {
+            for (int i = 0; i < commAtlas.Length; i++)
+            {
+                if (commAtlas[i] != null && !IsForbidden(commAtlas[i].name))
+                {
+                    commSp.Add(commAtlas[i]);
+                    allSp.Add(commAtlas[i]);
+                }
+            }
+        }
+        CommunitySprites = commSp.ToArray();
+
         AllActionSprites = allSp.ToArray();
 
         List<Sprite> basSp = new List<Sprite>();
@@ -84,6 +99,14 @@ public static class EntityUIHelpers
         if (sprite == null || IsForbidden(sprite.name)) return false;
 
         string spriteName = sprite.name;
+
+        // Filter out sprites containing "5x5" or "7x7" (case-insensitive)
+        if (spriteName.IndexOf("5x5", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            spriteName.IndexOf("7x7", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return false;
+        }
+
         string textureName = sprite.texture != null ? sprite.texture.name : string.Empty;
 
         bool isBaseAtlas = textureName.Contains("base_atlas");
@@ -97,7 +120,7 @@ public static class EntityUIHelpers
         {
             if (spriteName.StartsWith("sma_", StringComparison.OrdinalIgnoreCase) ||
                 spriteName.StartsWith("old_", StringComparison.OrdinalIgnoreCase) ||
-                spriteName.StartsWith("spe_", StringComparison.OrdinalIgnoreCase) ||
+                //spriteName.StartsWith("spe_", StringComparison.OrdinalIgnoreCase) ||
                 spriteName.StartsWith("key_", StringComparison.OrdinalIgnoreCase) ||
                 spriteName.StartsWith("lap_", StringComparison.OrdinalIgnoreCase) ||
                 spriteName.StartsWith("alp_", StringComparison.OrdinalIgnoreCase))

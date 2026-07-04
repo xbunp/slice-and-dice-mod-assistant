@@ -9,7 +9,7 @@ public static class AbilityDomainRules
     public static readonly HashSet<string> AbilityKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "sd", "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "n", "img", "hp", "col", "tier",
-        "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "doc", "adj", "speech"
+        "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "doc", "adj", "speech", "orb"
     };
 }
 
@@ -223,6 +223,16 @@ public abstract class AbilityData : HeroData
         ProbeAbilityData probe = new ProbeAbilityData();
         probe.Parse(data);
 
+        string trimmed = data.Trim();
+        if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("i.t.orb.", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("t.orb.", StringComparison.OrdinalIgnoreCase))
+        {
+            OrbData orb = new OrbData();
+            orb.Parse(data);
+            return orb;
+        }
+
         if (probe.hp != 0)
         {
             TriggerHPData triggerHP = new TriggerHPData();
@@ -300,7 +310,16 @@ public abstract class AbilityData : HeroData
     public void DebugAbilityCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        string typeName = this is SpellData ? "SPELL" : this is TacticData ? "TACTIC" : this.GetType().Name.ToUpper();
+        string typeName = this is SpellData ? "SPELL" : this is TacticData ? "TACTIC" : this is OrbData ? "ORB" : this.GetType().Name.ToUpper();
+
+        sb.AppendLine($"{indent}--- {typeName} DATA DEBUG ---");
+        if (this is OrbData orb)
+        {
+            if (orb.isHardcoded)
+                sb.AppendLine($"{indent}Hardcoded Orb: {orb.hardcodedAbilityName}");
+            else
+                sb.AppendLine($"{indent}Carrier Prefix: {orb.carrierPrefix}");
+        }
 
         sb.AppendLine($"{indent}--- {typeName} DATA DEBUG ---");
         if (!string.IsNullOrEmpty(entityName)) sb.AppendLine($"{indent}Name: {entityName}");

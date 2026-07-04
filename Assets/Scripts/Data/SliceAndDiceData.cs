@@ -1983,12 +1983,12 @@ public static class DiceTargetHelper
     /// Left (1), Mid (2), Top (4), Bot (8), Right (16), Rightmost (32).
     /// </summary>
     public static readonly (string name, int mask)[] TargetAliases = new (string, int)[]
-    {
+        {
         ("all", 63),       // 1+2+4+8+16+32 = 63
         ("right5", 62),    // 2+4+8+16+32 = 62
+        ("row", 51),       // 1+2+16+32 = 51  <-- FIXED
         ("right3", 50),    // 2+16+32 = 50
         ("right2", 48),    // 16+32 = 48
-        ("row", 19),       // 1+2+16 = 19
         ("mid2", 18),      // 2+16 = 18
         ("col", 14),       // 2+4+8 = 14
         ("topbot", 12),    // 4+8 = 12
@@ -1999,7 +1999,7 @@ public static class DiceTargetHelper
         ("top", 4),        // 4
         ("mid", 2),        // 2
         ("left", 1)        // 1
-    };
+        };
 
     /// <summary>
     /// Formats internal lowercase target codes into standard display names.
@@ -2082,7 +2082,7 @@ public static class DiceTargetHelper
 
             // Logic definitions
             "all" => new List<int> { 0, 1, 2, 3, 4, 5 },
-            "row" => new List<int> { 0, 1, 4 },      // Middle Row: Left, Mid, Right
+            "row" => new List<int> { 0, 1, 4, 5 },   // Middle Row: Left, Mid, Right, Rightmost
             "col" => new List<int> { 1, 2, 3 },      // Column: Mid, Top, Bot
 
             // Combinations
@@ -2403,7 +2403,7 @@ public static class NameFixes
         { "b2", "b2.75" },
         { "b3", "b3.75" },
         { "jinx", "jinx.uhh" },
-        { "orb", "orb.Slice" },
+        { "orb", "c" },
         { "egg", "egg.Bee" },
         { "dragonegg", "dragon egg" },
         { "cawegg", "caw egg" },

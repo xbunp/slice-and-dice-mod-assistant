@@ -17,7 +17,7 @@ public static class EntityDomainRules
     // Shared collection routing keys
     public static readonly HashSet<string> CommonCollectionKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "i", "t", "gift", "learn", "abilitydata"
+        "i", "t", "gift", "learn", "abilitydata", "triggerhpdata", "onhitdata", "orb" // Added "orb"
     };
 }
 
@@ -44,6 +44,12 @@ public abstract class EntityData : SDData, IPayloadContainer
     [JsonProperty]
     [SerializeField] public List<TriggerHPData> customTriggerHPs;
 
+    [System.NonSerialized]
+    [JsonProperty]
+    [SerializeField] public List<OrbData> customOrbs = new List<OrbData>();
+
+    //ADD ORB SUPPORT.
+
     // Interface mappings
     public List<string> BaseItems => items;
     public List<string> Traits => traits;
@@ -51,6 +57,73 @@ public abstract class EntityData : SDData, IPayloadContainer
     public List<string> Blessings => blessings;
     public List<string> BaseAbilities => baseAbilityData;
     public List<CustomPayload> CustomPayloads => customPayloads;
+
+    public virtual IReadOnlyList<AbilityData> customAbilityData
+    {
+        get
+        {
+            var combined = new List<AbilityData>();
+            if (customOnHits != null) combined.AddRange(customOnHits);
+            if (customTriggerHPs != null) combined.AddRange(customTriggerHPs);
+            if (customOrbs != null) combined.AddRange(customOrbs); // Added
+            return combined;
+        }
+    }
+
+    public virtual void AddCustomAbility(AbilityData ability)
+    {
+        if (ability == null) return;
+        if (customOnHits == null) customOnHits = new List<OnHitData>();
+        if (customTriggerHPs == null) customTriggerHPs = new List<TriggerHPData>();
+        if (customOrbs == null) customOrbs = new List<OrbData>();
+
+        if (ability is OrbData orb)
+        {
+            if (!customOrbs.Any(o => o.entityName == orb.entityName && o.hardcodedAbilityName == orb.hardcodedAbilityName))
+                customOrbs.Add(orb);
+        }
+        else if (ability is OnHitData onHit)
+        {
+            if (!customOnHits.Any(o => o.entityName == onHit.entityName)) customOnHits.Add(onHit);
+        }
+        else if (ability is TriggerHPData trig)
+        {
+            if (!customTriggerHPs.Any(t => t.entityName == trig.entityName)) customTriggerHPs.Add(trig);
+        }
+    }
+
+    protected void ProcessTraitPayload(string tPayload)
+    {
+        if (string.IsNullOrWhiteSpace(tPayload)) return;
+
+        List<string> chains = StaticBranchTracing.TopLevelSplit(tPayload, '#');
+        foreach (string chain in chains)
+        {
+            if (string.IsNullOrWhiteSpace(chain)) continue;
+            string trimmed = chain.Trim();
+
+            if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase))
+            {
+                OrbData orb = new OrbData();
+                orb.Parse(trimmed);
+                AddCustomAbility(orb);
+            }
+            else if (trimmed.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+            {
+                curses.Add(trimmed.Substring(5));
+            }
+            else if (trimmed.Contains("("))
+            {
+                ModifierData nestedMod = new ModifierData();
+                nestedMod.Parse(trimmed);
+                customPayloads.Add(new CustomPayload { Prefix = "t", Data = nestedMod });
+            }
+            else
+            {
+                traits.Add(trimmed);
+            }
+        }
+    }
 
     protected bool TryProcessEntityMetadata(List<string> tokens, ref int i, string tokenLower)
     {
@@ -65,14 +138,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-
-    /*
-    protected void AppendColorModifier(StringBuilder sb)
-    {
-        if (h != 0 || s != 0 || v != 0) sb.Append($".hsv.{h}:{s}:{v}");
-        else if (hue != 0) sb.Append($".hue.{hue}");
-    }
-    */
 
     public string BuildFaceModifiers(bool allowFacade)
     {
@@ -91,12 +156,26 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
 
-                // FIX: Trim leading colons and replace internal double colons with ":0:"
                 if (!string.IsNullOrWhiteSpace(face.facadeColor))
                 {
-                    string cleanColor = face.facadeColor.Trim(':');
-                    while (cleanColor.Contains("::")) cleanColor = cleanColor.Replace("::", ":0:");
-                    facStr += $":{cleanColor}";
+                    string[] hsv = face.facadeColor.Split(':');
+                    List<string> parts = new List<string>();
+
+                    for (int pIdx = 0; pIdx < hsv.Length; pIdx++)
+                    {
+                        parts.Add(string.IsNullOrWhiteSpace(hsv[pIdx]) ? "0" : hsv[pIdx].Trim());
+                    }
+                    while (parts.Count < 3) parts.Add("0");
+
+                    // If all elements are zero, fallback to the mandatory ":0"
+                    if (parts[0] == "0" && parts[1] == "0" && parts[2] == "0")
+                    {
+                        facStr += ":0";
+                    }
+                    else
+                    {
+                        facStr += $":{parts[0]}:{parts[1]}:{parts[2]}";
+                    }
                 }
                 else
                 {
@@ -187,19 +266,51 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             string tPayload = string.Join(".", tokens.GetRange(startIndex, count));
             i = endIndex - 1;
-
-            if (tPayload.Contains("("))
-            {
-                ModifierData nestedMod = new ModifierData();
-                nestedMod.Parse(tPayload);
-                customPayloads.Add(new CustomPayload { Prefix = "t", Data = nestedMod });
-            }
-            else
-            {
-                traits.AddRange(StaticBranchTracing.TopLevelSplit(tPayload, '#'));
-            }
+            ProcessTraitPayload(tPayload); // Routed
         }
     }
+
+    protected bool TryProcessOrbData(List<string> tokens, ref int i, string tokenLower)
+    {
+        if (tokenLower == "orb")
+        {
+            if (i + 1 >= tokens.Count) return true;
+
+            int endIndex = i + 1;
+            if (OrbData.ValidBaseOrbs.Contains(tokens[endIndex]))
+            {
+                OrbData orb = new OrbData();
+                orb.Parse($"orb.{tokens[endIndex]}");
+                AddCustomAbility(orb);
+                i = endIndex;
+                return true;
+            }
+
+            int j = i + 1;
+            while (j < tokens.Count)
+            {
+                if (tokens[j].StartsWith("("))
+                {
+                    endIndex = j;
+                    break;
+                }
+                if (EntityDomainRules.CommonMetadataKeys.Contains(tokens[j]) || EntityDomainRules.CommonCollectionKeys.Contains(tokens[j]))
+                {
+                    break;
+                }
+                j++;
+            }
+
+            string payload = string.Join(".", tokens.GetRange(i, endIndex - i + 1));
+            OrbData customOrb = new OrbData();
+            customOrb.Parse(payload);
+            AddCustomAbility(customOrb);
+            i = endIndex;
+            return true;
+        }
+        return false;
+    }
+
     protected bool TryProcessTriggerData(List<string> tokens, ref int i, string tokenLower)
     {
         if (tokenLower == "triggerhpdata")

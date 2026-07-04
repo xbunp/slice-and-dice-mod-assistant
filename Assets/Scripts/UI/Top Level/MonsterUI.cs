@@ -503,6 +503,71 @@ public class MonsterUI : EntityUI<MonsterData>
             }
         );
 
+        // ==========================================
+        // ADDED: ORB SELECTORS FOR MONSTER UI
+        // ==========================================
+        AppendCollectionSelector<string>(
+            layout: layout, label: "Add Base Orb:", uniqueKey: "BaseOrb",
+            availableChoices: OrbData.ValidBaseOrbs.ToList(),
+            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && o.isHardcoded).Select(o => o.hardcodedAbilityName).ToList() ?? new List<string>(),
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (orbName) => {
+                bool alreadyExists = CurrentEntity.customOrbs?.Any(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase)) ?? false;
+                if (!alreadyExists)
+                {
+                    OrbData newOrb = new OrbData();
+                    newOrb.Parse($"orb.{orbName}");
+                    CurrentEntity.AddCustomAbility(newOrb);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onRemove: (orbName) => {
+                var target = CurrentEntity.customOrbs?.FirstOrDefault(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase));
+                if (target != null && CurrentEntity.customOrbs.Remove(target))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+
+        var customAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
+        AppendCollectionSelector<string>(
+            layout: layout, label: "Add Custom Orb:", uniqueKey: "CustomOrb",
+            availableChoices: customAbilityNames,
+            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && !o.isHardcoded).Select(o => o.entityName).ToList() ?? new List<string>(),
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (abilityName) => {
+                bool alreadyExists = CurrentEntity.customOrbs?.Any(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase)) ?? false;
+                if (!alreadyExists)
+                {
+                    var template = ModPackage.Instance.CustomAbilities?.FirstOrDefault(a => string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+                    if (template != null)
+                    {
+                        string json = JsonUtility.ToJson(template);
+                        OrbData clonedOrb = JsonUtility.FromJson<OrbData>(json);
+                        clonedOrb.isHardcoded = false;
+                        clonedOrb.carrierPrefix = "sthief.abilitydata";
+                        CurrentEntity.AddCustomAbility(clonedOrb);
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
+                }
+            },
+            onRemove: (abilityName) => {
+                var target = CurrentEntity.customOrbs?.FirstOrDefault(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+                if (target != null && CurrentEntity.customOrbs.Remove(target))
+                {
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            }
+        );
+        // ==========================================
+
         return layout;
     }
 

@@ -17,7 +17,7 @@ public static class HeroDomainRules
     {
         "replica", "img", "n", "col", "hp", "tier", "hsv", "hsl", "hue", "sd",
         "speech", "doc", "i", "p", "t", "gift", "abilitydata", "adj", "b", "rect",
-        "draw", "thue", "triggerhpdata"
+        "draw", "thue", "triggerhpdata", "orb"
     };
 
     public static readonly HashSet<string> MetadataKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -28,7 +28,7 @@ public static class HeroDomainRules
 
     public static readonly HashSet<string> HeroItemBoundaryKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "sd", "hp", "tier", "col"
+        "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "sd", "hp", "tier", "col", "orb"
     };
 }
 
@@ -50,15 +50,13 @@ public class HeroData : EntityData
     [JsonProperty]
     public List<TacticData> customTactics;
 
-    public IReadOnlyList<AbilityData> customAbilityData
+    public override IReadOnlyList<AbilityData> customAbilityData
     {
         get
         {
-            var combined = new List<AbilityData>();
+            var combined = new List<AbilityData>(base.customAbilityData); // Safely grabs base orbs
             if (customSpells != null) combined.AddRange(customSpells);
             if (customTactics != null) combined.AddRange(customTactics);
-            if (customOnHits != null) combined.AddRange(customOnHits);
-            if (customTriggerHPs != null) combined.AddRange(customTriggerHPs);
             return combined;
         }
     }
@@ -85,6 +83,7 @@ public class HeroData : EntityData
         customOnHits = new List<OnHitData>();
         customTriggerHPs = new List<TriggerHPData>(); 
         customPayloads = new List<CustomPayload>();
+        customOrbs = new List<OrbData>();
         thue = new Thue();
         phue = new Phue();
 
@@ -133,6 +132,7 @@ public class HeroData : EntityData
             if (TryProcessHeroSpecificMetadata(tokens, ref i, tokenLower)) continue;
             if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
             if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
+            if (TryProcessOrbData(tokens, ref i, tokenLower)) continue;
 
             if (tokenLower == "t")
             {
@@ -236,14 +236,8 @@ public class HeroData : EntityData
                     // 2. Route Traits / Curses (.i.t.traitName or .i.t.jinx.curseName)
                     if (subToken == "t")
                     {
-                        if (subTokens.Count > 1 && subTokens[1].ToLower() == "jinx")
-                        {
-                            curses.AddRange(StaticBranchTracing.TopLevelSplit(string.Join(".", subTokens.Skip(2)), '#'));
-                        }
-                        else
-                        {
-                            traits.AddRange(StaticBranchTracing.TopLevelSplit(string.Join(".", subTokens.Skip(1)), '#'));
-                        }
+                        string tPayload = string.Join(".", subTokens.Skip(1));
+                        ProcessTraitPayload(tPayload); // Routed through unified processing
                     }
                     // 3. Route Abilities (.i.learn.abilityName)
                     else if (subToken == "learn")
@@ -377,7 +371,12 @@ public class HeroData : EntityData
         heroSb.Append("(");
         bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica;
 
-        if (!string.IsNullOrEmpty(baseReplica)) { heroSb.Append($"replica.{FormatName(baseReplica)}"); if (!hasImageOverride) AppendColorModifier(heroSb); }
+        if (!string.IsNullOrEmpty(baseReplica))
+        {
+            string formattedReplica = FormatSpecialImageName(baseReplica);
+            heroSb.Append($"replica.{FormatName(formattedReplica)}");
+            if (!hasImageOverride) AppendColorModifier(heroSb);
+        }
         if (!string.IsNullOrEmpty(entityName)) heroSb.Append($".n.{FormatName(entityName)}");
 
         bool skipColor = false;
@@ -408,7 +407,6 @@ public class HeroData : EntityData
         if (!string.IsNullOrEmpty(b)) heroSb.Append($".b.{b}");
         if (!string.IsNullOrEmpty(rect)) heroSb.Append($".rect.{rect}");
         if (!string.IsNullOrEmpty(draw)) heroSb.Append($".draw.{draw}");
-        //if (thue != null && (thue.colorRange != 0 || thue.colorOffset != 0)) heroSb.Append($".{PackTHue(thue)}"); //done in apply color now
 
         AppendDiceSides(heroSb);
         if (!string.IsNullOrEmpty(speech)) heroSb.Append($".speech.{speech}");
@@ -417,7 +415,12 @@ public class HeroData : EntityData
         string faceModifiers = BuildFaceModifiers(allowFacade: true);
         if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
 
-        if (hasImageOverride) { heroSb.Append($".img.{FormatName(imageOverride)}"); AppendColorModifier(heroSb); }
+        if (hasImageOverride)
+        {
+            string formattedImg = FormatSpecialImageName(imageOverride);
+            heroSb.Append($".img.{FormatName(formattedImg)}");
+            AppendColorModifier(heroSb);
+        }
 
         StringBuilder thoseSb = new StringBuilder();
         if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) thoseSb.Append($".i.t.{FormatName(t)}");
@@ -448,11 +451,12 @@ public class HeroData : EntityData
             {
                 if (cab != null)
                 {
-                    // Prefix correctly based on type
                     if (cab is TriggerHPData)
                         abilitiesSb.Append($".triggerhpdata.({cab.Export()})");
                     else if (cab is OnHitData)
                         abilitiesSb.Append($".onhitdata.({cab.Export()})");
+                    else if (cab is OrbData orb)
+                        abilitiesSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
                     else
                         abilitiesSb.Append($".abilitydata.({cab.Export()})");
                 }
@@ -460,25 +464,24 @@ public class HeroData : EntityData
 
             if (abilitiesSb.Length > 0)
             {
-                return $"({baseHeroString}){abilitiesSb.ToString()}";
+                return $"({baseHeroString}{abilitiesSb.ToString()})";
             }
         }
 
         return baseHeroString;
     }
 
-    public void AddCustomAbility(AbilityData ability)
+    public override void AddCustomAbility(AbilityData ability)
     {
         if (ability == null) return;
         if (customSpells == null) customSpells = new List<SpellData>();
         if (customTactics == null) customTactics = new List<TacticData>();
-        if (customOnHits == null) customOnHits = new List<OnHitData>();
-        if (customTriggerHPs == null) customTriggerHPs = new List<TriggerHPData>();
+        if (customOrbs == null) customOrbs = new List<OrbData>(); // Safety check
 
         if (ability is SpellData spell) { if (!customSpells.Any(s => s.entityName == spell.entityName)) customSpells.Add(spell); }
         else if (ability is TacticData tactic) { if (!customTactics.Any(t => t.entityName == tactic.entityName)) customTactics.Add(tactic); }
-        else if (ability is OnHitData onHit) { if (!customOnHits.Any(o => o.entityName == onHit.entityName)) customOnHits.Add(onHit); }
-        else if (ability is TriggerHPData trig) { if (!customTriggerHPs.Any(t => t.entityName == trig.entityName)) customTriggerHPs.Add(trig); }
+        else if (ability is OrbData orb) { if (!customOrbs.Any(o => o.entityName == orb.entityName && o.hardcodedAbilityName == orb.hardcodedAbilityName)) customOrbs.Add(orb); }
+        else base.AddCustomAbility(ability);
     }
 
     public void DebugContentsToConsoleCompact(string indent = "")
