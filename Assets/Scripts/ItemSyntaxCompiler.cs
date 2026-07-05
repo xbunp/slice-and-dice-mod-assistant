@@ -244,25 +244,36 @@ public static class ItemSyntaxCompiler
     {
         if (!(card.MechanicData.PayloadData is HeroData heroData)) return "";
 
-        // FIX 2: Safely filter out empty strings in the targets list to guarantee fallback to 'left'
         var validTargets = card.MechanicData.Targets?.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
         string targets = (validTargets != null && validTargets.Count > 0) ? string.Join(".", validTargets) : "left";
 
         string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
         string hatDice = HatNodeDef.GetHatDiceString(heroData);
 
-        if (!string.IsNullOrWhiteSpace(childrenCompiled))
+        // Extract external facades so they can be appended after the hat
+        string fullMods = heroData.BuildFaceModifiers(includeInlineFacades: true);
+        string innerMods = heroData.BuildFaceModifiers(includeInlineFacades: false);
+        string facadeMods = "";
+        if (!string.IsNullOrEmpty(fullMods))
         {
-            string inner = childrenCompiled;
-            if (inner.StartsWith(".")) inner = inner.Substring(1);
-
-            // Inject the child compilation INSIDE the hat's parenthesis
-            return $"{prefix}hat.({hatDice}.i.{inner})";
+            facadeMods = string.IsNullOrEmpty(innerMods) ? fullMods : fullMods.Replace(innerMods, "");
         }
 
-        return $"{prefix}hat.({hatDice})";
-    }
+        string hatCore;
+        if (!string.IsNullOrWhiteSpace(childrenCompiled))
+        {
+            string inner = childrenCompiled.Trim();
+            if (inner.StartsWith(".")) inner = inner.Substring(1);
+            hatCore = $"{prefix}hat.({hatDice}.i.{inner})";
+        }
+        else
+        {
+            hatCore = $"{prefix}hat.({hatDice})";
+        }
 
+        // Append external facade modifiers outside after the hat parentheses
+        return $"{hatCore}{facadeMods}";
+    }
     private static string BuildBracket(string childrenCompiled)
     {
         if (string.IsNullOrWhiteSpace(childrenCompiled)) return string.Empty;

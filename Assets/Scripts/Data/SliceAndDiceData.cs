@@ -5,6 +5,44 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using static SDColors;
 
+public static class DiceTargets
+{
+    // USEFUL HAT CONCEPT DATA:
+
+    /*
+    Items:
+    Pendulum - swap left and middle
+    Ballet Shoes - swap left and rightmost OR "Rorrim Tekcop" - copy the rightmost onto the left side
+    left.Origami - swap right with left
+    Left.Compass - swaps bot with left (rotates faces around center)
+    ritemx.a6e6 - copies top onto left
+    Memory - reverts any changes to left side.
+    i.left.hat.(Statue.sd.15-1)  -  Explicitly sets a dice face to the left side, which in this example is 15-1, aka (Damage, 1 pip)
+
+    Dice Face Order:
+    sd.<left>:<middle>:<top>:<bottom>:<right>:<rightmost>.    
+    Because tog items are all hardcoded to interact with left, we need to use tricks to payload more and more effects.
+    */
+
+    /*    
+    Targetting base IDs:
+    176: Target Ally
+    177: Target Ally w/ pips
+    178: Target All Allies /w pips
+    179: Target All Allies 
+    180: Target Enemy
+    181: Target Enemy w/ pips
+    182: Target All Enemies w/ pips
+    183: Target All Enemies 
+    184: Target All w/ pips
+    185: Target All
+    186: Target Self
+    187: Target Self /w pips.
+
+    Distinction between pip and pipless versions can matter. 
+    */
+}
+
 public static class RandomSDData
 {
     public static readonly string[] UnusuablePortraits = { "Glitch", "Error", "Totem" };
@@ -1984,21 +2022,21 @@ public static class DiceTargetHelper
     /// </summary>
     public static readonly (string name, int mask)[] TargetAliases = new (string, int)[]
         {
-        ("all", 63),       // 1+2+4+8+16+32 = 63
-        ("right5", 62),    // 2+4+8+16+32 = 62
-        ("row", 51),       // 1+2+16+32 = 51  <-- FIXED
-        ("right3", 50),    // 2+16+32 = 50
-        ("right2", 48),    // 16+32 = 48
-        ("mid2", 18),      // 2+16 = 18
-        ("col", 14),       // 2+4+8 = 14
-        ("topbot", 12),    // 4+8 = 12
-        ("left2", 3),      // 1+2 = 3
-        ("rightmost", 32), // 32
-        ("right", 16),     // 16
-        ("bot", 8),        // 8
-        ("top", 4),        // 4
-        ("mid", 2),        // 2
-        ("left", 1)        // 1
+        ("all",         63),       // 1+2+4+8+16+32 = 63
+        ("right5",      62),        // 2+4+8+16+32 = 62
+        ("row",         51),       // 1+2+16+32 = 51 
+        ("right3",      50),         // 2+16+32 = 50
+        ("right2",      48),         // 16+32 = 48
+        ("mid2",        18),      // 2+16 = 18
+        ("col",         14),       // 2+4+8 = 14
+        ("topbot",      12),     // 4+8 = 12
+        ("left2",       3),      // 1+2 = 3
+        ("rightmost",   32),        // 32
+        ("right",       16),     // 16
+        ("bot",         8),        // 8
+        ("top",         4),        // 4
+        ("mid",         2),        // 2
+        ("left",        1)        // 1
         };
 
     /// <summary>

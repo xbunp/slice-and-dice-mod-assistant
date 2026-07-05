@@ -28,7 +28,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     protected bool isDrawingUI = false;
     protected bool _needsRebuild = false;
 
-    protected DiceSideData diceClipboard = null;
+    //protected DiceSideData diceClipboard = null;
+    protected DiceFaceBuilderWidget diceBuilderWidget;
+
 
     protected bool showCustomImagePanel = false;
     protected string _customImageString;
@@ -64,6 +66,22 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         EntityUIHelpers.Initialize();
         InitializeSpecifics();
+
+        // ADDED: Initialize the reusable dice builder widget
+        if (diceBuilderWidget == null)
+        {
+            diceBuilderWidget = new DiceFaceBuilderWidget(
+                getDiceSides: () => CurrentEntity?.diceSides,
+                allowFacades: AllowFacades,
+                openBaseModal: OpenBaseModal,
+                openFacadeModal: OpenFacadeModal,
+                getBaseSprite: GetBaseDiceSprite,
+                getFacadeSprite: GetFacadeDiceSprite,
+                onStateChanged: NotifyStateChanged,
+                onRebuildRequested: RebuildDiceScrollView
+            );
+        }
+
         BuildUIAndBind();
 
         if (ModPackage.Instance != null)
@@ -206,7 +224,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             thueOffsetSlider.SetValueWithoutNotify(CurrentEntity.thue.colorOffset);
 
         UpdateSpecificUIFromData();
+        diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
 
+        /*
         int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
         int endIndex = (currentDiceTab == 0) ? 6 : currentDiceTab;
 
@@ -235,6 +255,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 if (diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.SetTextWithoutNotify(v != 0 ? v.ToString() : "");
             }
         }
+        */
 
         isDrawingUI = false;
         UpdateVisualsOnly();
@@ -273,30 +294,13 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         }
 
-        int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
-        int endIndex = (currentDiceTab == 0) ? 6 : currentDiceTab;
-
+        // CHANGED: Update the portrait preview icons for all 6 faces...
         for (int i = 0; i < 6; i++)
         {
             UpdateIcon(i);
-
-            if (diceUI != null && diceUI.Buttons != null && i >= startIndex && i < endIndex)
-            {
-                var face = CurrentEntity.diceSides[i];
-
-                if (diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
-                {
-                    Sprite s = GetBaseDiceSprite(face.effectID);
-                    SetButtonIcon(baseBtn, s);
-                }
-
-                if (AllowFacades() && diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
-                {
-                    Sprite s = GetFacadeDiceSprite(face.facadeID);
-                    SetButtonIcon(facBtn, s);
-                }
-            }
         }
+        // ...and delegate updating the dice scroll view's buttons to the widget
+        diceBuilderWidget?.UpdateVisuals(currentDiceTab);
 
         if (rawTextOutput != null)
         {
@@ -360,6 +364,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         previewImg.color = color;
     }
 
+    protected void SetButtonIcon(Button btn, Sprite sprite) => StaticUI.SetButtonIcon(btn, sprite);
+
+    /*
     protected void SetButtonIcon(Button btn, Sprite sprite)
     {
         if (btn == null) return;
@@ -396,6 +403,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         }
     }
+    */
 
     // =====================================================================
     // VIEW TO STATE
@@ -417,21 +425,12 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         RebuildDiceScrollView();
     }
 
-    protected void CopyDiceFace(int index) => diceClipboard = CurrentEntity.diceSides[index].Clone();
-    protected void PasteDiceFace(int index)
-    {
-        if (diceClipboard == null) return;
-        CurrentEntity.diceSides[index] = diceClipboard.Clone();
-        NotifyStateChanged();
-        RebuildDiceScrollView();
-    }
-
-    protected void ClearDiceFace(int index)
-    {
-        CurrentEntity.diceSides[index] = new DiceSideData();
-        NotifyStateChanged();
-        RebuildDiceScrollView();
-    }
+    // =====================================================================
+    // VIEW TO STATE
+    // =====================================================================
+    protected void CopyDiceFace(int index) => diceBuilderWidget?.CopyDiceFace(index);
+    protected void PasteDiceFace(int index) => diceBuilderWidget?.PasteDiceFace(index);
+    protected void ClearDiceFace(int index) => diceBuilderWidget?.ClearDiceFace(index);
 
     protected void AddKeywordToFace(int faceIndex, int dropdownValue)
     {
@@ -743,7 +742,11 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         bool wasDrawing = isDrawingUI;
         isDrawingUI = true;
 
-        diceUI = uiGenerator.RebuildGrid(diceScrollRect.content, GenerateDiceLayout(currentDiceTab));
+        if (CurrentEntity != null) CurrentEntity.InitializeDiceFaces();
+
+        // CHANGED: Delegate layout generation to the widget, then cache references
+        diceUI = uiGenerator.RebuildGrid(diceScrollRect.content, diceBuilderWidget.GenerateLayout(currentDiceTab));
+        diceBuilderWidget.SetGridReferences(diceUI);
 
         float extraHeight = 0f;
         var layoutGroup = diceScrollRect.content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
@@ -781,7 +784,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }),
             new ColumnSpec("MiddleDiceBase", 0.365f, 0.685f, new List<GridRowSpec>
             {
-                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateNavigationTabs("DiceTabs", new List<string> { "All", "Left", "Middle", "Top", "Bottom", "Right", "Rightmost" }, new List<GameObject>(), 1.0f, (idx) => {
+                // CHANGED: Use TabNames from the widget (removes the "All" tab)
+                new GridRowSpec(uiGenerator.rowHeight, GridCellSpec.CreateNavigationTabs("DiceTabs", DiceFaceBuilderWidget.TabNames, new List<GameObject>(), 1.0f, (idx) => {
                     currentDiceTab = idx;
                     RebuildDiceScrollView();
                 })),
@@ -817,7 +821,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             GameObject portraitObj = Instantiate(uiGenerator.PortraitPanel, previewContainer.transform, false);
             portraitPreview = portraitObj.GetComponentInChildren<PortraitPreviewUI>();
             portraitPreview.OnFaceSelected += (idx) => {
-                currentDiceTab = idx;
+                // FIXED: Convert 1-based preview clicks (1..6) to 0-based tab indices (0..5)
+                currentDiceTab = Mathf.Clamp(idx - 1, 0, 5);
                 RebuildDiceScrollView();
             };
         }

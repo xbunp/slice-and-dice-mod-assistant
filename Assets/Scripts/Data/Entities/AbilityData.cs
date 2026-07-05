@@ -183,7 +183,7 @@ public abstract class AbilityData : HeroData
             if (formattedAbilities.Count > 0) sb.Append($".abilitydata.{string.Join("#", formattedAbilities)}");
         }
 
-        string faceModifiers = BuildFaceModifiers(allowFacade: true);
+        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
 
         if (hasImageOverride) { sb.Append($".img.{FormatName(imageOverride)}"); AppendColorModifier(sb); }

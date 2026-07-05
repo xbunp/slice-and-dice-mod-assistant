@@ -163,7 +163,7 @@ public class HatNodeDef : AuthoringNodeDef
     {
         StringBuilder sb = new StringBuilder();
 
-        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Statue" : heroData.baseReplica;
+        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Fey" : heroData.baseReplica;
         sb.Append(baseName);
 
         // 1. Append the .sd. block
@@ -197,7 +197,8 @@ public class HatNodeDef : AuthoringNodeDef
         }
 
         // 2. Append standard Facades, HSV, and Keywords
-        string faceModifiers = heroData.BuildFaceModifiers(allowFacade: true);
+        // 
+        string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
         if (!string.IsNullOrEmpty(faceModifiers))
         {
             sb.Append(faceModifiers);
@@ -431,11 +432,6 @@ public class HatNodeDef : AuthoringNodeDef
                     face.sticker = val;
                     ui.AutoCompile();
                 })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
-                GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddHatKeywordToFace(ui, card, heroData, index, val))
             ));
 
             layout.Add(new GridRowSpec(

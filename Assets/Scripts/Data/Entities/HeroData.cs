@@ -410,9 +410,10 @@ public class HeroData : EntityData
 
         AppendDiceSides(heroSb);
         if (!string.IsNullOrEmpty(speech)) heroSb.Append($".speech.{speech}");
-        if (!string.IsNullOrEmpty(doc)) heroSb.Append($".doc.{doc}");
 
-        string faceModifiers = BuildFaceModifiers(allowFacade: true);
+        // Note: The inner .doc. append was removed from here.
+
+        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
 
         if (hasImageOverride)
@@ -442,6 +443,7 @@ public class HeroData : EntityData
         heroSb.Append(")");
 
         string baseHeroString = heroSb.ToString();
+        string fullContentString = baseHeroString;
 
         // Append custom abilities on the outside of the base hero structure
         if (customAbilityData != null && customAbilityData.Count > 0)
@@ -464,11 +466,17 @@ public class HeroData : EntityData
 
             if (abilitiesSb.Length > 0)
             {
-                return $"({baseHeroString}{abilitiesSb.ToString()})";
+                fullContentString = $"({baseHeroString}{abilitiesSb.ToString()})";
             }
         }
 
-        return baseHeroString;
+        // Wrap the completed structure with the .doc modifier if it is defined
+        if (!string.IsNullOrEmpty(doc))
+        {
+            return $"({fullContentString}.doc.{doc})";
+        }
+
+        return fullContentString;
     }
 
     public override void AddCustomAbility(AbilityData ability)

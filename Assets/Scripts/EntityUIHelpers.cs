@@ -355,22 +355,59 @@ public static class EntityUIHelpers
     // Recommendation: Relocate to a separate SyntaxHighlighter utility, or TMP overlay module.
     // =====================================================================
 
+    // =====================================================================
+    // PORT: SYNTAX HIGHLIGHTING / COLOR FORMATTING
+    // =====================================================================
+
     public static string FormatSyntaxHighlighting(string plainText)
     {
         if (string.IsNullOrEmpty(plainText)) return "";
-        string result = plainText;
 
-        string[] keys = { "replica", "img", "n", "col", "hp", "tier", "hsv" };
-        string lookahead = @"(?=\.n|\.col|\.hp|\.tier|\.img|\.sd|\.i|\.hsv|\)|$)";
+        // Strip any existing rich text tags if re-evaluating
+        string clean = System.Text.RegularExpressions.Regex.Replace(plainText, @"<.*?>", string.Empty);
 
-        foreach (string key in keys)
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        string currentTagColor = "FFFFFF"; // Default crisp white for parens/unclaimed roots
+
+        // Split by structural boundaries while keeping delimiters in the sequence
+        var matches = System.Text.RegularExpressions.Regex.Matches(clean, @"([\(\)\.\#]+)|([^\(\)\.\#]+)");
+
+        for (int i = 0; i < matches.Count; i++)
         {
-            string hexColor = GetFixedColorForTag(key);
-            string pattern = $"(?<=^|\\.|\\()({key}\\..*?){lookahead}";
-            result = System.Text.RegularExpressions.Regex.Replace(result, pattern, $"<color=#{hexColor}>$1</color>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            string token = matches[i].Value;
+
+            // Keep structural brackets crisp white/gold so nesting is legible
+            if (token.Contains("(") || token.Contains(")"))
+            {
+                sb.Append($"<color=#FFFFFF>{token}</color>");
+                continue;
+            }
+
+            // Inherit the active concept's procedural color for dots and hash operators
+            if (token.StartsWith(".") || token.StartsWith("#"))
+            {
+                sb.Append($"<color=#{currentTagColor}>{token}</color>");
+                continue;
+            }
+
+            string lower = token.Trim().ToLower();
+
+            // Check if this token starts a NEW domain concept or sub-concept
+            // If it's an item fragment like 'a6e6' in 'ritemx.a6e6', it returns false and stays grouped!
+            bool isNewConcept = HeroDomainRules.HeroPropertyKeys.Contains(lower) ||
+                                DiceTargetHelper.GetIndicesForTarget(lower).Count > 0 ||
+                                lower == "k" || lower == "facade" || lower == "hat" || lower == "orb" || lower == "mrg" || lower == "splice";
+
+            if (isNewConcept)
+            {
+                // Generate procedural FNV-1a hash color based on the concept tag
+                currentTagColor = GetFixedColorForTag(lower);
+            }
+
+            sb.Append($"<color=#{currentTagColor}>{token}</color>");
         }
 
-        return result;
+        return sb.ToString();
     }
 
     private static string GetFixedColorForTag(string tag)

@@ -47,7 +47,7 @@ public class MonsterData : EntityData
 
         monster.AppendDiceSides(sb);
 
-        string faceModifiers = monster.BuildFaceModifiers(allowFacade: true);
+        string faceModifiers = monster.BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers))
         {
             faceModifiers = Regex.Replace(faceModifiers, @"(\.facade\.[^.:\s]+)(?=\.|$)", "$1:0");

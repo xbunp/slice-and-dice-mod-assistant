@@ -325,19 +325,24 @@ public class AtlasProcessor : AssetPostprocessor
     // A stateless helper to strip structural folders, ensuring items match across both configurations
     private static string NormalizePath(string path)
     {
-        string normalized = path.Replace('\\', '/').ToLower();
+        string normalized = path.Replace('\\', '/');
 
-        if (normalized.StartsWith("3dlink/"))
+        if (normalized.StartsWith("3dlink/", StringComparison.OrdinalIgnoreCase))
         {
             normalized = normalized.Substring("3dlink/".Length);
         }
-        if (normalized.StartsWith("extra/"))
+        if (normalized.StartsWith("extra/", StringComparison.OrdinalIgnoreCase))
         {
             normalized = normalized.Substring("extra/".Length);
         }
 
-        // Unifies plural differences like "extra/items/poem" vs "item/poem"
-        normalized = normalized.Replace("items/", "item/");
+        // Unifies plural differences while preserving case
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            "items/",
+            "item/",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         return normalized;
     }
@@ -360,7 +365,7 @@ public class AtlasProcessor : AssetPostprocessor
             public List<Entry> entries = new List<Entry>();
         }
 
-        private static readonly Dictionary<string, Dictionary<string, int>> Database = new Dictionary<string, Dictionary<string, int>>();
+        private static readonly Dictionary<string, Dictionary<string, int>> Database = new Dictionary<string, Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
 
         public static void Load()
         {
@@ -377,7 +382,7 @@ public class AtlasProcessor : AssetPostprocessor
                     {
                         if (!Database.ContainsKey(entry.prefix))
                         {
-                            Database[entry.prefix] = new Dictionary<string, int>();
+                            Database[entry.prefix] = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                         }
                         Database[entry.prefix][entry.path] = entry.id;
                     }
@@ -524,9 +529,18 @@ public class AtlasProcessor : AssetPostprocessor
                 continue;
             }
 
+            /*
             string normalizedPath = NormalizePath(originalPath);
             string[] pathParts = normalizedPath.Split('/');
             string spriteSubName = pathParts[pathParts.Length - 1];
+            */
+
+            string normalizedPath = NormalizePath(originalPath);
+            string[] pathParts = normalizedPath.Split('/');
+
+            // Extract the leaf name from the original path to preserve casing
+            string[] originalParts = originalPath.Split('/');
+            string spriteSubName = originalParts[originalParts.Length - 1];
 
             // Scan path segments to find any registered authoritative domain
             string matchedDomain = null;
@@ -550,13 +564,13 @@ public class AtlasProcessor : AssetPostprocessor
             }
 
             string prefix = "Atm";
-            if (originalPath.StartsWith("reg/face/")) prefix = "bas";
-            else if (originalPath.StartsWith("small/face/")) prefix = "tin";
-            else if (originalPath.StartsWith("big/face/")) prefix = "big";
-            else if (originalPath.StartsWith("huge/face/")) prefix = "hug";
-            else if (originalPath.StartsWith("portrait/")) prefix = "prt";
-            else if (originalPath.StartsWith("trigger/")) prefix = "trg";
-            else if (originalPath.StartsWith("ui/")) prefix = "ui_";
+            if (originalPath.StartsWith("reg/face/", StringComparison.OrdinalIgnoreCase)) prefix = "bas";
+            else if (originalPath.StartsWith("small/face/", StringComparison.OrdinalIgnoreCase)) prefix = "tin";
+            else if (originalPath.StartsWith("big/face/", StringComparison.OrdinalIgnoreCase)) prefix = "big";
+            else if (originalPath.StartsWith("huge/face/", StringComparison.OrdinalIgnoreCase)) prefix = "hug";
+            else if (originalPath.StartsWith("portrait/", StringComparison.OrdinalIgnoreCase)) prefix = "prt";
+            else if (originalPath.StartsWith("trigger/", StringComparison.OrdinalIgnoreCase)) prefix = "trg";
+            else if (originalPath.StartsWith("ui/", StringComparison.OrdinalIgnoreCase)) prefix = "ui_";
             else if (pathParts.Length >= 2)
             {
                 string folderName = pathParts[pathParts.Length - 2].Trim();
@@ -658,7 +672,7 @@ public class AtlasProcessor : AssetPostprocessor
                 {
                     foreach (var kvp in customMappings)
                     {
-                        if (NormalizePath(kvp.Key) == sprite.normalizedPath)
+                        if (string.Equals(NormalizePath(kvp.Key), sprite.normalizedPath, StringComparison.OrdinalIgnoreCase))
                         {
                             sprite.assignedId = kvp.Value;
                             matchedHardcode = true;

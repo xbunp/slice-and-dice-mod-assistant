@@ -139,7 +139,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         return false;
     }
 
-    public string BuildFaceModifiers(bool allowFacade)
+    public string BuildFaceModifiers(bool includeInlineFacades)
     {
         StringBuilder modSb = new StringBuilder();
         var groupedModifiers = new Dictionary<string, int>();
@@ -152,7 +152,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             foreach (var kw in face.keywords)
                 if (!string.IsNullOrWhiteSpace(kw)) chunks.Add($"k.{kw.Trim().ToLower()}");
 
-            if (allowFacade && !string.IsNullOrWhiteSpace(face.facadeID))
+            if (includeInlineFacades && !string.IsNullOrWhiteSpace(face.facadeID))
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
 
