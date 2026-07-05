@@ -412,6 +412,23 @@ public static class EntityUIHelpers
 
     private static string GetFixedColorForTag(string tag)
     {
+        // 1. Curated overrides for high-traffic or visually sensitive tags
+        switch (tag)
+        {
+            case "sd": return "FFA726"; // Warm Amber (Replaces harsh blood red)
+            case "k": return "69F0AE"; // Bright Mint Green
+            case "facade": return "40C4FF"; // Electric Sky Blue (Sharp contrast against 'k')
+            case "i": return "d18c1c"; // Soft Lavender/Purple
+            case "tier": return "FFF176"; // Soft Gold/Yellow (Replaces dark blue)
+            case "hp": return "f33c7b"; // Soft Coral/Pink
+            case "learn": return "FFE082"; // Sand/Warm Yellow
+            case "replica": return "00e5ff"; // Soft Teal
+            case "n": return "81D4FA"; // Light Ice Blue
+            case "p": return "11a848"; // Light Ice Blue
+            case "img": return "e040fa"; // Light Ice Blue
+        }
+
+        // 2. Procedural FNV-1a fallback for all other domain concepts
         uint hash = 2166136261;
         foreach (char c in tag)
         {
@@ -420,7 +437,18 @@ public static class EntityUIHelpers
         }
 
         float hue = (hash % 1000) / 1000f;
-        Color color = Color.HSVToRGB(hue, 0.7f, 0.9f);
+        float sat = 0.65f;
+        float val = 0.92f;
+
+        // Compensate for low human visual luminosity in blues/purples (Hue ~0.55 to 0.75)
+        // Drops saturation and maxes brightness to produce glowing pastels instead of dark ink blues
+        if (hue >= 0.55f && hue <= 0.75f)
+        {
+            sat = 0.45f;
+            val = 1.00f;
+        }
+
+        Color color = Color.HSVToRGB(hue, sat, val);
         return ColorUtility.ToHtmlStringRGB(color);
     }
 

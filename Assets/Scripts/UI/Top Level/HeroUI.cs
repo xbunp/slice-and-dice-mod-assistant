@@ -262,7 +262,13 @@ public class HeroUI : EntityUI<HeroData>
     // =====================================================================
     protected override void UpdateSpecificUIFromData()
     {
-        if (statsUI.Inputs.TryGetValue("Tier", out var tierIn)) tierIn.SetTextWithoutNotify(CurrentEntity.tier.ToString());
+        if (statsUI.Inputs.TryGetValue("Tier", out var tierIn))
+        {
+            int displayTier = CurrentEntity.GetEffectiveTier();
+
+            // Populate with the effective tier (either explicit or inherent)
+            tierIn.SetTextWithoutNotify(displayTier > 0 ? displayTier.ToString() : "");
+        }
         if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseReplica);
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(CurrentEntity.imageOverride);
         if (statsUI.Inputs.TryGetValue("Speech", out var speechIn)) speechIn.SetTextWithoutNotify(CurrentEntity.speech);
@@ -287,7 +293,7 @@ public class HeroUI : EntityUI<HeroData>
     {
         if (portraitPreview != null)
         {
-            portraitPreview.SetTierText(CurrentEntity.tier.ToString());
+            portraitPreview.SetTierText(CurrentEntity.GetEffectiveTier().ToString());
 
             HeroColorOption colOpt = EntityUIHelpers.ReverseLookupColor(CurrentEntity.colorClass);
             portraitPreview.SetHeroColor(SDColors.GetColor(colOpt));
@@ -367,14 +373,26 @@ public class HeroUI : EntityUI<HeroData>
         if (showCustomImagePanel) layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
 
         layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("HP:", 0.2f),
-            GridCellSpec.CreateInput("HP", "", 0.3f, (val) => {
-                CurrentEntity.hp = (string.IsNullOrWhiteSpace(val) || !int.TryParse(val, out int parsedHp)) ? 0 : parsedHp;
-                NotifyStateChanged();
-            }),
-            GridCellSpec.CreateLabel("Tier:", 0.2f),
-            GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => { if (int.TryParse(val, out int t)) CurrentEntity.tier = t; NotifyStateChanged(); })
-        ));
+                    GridCellSpec.CreateLabel("HP:", 0.2f),
+                    GridCellSpec.CreateInput("HP", "", 0.3f, (val) => {
+                        CurrentEntity.hp = (string.IsNullOrWhiteSpace(val) || !int.TryParse(val, out int parsedHp)) ? 0 : parsedHp;
+                        NotifyStateChanged();
+                    }),
+                    GridCellSpec.CreateLabel("Tier:", 0.2f),
+                    GridCellSpec.CreateInput("Tier", "", 0.3f, (val) => {
+                        if (isDrawingUI) return;
+
+                        if (string.IsNullOrWhiteSpace(val))
+                        {
+                            CurrentEntity.tier = -1; // Empty box falls back to inherent replica tier
+                        }
+                        else if (int.TryParse(val, out int t))
+                        {
+                            CurrentEntity.tier = t; // Explicit number typed (including 0)
+                        }
+                        NotifyStateChanged();
+                    })
+                ));
 
         HeroColorOption currentOption = SDColors.GetOptionFromColorCode(CurrentEntity.colorClass);
         string currentFormattedName = SDColors.GetFormattedColorName(currentOption);

@@ -292,8 +292,11 @@ public class HeroData : EntityData
 
                 if (type == "k")
                 {
-                    if (!diceSides[faceIdx].keywords.Contains(value))
-                        diceSides[faceIdx].keywords.Add(value);
+                    string lowercaseKeyword = value.Trim().ToLower();
+                    if (!diceSides[faceIdx].keywords.Contains(lowercaseKeyword))
+                    {
+                        diceSides[faceIdx].keywords.Add(lowercaseKeyword);
+                    }
                 }
                 else if (type == "facade")
                 {
@@ -401,7 +404,7 @@ public class HeroData : EntityData
         }
 
         if (hp > 0) heroSb.Append($".hp.{hp}");
-        if (tier > 0) heroSb.Append($".tier.{tier}");
+        if (tier >= 0) heroSb.Append($".tier.{tier}");
         if (!string.IsNullOrEmpty(p)) heroSb.Append($".p.{p}");
         if (adj.HasValue) heroSb.Append($".adj.{adj.Value}");
         if (!string.IsNullOrEmpty(b)) heroSb.Append($".b.{b}");
@@ -559,5 +562,18 @@ public class HeroData : EntityData
             }
         }
         if (sb.Length > 0) UnityEngine.Debug.Log($"{indent}--- HERO DATA DEBUG (COMPACT) ---\n" + sb.ToString());
+    }
+
+    public int GetEffectiveTier()
+    {
+        if (tier >= 0) return tier;
+
+        if (!string.IsNullOrEmpty(baseReplica) &&
+            SDColors.heroTiers.TryGetValue(baseReplica, out int inherentTier))
+        {
+            return inherentTier;
+        }
+
+        return 1;
     }
 }
