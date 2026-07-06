@@ -32,11 +32,12 @@ Material:
     - _ColorMask: 15
     - _Hue: 0
     - _HueAsym: 0
-    - _HueBias: 0.12
+    - _HueBias: 0.06
     - _HueCurve: 1
     - _HueMultiplier: 1
     - _LumaPreserve: 0
     - _PRange: 0
+    - _PRangeMultiplier: 1.46
     - _Saturation: 0
     - _Stencil: 0
     - _StencilComp: 8
@@ -44,6 +45,7 @@ Material:
     - _StencilReadMask: 255
     - _StencilWriteMask: 255
     - _THueRange: 0
+    - _THueRangeMultiplier: 1.46
     - _THueShift: 0
     - _UseUIAlphaClip: 0
     - _Value: 0

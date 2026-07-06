@@ -85,7 +85,6 @@ public class DiceFaceBuilderWidget
     {
         _diceUI = gridRefs;
     }
-
     public List<GridRowSpec> GenerateLayout(int tabIndex)
     {
         var layout = new List<GridRowSpec>();
@@ -238,7 +237,6 @@ public class DiceFaceBuilderWidget
             }
         }
     }
-
     public void UpdateVisuals(int tabIndex)
     {
         if (_diceUI == null || _diceUI.Buttons == null) return;
@@ -272,7 +270,6 @@ public class DiceFaceBuilderWidget
         if (sides != null && index >= 0 && index < sides.Length)
             SharedClipboard = sides[index].Clone();
     }
-
     public void PasteDiceFace(int index)
     {
         if (SharedClipboard == null) return;
@@ -284,7 +281,6 @@ public class DiceFaceBuilderWidget
             _onRebuildRequested?.Invoke();
         }
     }
-
     public void ClearDiceFace(int index)
     {
         var sides = _getDiceSides?.Invoke();
@@ -315,7 +311,6 @@ public class DiceFaceBuilderWidget
             }
         }
     }
-
     private void RemoveKeywordFromFace(int faceIndex, string keyword)
     {
         var sides = _getDiceSides?.Invoke();
@@ -340,7 +335,6 @@ public class DiceFaceBuilderWidget
             }
         }
     }
-
     private void UpdateFaceHsv(int faceIndex, int componentIndex, int value)
     {
         if (_allowFacades != null && !_allowFacades()) return;

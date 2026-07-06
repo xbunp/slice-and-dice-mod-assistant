@@ -63,16 +63,55 @@ public static class HeroSpriteDatabaseGenerator
         }
 
         List<SpriteMetadata> parsedSprites = new List<SpriteMetadata>();
-        string[] lines = atlasText.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        string[] rawLines = atlasText.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        var linesList = new List<string>();
+
+        // Preprocess lines to merge split directory/file names safely (matching AtlasProcessor)
+        for (int i = 0; i < rawLines.Length; i++)
+        {
+            string current = rawLines[i].Trim().Replace('\\', '/');
+            if (string.IsNullOrEmpty(current)) continue;
+
+            if (current.EndsWith("/") && !current.Contains(":"))
+            {
+                if (i + 1 < rawLines.Length)
+                {
+                    string next = rawLines[i + 1].Trim().Replace('\\', '/');
+                    if (!string.IsNullOrEmpty(next) && !next.Contains(":") && !next.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    {
+                        current = current + next;
+                        i++; // Skip next line because we merged it
+                    }
+                }
+            }
+            linesList.Add(current);
+        }
+        string[] lines = linesList.ToArray();
 
         foreach (string line in lines)
         {
-            if (string.IsNullOrWhiteSpace(line) || char.IsWhiteSpace(line[0]))
+            if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
             }
 
-            string spritePath = line.Trim();
+            string spritePath = line;
+
+            // Auto-correct R1U1 name variants to o1R1U1 (matching AtlasProcessor)
+            if (spritePath.EndsWith("/R1U1", StringComparison.OrdinalIgnoreCase) || string.Equals(spritePath, "R1U1", StringComparison.OrdinalIgnoreCase))
+            {
+                int lastSlash = spritePath.LastIndexOf('/');
+                if (lastSlash >= 0)
+                {
+                    spritePath = spritePath.Substring(0, lastSlash + 1) + "o1R1U1";
+                }
+                else
+                {
+                    spritePath = "o1R1U1";
+                }
+            }
+
+            if (spritePath.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0) continue;
 
             if (spritePath.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0) continue;
 

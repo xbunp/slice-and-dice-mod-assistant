@@ -1059,12 +1059,20 @@ public static class SpecialAbilityKeywords
         Serrated
     }
 
-    public const string Channel = "ritemx.302ea5e.part.0";
-    public const string Cooldown = "Ritemx.161bf";
-    public const string Deplete = "ritemx.539ce9a";
-    public const string Future = "unpack.ritemx.644f";
-    public const string SpellRescue = "Ritemx.62e8";
-    public const string SingleCast = "Ritemx.132fb.part.1";
+    public const string Channel = "k.growth";
+    public const string Cooldown = "k.exert";
+    public const string Deplete = "k.decay";
+    public const string Future = "ritemx.dae9";
+    public const string SpellRescue = "k.rescue";
+    public const string SingleCast = "k.singleuse";
+
+    // Old Version
+    //public const string Channel = "ritemx.302ea5e.part.0";
+    //public const string Cooldown = "Ritemx.161bf";
+    //public const string Deplete = "ritemx.539ce9a";
+    //public const string Future = "unpack.ritemx.644f";
+    //public const string SpellRescue = "Ritemx.62e8";
+    //public const string SingleCast = "Ritemx.132fb.part.1";
 }
 
 public enum HeroColorOption

@@ -11,6 +11,9 @@ public class ImageReceiver : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
     [DllImport("__Internal")]
     private static extern void ReadOSClipboard(string objectName, string methodName);
+
+    [DllImport("__Internal")]
+    private static extern void DownloadFileWebGL(string fileName, string base64Data);
 #endif
 
     public Action<string, Texture2D> OnImageGenerated;

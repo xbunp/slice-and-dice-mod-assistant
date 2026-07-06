@@ -1,4 +1,4 @@
-Shader "UI/Custom/P_THUE_HSV_Complete"
+Shader "UI/Custom/P_THUE_HSV_Universal"
 {
     Properties
     {
@@ -21,10 +21,6 @@ Shader "UI/Custom/P_THUE_HSV_Complete"
         _Hue ("Hue (-99 to 99)", Range(-99, 99)) = 0
         _Saturation ("Saturation (-99 to 99)", Range(-99, 99)) = 0
         _Value ("Value (-99 to 99)", Range(-99, 99)) = 0
-
-        [Header(Asymmetric Hue Multiplier Controls)]
-        _HueBias ("Hue Linear Bias (Sign Control)", Range(-1.0, 1.0)) = 0.12
-        _HueAsym ("Hue Asymmetric Balance", Range(-1.0, 1.0)) = 0.0
 
         [Header(UI Masking Properties)]
         _StencilComp ("Stencil Comparison", Float) = 8
@@ -76,7 +72,6 @@ Shader "UI/Custom/P_THUE_HSV_Complete"
             float4 _THueColor;
             float _THueRange, _THueRangeMultiplier, _THueShift;
             float _Hue, _Saturation, _Value;
-            float _HueBias, _HueAsym;
 
             // RGB to HSV Conversion
             float3 rgb2hsv(float3 c)
@@ -116,23 +111,33 @@ Shader "UI/Custom/P_THUE_HSV_Complete"
                 clip (color.a - 0.001);
                 #endif
 
-                // ==========================================
-                // 1. Palette Swap (P-Swap - 3D RGB Euclidean)
-                // ==========================================
-                float pColorDist = distance(color.rgb, _PColor.rgb);
-                float pThreshold = (_PRange / 99.0) * _PRangeMultiplier;
-                
-                // Smooth distance falloff interpolates exact matches at 1.0 down to 0.0 at threshold
-                float pMask = smoothstep(pThreshold + 1e-5, 0.0, pColorDist);
-                
-                // Direct color blend ensures exact target matches output 100% of the replacement color
-                color.rgb = lerp(color.rgb, _PReplaceColor.rgb, pMask);
-                
+                // Local color property cache
+                float3 pColor = _PColor.rgb;
+                float3 pReplaceColor = _PReplaceColor.rgb;
+                float3 tHueColor = _THueColor.rgb;
+
+                // =========================================================================
+                // Color Space Normalization: Force calculations to run in Gamma space
+                // =========================================================================
+                #ifndef UNITY_COLORSPACE_GAMMA
+                    color.rgb = LinearToGammaSpace(color.rgb);
+                    pColor = LinearToGammaSpace(pColor);
+                    pReplaceColor = LinearToGammaSpace(pReplaceColor);
+                    tHueColor = LinearToGammaSpace(tHueColor);
+                #endif
 
                 // ==========================================
-                // 2. Targeted Hue Adjustment (Thue - 3D RGB Euclidean)
+                // 1. Palette Swap (P-Swap) - Gamma Space
                 // ==========================================
-                float tColorDist = distance(color.rgb, _THueColor.rgb);
+                float pColorDist = distance(color.rgb, pColor);
+                float pThreshold = (_PRange / 99.0) * _PRangeMultiplier;
+                float pMask = smoothstep(pThreshold + 1e-5, 0.0, pColorDist);
+                color.rgb = lerp(color.rgb, pReplaceColor, pMask);
+
+                // ==========================================
+                // 2. Targeted Hue Adjustment (Thue) - Gamma Space
+                // ==========================================
+                float tColorDist = distance(color.rgb, tHueColor);
                 float tThreshold = (_THueRange / 99.0) * _THueRangeMultiplier;
                 float thueMask = step(tColorDist, tThreshold);
 
@@ -140,19 +145,21 @@ Shader "UI/Custom/P_THUE_HSV_Complete"
                 float thueShiftAmount = (_THueShift / 99.0) * thueMask;
                 hsv.x = frac(hsv.x + thueShiftAmount + 1.0);
 
-
                 // ==========================================
-                // 3. Global HSV Adjustments (Asymmetric Multiplier)
+                // 3. Global HSV Adjustments - Gamma Space
                 // ==========================================
-                float normHue = _Hue / 100.0;
-                float dynamicMultiplier = 1.0 + (normHue * _HueBias) + (abs(normHue) * _HueAsym);
-                float scaledHue = normHue * dynamicMultiplier;
-
-                hsv.x = frac(hsv.x + scaledHue + 1.0);
+                hsv.x = frac(hsv.x + (_Hue / 100.0) + 1.0);
                 hsv.y = clamp(hsv.y + (_Saturation / 100.0), 0.0, 1.0);
                 hsv.z = clamp(hsv.z + (_Value / 100.0), 0.0, 1.0);
-
                 color.rgb = hsv2rgb(hsv);
+
+                // =========================================================================
+                // Return to Native Pipeline Space
+                // =========================================================================
+                #ifndef UNITY_COLORSPACE_GAMMA
+                    color.rgb = GammaToLinearSpace(color.rgb);
+                #endif
+
                 color.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
                 return color;
             }
