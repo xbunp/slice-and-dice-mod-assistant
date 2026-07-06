@@ -1,4 +1,4 @@
-Shader "UI/Custom/P_THUE_HSV_Adjustment"
+Shader "UI/Custom/P_THUE_HSV_Complete"
 {
     Properties
     {
@@ -9,16 +9,22 @@ Shader "UI/Custom/P_THUE_HSV_Adjustment"
         _PColor ("P-Target Color", Color) = (1,1,1,1)
         _PReplaceColor ("P-Replace Color", Color) = (1,1,1,1)
         _PRange ("P-Target Range (0 to 99)", Range(0, 99)) = 0
+        _PRangeMultiplier ("P-Range Multiplier", Float) = 1.46
 
         [Header(Targeted Hue Adjustment (Thue))]
         _THueColor ("Target Color", Color) = (1,0,0,1)
         _THueRange ("Target Range (0 to 99)", Range(0, 99)) = 0
+        _THueRangeMultiplier ("Target Range Multiplier", Float) = 1.46
         _THueShift ("Target Hue Shift (-99 to 99)", Range(-99, 99)) = 0
 
         [Header(Global HSV Adjustments)]
         _Hue ("Hue (-99 to 99)", Range(-99, 99)) = 0
         _Saturation ("Saturation (-99 to 99)", Range(-99, 99)) = 0
         _Value ("Value (-99 to 99)", Range(-99, 99)) = 0
+
+        [Header(Asymmetric Hue Multiplier Controls)]
+        _HueBias ("Hue Linear Bias (Sign Control)", Range(-1.0, 1.0)) = 0.12
+        _HueAsym ("Hue Asymmetric Balance", Range(-1.0, 1.0)) = 0.0
 
         [Header(UI Masking Properties)]
         _StencilComp ("Stencil Comparison", Float) = 8
@@ -66,10 +72,11 @@ Shader "UI/Custom/P_THUE_HSV_Adjustment"
             float4 _ClipRect;
 
             float4 _PColor, _PReplaceColor;
-            float _PRange;
+            float _PRange, _PRangeMultiplier;
             float4 _THueColor;
-            float _THueRange, _THueShift;
+            float _THueRange, _THueRangeMultiplier, _THueShift;
             float _Hue, _Saturation, _Value;
+            float _HueBias, _HueAsym;
 
             // RGB to HSV Conversion
             float3 rgb2hsv(float3 c)
@@ -88,13 +95,6 @@ Shader "UI/Custom/P_THUE_HSV_Adjustment"
                 float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
                 float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
                 return c.z * lerp(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-            }
-
-            // Cartesian converter used exclusively by the P-Swap module
-            float2 hsv2cartesian(float3 hsv) 
-            {
-                float angle = hsv.x * 6.28318530718; 
-                return float2(hsv.y * cos(angle), hsv.y * sin(angle));
             }
 
             v2f vert(appdata_t v)
@@ -116,58 +116,39 @@ Shader "UI/Custom/P_THUE_HSV_Adjustment"
                 clip (color.a - 0.001);
                 #endif
 
-                float3 hsv = rgb2hsv(color.rgb);
-
                 // ==========================================
-                // 1. Palette Swap (P-Swap) - Cartesian (Active)
+                // 1. Palette Swap (P-Swap - 3D RGB Euclidean)
                 // ==========================================
-                float3 pTargetHSV = rgb2hsv(_PColor.rgb);
-                float2 pPixelPos = hsv2cartesian(hsv);
-                float2 pTargetPos = hsv2cartesian(pTargetHSV);
+                float pColorDist = distance(color.rgb, _PColor.rgb);
+                float pThreshold = (_PRange / 99.0) * _PRangeMultiplier;
                 
-                float pColorDist = distance(pPixelPos, pTargetPos);
-                float pThreshold = (_PRange / 99.0) * 2.0;
-                
+                // Smooth distance falloff interpolates exact matches at 1.0 down to 0.0 at threshold
                 float pMask = smoothstep(pThreshold + 1e-5, 0.0, pColorDist);
-
-                float3 pReplaceHSV = rgb2hsv(_PReplaceColor.rgb);
-                float3 targetSwapHSV = float3(pReplaceHSV.x, pReplaceHSV.y, pReplaceHSV.z * hsv.z);
                 
-                color.rgb = lerp(color.rgb, hsv2rgb(targetSwapHSV), pMask);
+                // Direct color blend ensures exact target matches output 100% of the replacement color
+                color.rgb = lerp(color.rgb, _PReplaceColor.rgb, pMask);
                 
-                // Recalculate HSV space since base color changed
-                hsv = rgb2hsv(color.rgb);
-
 
                 // ==========================================
-                // 2. Targeted Hue Adjustment (Thue)
+                // 2. Targeted Hue Adjustment (Thue - 3D RGB Euclidean)
                 // ==========================================
-                float3 tTargetHSV = rgb2hsv(_THueColor.rgb);
+                float tColorDist = distance(color.rgb, _THueColor.rgb);
+                float tThreshold = (_THueRange / 99.0) * _THueRangeMultiplier;
+                float thueMask = step(tColorDist, tThreshold);
 
-                // --- ORIGINAL 1D HUE ANGLE METHOD (ACTIVE) ---
-                float tHueDist = abs(frac(hsv.x - tTargetHSV.x + 1.5) - 0.5);
-                float tHueThreshold = (_THueRange / 99.0) * 0.5;
-                float thueMask = step(tHueDist, tHueThreshold);
-
-                /*
-                // --- ALTERNATIVE 2D CARTESIAN METHOD (COMMENTED OUT) ---
-                // Use this fallback if T-Hue ever exhibits issues targeting grayscale colors (White/Black/Gray).
-                float2 tPixelPos = hsv2cartesian(hsv);
-                float2 tTargetPos = hsv2cartesian(tTargetHSV);
-                float tColorDist2D = distance(tPixelPos, tTargetPos);
-                float tThreshold2D = (_THueRange / 99.0) * 2.0;
-                float thueMask = step(tColorDist2D, tThreshold2D);
-                */
-
-                // Apply targeted shift
+                float3 hsv = rgb2hsv(color.rgb);
                 float thueShiftAmount = (_THueShift / 99.0) * thueMask;
                 hsv.x = frac(hsv.x + thueShiftAmount + 1.0);
 
 
                 // ==========================================
-                // 3. Global HSV Adjustments
+                // 3. Global HSV Adjustments (Asymmetric Multiplier)
                 // ==========================================
-                hsv.x = frac(hsv.x + (_Hue / 100.0) + 1.0);
+                float normHue = _Hue / 100.0;
+                float dynamicMultiplier = 1.0 + (normHue * _HueBias) + (abs(normHue) * _HueAsym);
+                float scaledHue = normHue * dynamicMultiplier;
+
+                hsv.x = frac(hsv.x + scaledHue + 1.0);
                 hsv.y = clamp(hsv.y + (_Saturation / 100.0), 0.0, 1.0);
                 hsv.z = clamp(hsv.z + (_Value / 100.0), 0.0, 1.0);
 

@@ -20,6 +20,7 @@ public class ImageReceiver : MonoBehaviour
     public TMPro.TMP_Dropdown compressionDropdown;
     public TMPro.TMP_InputField outputStringField;
     public Button copyString, pasteString, clearString;
+    public Button decodeExport; 
 
     private Texture2D _uploadedTexture;
     private Texture2D _generatedPreviewTexture;
@@ -30,6 +31,7 @@ public class ImageReceiver : MonoBehaviour
 
     private void Awake()
     {
+
     }
 
     private void Start()
@@ -65,6 +67,13 @@ public class ImageReceiver : MonoBehaviour
         }
         else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: pasteString button is MISSING in inspector!</color></b>", this);
 
+        if (decodeExport != null)
+        {
+            decodeExport.onClick.AddListener(DecodeCurrentInputString);
+        }
+        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: DECODE button is MISSING in inspector!</color></b>", this);
+
+
         if (clearString != null)
         {
             clearString.onClick.AddListener(ClearData);
@@ -76,15 +85,16 @@ public class ImageReceiver : MonoBehaviour
     /// </summary>
     private void ProcessPastedText(string pastedText)
     {
-        if (!string.IsNullOrEmpty(pastedText))
+        if (string.IsNullOrEmpty(pastedText)) return;
+
+        if (outputStringField != null)
         {
-            if (pastedText.Length > 100 && (pastedText.StartsWith("data:image") || !pastedText.Contains(".")))
+            outputStringField.text = pastedText.Trim();
+
+            // If the pasted string starts with our raw format versions, decode it immediately
+            if (pastedText.StartsWith("2") || pastedText.StartsWith("3"))
             {
-                OnImageLoaded(pastedText);
-            }
-            else if (outputStringField != null)
-            {
-                outputStringField.text = pastedText;
+                DecodeCurrentInputString();
             }
         }
     }
@@ -193,5 +203,56 @@ public class ImageReceiver : MonoBehaviour
 
         // Notify HeroModManager to clear the image override reference
         OnImageGenerated?.Invoke(string.Empty, null);
+    }
+
+    /////////////// DECODING /////////////////////
+    ///
+
+    /// <summary>
+    /// Decodes the custom string currently in the input field and updates the preview.
+    /// </summary>
+    public void DecodeCurrentInputString()
+    {
+        if (outputStringField == null || string.IsNullOrWhiteSpace(outputStringField.text)) return;
+
+        string currentText = outputStringField.text;
+        Texture2D decodedTex = ImageColorExtractor.DecodeTexture(currentText);
+
+        if (decodedTex != null)
+        {
+            if (_generatedPreviewTexture != null) Destroy(_generatedPreviewTexture);
+            _generatedPreviewTexture = decodedTex;
+
+            if (reducedImagePreview != null) reducedImagePreview.texture = _generatedPreviewTexture;
+
+            OnImageGenerated?.Invoke(currentText, _generatedPreviewTexture);
+        }
+    }
+
+    /// <summary>
+    /// Converts the current preview texture into a PNG file and saves/downloads it.
+    /// </summary>
+    public void ExportImageToPNG()
+    {
+        if (_generatedPreviewTexture == null)
+        {
+            Debug.LogWarning("[ImageReceiver] No image available to export.");
+            return;
+        }
+
+        // Convert the Texture2D into raw PNG image bytes
+        byte[] pngBytes = _generatedPreviewTexture.EncodeToPNG();
+        string fileName = "decoded_hero.png";
+
+        #if UNITY_WEBGL && !UNITY_EDITOR
+        // In WebGL, send Base64 string to the browser to trigger a download prompt
+        string base64 = Convert.ToBase64String(pngBytes);
+        DownloadFileWebGL(fileName, base64);
+        #else
+        // In Standalone or Editor, save directly to Application.persistentDataPath
+        string savePath = System.IO.Path.Combine(Application.persistentDataPath, fileName);
+        System.IO.File.WriteAllBytes(savePath, pngBytes);
+        Debug.Log($"[ImageReceiver] Saved image to: {savePath}");
+        #endif
     }
 }

@@ -18,7 +18,8 @@ public class WebGLScrollNormalizer : InputProcessor<Vector2>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Initialize()
     {
-        InputSystem.RegisterProcessor<WebGLScrollNormalizer>();
+        // Explicitly naming the processor can prevent mapping issues in the UI
+        InputSystem.RegisterProcessor<WebGLScrollNormalizer>("WebGLScrollNormalizer");
     }
 
     // 3. The actual hardware interception logic

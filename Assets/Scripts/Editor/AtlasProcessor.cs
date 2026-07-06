@@ -509,6 +509,20 @@ public class AtlasProcessor : AssetPostprocessor
         {
             string line = lines[i].Trim().Replace('\\', '/');
 
+            // Join paths if they are split across two lines (directory line ends with a slash)
+            if (line.EndsWith("/"))
+            {
+                if (i + 1 < lines.Length)
+                {
+                    string nextLine = lines[i + 1].Trim().Replace('\\', '/');
+                    if (!string.IsNullOrEmpty(nextLine) && !nextLine.Contains(":") && !nextLine.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    {
+                        line = line + nextLine;
+                        i++; // Consume the next line so it isn't parsed again
+                    }
+                }
+            }
+
             if (string.IsNullOrEmpty(line) ||
                 line.Contains(":") ||
                 line.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
@@ -522,6 +536,14 @@ public class AtlasProcessor : AssetPostprocessor
             {
                 originalPath = originalPath.Substring("3dlink/".Length);
             }
+
+            // Map the malformed generated R1U1 path to its correct path structure
+            if (string.Equals(originalPath, "portrait/hero/special/generated/R1U1", StringComparison.OrdinalIgnoreCase))
+            {
+                originalPath = "portrait/hero/special/generated/o1R1U1";
+            }
+
+            // Exclude the base atlas's ability/spell/ paths to prevent collision with community atlas extra/spells/
 
             // Exclude the base atlas's ability/spell/ paths to prevent collision with community atlas extra/spells/
             if (fileName == "base_atlas_image.png" && originalPath.StartsWith("ability/spell/", StringComparison.OrdinalIgnoreCase))

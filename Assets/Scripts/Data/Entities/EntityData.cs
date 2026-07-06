@@ -149,9 +149,24 @@ public abstract class EntityData : SDData, IPayloadContainer
             var face = diceSides[i];
             List<string> chunks = new List<string>();
 
-            foreach (var kw in face.keywords)
-                if (!string.IsNullOrWhiteSpace(kw)) chunks.Add($"k.{kw.Trim().ToLower()}");
+            // 1. MUST BE FIRST: Check and add permissive before anything else
+            if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
+            {
+                chunks.Add("k.permissive");
+            }
 
+            // 2. Add all regular keywords (excluding permissive and stasis)
+            foreach (var kw in face.keywords)
+            {
+                if (string.IsNullOrWhiteSpace(kw)) continue;
+                string cleanKw = kw.Trim().ToLower();
+                if (cleanKw != "permissive" && cleanKw != "stasis")
+                {
+                    chunks.Add($"k.{cleanKw}");
+                }
+            }
+
+            // 3. Facade processing happens after standard keywords
             if (includeInlineFacades && !string.IsNullOrWhiteSpace(face.facadeID))
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
@@ -167,7 +182,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                     }
                     while (parts.Count < 3) parts.Add("0");
 
-                    // If all elements are zero, fallback to the mandatory ":0"
                     if (parts[0] == "0" && parts[1] == "0" && parts[2] == "0")
                     {
                         facStr += ":0";
@@ -183,6 +197,12 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
 
                 chunks.Add(facStr);
+            }
+
+            // 4. MUST BE LAST: Check and add stasis after everything, including facades
+            if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("stasis", StringComparison.OrdinalIgnoreCase)))
+            {
+                chunks.Add("k.stasis");
             }
 
             if (chunks.Count > 0)

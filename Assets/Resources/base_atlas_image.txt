@@ -8895,7 +8895,7 @@ portrait/hero/special/generated/n3R2U1
   offset: 0, 0
   index: -1
 portrait/hero/special/generated/
-R1U1
+o1R1U1
   rotate: false
   xy: 300, 594
   size: 21, 21
