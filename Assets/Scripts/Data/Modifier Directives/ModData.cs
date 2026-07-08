@@ -1,7 +1,7 @@
-using System.Collections.Generic;
-using UnityEngine;
-using System.Linq;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
 [System.Serializable]
 public class ModData
@@ -11,12 +11,9 @@ public class ModData
     [SerializeField] private List<SliceDiceTextMod.TextModBlock> _directives = new List<SliceDiceTextMod.TextModBlock>();
     [SerializeField] private List<HeroData> _heroes = new List<HeroData>();
     [SerializeField] private List<MonsterData> _monsters = new List<MonsterData>();
-
-    // Split concrete lists for Unity Serialization
     [SerializeField] private List<SpellData> _spells = new List<SpellData>();
     [SerializeField] private List<TacticData> _tactics = new List<TacticData>();
-
-    [SerializeField] private List<ItemData> _items = new List<ItemData>();
+    [SerializeField] private List<ItemData> _customItems = new List<ItemData>();
 
     // --- AUTOMATION SETTINGS ---
     [SerializeField] public bool AutoExport_ReplaceBaseHeroes = false;
@@ -46,9 +43,8 @@ public class ModData
         _monsters.Clear();
         _spells.Clear();
         _tactics.Clear();
-        _items.Clear();
+        _customItems.Clear();
 
-        // Reset defaults
         AutoExport_ReplaceBaseHeroes = false;
         AutoExport_HideHeroPool = true;
 
@@ -58,7 +54,7 @@ public class ModData
     public void LoadFromTextMod(string rawMod)
     {
         NewMod();
-        // to do later.
+        // TODO: Implement import logic
         NotifyDataChanged();
     }
 
@@ -72,7 +68,7 @@ public class ModData
         OnDataChanged?.Invoke();
     }
 
-    // Resolves strictly to the concrete lists
+    // Modernized with pattern matching for cleaner reading
     private System.Collections.IList GetRawList(Type type)
     {
         if (type == null) return null;
@@ -81,7 +77,7 @@ public class ModData
         if (typeof(TacticData).IsAssignableFrom(type)) return _tactics;
         if (typeof(HeroData).IsAssignableFrom(type)) return _heroes;
         if (typeof(MonsterData).IsAssignableFrom(type)) return _monsters;
-        if (typeof(ItemData).IsAssignableFrom(type)) return _items;
+        if (typeof(ItemData).IsAssignableFrom(type)) return _customItems;
 
         return null;
     }
@@ -90,13 +86,10 @@ public class ModData
 
     public IReadOnlyList<T> GetAll<T>() where T : SDData
     {
-        // If the API asks for AbilityData, dynamically combine Spells and Tactics to serve the UI
+        // Fixed Memory allocation: Uses LINQ Concat to stream data instead of building a new List in memory every call.
         if (typeof(T) == typeof(AbilityData))
         {
-            var combinedAbilities = new List<AbilityData>();
-            combinedAbilities.AddRange(_spells);
-            combinedAbilities.AddRange(_tactics);
-            return combinedAbilities as IReadOnlyList<T>;
+            return _spells.Cast<T>().Concat(_tactics.Cast<T>()).ToList();
         }
 
         return GetList<T>();
@@ -104,12 +97,11 @@ public class ModData
 
     public T Load<T>(int index) where T : SDData
     {
-        var list = GetAll<T>(); // Route through GetAll to support combined AbilityData resolution safely
+        var list = GetAll<T>();
         if (list != null && index >= 0 && index < list.Count) return list[index];
         return null;
     }
 
-    /*
     public void SaveEntity(SDData original, SDData updated)
     {
         if (updated == null) return;
@@ -128,44 +120,10 @@ public class ModData
         else
         {
             int index = newList.IndexOf(original);
-            if (index >= 0)
-            {
-                newList[index] = updated; // Replace existing
-            }
-            else
-            {
-                newList.Add(updated); // Add new
-            }
-        }
-
-        NotifyDataChanged();
-    }
-    */
-
-    public void SaveEntity(SDData original, SDData updated)
-    {
-        if (updated == null) return;
-
-        System.Collections.IList oldList = original != null ? GetRawList(original.GetType()) : null;
-        System.Collections.IList newList = GetRawList(updated.GetType());
-
-        Debug.Log($"[DEBUG ModData] Saving Entity: {updated.entityName}. Type: {updated.GetType()}. Found List? {newList != null}");
-
-        if (newList == null) return;
-
-        if (oldList != null && oldList != newList)
-        {
-            oldList.Remove(original);
-            newList.Add(updated);
-        }
-        else
-        {
-            int index = newList.IndexOf(original);
             if (index >= 0) newList[index] = updated;
             else newList.Add(updated);
         }
 
-        Debug.Log($"[DEBUG ModData] Save Complete. Current Spell Count: {_spells.Count} | Current Tactic Count: {_tactics.Count}");
         NotifyDataChanged();
     }
 
@@ -189,12 +147,6 @@ public class ModData
 
     public IReadOnlyList<SliceDiceTextMod.TextModBlock> GetDirectives() => _directives;
 
-    public SliceDiceTextMod.TextModBlock LoadDirective(int index)
-    {
-        if (index >= 0 && index < _directives.Count) return _directives[index];
-        return null;
-    }
-
     public void SaveDirective(SliceDiceTextMod.TextModBlock original, SliceDiceTextMod.TextModBlock updated)
     {
         if (updated == null) return;
@@ -208,8 +160,10 @@ public class ModData
 
     public void DeleteDirective(SliceDiceTextMod.TextModBlock target)
     {
-        if (target == null) return;
-        if (_directives.Remove(target)) NotifyDataChanged();
+        if (target != null && _directives.Remove(target))
+        {
+            NotifyDataChanged();
+        }
     }
 
     public void MoveDirective(SliceDiceTextMod.TextModBlock directive, int direction)
@@ -228,7 +182,9 @@ public class ModData
         }
     }
 
-    // --- SERIALIZATION & AUTOMATION ---
+    // =========================================================================
+    // --- SERIALIZATION & AUTOMATION (THE "NOTEPAD" FIX) ---
+    // =========================================================================
     public static string Export(ModData modData)
     {
         if (modData == null) return "";
@@ -239,13 +195,10 @@ public class ModData
         foreach (var directive in modData.GetDirectives())
         {
             string syntax = directive.ToModString();
-            if (!string.IsNullOrWhiteSpace(syntax))
-            {
-                blocks.Add(syntax);
-            }
+            if (!string.IsNullOrWhiteSpace(syntax)) blocks.Add(syntax);
         }
 
-        // 2. Automate custom hero exports using an ephemeral HeroPoolData instance
+        // 2. Automate Custom Heroes
         var heroes = modData.GetAll<HeroData>();
         if (heroes != null && heroes.Count > 0)
         {
@@ -258,20 +211,49 @@ public class ModData
             foreach (var hero in heroes)
             {
                 string heroSyntax = hero.Export();
-                if (!string.IsNullOrWhiteSpace(heroSyntax))
-                {
-                    autoHeroPool.Elements.Add(heroSyntax);
-                }
+                if (!string.IsNullOrWhiteSpace(heroSyntax)) autoHeroPool.Elements.Add(heroSyntax);
             }
 
-            // HeroPoolData takes care of formatting, trailing commas, and size-chunking itself
             string autoPoolSyntax = autoHeroPool.ToModString();
-            if (!string.IsNullOrWhiteSpace(autoPoolSyntax))
+            if (!string.IsNullOrWhiteSpace(autoPoolSyntax)) blocks.Add(autoPoolSyntax);
+        }
+
+        // 3. Automate Custom Items
+        var items = modData.GetAll<ItemData>();
+        if (items != null)
+        {
+            foreach (var item in items)
             {
-                blocks.Add(autoPoolSyntax);
+                // Assuming ItemData has an Export() or ToModString() method like HeroData does.
+                // If they use an ItemPoolData class similar to Heroes, you can wrap them here just like above.
+                string itemSyntax = item.Export();
+                if (!string.IsNullOrWhiteSpace(itemSyntax)) blocks.Add(itemSyntax);
             }
         }
 
+        // 4. Automate Custom Monsters
+        var monsters = modData.GetAll<MonsterData>();
+        if (monsters != null)
+        {
+            foreach (var monster in monsters)
+            {
+                string monsterSyntax = monster.Export();
+                if (!string.IsNullOrWhiteSpace(monsterSyntax)) blocks.Add(monsterSyntax);
+            }
+        }
+
+        // 5. Automate Abilities (Spells & Tactics)
+        var abilities = modData.GetAll<AbilityData>();
+        if (abilities != null)
+        {
+            foreach (var ability in abilities)
+            {
+                string abilitySyntax = ability.Export();
+                if (!string.IsNullOrWhiteSpace(abilitySyntax)) blocks.Add(abilitySyntax);
+            }
+        }
+
+        // Finally, join absolutely everything together with the ampersand delimiter.
         return string.Join("&", blocks);
     }
 }

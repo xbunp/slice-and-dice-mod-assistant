@@ -21,9 +21,9 @@ public static class ModPackageHelper
 
     public static string[] GetItemNames()
     {
-        if (ModPackage.Instance == null || ModPackage.Instance.Items == null || ModPackage.Instance.Items.Count == 0)
+        if (ModPackage.Instance == null || ModPackage.Instance.CustomItems == null || ModPackage.Instance.CustomItems.Count == 0)
             return new[] { "Default Item (Builder Fallback)" };
-        return ModPackage.Instance.Items.Select(i => i.entityName).ToArray();
+        return ModPackage.Instance.CustomItems.Select(i => i.entityName).ToArray();
     }
 
     public static string[] GetAllEntityNames()

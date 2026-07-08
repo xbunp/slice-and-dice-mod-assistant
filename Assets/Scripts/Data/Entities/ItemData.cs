@@ -198,6 +198,8 @@ public struct ItemHsvShift
 [System.Serializable]
 public class ItemData : SDData
 {
+    public string unityName = "New Item";
+
     public List<string> GlobalTags = new List<string>();
     /// <summary> (.tier) Rarity reward pool index. Valid range: -5 to 20. </summary>
     public int? Tier { get; set; }
@@ -678,5 +680,89 @@ public class ItemData : SDData
 
         AssignDomainPayload(mech);
         Mechanics.Add(mech);
+    }
+}
+
+public enum PayloadInjectionZone
+{
+    InnerEntity,   // Appends inside the base replica ( ) alongside standard items/traits
+    OuterEntity,   // Appends outside the base ( ) alongside OnHits/TriggerHPs
+    EntityWrapper  // Completely wraps the entity string (Uses {0} as the entity placeholder)
+}
+
+public struct ItemInjectionResult
+{
+    public string FormattedString;
+    public PayloadInjectionZone Zone;
+}
+
+public static class CustomItemContextHelper
+{
+    /// <summary>
+    /// Evaluates a Custom Item to determine its exact syntax and where it belongs 
+    /// relative to the Entity's structural parentheses.
+    /// </summary>
+    public static ItemInjectionResult EvaluateItem(ItemData item)
+    {
+        if (item == null) return new ItemInjectionResult { FormattedString = "" };
+
+        string rawItem = item.Export();
+        if (string.IsNullOrWhiteSpace(rawItem)) return new ItemInjectionResult { FormattedString = "" };
+
+        string contentToEvaluate = rawItem.Trim();
+
+        // ====================================================================
+        // RULE 1: EXTERNAL PROPERTIES (OuterEntity Zone)
+        // ====================================================================
+        if (contentToEvaluate.StartsWith("abilitydata.") ||
+            contentToEvaluate.StartsWith("triggerhpdata.") ||
+            contentToEvaluate.StartsWith("onhitdata.") ||
+            contentToEvaluate.StartsWith("i.abilitydata.") ||
+            contentToEvaluate.StartsWith("i.triggerhpdata.") ||
+            contentToEvaluate.StartsWith("learn.") ||         // ADDED THIS
+            contentToEvaluate.StartsWith("i.learn."))         // ADDED THIS
+        {
+            return new ItemInjectionResult
+            {
+                FormattedString = contentToEvaluate.StartsWith("i.") ? contentToEvaluate : $"i.{contentToEvaluate}",
+                Zone = PayloadInjectionZone.OuterEntity
+            };
+        }
+
+        // ====================================================================
+        // RULE 2: ENCAPSULATION (EntityWrapper Zone)
+        // ====================================================================
+        if (contentToEvaluate.StartsWith("custom.wrap.") ||
+           (item.Mechanics != null && item.Mechanics.Any(m => m.Prefix == "wrap")))
+        {
+            return new ItemInjectionResult
+            {
+                FormattedString = contentToEvaluate,
+                Zone = PayloadInjectionZone.EntityWrapper
+            };
+        }
+
+        // ====================================================================
+        // RULE 3: MODIFIERS & EQUIPMENT (InnerEntity Zone)
+        // ====================================================================
+        string formattedInner;
+        if (contentToEvaluate.StartsWith("i.") || contentToEvaluate.StartsWith("i.t."))
+        {
+            formattedInner = contentToEvaluate;
+        }
+        else if (contentToEvaluate.StartsWith("t."))
+        {
+            formattedInner = $"i.{contentToEvaluate}";
+        }
+        else
+        {
+            formattedInner = $"i.{contentToEvaluate}";
+        }
+
+        return new ItemInjectionResult
+        {
+            FormattedString = formattedInner,
+            Zone = PayloadInjectionZone.InnerEntity
+        };
     }
 }

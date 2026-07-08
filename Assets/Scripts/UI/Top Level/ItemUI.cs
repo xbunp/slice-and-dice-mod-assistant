@@ -1,15 +1,15 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
-using TMPro; // Assuming TextMeshPro is used for clarity, replace with standard Text if needed
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using static UnityEngine.Rendering.VolumeComponent;
 
 // DO NOT FORGET: CRITICAL
 // YOU CANNOT WORK IN THIS CLASS WITHOUT SEEING ItemSyntaxCompiler.CS
 // AND ITEMDATA.CS
-// AND STRATEGYPATTERNNODES.CS WHICH CONTAINS AuthoringNodeDef
+// AND STRATEGYPATTERNNODES.CS WHICH CONTAINS AuthoringNodeDef!!
 
 public enum ItemNodeType
 {
@@ -122,6 +122,7 @@ public class ItemUI : RootUI
 
     private ReorderableZone _rootZone;
     private TMPro.TMP_Dropdown _loadDropdown;
+    private TMPro.TMP_InputField _savedNameInputField;
     private bool _isUpdatingDropdown = false;
     private EntityCard _selectedCard;
     private TextMeshProUGUI _syntaxHighlighterText;
@@ -185,7 +186,7 @@ public class ItemUI : RootUI
         }
 
         // Wait until ModPackage has finished creating/loading its mod database
-        while (!ModPackage.Instance.isModLoaded)
+        while (!ModPackage.Instance.IsModLoaded)
         {
             yield return null;
         }
@@ -315,7 +316,7 @@ public class ItemUI : RootUI
             {
                 if (_isUpdatingDropdown || idx == 0) return;
 
-                ItemData selectedItem = ModPackage.Instance.Items[idx - 1];
+                ItemData selectedItem = ModPackage.Instance.CustomItems[idx - 1];
                 ModPackage.Instance.LoadEntityForEditing(selectedItem);
 
                 ItemData activeClone = ModPackage.Instance.GetActiveEntity<ItemData>();
@@ -324,6 +325,49 @@ public class ItemUI : RootUI
 
             var ddLayout = ddObj.GetComponent<LayoutElement>() ?? ddObj.AddComponent<LayoutElement>();
             ddLayout.preferredHeight = 30f;
+        }
+
+        // --- ROW 1.5: Saved Name Input --- // 
+        if (inputFieldPrefab != null)
+        {
+            RectTransform nameRow = CreateRect("SavedNameRow", sidebarToolbar);
+            var nameLayout = nameRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+            nameLayout.spacing = 6;
+            nameLayout.childControlWidth = true;
+            nameLayout.childControlHeight = true;
+
+            var nameRowLayoutElem = nameRow.gameObject.AddComponent<LayoutElement>();
+            nameRowLayoutElem.preferredHeight = 30f;
+            nameRowLayoutElem.flexibleHeight = 0f;
+
+            // Label
+            RectTransform labelRect = CreateRect("SavedNameLabel", nameRow);
+            var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+            labelText.text = "Saved Name:";
+            labelText.fontSize = 12;
+            labelText.color = Color.gray;
+            labelText.alignment = TMPro.TextAlignmentOptions.MidlineLeft;
+
+            var labelLayout = labelRect.gameObject.AddComponent<LayoutElement>();
+            labelLayout.preferredWidth = 85f;
+            labelLayout.flexibleWidth = 0f;
+
+            // Input Field
+            GameObject inputObj = Instantiate(inputFieldPrefab, nameRow);
+            _savedNameInputField = inputObj.GetComponent<TMPro.TMP_InputField>();
+
+            var inputLayout = inputObj.GetComponent<LayoutElement>() ?? inputObj.AddComponent<LayoutElement>();
+            inputLayout.flexibleWidth = 1f;
+
+            _savedNameInputField.onValueChanged.RemoveAllListeners();
+            _savedNameInputField.onValueChanged.AddListener((val) =>
+            {
+                ItemData activeClone = ModPackage.Instance?.GetActiveEntity<ItemData>();
+                if (activeClone != null)
+                {
+                    activeClone.unityName = val;
+                }
+            });
         }
 
         // --- ROW 2: Save / New Buttons ---
@@ -444,9 +488,13 @@ public class ItemUI : RootUI
         _loadDropdown.ClearOptions();
 
         var options = new System.Collections.Generic.List<string> { "Load Saved Item..." };
-        foreach (var item in ModPackage.Instance.Items)
+        foreach (var item in ModPackage.Instance.CustomItems)
         {
-            string displayName = string.IsNullOrEmpty(item.entityName) ? "Unnamed Item" : item.entityName;
+            string displayName = !string.IsNullOrEmpty(item.entityName) ? item.entityName :
+                                 (!string.IsNullOrEmpty(item.unityName) ? item.unityName : item.Export());
+
+            if (displayName.Length > 35) displayName = displayName.Substring(0, 32) + "...";
+
             if (item.Tier.HasValue) displayName += $" (Tier {item.Tier})";
             options.Add(displayName);
         }
@@ -460,28 +508,20 @@ public class ItemUI : RootUI
     /// </summary>
     public void CreateNewItem()
     {
-        // FIX: Guard against running before MainCanvasContent has been instantiated in BuildMainCanvas()
         if (MainCanvasContent == null) return;
 
-        // 1. Create a blank backend editing session
         ItemData newItem = new ItemData();
-        ModPackage.Instance.LoadEntityForEditing(newItem);
+        newItem.unityName = "New Item"; // Default temporary identity
 
-        // 2. Clear the workspace canvas UI
+        ModPackage.Instance.LoadEntityForEditing(newItem);
         ClearWorkspace();
 
-        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
-        if (rootZone != null)
+        // <-- ADDED: Reset visual input field on new item
+        if (_savedNameInputField != null)
         {
-            EntityCard equipCard = CreateEntityCard(ItemNodeType.Equippable) as EntityCard;
-            if (equipCard != null) // Guard against null cards
-            {
-                equipCard.RootData.entityName = "New Item";
-                rootZone.AddEntrant(equipCard);
-            }
+            _savedNameInputField.SetTextWithoutNotify(newItem.unityName);
         }
 
-        // 4. Force a UI layout update and output compilation
         RefreshSidebar();
         AutoCompile();
     }
@@ -491,17 +531,25 @@ public class ItemUI : RootUI
     public void SaveActiveItem()
     {
         ItemData activeClone = ModPackage.Instance?.GetActiveEntity<ItemData>();
-        if (activeClone == null) return;
+        if (activeClone == null || MainCanvasContent == null) return;
 
-        // Ensure the visual canvas is fully synced to the backend clone
-        AutoCompile();
+        // <-- ADDED: Write the UI input text back to the backend data before saving
+        if (_savedNameInputField != null)
+        {
+            activeClone.unityName = _savedNameInputField.text;
+        }
 
-        // Commit the session changes
+        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
+        if (rootZone != null)
+        {
+            string compiledString = ItemSyntaxCompiler.CompileZone(rootZone.Entrants.Cast<EntityCard>());
+            activeClone.Parse(compiledString);
+        }
+
         ModPackage.Instance.SaveActiveEntity<ItemData>();
 
-        // Refresh load list in case the item was renamed
         PopulateLoadDropdown();
-        Debug.Log($"Successfully saved item: {activeClone.entityName ?? "Unnamed Item"}");
+        ModPackage.Instance.NotifyActiveEntityChanged<ItemData>(this);
     }
     /// <summary>
     /// Clears the workspace and recursively reconstructs the visual tree from ItemData.
@@ -516,36 +564,138 @@ public class ItemUI : RootUI
         ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
         if (rootZone == null) return;
 
-        Debug.Log($"<color=cyan>[UI Load]</color> Loading Item. Mechanics: {item.Mechanics.Count}");
-
-        // Mechanics are dropped directly onto the Workspace Canvas. No root card wrapper!
-        foreach (var mechanic in item.Mechanics)
+        bool hasMetadata = !string.IsNullOrEmpty(item.entityName) || item.Tier.HasValue;
+        if (hasMetadata)
         {
-            LoadMechanicIntoUI(mechanic, rootZone);
+            EntityCard equipCard = CreateEntityCard(ItemNodeType.Equippable) as EntityCard;
+            equipCard.RootData = item;
+            rootZone.AddEntrant(equipCard);
+        }
+
+        // Parse mechanics, merging external face modifiers into their parent Hat
+        for (int i = 0; i < item.Mechanics.Count; i++)
+        {
+            var mechanic = item.Mechanics[i];
+            string prefix = mechanic.Prefix?.ToLower() ?? "";
+
+            if (prefix.EndsWith("hat"))
+            {
+                // 1. Spawn Hat Card
+                EntityCard hatCard = CreateEntityCard(ItemNodeType.Hat) as EntityCard;
+                hatCard.MechanicData = mechanic;
+                rootZone.AddEntrant(hatCard);
+
+                HeroData heroData = new HeroData();
+                heroData.InitializeDiceFaces();
+                hatCard.MechanicData.PayloadData = heroData;
+
+                string rawPayload = mechanic.PayloadString ?? "";
+                if (rawPayload.StartsWith("(") && rawPayload.EndsWith(")"))
+                {
+                    rawPayload = rawPayload.Substring(1, rawPayload.Length - 2);
+                }
+
+                // 2. Separate Hat core from nested item packs
+                // e.g. "Fey.sd.66.i.togorf#togfri" -> Core: "Fey.sd.66", Pack: "i.togorf#togfri"
+                string hatCore = rawPayload;
+                string nestedPackStr = "";
+
+                int iIndex = rawPayload.IndexOf(".i.");
+                if (iIndex >= 0)
+                {
+                    hatCore = rawPayload.Substring(0, iIndex);
+                    nestedPackStr = rawPayload.Substring(iIndex + 1);
+                }
+
+                heroData.Parse(hatCore);
+
+                // 3. Lookahead: Fold subsequent facade/appearance modifiers directly into this Hat's HeroData
+                while (i + 1 < item.Mechanics.Count)
+                {
+                    var nextMech = item.Mechanics[i + 1];
+                    string nextPrefix = nextMech.Prefix?.ToLower() ?? "";
+                    string nextPayload = nextMech.PayloadString ?? "";
+
+                    if (nextPrefix == "i" && (nextPayload.Contains("facade") || nextPayload.Contains("sidesc") || nextPayload.Contains("img")))
+                    {
+                        ApplyFacadeToHeroData(heroData, nextPayload);
+                        i++; // Consume this mechanic, preventing it from spawning its own card
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // 4. Spawn nested Item Pack inside Hat's Payload Port
+                if (!string.IsNullOrWhiteSpace(nestedPackStr))
+                {
+                    ItemData nestedPack = new ItemData();
+                    nestedPack.Parse(nestedPackStr);
+
+                    foreach (var childMech in nestedPack.Mechanics)
+                    {
+                        LoadMechanicIntoUI(childMech, hatCard.PayloadPort, 1);
+                    }
+                }
+            }
+            else
+            {
+                LoadMechanicIntoUI(mechanic, rootZone, 0);
+            }
         }
 
         RefreshSidebar();
         AutoCompile();
     }
-    /// <summary>
-    /// Spawns the visual mechanic card. Sub-payloads are left to the inspector.
-    /// </summary>
-    private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone)
+
+    private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
     {
+        string prefix = mechanic.Prefix?.ToLower() ?? "";
         ItemNodeType type = ItemNodeType.BaseItem;
-        if (mechanic.Prefix == "hat") type = ItemNodeType.Hat;
-        //else if (mechanic.Prefix == "sticker") type = ItemNodeType.Sticker;
-        //else if (mechanic.Unpack) type = ItemNodeType.Unpack;
-        //else if (mechanic.PartIndex.HasValue) type = ItemNodeType.ItemPart;
-        //else if (!string.IsNullOrEmpty(mechanic.SplicedItem)) type = ItemNodeType.Splice;
-        //else if (!string.IsNullOrEmpty(mechanic.MergedItem)) type = ItemNodeType.Merge;
+
+        if (prefix.EndsWith("hat")) type = ItemNodeType.Hat;
+        else if (prefix.EndsWith("facade") || prefix.EndsWith("sidesc") || prefix.EndsWith("img") || prefix.EndsWith("doc")) type = ItemNodeType.Appearance;
+        else if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
 
         EntityCard mechCard = CreateEntityCard(type) as EntityCard;
         mechCard.MechanicData = mechanic;
         targetZone.AddEntrant(mechCard);
 
-        // NOTICE: We do not unpack mechanic.PayloadData or mechanic.PayloadString.
-        // They are parameters of this mechanic node, edited via the Inspector panel.
+        if (mechanic.PayloadData is ItemData nestedItem)
+        {
+            foreach (var childMech in nestedItem.Mechanics)
+            {
+                LoadMechanicIntoUI(childMech, mechCard.PayloadPort, depth + 1);
+            }
+        }
+    }
+
+    private void ApplyFacadeToHeroData(HeroData heroData, string facadePayload)
+    {
+        // Extracts the face and facade ID from strings like "left.facade.bas171:0"
+        string[] tokens = facadePayload.Split('.');
+        string targetFace = "left";
+        string facadeId = "";
+
+        for (int j = 0; j < tokens.Length; j++)
+        {
+            string tokenLower = tokens[j].ToLower();
+            if (DiceTargetHelper.FaceNames.Contains(tokenLower))
+            {
+                targetFace = tokenLower;
+            }
+            if (tokenLower == "facade" && j + 1 < tokens.Length)
+            {
+                facadeId = tokens[j + 1];
+            }
+        }
+
+        int faceIndex = Array.IndexOf(DiceTargetHelper.FaceNames, targetFace);
+        if (faceIndex >= 0 && faceIndex < 6 && !string.IsNullOrEmpty(facadeId))
+        {
+            heroData.diceSides[faceIndex].facadeID = facadeId;
+        }
     }
     /// <summary>
     /// Evaluates the metadata and flags on a mechanic instance, spawns its card UI representation, 
@@ -567,44 +717,8 @@ public class ItemUI : RootUI
         mainLayout.padding = new RectOffset(40, 40, 40, 40);
         mainLayout.spacing = 20;
     }
-    private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
-    {
-        string indent = new string(' ', depth * 4);
+    // --- KEEP AND ENSURE THIS IS THE ONLY OVERLOAD ---
 
-        ItemNodeType type = ItemNodeType.BaseItem;
-
-        // Map mechanics to visual node strategies
-        if (mechanic.Prefix == "hat") type = ItemNodeType.Hat;
-        //else if (mechanic.Prefix == "sticker") type = ItemNodeType.Sticker;
-        //else if (mechanic.Unpack) type = ItemNodeType.Unpack;
-        //else if (mechanic.PartIndex.HasValue) type = ItemNodeType.ItemPart;
-        //else if (!string.IsNullOrEmpty(mechanic.SplicedItem)) type = ItemNodeType.Splice;
-        //else if (!string.IsNullOrEmpty(mechanic.MergedItem)) type = ItemNodeType.Merge;
-        else if (mechanic.Prefix == "facade" || mechanic.Prefix == "sidesc" || mechanic.Prefix == "img" || mechanic.Prefix == "doc")
-            type = ItemNodeType.Appearance; // <-- Map to new Appearance node
-
-        EntityCard mechCard = CreateEntityCard(type) as EntityCard;
-        mechCard.MechanicData = mechanic;
-        targetZone.AddEntrant(mechCard);
-
-        if (mechanic.PayloadData != null)
-        {
-            LoadDataPayloadIntoUI(mechanic.PayloadData, "", mechCard.PayloadPort, depth + 1);
-        }
-        else if (!string.IsNullOrEmpty(mechanic.PayloadString) && type != ItemNodeType.Appearance)
-        {
-            // Notice we skip unpacking RawStrings if it's an Appearance node. 
-            // Appearance values (like "Che5:89") just belong in the inspector, not as child nodes.
-            string cleanPayload = mechanic.PayloadString.Trim();
-
-            EntityCard rawCard = CreateEntityCard(ItemNodeType.RawString) as EntityCard;
-            if (cleanPayload.StartsWith("(") && cleanPayload.EndsWith(")"))
-                cleanPayload = cleanPayload.Substring(1, cleanPayload.Length - 2);
-
-            rawCard.MechanicData.PayloadString = cleanPayload;
-            mechCard.PayloadPort.AddEntrant(rawCard);
-        }
-    }
     private void LoadDataPayloadIntoUI(object payloadData, string prefix, ReorderableZone targetZone, int depth = 0)
     {
         if (payloadData == null) return;

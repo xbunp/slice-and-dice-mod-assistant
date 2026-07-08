@@ -554,14 +554,25 @@ public class HeroUI : EntityUI<HeroData>
             }
         );
 
-        // 4. Custom Items (Instantiated directly from selected name string)
-        // Available choices hook: pass your list of raw custom item name strings here
+        // --- UPDATED COLLECTION SELECTOR IN HeroUI ---
         AppendCollectionSelector<string>(
             layout: layout,
             label: "Add Custom Item:",
             uniqueKey: "CustomItem",
-            availableChoices: new List<string>(), // Hook: Put your string choices here
-            currentActiveItems: CurrentEntity.customItems?.Select(i => i.entityName).ToList() ?? new List<string>(),
+            // 1. Hook up available choices using unityName with entityName fallbacks
+            availableChoices: ModPackage.Instance?.CustomItems?
+                .Select(i => !string.IsNullOrEmpty(i.unityName) ? i.unityName : (!string.IsNullOrEmpty(i.entityName) ? i.entityName : "Unnamed Item"))
+                .Distinct()
+                .ToList() ?? new List<string>(),
+
+            // 2. Map current items safely using unityName first to avoid string bloat in the UI
+            currentActiveItems: CurrentEntity.customPayloads?
+                .Where(p => p.Type == PayloadType.Item)
+                .Select(p => p.Data as ItemData)
+                .Where(item => item != null)
+                .Select(item => !string.IsNullOrEmpty(item.unityName) ? item.unityName : item.entityName)
+                .ToList() ?? new List<string>(),
+
             getKey: (name) => name,
             getDisplay: (name) => name,
             onAdd: (itemName) =>
@@ -570,20 +581,47 @@ public class HeroUI : EntityUI<HeroData>
                 {
                     CurrentEntity.customPayloads = new List<CustomPayload>();
                 }
-                if (!CurrentEntity.customItems.Any(i => i.entityName == itemName))
+
+                var templateItem = ModPackage.Instance?.CustomItems?.FirstOrDefault(i =>
+                    i.unityName == itemName || i.entityName == itemName);
+
+                if (templateItem != null)
                 {
-                    // Add the ItemData container to payloads as Item type
-                    CurrentEntity.customPayloads.Add(new CustomPayload { Type = PayloadType.Item, Data = new ItemData { entityName = itemName } });
-                    NotifyStateChanged();
-                    RebuildStatsUI();
+                    bool alreadyExists = CurrentEntity.customPayloads.Any(p =>
+                        p.Type == PayloadType.Item &&
+                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
+
+                    if (!alreadyExists)
+                    {
+                        // PROPER FIX: Deep clone the item so it retains its effects and stats
+                        string json = JsonUtility.ToJson(templateItem);
+                        ItemData clonedItem = JsonUtility.FromJson<ItemData>(json);
+
+                        // Optional: Ensure the names are forced to match the template if JsonUtility misses them
+                        clonedItem.entityName = templateItem.entityName;
+                        clonedItem.unityName = templateItem.unityName;
+
+                        CurrentEntity.customPayloads.Add(new CustomPayload { Type = PayloadType.Item, Data = clonedItem });
+
+                        // NOTE: If the hero also needs this item explicitly EQUIPPED (not just defined in the payload), 
+                        // you may also need to add it to the standard items list here depending on your Export logic:
+                        // if (CurrentEntity.items == null) CurrentEntity.items = new List<string>();
+                        // if (!CurrentEntity.items.Contains(clonedItem.entityName)) CurrentEntity.items.Add(clonedItem.entityName);
+
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
                 }
             },
             onRemove: (itemName) =>
             {
                 if (CurrentEntity.customPayloads != null)
                 {
-                    // Find the underlying payload container matching the Item Type and Name
-                    var targetPayload = CurrentEntity.customPayloads.FirstOrDefault(p => p.Type == PayloadType.Item && (p.Data as ItemData)?.entityName == itemName);
+                    // Locate payload utilizing the prioritized name schema
+                    var targetPayload = CurrentEntity.customPayloads.FirstOrDefault(p =>
+                        p.Type == PayloadType.Item &&
+                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
+
                     if (targetPayload != null)
                     {
                         CurrentEntity.customPayloads.Remove(targetPayload);

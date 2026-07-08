@@ -1,8 +1,8 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using UnityEngine;
 
 public class ModPackage : MonoBehaviour
@@ -10,12 +10,14 @@ public class ModPackage : MonoBehaviour
     public static ModPackage Instance { get; private set; }
     public event Action<object> OnModDataChanged;
 
-    public bool isModLoaded { get; private set; } = false;
+    // Converted to PascalCase for standard C# property naming
+    public bool IsModLoaded { get; private set; } = false;
     public readonly ModData loadedMod = new ModData();
-    public IReadOnlyList<AbilityData> CustomAbilities => loadedMod.GetAll<AbilityData>();
+
+    public IReadOnlyList<AbilityData> CustomAbilities => (IReadOnlyList<AbilityData>)loadedMod.GetAll<AbilityData>();
     public IReadOnlyList<HeroData> Heroes => loadedMod.GetAll<HeroData>();
     public IReadOnlyList<MonsterData> Monsters => loadedMod.GetAll<MonsterData>();
-    public IReadOnlyList<ItemData> Items => loadedMod.GetAll<ItemData>();
+    public IReadOnlyList<ItemData> CustomItems => loadedMod.GetAll<ItemData>();
 
     // --- CONCURRENT SESSION TRACKING (ENTITIES) ---
     private class EditingSession
@@ -24,17 +26,15 @@ public class ModPackage : MonoBehaviour
         public SDData Clone;
     }
 
-    // Single-session tracker per Entity Type (Hero, Monster, etc.)
     private readonly Dictionary<Type, EditingSession> _activeSessions = new Dictionary<Type, EditingSession>();
 
     // --- MULTI-SESSION TRACKING (DIRECTIVES) ---
-    // Key: Original Directive reference | Value: Active Directive reference (direct reference, no clone)
-    private readonly Dictionary<SliceDiceTextMod.TextModBlock, SliceDiceTextMod.TextModBlock> _activeDirectiveSessions =
-        new Dictionary<SliceDiceTextMod.TextModBlock, SliceDiceTextMod.TextModBlock>();
+    // Changed to a HashSet: Since you edit the direct reference, a Dictionary where Key==Value is redundant.
+    private readonly HashSet<SliceDiceTextMod.TextModBlock> _activeDirectiveSessions = new HashSet<SliceDiceTextMod.TextModBlock>();
 
     // --- EVENTS ---
     public event Action<Type, SDData> OnActiveEntityChanged;
-    public event Action OnDirectivesChanged; // Invoked when directives are saved, deleted, or reloaded
+    public event Action OnDirectivesChanged;
     public event Action OnModLoaded;
 
     private void Awake()
@@ -47,31 +47,30 @@ public class ModPackage : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
-        // Database-level updates pass null as they don't originate from a specific UI class
         loadedMod.OnDataChanged += () => OnModDataChanged?.Invoke(null);
     }
+
     private void Start()
     {
         CreateNewMod();
 
-        if (RootUIFactory.Instance != null)
-        {
-            RootUIFactory.Instance.InitializeEntireUI();
-        }
+        // Null coalescing operator simplifies this check
+        RootUIFactory.Instance?.InitializeEntireUI();
     }
 
     public void CreateNewMod()
     {
         ClearAllEditingSessions();
         loadedMod.NewMod();
-        isModLoaded = true;
+        IsModLoaded = true;
         OnModLoaded?.Invoke();
     }
+
     public void LoadModFromTextmod(string fullMod)
     {
         ClearAllEditingSessions();
         loadedMod.LoadFromTextMod(fullMod);
-        isModLoaded = true;
+        IsModLoaded = true;
         OnModLoaded?.Invoke();
     }
 
@@ -81,14 +80,13 @@ public class ModPackage : MonoBehaviour
 
     public void LoadEntityForEditing<T>(T originalEntity) where T : SDData
     {
-        Type type = typeof(T);
-
         if (originalEntity == null)
         {
             UnloadEditingSession<T>();
             return;
         }
 
+        Type type = typeof(T);
         var session = new EditingSession
         {
             Original = originalEntity,
@@ -98,14 +96,12 @@ public class ModPackage : MonoBehaviour
         _activeSessions[type] = session;
         OnActiveEntityChanged?.Invoke(type, session.Clone);
     }
+
     public T GetActiveEntity<T>() where T : SDData
     {
-        if (_activeSessions.TryGetValue(typeof(T), out var session))
-        {
-            return session.Clone as T;
-        }
-        return null;
+        return _activeSessions.TryGetValue(typeof(T), out var session) ? session.Clone as T : null;
     }
+
     public void UnloadEditingSession<T>() where T : SDData
     {
         Type type = typeof(T);
@@ -114,16 +110,17 @@ public class ModPackage : MonoBehaviour
             OnActiveEntityChanged?.Invoke(type, null);
         }
     }
+
     public void SaveActiveEntity<T>() where T : SDData
     {
         Type type = typeof(T);
-
         if (_activeSessions.TryGetValue(type, out var session))
         {
             loadedMod.SaveEntity(session.Original, session.Clone);
             session.Original = session.Clone;
         }
     }
+
     public void DeleteEntity<T>(T entityToDelete) where T : SDData
     {
         if (entityToDelete == null) return;
@@ -141,48 +138,29 @@ public class ModPackage : MonoBehaviour
     // --- DIRECTIVE-SPECIFIC API (MULTI-SESSION / INSTANCE-SAFE) ---
     // =========================================================================
 
-    /// <summary>
-    /// Gets the unique editable clone for a specific directive. 
-    /// If no editing session exists for this directive instance, one is created automatically.
-    /// </summary>
     public SliceDiceTextMod.TextModBlock GetOrCreateDirectiveSession(SliceDiceTextMod.TextModBlock original)
     {
         if (original == null) return null;
 
-        if (_activeDirectiveSessions.TryGetValue(original, out var activeInstance))
-        {
-            return activeInstance;
-        }
-
-        // We use the direct reference instead of cloning
-        _activeDirectiveSessions[original] = original;
-        return original;
+        _activeDirectiveSessions.Add(original);
+        return original; // Returning direct reference as requested by original design
     }
 
     public void SaveDirective(SliceDiceTextMod.TextModBlock original)
     {
-        if (original == null) return;
-
-        if (_activeDirectiveSessions.TryGetValue(original, out var activeInstance))
+        if (original != null && _activeDirectiveSessions.Contains(original))
         {
-            loadedMod.SaveDirective(original, activeInstance);
-            _activeDirectiveSessions.Remove(original); // Close editing session after saving
+            loadedMod.SaveDirective(original, original); // Passing original twice since we didn't clone
+            _activeDirectiveSessions.Remove(original);
             OnDirectivesChanged?.Invoke();
         }
     }
 
-    /// <summary>
-    /// Discards any pending local edits made to a directive instance.
-    /// </summary>
     public void CancelDirectiveEdit(SliceDiceTextMod.TextModBlock original)
     {
-        if (original == null) return;
-        _activeDirectiveSessions.Remove(original);
+        if (original != null) _activeDirectiveSessions.Remove(original);
     }
 
-    /// <summary>
-    /// Deletes a directive configuration completely.
-    /// </summary>
     public void DeleteDirective(SliceDiceTextMod.TextModBlock original)
     {
         if (original == null) return;
@@ -203,7 +181,6 @@ public class ModPackage : MonoBehaviour
 
     public void ClearAllEditingSessions()
     {
-        // Clean up entity sessions
         List<Type> activeTypes = new List<Type>(_activeSessions.Keys);
         _activeSessions.Clear();
 
@@ -212,7 +189,6 @@ public class ModPackage : MonoBehaviour
             OnActiveEntityChanged?.Invoke(type, null);
         }
 
-        // Clean up directive sessions
         _activeDirectiveSessions.Clear();
         OnDirectivesChanged?.Invoke();
     }
@@ -239,10 +215,9 @@ public class ModPackage : MonoBehaviour
         {
             OnActiveEntityChanged?.Invoke(type, session.Clone);
         }
-
-        // Trigger the change event and pass the sender along
         OnModDataChanged?.Invoke(sender);
     }
+
     public void NotifyDirectiveSessionChanged(object sender)
     {
         OnDirectivesChanged?.Invoke();
@@ -254,10 +229,6 @@ public class ModPackage : MonoBehaviour
         return ModData.Export(loadedMod);
     }
 
-    /// <summary>
-    /// Replaces the currently active working clone in an editing session.
-    /// Useful for actions like pasting an import or resetting an entity to defaults.
-    /// </summary>
     public void UpdateActiveEntityClone<T>(T newClone) where T : SDData
     {
         Type type = typeof(T);
@@ -273,8 +244,6 @@ public class ModPackage : MonoBehaviour
         protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
         {
             JsonProperty property = base.CreateProperty(member, memberSerialization);
-
-            // Prevent infinite loops in Unity's Color and Vector types
             if (property.DeclaringType == typeof(Color) && (property.PropertyName == "linear" || property.PropertyName == "gamma"))
             {
                 property.ShouldSerialize = _ => false;
@@ -283,4 +252,3 @@ public class ModPackage : MonoBehaviour
         }
     }
 }
-

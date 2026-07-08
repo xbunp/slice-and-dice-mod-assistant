@@ -37,7 +37,6 @@ public class MonsterUI : EntityUI<MonsterData>
         monster.Parse(data);
         return monster;
     }
-
     private void OpenMonsterPortraitsModal(Action<MonsterType, Sprite> onMonsterSelected)
     {
         if (iconPicker == null) return;
@@ -61,6 +60,19 @@ public class MonsterUI : EntityUI<MonsterData>
 
     ////////////////////////////////////////////
     ///
+
+    protected override MonsterData CreateDefaultEntity()
+    {
+        var newMonster = new MonsterData();
+        newMonster.InitializeDiceFaces();
+        newMonster.items = new List<string>();
+        newMonster.traits = new List<string>();
+        newMonster.blessings = new List<string>();
+        newMonster.curses = new List<string>();
+        //newMonster.customItems = new List<ItemData>();
+        newMonster.customOrbs = new List<OrbData>();
+        return newMonster;
+    }
 
     private void OpenAllPortraitsModal(Action<bool, object, Sprite> onPortraitSelected)
     {
@@ -346,6 +358,8 @@ public class MonsterUI : EntityUI<MonsterData>
             }
         );
 
+        // todo: fix this later/soon
+        /*
         // 4. Custom Items (Instantiated directly from selected name string)
         // Available choices hook: pass your list of raw custom item name strings here
         AppendCollectionSelector<string>(
@@ -356,7 +370,8 @@ public class MonsterUI : EntityUI<MonsterData>
             currentActiveItems: CurrentEntity.customItems?.Select(i => i.entityName).ToList() ?? new List<string>(), // Note: change to 'name' if ItemData uses 'name'
             getKey: (name) => name,
             getDisplay: (name) => name,
-            onAdd: (itemName) =>
+            
+
             {
                 if (CurrentEntity.customItems == null)
                 {
@@ -382,6 +397,7 @@ public class MonsterUI : EntityUI<MonsterData>
                 }
             }
         );
+        */
 
         // 5. Traits (Strings)
         AppendCollectionSelector<string>(
@@ -513,6 +529,7 @@ public class MonsterUI : EntityUI<MonsterData>
             getKey: (name) => name,
             getDisplay: (name) => name,
             onAdd: (orbName) => {
+                if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
                 bool alreadyExists = CurrentEntity.customOrbs?.Any(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase)) ?? false;
                 if (!alreadyExists)
                 {
@@ -541,6 +558,7 @@ public class MonsterUI : EntityUI<MonsterData>
             getKey: (name) => name,
             getDisplay: (name) => name,
             onAdd: (abilityName) => {
+                if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
                 bool alreadyExists = CurrentEntity.customOrbs?.Any(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase)) ?? false;
                 if (!alreadyExists)
                 {
@@ -893,7 +911,7 @@ public class MonsterUI : EntityUI<MonsterData>
         }
         else
         {
-            ModPackage.Instance.LoadEntityForEditing(new MonsterData());
+            ModPackage.Instance.LoadEntityForEditing(CreateDefaultEntity());
         }
 
         ModPackage.Instance.NotifyActiveEntityChanged<MonsterData>(this);

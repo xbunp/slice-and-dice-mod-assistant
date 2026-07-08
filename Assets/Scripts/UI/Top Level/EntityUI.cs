@@ -537,10 +537,16 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         _currentPoolIndex = index;
 
         var entities = ModPackage.Instance.loadedMod.GetAll<T>();
-        if (index > 0 && (index - 1) < entities.Count) ModPackage.Instance.LoadEntityForEditing(entities[index - 1]);
-        else ModPackage.Instance.LoadEntityForEditing(CreateDefaultEntity());
+        if (index > 0 && (index - 1) < entities.Count)
+            ModPackage.Instance.LoadEntityForEditing(entities[index - 1]);
+        else
+            ModPackage.Instance.LoadEntityForEditing(CreateDefaultEntity());
 
         ModPackage.Instance.NotifyActiveEntityChanged<T>(this);
+
+        // FIX: Force the UI to fully rebuild and pull values from the newly loaded entity
+        RebuildStatsUI();
+        RebuildDiceScrollView();
     }
 
     protected void SaveToModPool()
@@ -986,5 +992,4 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         }
     }
-
 }

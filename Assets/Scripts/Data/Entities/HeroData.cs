@@ -213,6 +213,19 @@ public class HeroData : EntityData
             foreach (string chunk in chunks)
             {
                 if (string.IsNullOrWhiteSpace(chunk)) continue;
+
+                // FIX: Detect standalone future keyword IDs (like ritemx.dae9 or unpack.ritemx.644f)
+                string trimmedChunk = chunk.Trim();
+                string lowerChunk = trimmedChunk.ToLower();
+                if (lowerChunk == "ritemx.dae9" || lowerChunk == "unpack.ritemx.644f" || lowerChunk == "k.future")
+                {
+                    if (!diceSides[faceIdx].keywords.Contains("future"))
+                    {
+                        diceSides[faceIdx].keywords.Add("future");
+                    }
+                    continue;
+                }
+
                 string[] parts = chunk.Split(new char[] { '.' }, 2);
                 if (parts.Length < 2) continue;
 
@@ -222,6 +235,13 @@ public class HeroData : EntityData
                 if (type == "k")
                 {
                     string lowercaseKeyword = value.Trim().ToLower();
+
+                    // FIX: Normalization fallback in case of mixed formats
+                    if (lowercaseKeyword == "ritemx.dae9" || lowercaseKeyword == "unpack.ritemx.644f" || lowercaseKeyword == "future")
+                    {
+                        lowercaseKeyword = "future";
+                    }
+
                     if (!diceSides[faceIdx].keywords.Contains(lowercaseKeyword))
                     {
                         diceSides[faceIdx].keywords.Add(lowercaseKeyword);
@@ -313,20 +333,17 @@ public class HeroData : EntityData
 
         bool skipColor = false;
         string activeVisual = hasImageOverride ? imageOverride : baseReplica;
-        // Try parsing the current active visual into a HeroType
         if (!string.IsNullOrEmpty(activeVisual) && Enum.TryParse(activeVisual, true, out HeroType parsedHero))
         {
-            // Lookup the inherent natural color for this hero sprite
             if (SDColors.HeroColorMap.TryGetValue(parsedHero, out HeroColorOption defaultColor))
             {
-                // If the selected color matches the default, flag it to be omitted
                 if (EntityUIHelpers.ReverseLookupColor(colorClass) == defaultColor)
                 {
                     skipColor = true;
                 }
             }
         }
-        // Only append the color modifier if it differs from the inherent default
+
         if (!skipColor && !string.IsNullOrEmpty(colorClass))
         {
             heroSb.Append($".col.{colorClass}");
@@ -343,11 +360,27 @@ public class HeroData : EntityData
         AppendDiceSides(heroSb);
         if (!string.IsNullOrEmpty(speech)) heroSb.Append($".speech.{speech}");
 
-        // Note: The inner .doc. append was removed from here.
-
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
 
+        // 1. Sort all custom payloads based on Entity-level rules
+        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
+
+        // 2. Append Inner items (Items, Traits, Curses, inner payloads) BEFORE the image override
+        StringBuilder innerSb = new StringBuilder();
+        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) innerSb.Append($".i.t.{FormatName(t)}");
+        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
+        if (blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) innerSb.Append($".gift.{FormatName(bl)}");
+        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) innerSb.Append($".i.t.jinx.{FormatName(c)}");
+
+        foreach (var inner in innerPayloads)
+        {
+            innerSb.Append($".{inner}");
+        }
+
+        heroSb.Append(innerSb.ToString());
+
+        // 3. Append the Image Override (resets visual rendering to the override payload)
         if (hasImageOverride)
         {
             string formattedImg = FormatSpecialImageName(imageOverride);
@@ -355,54 +388,55 @@ public class HeroData : EntityData
             AppendColorModifier(heroSb);
         }
 
-        StringBuilder thoseSb = new StringBuilder();
-        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) thoseSb.Append($".i.t.{FormatName(t)}");
-        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) thoseSb.Append($".i.{FormatName(i)}");
-        if (blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) thoseSb.Append($".gift.{FormatName(bl)}");
-        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) thoseSb.Append($".i.t.jinx.{FormatName(c)}");
-        if (baseAbilityData != null) foreach (var ab in baseAbilityData) if (!string.IsNullOrEmpty(ab)) thoseSb.Append($".i.learn.{FormatName(ab)}");
-
-        if (customPayloads != null)
-        {
-            foreach (var payload in customPayloads)
-            {
-                string exported = payload.Export();
-                if (!string.IsNullOrEmpty(exported)) thoseSb.Append($".{exported}");
-            }
-        }
-
-        heroSb.Append(thoseSb.ToString());
         heroSb.Append(")");
 
         string baseHeroString = heroSb.ToString();
         string fullContentString = baseHeroString;
 
-        // Append custom abilities on the outside of the base hero structure
+        // 4. Append Outer Abilities and Outer Items OUTSIDE the entity string
+        StringBuilder outerSb = new StringBuilder();
+
+        // Base ability data (spells/tactics) relocated to outer shell
+        if (baseAbilityData != null)
+            foreach (var ab in baseAbilityData)
+                if (!string.IsNullOrEmpty(ab))
+                    outerSb.Append($".i.learn.{FormatName(ab)}");
+
         if (customAbilityData != null && customAbilityData.Count > 0)
         {
-            StringBuilder abilitiesSb = new StringBuilder();
             foreach (var cab in customAbilityData)
             {
                 if (cab != null)
                 {
-                    if (cab is TriggerHPData)
-                        abilitiesSb.Append($".triggerhpdata.({cab.Export()})");
-                    else if (cab is OnHitData)
-                        abilitiesSb.Append($".onhitdata.({cab.Export()})");
-                    else if (cab is OrbData orb)
-                        abilitiesSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-                    else
-                        abilitiesSb.Append($".abilitydata.({cab.Export()})");
+                    if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.({cab.Export()})");
+                    else if (cab is OnHitData) outerSb.Append($".onhitdata.({cab.Export()})");
+                    else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
+                    else outerSb.Append($".abilitydata.({cab.Export()})");
                 }
-            }
-
-            if (abilitiesSb.Length > 0)
-            {
-                fullContentString = $"({baseHeroString}{abilitiesSb.ToString()})";
             }
         }
 
-        // Wrap the completed structure with the .doc modifier if it is defined
+        foreach (var outer in outerPayloads)
+        {
+            outerSb.Append($".{outer}");
+        }
+
+        if (outerSb.Length > 0)
+        {
+            // Wrap the base hero and the abilities up: ((hero).abilities)
+            fullContentString = $"({baseHeroString}{outerSb.ToString()})";
+        }
+
+        // 5. Apply Wrappers (if an item explicitly demands wrapping the entire hero)
+        foreach (var wrapper in wrapperPayloads)
+        {
+            if (wrapper.Contains("{0}"))
+                fullContentString = string.Format(wrapper, fullContentString);
+            else
+                fullContentString = $"({fullContentString}.{wrapper})"; // Failsafe
+        }
+
+        // 6. Wrap the completed structure with the .doc modifier if it is defined
         if (!string.IsNullOrEmpty(doc))
         {
             return $"({fullContentString}.doc.{doc})";

@@ -1066,6 +1066,9 @@ public static class SpecialAbilityKeywords
     public const string SpellRescue = "k.rescue";
     public const string SingleCast = "k.singleuse";
 
+    public const string OldFuture = "unpack.ritemx.644f";
+
+
     // Old Version
     //public const string Channel = "ritemx.302ea5e.part.0";
     //public const string Cooldown = "Ritemx.161bf";

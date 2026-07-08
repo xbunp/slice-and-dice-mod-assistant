@@ -162,7 +162,14 @@ public abstract class EntityData : SDData, IPayloadContainer
                 string cleanKw = kw.Trim().ToLower();
                 if (cleanKw != "permissive" && cleanKw != "stasis")
                 {
-                    chunks.Add($"k.{cleanKw}");
+                    if (cleanKw == "future")
+                    {
+                        chunks.Add("ritemx.dae9");
+                    }
+                    else
+                    {
+                        chunks.Add($"k.{cleanKw}");
+                    }
                 }
             }
 
@@ -438,6 +445,38 @@ public abstract class EntityData : SDData, IPayloadContainer
 
             // Only append separator if there are more customized sides remaining
             if (i < lastActiveIndex) sb.Append(":");
+        }
+    }
+
+    protected void ProcessCustomPayloadsForExport(
+    out List<string> innerPayloads,
+    out List<string> outerPayloads,
+    out List<string> wrapperPayloads)
+    {
+        innerPayloads = new List<string>();
+        outerPayloads = new List<string>();
+        wrapperPayloads = new List<string>();
+
+        if (customPayloads == null) return;
+
+        foreach (var payload in customPayloads)
+        {
+            if (payload.Type == PayloadType.Item && payload.Data is ItemData itemData)
+            {
+                var result = CustomItemContextHelper.EvaluateItem(itemData);
+                if (!string.IsNullOrEmpty(result.FormattedString))
+                {
+                    if (result.Zone == PayloadInjectionZone.InnerEntity) innerPayloads.Add(result.FormattedString);
+                    else if (result.Zone == PayloadInjectionZone.OuterEntity) outerPayloads.Add(result.FormattedString);
+                    else if (result.Zone == PayloadInjectionZone.EntityWrapper) wrapperPayloads.Add(result.FormattedString);
+                }
+            }
+            else
+            {
+                // Non-item custom payloads default to InnerEntity
+                string exported = payload.Export();
+                if (!string.IsNullOrEmpty(exported)) innerPayloads.Add(exported);
+            }
         }
     }
 }
