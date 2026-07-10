@@ -1,52 +1,17 @@
 =
 heropool.ace.part.0.mn.Remove vanilla pool,
 
-(party.thief.n.BaZ.col.b.tier.12.hp.12.sd.100:118-3:88:88.i.left.eyepatch#k.exert#facade.ite164:57:-50:0.i.mid.eyepatch#k.managain#facade.bas118:70:4:0.img.3b2yIs2CAk2K8V2Pyf2R8w3SkEX3ThKA3ZTM63TZMC3ZTAm5TQV85w2le000YVJccsWz88uAmii=O2Nn5b8dEAAaaaGjaLIFqhx2wawXVw8jgRX38ji8X2wjjgwX18jh9BS9jg8ElCEWbb8FkCWbbaECWwbbRESbbEDkEVwb9wEnSw8B7MDkZZZhKnkHHFVEo=6oEV8=YK87xYxK86wpw6wpTr6qTcpc6cpQ3tIo5wdw6wdQ2tcso=6ow1yeso=4o82Pso7o5oRs1PcIoYoRIt2PIwbRIuUPsLvsVPdoetIWPofsJ)
-&0.ph.bbarty;1;!m(hidden&temporary)@2!m(hidden&temporary&0.x5.ph.s[b][amber]Add a hero[b][cu][nh][grey]Some Colors are here for other[n]mods but not supported by Bmod[cu]
-@1[orange]Orange[cu] [274000ra0Nn5YVJ3gwg3gxg1gwhw0gwg1Mgwg2Ng3Owg1]
-@2!m(add.(lost.n.Guile.tier.0.img.274000ra0Nn5YVJ3gwg3gxg1gwhw0gwg1Mgwg2Ng3Owg1)&Temporary&hidden)
-@1[yellow]Yellow[cu] [274000JD2=O2YVJ3gN2gMwMw0gMwMhwMwMg1gwMg2wgw2w1gw1]
-@2!m(add.(lazy.n.Might.tier.0.img.274000JD2=O2YVJ3gN2gMwMw0gMwMhwMwMg1gwMg2wgw2w1gw1)&Temporary&hidden)
-@1[grey]Grey[cu] [274mpsfhj000YVJ0gw0wg1MgMgM1Q0gM2Mgw4xg2gyg0gx]
-@2!m(add.(alloy.n.Kindness.tier.0.img.274mpsfhj000YVJ0gw0wg1MgMgM1Q0gM2Mgw4xg2gyg0gx)&Temporary&hidden)
-@1[red]Red[cu] [274H77000k33YVJw1g1w9M4O1w1M1wgw2wj0i]
-@2!m(add.(fey.n.Life.tier.0.img.274H77000k33YVJw1g1w9M4O1w1M1wgw2wj0i)&Temporary&hidden)
-@1[blue]Blue[cu] [2740004jt8uAYVJ1gxg1gwg2gwNwg0gwOwg0gwNwg2gwg1gxg1]
-@2!m(add.(ace.n.Knowledge.tier.0.img.2740004jt8uAYVJ1gxg1gwg2gwNwg0gwOwg0gwNwg2gwg1gxg1)&Temporary&hidden)
-@1[green]greeN[cu] [274000ewh5o3YVJ1wMw2wMgMw1Mg0gM0wg2gwi0iwg2gw0wg0gw0]
-@2!m(add.(dice.n.Chaos.tier.0.img.274000ewh5o3YVJ1wMw2wMgMw1Mg0gM0wg2gwi0iwg2gw0wg0gw0)&Temporary&hidden)
-@1[huish]Huish[cu] [274Isoqif000YVJwgygxkwg1g1g0M2M0w4wh2hx0g0x]
-@2!m(add.(ace.n.Friendship.col.h.tier.0.img.274Isoqif000YVJwgygxkwg1g1g0M2M0w4wh2hx0g0x)&Temporary&hidden)
-@1[iuish]Iuish[cu] [274000GGGYVJmps0MgwgM0MgygMg1g1gw1w1yg0gx1gMg2gMgMg0]
-@2!m(add.(ace.n.Death.col.i.tier.0.img.274000GGGYVJmps0MgwgM0MgygMg1g1gw1w1yg0gx1gMg2gMgMg0)&temporary&hidden&ch.vsilvernumV1)
-@1[uuish]Uuish[cu] [274000YVJ=N=UwM1g0g2wgwgw0hM0Mh0w2w0hM0Mh0wgwgw2g0g1]
-@2!m(add.(ace.n.Creativity.col.u.tier.0.img.274000YVJ=N=UwM1g0g2wgwgw0hM0Mh0w2w0hM0Mh0wgwgw2g0g1)&temporary&hidden&ch.vpinknumV1)
-@1[violet]Violet[cu] [274N0N000v3AYVJg1w0h2g0wg0M0g1w2g2w1w0M0gw0w2h0w1g]
-@2!m(add.(ace.n.Contempt.col.v.tier.0.img.274N0N000v3AYVJg1w0h2g0wg0M0g1w2g2w1w0M0gw0w2h0w1g)&temporary&hidden&ch.violetnumV1)
-@1[fuish]Fuish[cu] [274000OXEzQpYVJ1w1N1wg0N2h4wh2w1x0g4g5]
-@2!m(add.(ace.n.Creation.col.f.tier.0.img.274000OXEzQpYVJ1w1N1wg0N2h4wh2w1x0g4g5)&temporary&hidden&ch.vfuishnumV1)
-@1[quish]Quish[cu] [273=ggYVJH77w4w0g2g8g2g8g2g0w4w]
-@2!m(add.(ace.n.Chance.col.q.tier.0.img.273=ggYVJH77w4w0g2g8g2g8g2g0w4w)&temporary&hidden)
-@1[kuish]Kuish[cu] [274000qhxDuPYVJ0gwNg0MwPgMwMyMiz0i0gw5g3wg0]
-@2!m(add.(ace.n.Conscience.col.k.tier.0.img.274000qhxDuPYVJ0gwNg0MwPgMwMyMiz0i0gw5g3wg0)&temporary&hidden)
-@1[mahogany]Mahogany[cu] [3136wMg274000n50YVJFxq2g1g3h36260g06263wg4]
-@2!m(add.(ace.n.Betrayal.col.m.tier.0.img.3136wMg274000n50YVJFxq2g1g3h36260g06263wg4)&temporary&hidden)
-@1[lime]Lime[cu] [2740002Q2YVJrC6gwg0gwgyMyMkM0MiM3g3MyM2MgM1]
-@2!m(add.(ace.n.Change.col.l.tier.0.img.2740002Q2YVJrC6gwg0gwgyMyMkM0MiM3g3MyM2MgM1)&temporary&hidden)
-@1[light]White[cu] [273YVJ000FFE0g2g1w2w3g4i1w1g1wgw2wiw0wh]
-@2!m(add.(ace.n.Belief.col.w.tier.0.img.273YVJ000FFE0g2g1w2w3g4i1w1g1wgw2wiw0wh)&temporary&hidden)
-@1[purple]Purple[cu] [273000qhxhbmg4i2h0gw0wg0w4wg0g0g0g0k2wgw1]
-@2!m(add.(ace.n.Consumption.col.p.tier.0.img.273000qhxhbmg4i2h0gw0wg0w4wg0g0g0g0k2wgw1)&temporary&hidden)
-@1[amber]Amber[cu] [274Nn5YVJ=L00000NwN1wMgMw1wiw0gwgMgwg0wiw0M4M0wiw0]@2!m(add.ace.n.WORD.col.a.tier.0.img.274Nn5YVJ=L00000NwN1wMgMw1wiw0gwgMgwg0wiw0M4M0wiw0&temporary&hidden)
-@1[cyan]Cyan[cu] [274000jQWYVJ8uA1gwg2gyg0gAg0hwh1MiM2i4g2]@2!m(add.ace.n.Beauty.col.c.tier.0.img.274000jQWYVJ8uA1gwg2gyg0gAg0hwh1MiM2i4g2&temporary&hidden)
-@1[dark]Dark[cu] [273435YVJ000wkwg4h4h4h4h4gwkw]@2!m(add.ace.n.Shadow.col.d.tier.0.img.273435YVJ000wkwg4h4h4h4h4gwkw&temporary&hidden)
-@1[euish]Euish[cu] [273YVJ000GGGhw1wh4x1wh3jw1wh0g4whw1wg]@2!m(add.ace.n.Unknown.col.e.tier.0.img.273YVJ000GGGhw1wh4x1wh3jw1wh0g4whw1wg&temporary&hidden)
-@1[juish]Juish[cu] [33240w250g561gwg1273000T%=YVJ4544g55w6hw4h6wg55w4540]@2!m(add.ace.n.Cold.col.j.tier.0.img.33240w250g561gwg1273000T%=YVJ4544g55w6hw4h6wg55w4540&temporary&hidden)
-@1[sea]Sea[cu] [2748uA0005evYVJgw1wh0N1wgMhM1wiM2hw3gw4w4w]@2!m(add.ace.n.The Deep.col.s.tier.0.img.2748uA0005evYVJgw1wh0N1wgMhM1wiM2hw3gw4w4w&temporary&hidden)
-@1[tuish]Tuish[cu] [2740005o38f8YVJwi0N0w1gN0w1Mg1w0g1g0wg2g0gzh4w]@2!m(add.ace.n.Hunting.col.t.tier.0.img.2740005o38f8YVJwi0N0w1gN0w1Mg1w0g1g0wg2g0gzh4w&temporary&hidden)
-@1[xuish]Xuish[cu] [3233gNg573w5w3264000WY8JD2YVJ1h1w7x7w]@2!m(add.ace.n.Energy.col.x.tier.0.img.3233gNg573w5w3264000WY8JD2YVJ1h1w7x7w&temporary&hidden)
-@1[zuish]Zuish[cu] [3223g151g0M0g274000Zn2YVJ=O233g012gw3gMyM3gwg21033g]@2!m(add.ace.n.Heat.col.z.tier.0.img.3223g151g0M0g274000Zn2YVJ=O233g012gw3gMyM3gwg21033g&temporary&hidden)
-)&hidden&temporary&(0.ph.zbarty@61@6!m(hidden&temporary)@7!m(
+(party.thief.n.BaZ.col.b.tier.12.hp.12.sd.100:118-3:88:88.i.left.eyepatch#k.exert#facade.ite164:57:-50:0.i.mid.eyepatch#k.managain#facade.bas118:70:4:0.img.(customImg).ph.bbarty;1;!m(hidden&temporary)@2!m(hidden&temporary&0.x5.ph.s[b][amber]Add a hero[b][cu][nh][grey]Some Colors are here for other[n]mods but not supported by Bmod[cu]
+@1[orange]Orange[cu] [(customImg)]
+@2!m(add.(lost.n.Guile.tier.0.img.(customImg).(lazy.n.Might.tier.0.img.(customImg).(alloy.n.Kindness.tier.0.img.(customImg).(fey.n.Life.tier.0.img.(customImg).(ace.n.Knowledge.tier.0.img.(customImg).(dice.n.Chaos.tier.0.img.(customImg).(ace.n.Friendship.col.h.tier.0.img.(customImg).(ace.n.Death.col.i.tier.0.img.(customImg).vsilvernumV1)
+@1[uuish]Uuish[cu] [(customImg)]
+@2!m(add.(ace.n.Creativity.col.u.tier.0.img.(customImg).vpinknumV1)
+@1[violet]Violet[cu] [(customImg)]
+@2!m(add.(ace.n.Contempt.col.v.tier.0.img.(customImg).violetnumV1)
+@1[fuish]Fuish[cu] [(customImg)]
+@2!m(add.(ace.n.Creation.col.f.tier.0.img.(customImg).vfuishnumV1)
+@1[quish]Quish[cu] [(customImg)]
+@2!m(add.(ace.n.Chance.col.q.tier.0.img.(customImg).(ace.n.Conscience.col.k.tier.0.img.(customImg).(ace.n.Betrayal.col.m.tier.0.img.(customImg).(ace.n.Change.col.l.tier.0.img.(customImg).(ace.n.Belief.col.w.tier.0.img.(customImg).(ace.n.Consumption.col.p.tier.0.img.(customImg).ace.n.WORD.col.a.tier.0.img.(customImg).ace.n.Beauty.col.c.tier.0.img.(customImg).ace.n.Shadow.col.d.tier.0.img.(customImg).ace.n.Unknown.col.e.tier.0.img.(customImg).ace.n.Cold.col.j.tier.0.img.(customImg).ace.n.The Deep.col.s.tier.0.img.(customImg).ace.n.Hunting.col.t.tier.0.img.(customImg).ace.n.Energy.col.x.tier.0.img.(customImg).ace.n.Heat.col.z.tier.0.img.(customImg).ph.zbarty@61@6!m(hidden&temporary)@7!m(
 (1.ph.sAmount of choices for starting party or whatevs
 @1All random@2!m(Level Up&Temporary&hidden)@1Some of them@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)
 @1Most of them@2!mVersatile^6&Versatile^2&Temporary&hidden@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden)@2!m(1.phi.0&temporary&hidden&hidden))
@@ -116,541 +81,306 @@ lost+juggler+ranger+spellblade+agent
 .mn.Base game heroes.modtier.-1,
 
 (heropool.
-(replica.rogue.n.Sharp.tier.1.hp.4.sd.0:36-1:46-1:46-1:15-1:15-1.i.left.(mid.hat.ace.sd.34-2:13.i.left.k.terminal.i.mid.togtarg#togfri#eyepatch#togres#togpip#k.managain#sidesc.Kill all enemies with exactly one hp [pipsk]#facade.Yca27:55).img.392a8c2nk82r332uos2zso2Dc82Jw73K74w5LCDQuh2mg000hCF247cdeRHCejftffIzbsxfhjQGABBBSojn8mmmh68329dkyDr0ckw5wkKkc31kJKlwn3cJKkdnk2cJ6w5kDdnnx76w6kco8dn0ky7Jugocn18kx6Juhsan0mykw4w4uisa818lalw4cw8js8d80ldankDsjoa28dEoaaotpza30aEscqbp9328ovsUI9uI8r08tNpYugor0ActjjsrB8pshsiz32LogzrcLzr0aCd8otor0)
-.abilitydata.(ace.n.Swindle.sd.181-1:0:0:0:76-2.i.left.k.vulnerable#k.singleuse.img.3323gy253g33525284000Ipdme9NC61k0M032513250M0k1)
-+
-(replica.lost.n.Protege.hp.4.sd.18-1:115-1:76-1:76-1:96-1.i.left.k.singleuse#facade.Eme57:0.i.mid.k.cleave#facade.eba31:0:0:0.img.362l422nc22r992Lc62Nff2Pga2oh000cde247bsxhCFtNejfRHCIsok88h68QGAmmmJD2BBBpsvSojy2z53c3H752L986dO4z4LL26rr7n4Al4crr97c3l4y46987r86824O4z=7r78n52lz2c79786c8c4a4Ol402%8c78d6d4P435146c82Lc8L2aPhll14n726n6a6ahqaglly362L2LnafgegW2yla6an4nPNa4B4Lmg3anlhP4Dnmg2aea4olb2Enahfgos5aguEclagfwbkgfaF4c4agNNgGc4bNfePHiaiafkbPIib4afkPKiai4ahaM5K)
-.abilitydata.(statue.n.Fluke.sd.0:34-1:0:0:76-1.i.mid.togfri.i.left.cast.imbue#k.singleuse.img.learn.bolt.hue.10)
+(replica.rogue.n.Sharp.tier.1.hp.4.sd.0:36-1:46-1:46-1:15-1:15-1.i.left.(mid.hat.ace.sd.34-2:13.i.left.k.terminal.i.mid.togtarg#togfri#eyepatch#togres#togpip#k.managain#sidesc.Kill all enemies with exactly one hp [pipsk]#facade.Yca27:55).img.(customImg).abilitydata.(ace.n.Swindle.sd.181-1:0:0:0:76-2.i.left.k.vulnerable#k.singleuse.img.(customImg).lost.n.Protege.hp.4.sd.18-1:115-1:76-1:76-1:96-1.i.left.k.singleuse#facade.Eme57:0.i.mid.k.cleave#facade.eba31:0:0:0.img.(customImg).abilitydata.(statue.n.Fluke.sd.0:34-1:0:0:76-1.i.mid.togfri.i.left.cast.imbue#k.singleuse.img.(customImg).bolt.hue.10)
 +
 (replica.lost
 .n.Nest.hp.5.sd.0:46-2:0:0:123.i.left.(mid.hat.lazy.i.sticker.t.orb.slost.abilitydata.(statue.n.Nested Eggs.i.left.hat.caw egg#eyepatch)#togpip#k.damage#togfri)#facade.ite371:50:40:25
-.img.382l262za42Kff2Ma62Q242T462U8i3V2122ni000Q7ejfcdetKbsxhCFRHCk88IsoBokLvrpegSojvkhh68BBBmmmC6471561z0404205lb35O6z205Vb4dT272bMQl2AQb4ddamM4b6ol20Qdczdc4k4bT2k6302MTdszkokm42krl3kls34kokmko657okVqmko4sn2zcz2z6kVosnqm6acTc6ag2z2AlM2a2ac4g4cg4hlAl4b4czcg86ag9glAQ2Mac4h9998g3B2z9T8h3u9glDlj69lM29aEl2U96yx29i2FPUq8ayuUe8G27UKKiI29Kfei8Ig8gieiwuU8Jg92ie8ui8Lg8g2if8N3L)
-+
-(replica.lost
-.n.Broken.hp.6.sd.15-1:15-1:0:0:15-2.i.left2.k.swapcruel#k.selfheal#facade.Yca8:96.img.332a333lc843vMAa2mg000247cdeABAINIhCFejfmmmQGAtffh68POFIsobsxk88BBB3068oTno4268pQnnQo434nnnkQq84148QnkQo9r85248oRo8tffs86ucjjLJc858udjIhegIl04EtbEsgIhdhs419sduciKhl048tfdjKgl16b8tcs75814p8wMo8HHF924pxoAMA7F431qAwNwEsY4EAME3148o9AhcAEMchU32q4BzzA32494AUMzxv1UA4AMw4dv2UAU4AMxv30W4ANAa326a3).doc.[Scar][n]Starts at half health.i.self.Start Damaged^1/2
+.img.(customImg).lost
+.n.Broken.hp.6.sd.15-1:15-1:0:0:15-2.i.left2.k.swapcruel#k.selfheal#facade.Yca8:96.img.(customImg).doc.[Scar][n]Starts at half health.i.self.Start Damaged^1/2
 .part.1.mn.T1)
 
 &(heropool.
-(replica.rogue.n.Scythe.hp.6.sd.39-1:39-1:0:0:18-1.i.left2.k.cantrip#facade.pos121:0.i.topbot.(mid.hat.ace.sd.34-2:13.i.left.k.terminal.i.mid.togtarg#togfri#eyepatch#togres#togpip#k.managain#sidesc.Kill all enemies with exactly one hp [pipsk]#facade.Yca27:55).img.332a8c2ywo5zks77s2mf000hCF247cdeRHCejfIsobsxtffBBBSojmmmk88QGAh68=3aktc8%ckvskcks6k8Yz74k3z4d6s81kvs75c9k6c08kCu7scow8k5kaAcAIAu6cohw8k4kaDAt6yioask8dA8As6syjoakc9ckd5s8yjgo8d81me8pjhw8d1clQodq9wpw8d81akQocq8I9x80c83awrwIA9y808Yca8ogFxUohwZcldwjjgoZal8xhojowZn8wMwhFyw%clc8x8wiow=0e8MwM8wpw=%9=Z)
-.abilitydata.(ace.n.Collect.sd.15:30-4:0:0:76-1.i.left.k.sixth.i.mid.eyepatch#sidesc.4 damage if you have used exactly 5 dice this turn [yellow]heavy[cu] [purple]singleCast[cu]#togres#k.heavy#k.singleuse.i.pendulum#rusty plate.img.284Ipd000me9Sk0gw0w1wjOjw2wh5wfw5wgw2wh)
-+
-(replica.rogue
+(replica.rogue.n.Scythe.hp.6.sd.39-1:39-1:0:0:18-1.i.left2.k.cantrip#facade.pos121:0.i.topbot.(mid.hat.ace.sd.34-2:13.i.left.k.terminal.i.mid.togtarg#togfri#eyepatch#togres#togpip#k.managain#sidesc.Kill all enemies with exactly one hp [pipsk]#facade.Yca27:55).img.(customImg).abilitydata.(ace.n.Collect.sd.15:30-4:0:0:76-1.i.left.k.sixth.i.mid.eyepatch#sidesc.4 damage if you have used exactly 5 dice this turn [yellow]heavy[cu] [purple]singleCast[cu]#togres#k.heavy#k.singleuse.i.pendulum#rusty plate.img.(customImg).rogue
 .n.Traveller.sd.15-2:15-2:0:0:46-2.i.left2.k.rescue#k.doublegrowth#facade.ite8:91:50:-7
-.img.
-352D622Mff2Nm42WDd2Xk42nl000tttcdemmm247IsoABARHCejftMbsxb8dSojhCFPHQLddk88QGAH77BBBh68JN6U6mP4WcT64K4n4DctscT64I8W63ctcT7mI8WSdT%4J84DtV%m5Guo9n42ts2=6N6m18Aouo8NW2=4%418AovouNWc2=D4084oAougkg8N3ddc368g85ou4rigkg942c36m04h94kqgb4krkg4n808h4yaXgbb8grqX8G84gz4baw9w4kqkrX1kg4iybg86C8jiXgX818lg4apojEafi848I8l4iaMMa8Kg4hjfaMbOwiwafeaibPwj8afebRwiw8ibiR19R)
-+
-(replica.rogue.n.Mirage
+.img.(customImg).rogue.n.Mirage
 .sd.34-1:125-1:24-2:24-2:124.i.left.hat.egg.illusion#blindfold.i.col.togunt.i.topbot.facade.ite156:40.i.mid.facade.ite289:79:9:0.i.left.(mid.hat.ace.sd.15:34-1.i.left.k.stasis.i.mid.facade.har30:53#togkey)
-.img.3226cg2i4s2me000247HErbsxcdepnjhCFejftffRHCIsok88UJopsvW4gsos5sp64W4gscodq64tg42icrrcpsg52irrfsg4h414crqcm5h524eulbk94h1gPbbb5g40gal8gcpck9k840504k8mgckhk6kgk43h9ksc8Mh8k6l43g9m8c8M9c8xg434l5l8kcoc8yI43i66kb8kxk4Ugsgeg9k9kx4UigIgdgm9IwEQUigsIsdJxkwEAwU4gi6IcEDCEV4csdIsEDBEwUi6cscswBFwEwWi5gcsIwCEwX34Js4wFwXW5XU)
-+
-(replica.rogue.n.Saboteur.sd.29-3:30-2:0:0:123
-.i.topbot.(mid.hat.egg.(seed.n.Bomb.hp.6.i.hat.ace.sd.all:34-6.i.all.k.minusflesh#togfri#facade.Ese43:34#unpack.pentagram#self.ea.slost.abilitydata.(ace.sd.178.i.k.swapterminal.i.mid.(sticker.self.unpack.Crumbling Castle.part.1)#togtarg#togtime#togres.i.pendulum#rusty plate).img.372ec52f5c2i8g2j8e2mfk2q8w2rgR2ld000Vcc247Mbbs9bn58MHEtwzRo2YVJahk435WL028c1kgX0qqi1kX08cMwk1gWqcMAkd0gX9wMw9g28khRqq8cidgjkR9kgl7kerkg6g7g8mQi6ketEerjckcsoIoEmQifgspIps4crjgsBKE5rifEoCosmRj8EoAoE8c4crif8Et4kegSjgjgecSimc6gmSjcg6k5gTimc4gkaUkhkbQ))#eyepatch#facade.kas69:45:20:0
-.img.362l282ndd2r682Ela2Ja82Leg2mh000cdehCF247ejfbsxRHCtffIsoSojh9dk88QGAmmmBBBpsvhrAEWay8a6G385a9Jr2AEWbJ4alba2z7EYa2bJ261EX8bWa297218ZJX8ba3612aX9WJ72b360rWaE4Jehera212WaE46gnie6l16b8E46encie6O02a93a6Lncik7l06982r6enhik6l2698pl637262k602r1rpe63627k26B63eh3kqs6khuC6Ohj3Ld2CPLnngD206fgndgeFmemLdcwfGmf6LdgeImem6LfK7I)
-+
-(replica.rogue.n.Stabber
+.img.(customImg).rogue.n.Saboteur.sd.29-3:30-2:0:0:123
+.i.topbot.(mid.hat.egg.(seed.n.Bomb.hp.6.i.hat.ace.sd.all:34-6.i.all.k.minusflesh#togfri#facade.Ese43:34#unpack.pentagram#self.ea.slost.abilitydata.(ace.sd.178.i.k.swapterminal.i.mid.(sticker.self.unpack.Crumbling Castle.part.1)#togtarg#togtime#togres.i.pendulum#rusty plate).img.(customImg).kas69:45:20:0
+.img.(customImg).rogue.n.Stabber
 .hp.6.sd.30-2:123:30-1:30-1:123
-.i.topbot.(right.hat.statue.sd.12:15-2.i.right.(sticker.ritemx.d7ac.part.1.splice.t.jinx.ea.slice)#togtarg#togtime.i.pendulum#origami.i.right.togunt)#facade.ite444:95.img.362nc82q1k2rgn2u9c3vk9g5y2k1gc2kemmm00024787acafgfkejfh9dbsxhCFtffIsoRHCcde8k3kgmrZ8gXk1r78glgVkqr6dXqqg858kX2kqn4cVk2cxo8cg84gUkqcoBwo8vkywBEBovywBJoAwvq1rwoENIwoguq0knpsINws8c9gq0nps8s8tuum0cosb8Eac48cgl08FcQnsIQ8n5eg08sFtEIMEn68gdk8hffY8gcgdk2lgc%ci8cjr=chuqn=5chukh8=6ba%)
-+
-(replica.rogue.n.Toxote
+.i.topbot.(right.hat.statue.sd.12:15-2.i.right.(sticker.ritemx.d7ac.part.1.splice.t.jinx.ea.slice)#togtarg#togtime.i.pendulum#origami.i.right.togunt)#facade.ite444:95.img.(customImg).rogue.n.Toxote
 .hp.8.sd.0:0:15-3:15-3:56-1
-.i.left2.(mid.hat.thief.i.sticker.t.orb.slost.abilitydata.(statue.n.Moonlight.sd.72-1.i.togfri)#togpip#togvis#togfri#sidesc.Target shields all heroes by 1 upon death [pipsk])#k.damage#k.ranged#facade.eba10:50:-40:10.img.372l2c2ra72u242zg42De92Kca2L6a2pk000cdeu7hCFRHCbsxejfIsotffnohh68k882o6ZMRQGASojPHQijemmmBBBHKEc620LlLJ2b3KLL=5c4JK6rc6ralbuGl7rcL%cb34uF27r2a6raluc25FK%c7a%l52d2F363rcr2fzduE4Kua6lrg98ezc4Fcl4b2rkg98eqe4l4FWc2a2ikD8eqf4c2G42jjikD9ewqe5c2F4ciyjc9z98fz0uF4lse398zg9z204G52tfekl25zJlo3fp4AC4he4Jb2o42fvhkDgI4bacuf9999eI2bc34hD99egH4acQ0mgmgDegegI4c3Emh4gDegP1mgm4gfgPF5P)
-+
-(replica.rogue.hp.8.n.Spike.sd.15-2:15-2:0:0:119-2.i.left2.k.duel#facade.Yca15:0
-.img.382u4c2v842z8c2Dk42G4k2J812K8h3L5c12nd000ejf247cdehCFbsxIsotffRHCh68k88mmmBBBQ4l8gvS4v80vk9c4li4e8kv82vkjGhDDlu82kdGi4ilc4DzJ4mjciku791zkil4hu8s85z24jlugu8pscuJKkuGckg48oxs8LcuugDKDoxovd80zGg5kK4oyo85Jcl4dguhDyocL85dgkKDsqsLvd4gDKu4sosveJ8ldvgkaB9eJz4z4zhI8toM8d839cl4AcgsAsows8d83zlupGqws80d36zsrqt2cSEsEAqA8tXEt8AqtX1EsE8AowsX39X1)
-
-.part.1)
+.i.left2.(mid.hat.thief.i.sticker.t.orb.slost.abilitydata.(statue.n.Moonlight.sd.72-1.i.togfri)#togpip#togvis#togfri#sidesc.Target shields all heroes by 1 upon death [pipsk])#k.damage#k.ranged#facade.eba10:50:-40:10.img.(customImg).rogue.hp.8.n.Spike.sd.15-2:15-2:0:0:119-2.i.left2.k.duel#facade.Yca15:0
+.img.(customImg).part.1)
 &(heropool.
-(replica.Venom.n.Shark.hp.9.sd.15-5.i.mid2.sticker.(Silk Cape#Dragonhide Gloves)#k.doubleuse#facade.ite433:0#sidesc.Copy target's left side onto all sides.img.332u842vo45DgBgoI2gg000tffIsoRHCejfhCF247cdeHJGbsxh68twzk88SojmmmBBB1sAnlwIAs30sgnkxIAg2gnlBxBg0gnAIxsyiBlAsxsogxh0sgAksIxv8gwgo0Dwv8dsvDwvfcusisws4dQeu0sj48dQeut8sgsa4Ea4o0s9s4urE4o0t495EUYoE48o2s75E58c434M58fd42E4E4afu2M5M4a4Eu3M6v9cu31M5Mv9433q1p30)
+(replica.Venom.n.Shark.hp.9.sd.15-5.i.mid2.sticker.(Silk Cape#Dragonhide Gloves)#k.doubleuse#facade.ite433:0#sidesc.Copy target's left side onto all sides.img.(customImg).alloy.tier.3.col.o.n.Showoff.hp.8.sd.46-3:0:32-2:32-2:46-1.i.mid.(hat.ace.sd.72-1.i.sticker.(ocular amulet).i.togtarg)#catnip#facade.ite351:62.i.left.k.cruel#facade.Yca22:0.img.(customImg).speech.Watch and learn:Try not to stare too much:I never miss:Impressive[comma] I know:Nice shot
 +
-(replica.alloy.tier.3.col.o.n.Showoff.hp.8.sd.46-3:0:32-2:32-2:46-1.i.mid.(hat.ace.sd.72-1.i.sticker.(ocular amulet).i.togtarg)#catnip#facade.ite351:62.i.left.k.cruel#facade.Yca22:0.img.
-342y852zc42Gwy2Jwo2nf000cde247ejfhCFbsxIsoRHCtffSojk88BBBmmmh68ZVH2l414ckjgkzZld4kjjzy82k40cjjgkc58Y40kjjlc75824ljhlzG8YdkikglwqG82dncgkcwroG28ckekz9dad8424lcl4be9e4174ca4o48c8p8c8419da5osp8qG24dsw4couoxoG28esodswbx80428d5JzsoMI9JIZ8784cBwQJtwZ748w4vvoZ968xovsC%68EwEJuBsUA%49Ex8JtDA=2EwE8wpDA=39YCY).speech.Watch and learn:Try not to stare too much:I never miss:Impressive[comma] I know:Nice shot
-+
-(replica.venom.n.Afflict.hp.9.sd.158-1:15-4:89-3:89-3:162-2.img.362ac82qgl2r8c2u5s2v5o2yco2lc000Soj247o7bejfbsxAddIc7h9dtffJD2LS01qM9M92gmg0ch848x80r2q8wnw4s8hw8o818anl8vqwoA808kqq8wu8lg8oaqqgy6A8kgaoA0whkgkAwuo8pxrA0rik8s4sAwAuw8Ac0jhwtowo7orwrgch8wtcAuvd1rwcgaosc6sucw28axAy7cua1cvaocs6s8s4a28o4s4cs6sd8sac38A4t6aE9aM8gy4w4aEJEyEM8hao4tcwyvN8h8AUc6oOh8B7ovcQcAd5c9AcRcBr6ocTcAacpcT19T).speech.This form is not so bad after all!:yes [i]YES[i]:[red]Blood[cu]:Carnage:Wrath
+(replica.venom.n.Afflict.hp.9.sd.158-1:15-4:89-3:89-3:162-2.img.(customImg).speech.This form is not so bad after all!:yes [i]YES[i]:[red]Blood[cu]:Carnage:Wrath
 +
 (replica.venom.n.Shinobi
 .hp.7.sd.28-3:0:27-2:27-2:0:123
-.i.mid2.(right.hat.statue.sd.12:15-2.i.right.(sticker.ritemx.d7ac.part.1.splice.t.jinx.ea.slice)#togtarg#togtime.i.pendulum#origami.i.right.togunt)#facade.ite444:95.i.wrench.img.362n042r0g2D0c2H052Jok3Kb8k2le247000hCF799cdebsxejfmmmPEytffpsv6NwIsoh9d0kakc0=Y0d9tgDgJqh0609sg9kpkKo2logalb9kchnn0alKpchHcalKodgogHck8loI8kpc3ocHcovIksGtg0ocHDiI8ohsj0on0oloc8IkgMzwMAgonDlcI80AzxMAconDJoIkAwMA0Q0B1o1olocIowQ3QA0Qrn0omI0MAgE0QAMgQr60Jo80CRNwArH0pDkrtGsgcr17DJ0dgsge1g060dgkrsFge4rY0dJdugcng0%dk1chdng=5H3Z)
-+
-(replica.venom.n.Grim.hp.7.sd.53-2:91-2:99-2:18-2
+.i.mid2.(right.hat.statue.sd.12:15-2.i.right.(sticker.ritemx.d7ac.part.1.splice.t.jinx.ea.slice)#togtarg#togtime.i.pendulum#origami.i.right.togunt)#facade.ite444:95.i.wrench.img.(customImg).venom.n.Grim.hp.7.sd.53-2:91-2:99-2:18-2
 .i.bot.k.singleuse#facade.Eme57:0
-.i.right.(mid.hat.ace.sd.34-2:13.i.left.k.terminal.i.mid.togtarg#togfri#eyepatch#togres#togpip#k.managain#sidesc.Kill all enemies with exactly one hp [pipsk]#facade.Yca27:55).img.362r2c2Ebb2Gc82J282K2g2Lf82li000247caL7absxgdkejfhCFcdeIsoRHCtfftwzmmmk88h68misBBBD==7F3WEb4pqA364EEawoao2q12WE5Eqo2q6AZ5E7oqo6A2Z4b47ur27126Z47JLe8612Y7JfffeGc06W%JcLGes8d05=J2L2n3G20%KcgJec2jiOG072hcr8smjjnK8026K9dgj3j2sKAr9gG2mqm2um3gBg98re2qy3miqrA29G2fjvilmrAGg8cgflllkirA8K8JflllimgcAgKc2LikomsimrgCh2egemlsim20cFrr2mjmAgHRF)
-.abilitydata.(ace.n.Doomed.sd.34-2:13:0:0:76-1.i.left.k.swapdeathwish.i.mid.togtarg#togfri#eyepatch#togres.i.left.cast.slay.i.mid.togvis#togpip#k.decay#sidesc.Kill all dying enemies [orange]deplete[cu].i.pendulum#rusty plate.img.283PMC000uxAh2wi2g0wh0g3h2g1wgw4wj2gw0gw1wi2wh)
-+
-(replica.venom.n.Static.hp.7.sd.18-2:77-1:36-1:36-1:77-1
-.img.382a082moA2ncg2qk82rog2uo82vkA3z8282jd000RHC247j==bsxcdeejftffIsohCFq8Sojh683kgd0gAc8gAag18gAc8mdrcuc8m18meAdAgcunA8oiAeAgnonAn09mgmdAhvrco0kgdhmdBkgvgoakofonrwgkEgqoEoveAksw6sEkalovdks6w5s8aEhovks6wr4w80plhuw7gw4w8ahEkus=sakrtlw5xsEwszkxt4sbEszkEsy4wAd8swcu0qlEowJMnw5AzkE8sw=E3qqt%wE381EsEwYwsTEt8w6tVEsE8sxsX9V)
-.abilitydata.(ace.n.Charge.sd.177-1:0:0:0:76-1.i.left.k.smith#k.charged#k.inflictpain#k.singleuse#sidesc.Give [hp-plus][p]1 pip to target's damage and shield sides [blue]charged [purple]inflict[red]pain [purple]singleCast[nokeyword].img.2850001OXj==hCFbsxhwo809i190wi2p0i281i08081go8w929080o08w08)
-+
-(replica.venom.n.Raider.hp.6.sd.0:125-1:44-1:44-1:124.i.left.(mid.hat.ace.sd.56:15-2:0:0:123.i.left.k.ego.i.right.togtarg#togres.i.left.origami.i.mid.togorf.i.left.k.stasis.i.mid.k.doubleuse#k.exert#sidesc.2 damage or I dodge all damage and enemy effects this turn#facade.The30:12:-40:15#togkey).i.topbot.k.cantrip#facade.Yca58:70:30:0
-.img.382l482vI82G4k2K8k2LcE2NM42O943PQkQ2me000247da6zrghCFpnjUJoejfbsxqifJD2hhhzwumhaW58sgw8shwt4UltwhwtgwOVlxjhxtxs2s8sjjxsysO08wjixs8584O14sixt8Zb049swtOdHc8l41b85Lrr4O04bcrrql40AeFqc8ll4Ac518eEpc4vvvvA425BcFlkPAKQ524d8AL8MkNMG4v34dA8LKKKAM8A434eALk4NNNNIUeALvkKPkQ8U4IBLG4MQMQNI4UlIBFGQkGGlVlCF4IkIk8I9V49BFGKK8IX18AdlkGG8X37vvIXX8l58V)
-+
-(replica.venom.n.Arkouda
+.i.right.(mid.hat.ace.sd.34-2:13.i.left.k.terminal.i.mid.togtarg#togfri#eyepatch#togres#togpip#k.managain#sidesc.Kill all enemies with exactly one hp [pipsk]#facade.Yca27:55).img.(customImg).abilitydata.(ace.n.Doomed.sd.34-2:13:0:0:76-1.i.left.k.swapdeathwish.i.mid.togtarg#togfri#eyepatch#togres.i.left.cast.slay.i.mid.togvis#togpip#k.decay#sidesc.Kill all dying enemies [orange]deplete[cu].i.pendulum#rusty plate.img.(customImg).venom.n.Static.hp.7.sd.18-2:77-1:36-1:36-1:77-1
+.img.(customImg).abilitydata.(ace.n.Charge.sd.177-1:0:0:0:76-1.i.left.k.smith#k.charged#k.inflictpain#k.singleuse#sidesc.Give [hp-plus][p]1 pip to target's damage and shield sides [blue]charged [purple]inflict[red]pain [purple]singleCast[nokeyword].img.(customImg).venom.n.Raider.hp.6.sd.0:125-1:44-1:44-1:124.i.left.(mid.hat.ace.sd.56:15-2:0:0:123.i.left.k.ego.i.right.togtarg#togres.i.left.origami.i.mid.togorf.i.left.k.stasis.i.mid.k.doubleuse#k.exert#sidesc.2 damage or I dodge all damage and enemy effects this turn#facade.The30:12:-40:15#togkey).i.topbot.k.cantrip#facade.Yca58:70:30:0
+.img.(customImg).venom.n.Arkouda
 .sd.30-3:30-2:0:0:30-1
 .i.topbot.(mid.hat.lazy.i.sticker.t.orb.slost.abilitydata.(statue.n.Moonlight.sd.72-1.i.togfri)#togpip#togvis#togfri#sidesc.Target shields all heroes by 1 upon death [pipsk])#k.damage#k.ranged#facade.eba10:50:-40:10
-.img.342igc2r332uc42z8k2lg000tffh9d247a58peideRHCIsoejfAddbsxk88SojQGAqhx384kigbg1c9g1cg48l9k7kha2uh4l75kag0diz4k77k8i0gagz7759c1ak74lz5Eg8c1gak5koc8cz4Ech0gbgloegbchcAoik5khcig84gd80cJogl4F9g9Ecg90pJc8m6l4Qg8i0cIBocnm4EQ9c0cICpg8n9EYoi1AoAUwpcgkis8och2cBUwg5c8lgdhc2oAo4y5iz48i3AoAuxtw4ge430AcoAuwvvw30o1oc5wvtw4rcM4M4ws4wh4r1M5uwsh4r3M4Mux4r31dr3)
-.doc.[2d4000XUIAddwvo3MiM6MkM5MkM5g1g1g5g0MgM0g5Mh0hM7i9g0gf5x0x7A8yaw5][nh][red]All monsters[cu]: Upon death[comma] heal 1 to all heroes 
+.img.(customImg).doc.[(customImg)][nh][red]All monsters[cu]: Upon death[comma] heal 1 to all heroes 
 .i.t.jinx.alliteme.(t.orb.slost.abilitydata.(statue.n.Restore.sd.107-1.i.togfri))
 .part.1).mn.O.modtier.0,
 
 (heropool.
-(replica.fighter.n.Fisher.sd.0:30-2:37-1:37-1:15-1.i.left.(sticker.k.vitality)#facade.pos94:0#sidesc.Add [light]vitality[cu] to target's sides this turn.img.
-332nk82rgn5Dr5hoc2kf000jj8cdeIso247799tffn8QGAqqhAdduuommmBBBqhxYg878k=286C48=1k75B48=k774B8gYk97768g2gb7b84AJA0kb85r4ALIBlb8n4BJ4b4gl8krC8kvk90mDxcon1gkDycok2r6godydo3n58kEeptos2galscojsoh29kp8dwMQsgpgs2lto4cxcgodwpYgt4czdxpZh4ocxeosgsZt4sfUFt%oskgEdsEis%qkgEdxcp=psksEeEos=YgsHs3)
-+
-(replica.fighter.n.Taunt.sd.39-3:39-2:118-1:118-1:23-2:23-2
+(replica.fighter.n.Fisher.sd.0:30-2:37-1:37-1:15-1.i.left.(sticker.k.vitality)#facade.pos94:0#sidesc.Add [light]vitality[cu] to target's sides this turn.img.(customImg).fighter.n.Taunt.sd.39-3:39-2:118-1:118-1:23-2:23-2
 .i.topbot.eyepatch#k.selfvulnerable#facade.pow0:0
-.img.342bg02i802y8c2zg12jdk8i00AddGja247QGAIsotffSojvoruxAlormmmY0y09c0gy0Zg9cwewew86g29xdxcyw04zdicxywc1w8g2eiyic1d82ieg93b9081id8bo1sobz81c9wonkosg428di8nlwsg41zc1kownw0g4zg28khswowsg6bos1k0gMgs0sh5zps8lME0bob5bBqlogspkt5bA0I9nplt6gJ0syokq1bY0tgdp091Zug8d0FAg8%t0gdno8=38omo0=7h37)
-+
-(replica.lazy.n.Rookie.sd.0:0:15-2:56-2.i.left2.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0)#(wrench.m.-1)
+.img.(customImg).lazy.n.Rookie.sd.0:0:15-2:56-2.i.left2.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0)#(wrench.m.-1)
 .hp.4
-.img.352Hkc2L8c2Oo45SHwARB5TSwe9l2hg000k88hhhpnjQGAb8d247IsozwuFFFAddtffGjaYPVmmmBBB3Hyd9k31LwCwd9k38wDAwe8l1T0T0LwDAwcbl0Lx9774k0k86cxARAw9k05cyc8lr480kap4NE4tIEk5q4NE4vI405sLFsq4IsIo0OsH4tUY4OsO05EHEhsoItgJ0p4H4jgshJ16c4sjsI4O2pLEisMsF31484MhMOI43158EsiK3258EMhsM43324GM41)
-+
-(replica.lazy.n.Drunkard.sd.56-2:0:0:0:56-2.i.col.(mid.hat.ace.sd.15:174-0.i.blindfold#k.critical#togkey#facade.The7:13:99:30).img.322qgk2u8k2ibQGA000k88IsoGjaAdd247tffmmmSojBBBV8skv8X8gf2cs8U8gfIcsUgfcJc86ufLs58qekLs5kqsdkcAJs4oqhsc9lA2Ak9g9kgdrsdp8qo0ckc0sxaso84qo1g2wEp8cowuus0gc1c9d0osagphIc1t848g8hkg3cs8o94qikhfclaqhokicgob4uoqojk8skt87k8oglhnaVkouhn48X4oug4u5)
-.part.1.mn.T1)
+.img.(customImg).lazy.n.Drunkard.sd.56-2:0:0:0:56-2.i.col.(mid.hat.ace.sd.15:174-0.i.blindfold#k.critical#togkey#facade.The7:13:99:30).img.(customImg).part.1.mn.T1)
 
 &(heropool.
-(replica.ludus.n.Plumber.hp.7.col.y.tier.2.hp.8.sd.39-4:16-4:80-2:80-2:16-3:16-2.i.left.(mid.hat.ace.sd.76-0.i.left.wrench.m.-3#sidesc.-3 mana.i.mid.cast.drop#(wrench.m.-2)#togunt#k.sticky#k.mandatory)#facade.ite361:0:20:30.i.right3.eyepatch#k.decay#facade.Eme9:0.img.
-362vg42xfc2Fec2Jsa3KcF43Lga42jh000QGAk888uA4eotffAddGja247Iso68h4jt44bb8dSojmmmBBBBo8m7m8rkoCqm%99qloAkm%9kcfxyo8=68ocfF5k1km=m8vx5ok1qm7n994cxl1q98%99qgxk1q8m%m9kojaoqlkm7m9o4iQJ0%8oKSJ0pg5cxSJzgWdOJiJ4yvia52ihLa4gy5ja3auw4viguzgcjOaLi2bzWcePj3bAvae3iKhaBLO4Kc4CbeO4hvD4beOjacEWc3jFHvbce41).speech.Yahoo!:Was an easy fix:Fixed it:Let's a go:Are you sure you need a plumber for this?:I think you got the wrong guy:My name is Fighter Fighter:Plumb it:No more swords for me!:I hope that was mud[sin][dot][dot][dot][sin]:[smelly manure]:Need a new pipe
+(replica.ludus.n.Plumber.hp.7.col.y.tier.2.hp.8.sd.39-4:16-4:80-2:80-2:16-3:16-2.i.left.(mid.hat.ace.sd.76-0.i.left.wrench.m.-3#sidesc.-3 mana.i.mid.cast.drop#(wrench.m.-2)#togunt#k.sticky#k.mandatory)#facade.ite361:0:20:30.i.right3.eyepatch#k.decay#facade.Eme9:0.img.(customImg).speech.Yahoo!:Was an easy fix:Fixed it:Let's a go:Are you sure you need a plumber for this?:I think you got the wrong guy:My name is Fighter Fighter:Plumb it:No more swords for me!:I hope that was mud[sin][dot][dot][dot][sin]:[smelly manure]:Need a new pipe
 +
 (replica.leader.n.Bruiser.sd.26-1:17-1:20-2:20-2:41-1:12-1
 .hp.8.tier.2
-.img.
-3523ck2b802uc02yok3Dhwt2je9au00247fhjk88lortwzGjaAddtffn56IsommmBBB5hwvwgsgwgZ8Dwsxsgwg7aDwW5gwvs81krou4Dwb3ypc284iw13yp0d0uh90cqlyue0b3ol1cmyd1813od90kry081d19FjgEb40918iEjh85130hAaAhE86b38EBMQg8gAE871k8EJA8CIEg61koc8ALA0p151co3cAJEcy30582cmcq8k26090308kcbk0b70903bcbo0b5V838kc8o8u4X8cmpu=73qu5)
-.doc.[2c2000quxv8w9w0w9w9w0w9wvl] Add [grey]enduring[cu] to all sides.i.k.enduring
+.img.(customImg).doc.[(customImg)] Add [grey]enduring[cu] to all sides.i.k.enduring
 +
 (replica.leader.n.Lord.sd.102-1:59-2:33-2:33-2
 .i.left.k.exert#facade.bas102:65:-20:-10#k.singleuse
 .tier.2
-.img.342x4a2K982LKc5Meimom2jh000lork88247QGAtffIsoeeehhhb8dAddJD2FocFwaUJoBBBmmmC7iehgfi7z6iehTge16eVOge0iV3hfjUhfeiqi0gSgfi6m7m6ogQgMospskqhOMqsqsqmsomehge6onqxxXk6fei6l5adcbW06j6XaddcX07Xkda5bb4y5ca4da=x7y64da9cwu464c64y5kdL6ad8bz65kc9L9bA6xc999a464B6a4LLaDbc942v26DxkK4%4E5kLakaGxc9ok4H5al4y)
-+
-(replica.ace.n.Sailor.tier.2.col.y.sd.56-2:0:15-3:15-3.i.left.k.cruel#facade.Sea6:93:40:7.i.mid.(mid.hat.ace.sd.116-3:100.i.mid.blindfold#togpip#togres#k.cruel#facade.ite7:0:0:-10).i.topbot.k.vitality#facade.Ric12:0:-15:0
-.img.352rk42vdc2C992Fi42Kam2jh000QGAk88YPVtwzIsoHJG68hGjaAdd247tff8lxcde44bmmmBBBAe8=c9Esc%v9qDeq8c=eoe8Ak8c==e7c1c==7ecoced8e8v=vpovesqCvCC8e0eC8ffqllq81sq8erhFPa4qyqihgFaQKs14hhFaRK514igji2maPm5y4KigKlka3mry4bmgbuw4rarzrbga2akmb2nAligiSnAorhiPa4rAoe5hagjb4Beo5iga2qkWzepoe5iaPKzepses5ia3gFHrjgFy)
-+
-(replica.ace.n.Cadet
+.img.(customImg).ace.n.Sailor.tier.2.col.y.sd.56-2:0:15-3:15-3.i.left.k.cruel#facade.Sea6:93:40:7.i.mid.(mid.hat.ace.sd.116-3:100.i.mid.blindfold#togpip#togres#k.cruel#facade.ite7:0:0:-10).i.topbot.k.vitality#facade.Ric12:0:-15:0
+.img.(customImg).ace.n.Cadet
 .hp.7.tier.2.col.y
 .sd.51-1:15-2:19-2:19-2.i.mid.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0).i.right.(sticker.k.chain)#facade.pos5:0
-.img.332pc82r8c2v2e2ji000k88ioj247ejfqqh6e8tffjj8b8dIso===NKznifd74JwlBBBQGAB6ipWriGp4bXriC684baW8noqcBc4bbW8msuociA84b48Rdci1i85cTdd1pPp58qonqc1OpY999r02pXri=jj8Y8jfba4e2i0c5r7vavbae2A6el82ga%2f26A62l86g46w27a7Bvk86fg65gkhB6v86afbgayhC7rbfeg272Edb43eh2F2cgakge6v2F36gl2hgeG36glkag2J6elag2A)
-.doc.At the end of the turn[comma] set hp to full if at exactly 2 health
+.img.(customImg).doc.At the end of the turn[comma] set hp to full if at exactly 2 health
 .i.self.ea.slost.abilitydata.(ace.n.Regen.sd.34-2.i.left.k.picky.i.sticker.second heart.i.togtarg#togpip#togres#pendulum#rusty plate)
 +
 (replica.ace.n.Butcher.col.y.tier.2.hp.10
 .sd.15-3:0:15-1:15-1.i.topbot.k.selfregen#facade.pos99:0
-.i.mid2.(mid.hat.ace.sd.12-3.i.mid.left.(sticker.(t.vase.ch.i(standard.splice.right5.hat.ace.col.q.sd.all:113-6.i.all.k.potion#facade.Lem114:93:10:20).n.Meatchunk.img.void.draw.(void.img.Lem114.hsv.93:10:20):-1:-1))#togfri#togpip#k.damage#sidesc.[pipsk] damage[comma] if the target dies this turn get a Meatchunk item#facade.Spi20:0)
-.img.34230c2e1c2igc2ns02hdk88000GjaAdd247IsoQGAtffDa8VccmmmBBBOFp6i15085i6i4i9hc8g36g3ea09e408g0f9c8c8eg08dbckqk3g1b8nrok1g1ac0krpw3g39cskrkoA43e80lAqwkAh3eslwkpkBcRsltwlwAiQcknhsk0g41ks1kngFgk14g0l3koEMwhwh4ekc8kptkBx5h0s9kqlox7gsc93kngwZs39FdnZtagJg1Z0tcas8sA%2cbA0=5g38x1)
-+
-(replica.gambler.n.Charlatan.sd.23-5:0:39-3:39-3.i.mid2.(mid.hat.ace.sd.182-1.i.mid.(sticker.(gauntlet#t.orb.slost.abilitydata.(ace.n.Tall Tale.sd.34-2.i.togfri))).i.togtarg#togvis#left.hat.armorer#togres#togfri#togtime#sidesc.The heaviest enemies: [hp-plus][p]1 pips to all damage sides and 2 damage to other monsters upon death this fight#facade.Leo11:0)
-.hp.9.col.y.img.342b482e8o2us42xgc2id000k88AddtffIsoQGAGja247SojmmmvorZVHBBB14o0so8so08404R8p4pebb04081bp8pe4941bo49pboea1up5e84ab50obqb69b6e9o9594xb40b6858xmx80sb78glclwcb4d84cg8n4kwc04sfh8kwlgswc05fh4htxu04schcgkctd4ct24hclgAM4tgt38hmgschkdQE8gnlgkdQEc8lglx4uRcbkg4go94Sd4hoAJuS4d8ichcT68ic84Wuca42)
-.part.1.mn.T2)
+.i.mid2.(mid.hat.ace.sd.12-3.i.mid.left.(sticker.(t.vase.ch.i(standard.splice.right5.hat.ace.col.q.sd.all:113-6.i.all.k.potion#facade.Lem114:93:10:20).n.Meatchunk.img.(customImg).draw.(void.img.(customImg).hsv.93:10:20):-1:-1))#togfri#togpip#k.damage#sidesc.[pipsk] damage[comma] if the target dies this turn get a Meatchunk item#facade.Spi20:0)
+.img.(customImg).gambler.n.Charlatan.sd.23-5:0:39-3:39-3.i.mid2.(mid.hat.ace.sd.182-1.i.mid.(sticker.(gauntlet#t.orb.slost.abilitydata.(ace.n.Tall Tale.sd.34-2.i.togfri))).i.togtarg#togvis#left.hat.armorer#togres#togfri#togtime#sidesc.The heaviest enemies: [hp-plus][p]1 pips to all damage sides and 2 damage to other monsters upon death this fight#facade.Leo11:0)
+.hp.9.col.y.img.(customImg).part.1.mn.T2)
 
 &(heropool.
-(replica.leader.n.Hunter.hp.7.sd.0:46-2:0:0:56-4.i.left.(mid.hat.ace.sd.72.i.sticker.k.focus#togtarg.i.pendulum.i.mid.hat.fighter#togunt.i.facade.The2:2)#k.heavy.i.topbot.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0).img.
-322zae3K98a2ni000247h9dpegQGAIsok88tffvkhn56GjaAddBokLvruxAmmmBBBpiaB2ZY2F4rpo7Z272B6qohhh7jji246216qh=g6hg6jj2421ohg==6hgj2520=6ZW7hg7g=W2mlkec3X6h%52cllezcfQ573mlkcea8z4fec2A7cmldia98z2f2B462icnieaiebz2c2C42izdzOece3Edbea84uwc2ca3FcmbK2eb8fF2de999a9fG2cea99bc3cH2em99akmjIcecb9kty2I2dmb8kKJ2dmbm9acL3caKcD)
-+
-(replica.leader.n.Forceaken.sd.20-3:51-3:72-2:72-2:51-3:19-3.img.352e4c2lc42no93u8s85xkg5kc2jc000h68Iso247GjaAddtffQGAtwzDa8YVJVcc3ckikekeO4kjgx3w4kjix1w6wkgwiwgklw0h5w5wkhkEkc5Ecw0k4g5E5k4EcoeEcw5dg4gE5cEnwEwgm4fgdgqgog14md4ro5oc14m5coZAoc1VkaA49Ae248oe4Ald4oe259nlIe48l34kYensA43cAcnsAntpMIl9sAuoe4MIlk8sAta4P5us8c6P68v9oQ68v84Tcob43)
-+
-(replica.fighter.n.General.tier.3.hp.7.sd.168-4:33-2:17-2:17-2:69-2.i.mid.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0).img.
-362vbb2xe22Bdd2Fe82K992L022ii247k88b8d000GjapnjeeeABtffIsoQGAE56j55Hv=O2JD2YVHWz8%4cvaBc4065cvbaBdc6vvaBB4cvacW0su0usWvcomrqosuso41dc4omrqnosp060onnm1Z56WEZXC2Fxhg312eK9xhhgO0igDw4AaO0jxig0wy0giay0Oei9ikig2jk2gL034Fillilh0P429iliF2LL034ge9i2Fxx7O4g298e4A427A4g4Keg8g2=74204K8xe==6LK8f2==6LFxx07)
-.abilitydata.(ace.n.Strike.sd.32:90-15:181:1:0:177-2.i.togres#pendulum.i.eyepatch#k.ranged#sidesc.[pips] damage to the target of the previous dice this turn [light]ranged[cu].i.mid.hat.statue.img.rain of arrows)
-+
-(replica.wanderer.n.Frontier.hp.9.sd.63-3:63-2:70-1:70-1:56-6:56-6.i.right2.k.heavy#facade.ite400:0.img.3723c02y842D8g2Fk02Gy02Hc42IDD2hbpnjeee247k88meezwuBBB000b8dYPVqhxvvGl04cu8HhH0qFctHj8krl4d4j8kArl0d4i3Bpn07g3oBkJ7g0m0jjyf9e7c94D2krok14dygkoCqk15wg0HgcwZcs4GGkwawEwcscGGk4dg0l5c8x83oCol148dx83g1l0g1saxIII0k9x033335gF9w48cg8i86gF94080g3Hc5cF4942l04s5cF4gc8ckBFd)
-.abilitydata.(statue.n.Defend.sd.15-4:0:56-3)
+(replica.leader.n.Hunter.hp.7.sd.0:46-2:0:0:56-4.i.left.(mid.hat.ace.sd.72.i.sticker.k.focus#togtarg.i.pendulum.i.mid.hat.fighter#togunt.i.facade.The2:2)#k.heavy.i.topbot.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0).img.(customImg).leader.n.Forceaken.sd.20-3:51-3:72-2:72-2:51-3:19-3.img.(customImg).fighter.n.General.tier.3.hp.7.sd.168-4:33-2:17-2:17-2:69-2.i.mid.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0).img.(customImg).abilitydata.(ace.n.Strike.sd.32:90-15:181:1:0:177-2.i.togres#pendulum.i.eyepatch#k.ranged#sidesc.[pips] damage to the target of the previous dice this turn [light]ranged[cu].i.mid.hat.statue.img.(customImg).wanderer.n.Frontier.hp.9.sd.63-3:63-2:70-1:70-1:56-6:56-6.i.right2.k.heavy#facade.ite400:0.img.(customImg).abilitydata.(statue.n.Defend.sd.15-4:0:56-3)
 
 +
-(replica.sinew.n.King.hp.10.tier.3.sd.102-1:56-2:148:148:33-2.i.mid.k.lead#facade.pos144:0.img.382v242C422Kia2Mao2Ne42Okm3P2c=3RsND2lj000k88v7Da8QGAJD2E56tffIsoUJoAddGjaHnbhhhSojpKmmmBBBFwaDP=6cvEP==Acv1P7a=6aKcA5c%a7aKddcida5o7aKdiddaj2oi2oMdiduiboajMjCa3uaKojMajMK5ubpKoai3fevM14obuou3fg98geo41CuSes998R4Qq2kh998R2rk2q2hs99R3rk2qgevsgsNECge2kgvf4fCE3hO84wyv2g5F2kgn9Negeg2eF43Og99g9fG4q4O98h3CGyqCmg9menk2Fcyqvln2zq4k2Ddwqv2n2WQkD3x3ClehkeG3wqvlnOk3LCknO2D)
-+
-(replica.leader.n.Darklord.hp.6.sd.21-4:51-2:45-0:45-0:51-1:56-2.i.rightmost.facade.bas56:0
-.img.3721842ig22m852Bc42C9k2Dog5F8RCAi2la000lorfhj9acb8dk88247twzYPVn56I8ws8E183gd8x8fcmc2g5sygBu4Bg3gtxsgBzskc3d1t8Bw4bkg3%4w7Cg3clc5swQ9AiDlBFDlcsFc9lwmZkAig9ckw1tzws52ocCwmrr42DCsmcqAkoA43oclsa4cplA4EDl4c8c1v48i4Dl4c9e9f21gl118dhkdic1pc1878kdid5cp1868kc83g8c6co119sc836c68o86t8g3m8cmco1sx8gNojp3)
-.doc.[2c70006gsp5wFnXb8dD4RSsM49Ub5MEbEo38NFp829gMhog909ENhpE91gMw1wog4gExEg5wohow6gpg7z7b3][n]At the end of every 2nd turn[comma] [hp-plus][p]6 hp and [hp-plus][p]2 pips to the middle row this fight
+(replica.sinew.n.King.hp.10.tier.3.sd.102-1:56-2:148:148:33-2.i.mid.k.lead#facade.pos144:0.img.(customImg).leader.n.Darklord.hp.6.sd.21-4:51-2:45-0:45-0:51-1:56-2.i.rightmost.facade.bas56:0
+.img.(customImg).doc.[(customImg)][n]At the end of every 2nd turn[comma] [hp-plus][p]6 hp and [hp-plus][p]2 pips to the middle row this fight
 .i.self.et2.ea.sstatue.abilitydata.(ace.sd.72.i.sticker.(iron helm#row.face of horus).i.togtarg#togtime#pendulum#mid.hat.statue)
 +
-(replica.veteran.n.Commando.hp.10.sd.39-6:0:36-1:36-1.i.topbot.k.rite#facade.Spi19:35.i.mid2.(mid.hat.ace.sd.72-2:15-2.i.togunt#(left.k.first)#togres)#sidesc.If used [light]first[cu][comma] [pips] damage[comma] then shield [pips] to all allies#facade.Yca16:2:40:3.i.rightmost.(sticker.k.chain)#facade.pos5:0.img.342xa42C4c2JQm2Kao2ii000pnjk88GjacdeAdd247QGA68htffIsoejf44b799SojtwzmmmBBBEogOm8gFoqmPm8gDn8J98gAcoq8Ja6g8gAr8J87a9o0omJ98oK9g0qPm9mJ9oqOm8O98dd9oqn83847i6xK8o93m4%i6fs4Kcq9a=4kfesiagb=xjsfes4gWki5kidilkichc4liak4wyC4id0gcxlafkcilei41ba5akfffejg0xa5a6kfekiC4g0CaW7ia%bgBCCa%iCvu6BcCga6xil4oFcg%xagHcg%xKHc46a6oK1)
-+
-(replica.witch.n.Navigator.col.y.sd.69-2:15-4:0:0:15-3:69-1
+(replica.veteran.n.Commando.hp.10.sd.39-6:0:36-1:36-1.i.topbot.k.rite#facade.Spi19:35.i.mid2.(mid.hat.ace.sd.72-2:15-2.i.togunt#(left.k.first)#togres)#sidesc.If used [light]first[cu][comma] [pips] damage[comma] then shield [pips] to all allies#facade.Yca16:2:40:3.i.rightmost.(sticker.k.chain)#facade.pos5:0.img.(customImg).witch.n.Navigator.col.y.sd.69-2:15-4:0:0:15-3:69-1
 .i.topbot.(mid.hat.ace.sd.90:54-1.i.left.eyepatch#k.wham.i.mid.togres#togresn#togvis#eyepatch#sidesc.[pips] damage to unshielded characters)#k.cruel#facade.The1:5
 .i.rightmost.(mid.hat.ace.sd.116-4:100.i.mid.blindfold#togpip#togres#k.cruel#facade.ite7:0:0:-10)
-.i.mid2.k.vitality#facade.Ric12:0:-15:0.img.372ra62E282J262Ked3Ldcq3M20r5NP85612kh000cdeuxAb8dioj247QGAIsotffk88hhhFiiBokSojvkhmmmBBBzb69X86D6EZW86ya2%2WO8W8zaJ38WNrQ95NrP6E5729480627P6aEgf6290rkJ36gm62Li021aEJ3gfmLiy36k8kJ8fmLikM39EegiaKgalMegk24fngiqia2l03fE4euwbigai0kMie25dagKh120=25dmKch021b%84Kdgiai0os1%a25Kehi1osyrrWek6jposCa8W6eceJFak858483Hak48486z)
-
-.part.1.mn.T3)
+.i.mid2.k.vitality#facade.Ric12:0:-15:0.img.(customImg).part.1.mn.T3)
 .mn.Y.modtier.0,
 
 
 (heropool.
-(replica.alloy.n.Skipper.hp.5.sd.115-1:146:56-1:56-1.i.left.eyepatch#k.step#facade.pos147:0.i.right.(sticker.k.steel)#facade.pos84:0.img.342n842vsk2z8g2Hg42ke000qif247FwajccSF0IsoJD2%PkBokb8dGumBBBCe4X1aX394ckxkd4Xncsykes4W8sysfv4gUnkxkfckw5g2nsmfvw951zvsfvxb41nfcvx48Kz1Hflx4nK4E0zeslwcgnCJ40zdtlwh5C4AI48ctc5sgnCp4g18d6v86h8Ag8187vHAN958E18c6kFC4gq4g18kc4s9HArp4E1zkck8EhAo4qH3Hcs8EgE4phngUEgcg9gE4rgVzckhznp4X04lhaE8X24kscQ58W)
+(replica.alloy.n.Skipper.hp.5.sd.115-1:146:56-1:56-1.i.left.eyepatch#k.step#facade.pos147:0.i.right.(sticker.k.steel)#facade.pos84:0.img.(customImg).defender.n.Tin.hp.6.sd.23-2:23-2:56-2:56-2:56-1:56-1.img.(customImg).wallop.n.Pike.hp.6.sd.119-1:119-1:56-1:56-1.img.(customImg).wallop.n.Robber.hp.7.sd.136-1:63-2:63-1:63-1:20-2.img.(customImg).wallop.n.Ward.sd.62-1:56-3:0:0:61-1:61-1.img.(customImg).abilitydata.(statue.n.Pendant.sd.right:76-1.i.left.(sticker.iron pendant)#k.singleuse.img.(customImg).part.1)&(heropool.
+(replica.monk.n.Dasher.hp.6.sd.56-5:56-0:0:0:15-1.i.mid.k.flesh#k.lucky#facade.ite189:0:-50:-20.img.(customImg).defender.tier.2.n.Pigiron.hp.8.sd.23-5:56-4:56-2:56-2:64-1.img.(customImg).knight.n.Inker.sd.61-2:70-0:93-2:93-2:15-1.i.topbot.k.exert#facade.bas93:25:-5:-13.img.(customImg).abilitydata.(ace.n.Inkshield.sd.0:0:0:0:76-1.i.left.(sticker.all.top.hat.bard.i.k.steel.i.all.wrench.m.-1)#k.singleuse.img.(customImg).knight.n.Punk.sd.0:71-2:57-4:57-4:71-1.i.left.hat.troll#k.selfpetrify#facade.dan9:0#(wrench.m.-1).i.topbot.eyepatch#k.heavy#facade.ite400:0.img.(customImg).knight.n.Kino.sd.63-3:66-1.i.topbot.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).img.(customImg).abilitydata.(ace.n.Metalcoat.sd.15:72-4:56-4.i.left.k.tall.i.mid.togres#sidesc.shield [pips] to the top-most ally.i.left.cast.drop)
 +
-(replica.defender.n.Tin.hp.6.sd.23-2:23-2:56-2:56-2:56-1:56-1.img.382ve42z6i2Jk82K1c2L6c3Mcg25NlJ35g5Qg4ebe2ki000mmmeeeqifuxA247352b8dic6jccBBBCEHBokFwaGumYPVIsoh68AMu8NeCMJNeCg3unn8O5gBM8Jnm8PgvA628uJnm9OgvK38u9nm92tsqiK43m8lJ24tsrqi0cXgl82jsLriKXa92izLLrKfeh8ki7ppLqi1v3g8m7poxzci1ae3g8k6azbobBf4v28i2kb7ayBahv387ipozCdW387pwzCbbg2628%iLe1de5b462uzyzc414eQ62k=cv0c3Q58i7cvK3eg4gb52bacvDg34aI)
-+
-(replica.wallop.n.Pike.hp.6.sd.119-1:119-1:56-1:56-1.img.3426482rg02v843ygo52ie000jccqifIso247OFpb8dGumBmgBokFwaeeeBBBmmmVrrrgX8g4sgkgk4s0g6rgsk6k8slsk8tg1g4lsltmsv18ktnlsmEth8nlF8k4F8r4nkF8Ex64s8gskFlEx8dw86r64EkE4Afcwv1a66fdwv15a4wfdw828594Bog8wc526doB6xao2goAo8A8wQh6h3gB8dNh5hUg8Aevxcv3g5o8fe8o2g5g5Afc63o4h4o8d64A43oIyo4eBUoJyg4dA4VKyjXKpgpX)
-+
-(replica.wallop.n.Robber.hp.7.sd.136-1:63-2:63-1:63-1:20-2.img.332rc82v4c2yso2kf000qif247jccOFpIyb8deeeBokGumFwammmBmgh68BBB2cBjgr5r38cjiBMc6r086Bji58e808cjiG5r481EjgA4FvA5949iBc4F5Bc5r04gCvFck4Ackw5Q04Ew4wQFclw4lwc58v5wQE5nkMwcQ49dvoc6dmv0r085w4Qwca4Nr0Q18ocwo4w4eo8rc08195wclwU958oYaIwmvxkv2oyacMnm4o28tp8cIMwlwJy38u8cosLIscYot9doLtoYot8odo8sIuZ8u9e9oy=9sp8p1yY)
-+
-(replica.wallop.n.Ward.sd.62-1:56-3:0:0:61-1:61-1.img.372r842vgc2y8c2z8s2C483Dmwz5H8Ajgd2ke000qifjccGumOFpIsob8d247BokFwaqpjROEBBBmmmW95z958WrAjf5VH4vr83H4cvt434vjdhcu428vjc4hcr8o8o08h4icyv8lCo804cyh4rv4D80ro8d4yCwDo1q4rr8xDo05orr9ps4l4o19o4yrw4spsros1o08e5wk8Mt5t28f4col58lC1y4dvg8wnl4o1y5frkwmr2rs4d4cCwkwCw83zy6co8wlxoVs5rqs4x8Wqs4EIps8XW8QIEW).abilitydata.(statue.n.Pendant.sd.right:76-1.i.left.(sticker.iron pendant)#k.singleuse.img.284000=M2Ip0me92h4whw4N2wMwhwMw2h5N3g0x0g1MwhwM0)
-
-.part.1)&(heropool.
-(replica.monk.n.Dasher.hp.6.sd.56-5:56-0:0:0:15-1.i.mid.k.flesh#k.lucky#facade.ite189:0:-50:-20.img.342n482yc82z4k3AcBg2kd000qifjccb8d247GumIsoOFpBokeeeFwah68BBBViz8Uzvk8gkyRi5lvld1g4lvvtznc1g494luk4En582gndul8E84g8528k8slz4F4w4g8c2c4slzw8E4p4y3csl4l4Fwpw91g87l4F4qw8Q8yl8F4wqwcQywn4E4h9ogcQd94Eg5Igx8IQyn4g4Nh5hQ68dwonqn3d84ewrp4cR4c0ywro5V8np4w8nRgBgc5cp85SA95cow4RcBAy4jRDAydS)
-+
-(replica.defender.tier.2.n.Pigiron.hp.8.sd.23-5:56-4:56-2:56-2:64-1.img.322v8c2zk82jf000OFpqifjccIsoGum247b8dFwaBokeeepnjBBBmhdh68=240c=16k085o8Zk4l87k5kcZ859k74z0s1k7774vs2k75n6z0Q875w8k7k9so87x879zzo5k4zw948zAvkv4l48y8kc8hAcs9x9y8AcAiAc0cow8ksx48AjgAc0bcx5vAjAo0c0c8sws5Ap8dvo1sxs948ANpA8oU2cxc8zhviv3ovos8ji9Yqdjhc8s3Icpcs8ivv3sEIcsdscAh8As2oHEsdp8Bc3JHEsdrZpsFItot%)
-+
-(replica.knight.n.Inker.sd.61-2:70-0:93-2:93-2:15-1.i.topbot.k.exert#facade.bas93:25:-5:-13.img.362y482z842C4A2D4g2H1E3KMIx2kg000jccqifIsob8d247GumOFppnjBok352eeejjjh68BBB43531yp94kyg31ypvtDzgD04ovvspwg9gHytpupx49gH8rupx4k4I40kEgytq8x49EIDk49rzxCczEDkEao9IwyAdA4F40E4bYwCfA4Eg4H8g5Iw8AeAzE424IA85SkCzkEDHCg86zl4l142E8A8c8VlykQ3wk0k8AdAzeA42gwkHgffAg2xMGyfdC3IMwgkg8g8d9C830Ixh9g4d4B30kKk49kgdA31IgKky4n31JgKg5h33).abilitydata.(ace.n.Inkshield.sd.0:0:0:0:76-1.i.left.(sticker.all.top.hat.bard.i.k.steel.i.all.wrench.m.-1)#k.singleuse.img.Ink Bottle)
-+
-(replica.knight.n.Punk.sd.0:71-2:57-4:57-4:71-1.i.left.hat.troll#k.selfpetrify#facade.dan9:0#(wrench.m.-1).i.topbot.eyepatch#k.heavy#facade.ite400:0.img.342n8c2r803CExk3Dgng2getwz000jmo247b8djcceeeHJFBmg4jtqifYPVzwummm%c0Y8Yes87o86cgkEs8xEkon5ckxro38oc4cC08t3oc4kyrsJs28g4CrsJs3g4C1v3o4lEk2u3nElg9U908hlcoa1t09g0ag9ocA18Aogk1g8pcAd8od4ck29AogconA5gk90tB296ch8Us08oYko2I0AoIo4okdkgrAMoQcMA4Dlgru0o58Dlco82g59Dlf79o8ohchZ)
-+
-(replica.knight.n.Kino.sd.63-3:66-1.i.topbot.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).img.332rg42vg82yA42ig000247jccIsoqifOFpBokFwaeeemmmBBBtttb8dh68GumAdd304bS3308gltr8gQ304gUktmt8sg24Vkpnto8s814Uk8sn9go4vQ0gksnswE4h5y0Uluw4E8eo4Aw4U8uw4EwocYdrygA8rwAEgfYoMy8IyMAFoeIYo8w4MJwAIEgfoEo8148JAI4gpdpgM14sIEB4o86vr1gs8wIE8pv585w04hM8FgdvZQ8w0v6MI8fdrM0g04y8Egof8r34IM8MEgdvrM24wEI948oe834JEI494wgp43AEIAwAM9730xBwyw9Mw30).abilitydata.(ace.n.Metalcoat.sd.15:72-4:56-4.i.left.k.tall.i.mid.togres#sidesc.shield [pips] to the top-most ally.i.left.cast.drop)
-+
-(replica.knight.n.PI.hp.8.sd.57-1:51-2:115-1:115-1:51-2:43.i.left.eyepatch#k.lead#left2.facade.pos144:0.i.topbot.eyepatch#k.step#facade.pos147:0.img.342rhh2v842xai3A8%92kh000pkg247da8hdbqifOFpjccIsob8dBokFwaGumeeeBBBh68BmgC63%86G683Az828647PA614PvQA618P64QA146P5R790adcP59O9860codcP6W99v0odod8Pi4jjXcoddm6P4ji465ncaocacmQ87vnmoicadcm6Q98mameacidemi68O9vamekoacfae5683vanaleckt5x52804mbelkhaebgx4i04a0xearraeCifkrhexy4e14eiekrxuwc604bafeiqhkagkqz46bb6i4qllaCebbae4eqleC7bb6YG6ea646eD)
-+
-(replica.Knight.n.Renegade.hp.11.sd.56-3:117:75-1:75-1:117.i.topbot.k.selfpoison#facade.bas75:20:20:0.i.mid2.togpip#k.selfpoison#(doll.part.1)#facade.bas117:22:0:-5.img.352veo2J462K422L993Mucu2ji000qif247jccOFpb8dju8rCgGum1k56e8IsoDHb2o6BokmmmBBBtwz1K14g6K0JC4g52g38g2g2K6AK8h9392ha3b0J8hL98ha274gLLg92gOa0Kg98g6gjg26ka60iJidvvcrcfq06ickMcueuvvfca04crfecovMcuik0ial5kiqcfoveck047Pa4rcedq6A43s6262bJa6a4A4a2sa62s4u5a65A6Otnx534kBJ2y2nm3tm3B434asnnnm2aEJqtnmocqkCil6acepoedaBkjk7acvvqaCaj4%4iveqEici47k40ickFkja4lF)
-+
-(replica.defender.n.Burdened.hp.10.tier.2.sd.28-3:117:57-2:57-2:117.i.topbot.eyepatch#k.cruel#facade.Sea6:93:40:7.img.342v6a2xse2z4c2D982iiIso000247qifOFpjccb8deeeYPVGumBmgBokBBBtttmmmh68G67FwaQ5a68i4qcSa6Di68iogqP46ji9Di6hqO5999vWgoe36i9DmA6ehqc25iD6Bkehoe6iDiamA6kqhoq6jD6Bu0ohoq4aia8ykAk1hpqaivvkAa0kgoezav1an46u4ar524vmcnvo56goz347n1mv6k0kuce2avvm1kBk64e2474ack0mAmu6z4b64xkCmwazb4acf46AwauacO5exc4ekA6zOcxxsc56laPcxxxdYQzexxczR).doc.[Scar][n]Starts at half health.i.self.Start Damaged^1/2
+(replica.knight.n.PI.hp.8.sd.57-1:51-2:115-1:115-1:51-2:43.i.left.eyepatch#k.lead#left2.facade.pos144:0.i.topbot.eyepatch#k.step#facade.pos147:0.img.(customImg).Knight.n.Renegade.hp.11.sd.56-3:117:75-1:75-1:117.i.topbot.k.selfpoison#facade.bas75:20:20:0.i.mid2.togpip#k.selfpoison#(doll.part.1)#facade.bas117:22:0:-5.img.(customImg).defender.n.Burdened.hp.10.tier.2.sd.28-3:117:57-2:57-2:117.i.topbot.eyepatch#k.cruel#facade.Sea6:93:40:7.img.(customImg).doc.[Scar][n]Starts at half health.i.self.Start Damaged^1/2
 
 .part.1)&(heropool.
 (replica.monk.n.Stain.tier.3.hp.8.sd.75-1:71-4:69-1:69-1.i.right2.enchant.allitem.(ritemx.7545.splice.all.wrench)#facade.ite354:47:0:-20
-.img.35274E2rwI2x0g2ycM2D412jepnj352000BBBzwuBokjjjIsoqifb8deeejccCEHBmgb84A2o5oEAb84B0hexAo0Ea40ffiA1o9AgNfdMcgoE1A40cNydhMcgEDA4oc0dMyg0d6o0A7gEcx0hIg5kwAoA4o04g4g4c0wc4tk4oEDDo40wQgwtkI78EVIlwukI4A87q1wkvskI487pIr0w4I5l4Aa4IwlrBzwB97pkAksrg5J5b4owltkrkskrbDAwkvtkra6p0ouMkNhE08DyBomNgwEg97xygEInkoaExyc1g4Iolwgaoxeg1g48Fo0E9)
-+
-(replica.paladin.n.Shining.hp.11.sd.65-3:65-3:28-2:28-2:71-2.img.3621242r992ta22D425Jr98g15Ktbtt=2mh000qifjccIsoOFpFwa17352Gumb8dBokmmmzwueeeBmgPHQBBBC434dc534E4Jc3COhr8hgc1A29hrhg2g10iADJc11z2gr9b2Wc34yc2ra8b2a4k7Diyc9a8tb1t%s2iyfbKk4AtK6k4zf1ia43a4=6kAcW34i1dd2scBe4PkscmYiAe5eDqk6xd1dBcemi2qk7136s2Bfoieqs=%s4BeqomeD6k=Dizenqmoic47wvc3zempqmpeis7w4k1yemvoinveis7lqzeovoiqmpqdql4A)
-+
-(replica.paladin.n.Scale.hp.10
-.sd.72-2:72-2:57-5:57-5:69-1:69-1.i.topbot.eyepatch#k.heavy#facade.ite400:0.i.right2.k.regen#facade.bas59:88.img.342fg82r482v4k2y3A2ke000eeenqtzwummmcbeb8d352YPV247jccNbaAdd3cg2IMEJMEo0gk1kUKM0Momsck1k2EIM1k4fhswg5Ek2EMkfxc8kx8k4El0EMorcxcrw8vtk1IMAreso8c4scwgvEIEAkg4totks4wc8vJoAk79h8wc94EMIoAfczwejE0MoAp4gdafi840EM0AoF4acxe8g1M0fo4s4Sf4Er41E1gdoskukukyp8gcgEkt4u4yp5gd8id9k3Bo58ekxcg4syoB4gks8cxg5kyqArgrs8s8sypfcoAfc4c4ckyok6ckArg94UofekgkAkxckUofe8kvDVk5h9vvoU).abilitydata.(ace.n.Fireball.sd.30-1:0:56-2.i.left.eyepatch#k.cleave)
+.img.(customImg).paladin.n.Shining.hp.11.sd.65-3:65-3:28-2:28-2:71-2.img.(customImg).paladin.n.Scale.hp.10
+.sd.72-2:72-2:57-5:57-5:69-1:69-1.i.topbot.eyepatch#k.heavy#facade.ite400:0.i.right2.k.regen#facade.bas59:88.img.(customImg).abilitydata.(ace.n.Fireball.sd.30-1:0:56-2.i.left.eyepatch#k.cleave)
 +
 (replica.paladin.n.Nemean.hp.8
 .sd.56-6:56-5:171-1:171-1:74-3:67-2
-.img.362r4s2H042Lwg2Nkg2Oo42R412le000247BBBzwunqteeejccb8dmmmqifvm7Gumh68%PkUoFpEJoXHoJGJEJE534EKFo6lwhls4HKEOxicacgwkHAJoskhdback1oIA4gyc9cbc8s40oEomLcbb8c4HEsmwdbb8c1F4NLfcbds1oArgLc4gfegR4pskx8MNcwdwck4HAOlL85wrws4wR4BrNdoEQ4o5Qs3oAoswd8BoCor3rA4LdDBor24AoHokhoDMOk4VsOgc4oBMp4k434u4kwcs8o8OgNR4kLks5kdgcscgck24tkckpsgbc8wRrkwhcs5N9dgkR4twhNwsrkik3)
-.abilitydata.(ace.n.Roar.sd.117:184-2:103-2:56-2.i.mid.k.fierce.i.left.sidesc.Target ally cannot die this turn[comma] then target ALL 2 [yellow]fierce[cu].img.285Ip0000=M2me9YVJ858g08h80g1g9g3w1w3o9o1o0o9o0o8og9goa0h09)
-+
-(replica.paladin.n.Crypt.hp.8.sd.61-2:61-2:63-4:63-4:136-0
-.i.right.k.vigil#k.hyperboned#facade.pos183:32.img.382ugc2v4c2z482Cg53Dkho3Hgv05Kso4b95LKo8k12kf000ihdmkgedef7924763bysqjccb8dBokqifIsommmeee%mrk=1Du8t8gk%Dut7ckYDg4s8gdhvk3hods8u6cov2kdoc8suzz4go42odgzLodCLo5C8Cb4o4k1Cuzc6a4Hk5cu5u68vHo5coc5u7vHo5gkCu68vg8c0odEIo59gdi9c0khEwkdbb9k1koAEJkic7cgZkAEPMwJpk2sk0kwFAMERwIYt4lwAUEAwIwIU3oc8s4AxAUGQwYog9skAxkwEMQwYouztAxn%oc5sUBoB=)
-.abilitydata.(ace.n.Engrave.sd.56-7:0:0:0:76-1.i.left.k.singleuse.i.mid.(hat.egg.bones)#eyepatch.img.285elsYVJ0006gsPMCh3io8080oh080808h0w0w08g80w9w0h9y0go191rw8q)
-+
-(replica.stoic.n.Glacier.hp.9.sd.0:51-2:68-2:68-2.i.left.(mid.hat.ace.sd.95-1.i.mid.sticker.ritemx.7545.splice.triggerhpdata.(ace.hp.1.col.c.sd.187-1.i.k.weaken)#togpip#togfri#togvis#sidesc.Target an enemy: while shielded it is [green]weakened[cu] equal to damage taken)#k.shield#k.vulnerable#facade.ite370:37:30:15.img.362ngc2y582Cg82Dkg3E48y5HglnX02le000Fwavm7247jccqifOFpIsoBmnbetwz3cgmmmBBB0cC492Hcg4qyCknVc8ro68kyc3c8ro5agyn1d84qE4k78184rE5C68nk8r9Y8Iyn0cp4o95k5CI9D1c4o5k5g5xglan8%k4xugk8n0k48EkxvwgI2c8k94kAwnwsDkcI3AcbknMngkd3chc8CwgMQdkwcI3k9AgAkwtDxsl39kBcAxvtwg38gdJckowuDD42kcIFIcAk4r85UcMFMdC4o8gA8gVAGAdgmwgIXAGBcAHNFMAdX0)
-+
-((replica.paladin.n.Psammo.hp.7.sd.126-1:125-3:66-2:66-2:66-1:66-1.i.mid.k.sticky#facade.pos172:59:0:7.img.332nc82v853DMsM2kf000OFpqifjccFwa247Isoh68Bokb8dBmgGum2o6rCgBBBYae181c%vi9nk0cZ976h9kc3vh79hcI83c76g4c9cJc1ng74g4hdK90cg74g5gnnIn1k86Js5DsMt90g5ItvsQEgEQtc0g5tck5skDskskAcgc9h84gnEzEBc08g5g9nwpyEcA08c6hA9ckcwp8kA16g4gkEck8ckcwl186vkEwVl9ks14vchkEowE8Ep8c1g8g8c9nrq8A1c0n0BdEron=ldAEqkwc%lseAwpx=dsAekcx=28sAc0AmY)
-.i.t.jinx.t1.ea.slost.abilitydata.(ace.n.Barrier.sd.0.i.left.(hat.egg.((replica.alloy.n.Fort.hp.1.col.n.sd.all:41-0.i.all.cast.drop#(doll.part.1.m.4)#k.pain#k.sticky#k.steel#k.mandatory#facade.Eme109:17:50:30).i.(self.t2.unpack.cataclysm)#brittle#quicksilver#iron pendant.img.3526wE286w2d2o2fgo2kw92j7YVJ000Ip0=M2352me9SF0agd9f2w1o8o3Mh3M1o8f3o4o1g8iMoMoMo1Mpg9EhN2hqM1o9whMo2M4o0g9wFxgMp3ofg96gp2Pgw1k66od3o1k8j63whk8f2gMpgpgkwFwod3pgk8gygE3g0ga8f2pMgp0wawFwgd3gEgbFgExh3o0gbwFgdMhp0cwGo1o3heyEhdEb)#eyepatch)).doc.[3221gM26xM2c4000Ip0YVJ=M2f9gx1xg3Mx165j5M1613M1615j5M6g63g6gxgf9][n]At the end of the 1st turn: Summon a [green]Fort[cu] that deals [light]steel[cu] damage)
+.img.(customImg).abilitydata.(ace.n.Roar.sd.117:184-2:103-2:56-2.i.mid.k.fierce.i.left.sidesc.Target ally cannot die this turn[comma] then target ALL 2 [yellow]fierce[cu].img.(customImg).paladin.n.Crypt.hp.8.sd.61-2:61-2:63-4:63-4:136-0
+.i.right.k.vigil#k.hyperboned#facade.pos183:32.img.(customImg).abilitydata.(ace.n.Engrave.sd.56-7:0:0:0:76-1.i.left.k.singleuse.i.mid.(hat.egg.bones)#eyepatch.img.(customImg).stoic.n.Glacier.hp.9.sd.0:51-2:68-2:68-2.i.left.(mid.hat.ace.sd.95-1.i.mid.sticker.ritemx.7545.splice.triggerhpdata.(ace.hp.1.col.c.sd.187-1.i.k.weaken)#togpip#togfri#togvis#sidesc.Target an enemy: while shielded it is [green]weakened[cu] equal to damage taken)#k.shield#k.vulnerable#facade.ite370:37:30:15.img.(customImg).paladin.n.Psammo.hp.7.sd.126-1:125-3:66-2:66-2:66-1:66-1.i.mid.k.sticky#facade.pos172:59:0:7.img.(customImg).i.t.jinx.t1.ea.slost.abilitydata.(ace.n.Barrier.sd.0.i.left.(hat.egg.((replica.alloy.n.Fort.hp.1.col.n.sd.all:41-0.i.all.cast.drop#(doll.part.1.m.4)#k.pain#k.sticky#k.steel#k.mandatory#facade.Eme109:17:50:30).i.(self.t2.unpack.cataclysm)#brittle#quicksilver#iron pendant.img.(customImg).doc.[(customImg)][n]At the end of the 1st turn: Summon a [green]Fort[cu] that deals [light]steel[cu] damage)
 
 .part.1).mn.G.modtier.0,
 
 (heropool.
-((replica.fey.n.Wounded.tier.1.sd.76-1:76-1:103-2:103-2:76-1.i.left2.k.swapcruel#facade.Spi21:32.i.topbot.k.cruel#facade.Eme82:7.img.332z242F262K422jl000z7b8dcbemmmffiYVJjccqifh9dquxIsoNEOh68BokpeghhhDe5EqiDa8JC1J2Z212L36Ya5zz2H365a856252IzF98a8a464z21zz99874FKGF4a4b86aKiz2G46za68a2a2vi31F56a7ak38l82027za2a2p8kpk820F36a3kokdokwiGK56ekodcowei2Gz8k2oddkqeq2H7wkodckoque3G7K9egidgsurGz62xetgsnseiIF3esnnmqeqH4%zgnmsfeI3462i4gnuqgMKj4gmsgN3yj2hN3hAyCqzNiehy3YN2ieE3YI)
-.doc.[Scar][n]Starts at half health.i.self.Start Damaged^1/2
-.abilitydata.(ace.n.Relief.sd.105-1:0:0:0:76-2.i.left.k.cruel.img.284000rS04A08j81MxM2M0h0M0MlNxhxN1h1Mw1x0g1w2i1Mx0g0))
-+
-(replica.splint.n.Cluster.hp.7.sd.134-1:110-1
-.img.342m482rc42y4c5zc84Ao2ig000247b8dh68IsoffijccqifcbeBokh9dDa8v66De5peguxA182mw9w283094w8kwl858c3rw8n8wmy2584wn6w82958lwkw7w8158l8wl84Gm418kmxkw4sBsE49d494kw4oiAsy5a4l5jAsymmlw5sjAIy9ld5sBshQE40z4o5Q5Asr1MrBodY5EUo51MzucosAUr14Md4osjhAoE2IMcmojhcoc24J49sgchq304IrE8Agsds32cI4F8Ahs334M4oF4t33cQ5qE5M33yI4q4MIc32cMI5o5JMc2)
-.abilitydata.(ace.n.Asteroid.sd.0:107-1:0:0:76-3.i.left.cast.drop#(wrench.m.-2).img.285000SF0Ce4lb5Ip0o0g5o0go2g0o0wo2wpgwg28gx8g2c2gb3o9g)
-+
-(replica.splint.n.Fig.hp.5.sd.112-2:79-1:151:151
-.img.362n242t262v462zg42Fm85Lgcvnc2lj000n7b8d96aqifIsocbejccffimmmh9dBokh687f6pegDe5EqiJC1uxA1vDndc7Ghc60ndcig5tD6L5ig5c6vCL2cjigigtv14zncnjjic43641c4tc5zhic62ln604365ndic628Fk6206tv2W2748bF%204734273mbFt0n7tzz29mbF270t5zz2fk8bkot1t2me2o2o2k3FotCv2FfeoA3kse36Cn62e849eoe8mso2E6vwn9bbamekEt4y3e8bbaoeoG2u6nebbfeIQk48asp8J52l48a9Kr2uwk290qI4rq2eu34r4H5q43y3XD).abilitydata.(ace.n.Eat.sd.108-1:0:0:0:76-1.i.left.k.inflictsingleuse#k.decay.img.286000F=jVcccz9=qqqif6E5E1p9o1o8h918gxg818gxgo19h8o2ao2)
-+
-(replica.splint.n.Coven.sd.52-2:0:76-1:76-1.hp.6.i.mid2.(mid.hat.ace.sd.56:107-2.i.left.k.generous.i.mid.togres#sidesc.Heal [pips] to all other heroes#k.pain#facade.ite55:96:20:5).i.right.wrench.m.-1.img.392r042t602v6a2z242F642G742H0c2K995L98ge02jiz7000b8dcbeIsoffijccqifBokmmmh9dh68pegDe5uxAEqiDa8JC1O47rrt26S71F7a4tTr65ai47rzP0506jvia4FzO46ria7iF0aFO0Ga4vivAa652Gr7ita0goa72rtWata09goa4214Av14LFrrra1hL6zv4061eheHekrv4v4HCdAFatv0ns1koc14tv1aHfmcegomr02rt5cK9gck052r6rcK9mcmz0OrreKdc30PAk4g8dmeT420l4g8fU41ql0fzR42rHuqwm0tzPrGHq14GRr71y1GQ).abilitydata.(ace.n.Reck.sd.0:107-2:0:0:76-1.i.left.cast.betray#k.singleuse.img.284000M6C=KR%jQ3M2g2w1gM1Mw1Mwg0x0gwgw0wg0wg0w0w0gw1MgNgM1gM1Mg0)
-+
-(replica.splint.n.Pixie.sd.93-2:93-2:112-1:112-1:103-2.img.352r242t642v622z995F8gcr62li000r7b8dcbeIsommmqifffiBokjcch68h9dDe5peguxAEqiDa8JC1ErtvL6ea5e52tG6b4eat65tE6bbbeae4r2D2bebbat374C4aebfavnmr7A2eva7avchcm26A26e2atevi9F14tet2e2czgc26Arf3e3zFArre3chhgkmrAr2gi2lOdck2W05vhj2a3mqi3X0742gdcslcgq2k50474t3cz9gimr1v7r2iz9kik251736rc8k9cj2W17272m4g8lic250404t742n4g9c2WAt26r2on2d14051v04OiuowkrB4D342io3WI53y3WD)
-.abilitydata.(ace.n.Dust.sd.90-3:0:0:0:76-2.i.mid.(hat.egg.(spider.n.Pix.hp.3.i.t.archer.img.2d3000ZVHLIF3g3g6gw1wg5m2j0wi0hw1wmw4wg3g6wj5ix6g0wg1g7g0g8g1g6gw1g=1)).i.blindfold#left.k.singleuse.img.284000=M2Un0uaaw1w1w1gMg0g2Miw1wkwM1iw2gwgwgM0w1w0wg3M2w)
-.part.1)&
+((replica.fey.n.Wounded.tier.1.sd.76-1:76-1:103-2:103-2:76-1.i.left2.k.swapcruel#facade.Spi21:32.i.topbot.k.cruel#facade.Eme82:7.img.(customImg).doc.[Scar][n]Starts at half health.i.self.Start Damaged^1/2
+.abilitydata.(ace.n.Relief.sd.105-1:0:0:0:76-2.i.left.k.cruel.img.(customImg).splint.n.Cluster.hp.7.sd.134-1:110-1
+.img.(customImg).abilitydata.(ace.n.Asteroid.sd.0:107-1:0:0:76-3.i.left.cast.drop#(wrench.m.-2).img.(customImg).splint.n.Fig.hp.5.sd.112-2:79-1:151:151
+.img.(customImg).abilitydata.(ace.n.Eat.sd.108-1:0:0:0:76-1.i.left.k.inflictsingleuse#k.decay.img.(customImg).splint.n.Coven.sd.52-2:0:76-1:76-1.hp.6.i.mid2.(mid.hat.ace.sd.56:107-2.i.left.k.generous.i.mid.togres#sidesc.Heal [pips] to all other heroes#k.pain#facade.ite55:96:20:5).i.right.wrench.m.-1.img.(customImg).abilitydata.(ace.n.Reck.sd.0:107-2:0:0:76-1.i.left.cast.betray#k.singleuse.img.(customImg).splint.n.Pixie.sd.93-2:93-2:112-1:112-1:103-2.img.(customImg).abilitydata.(ace.n.Dust.sd.90-3:0:0:0:76-2.i.mid.(hat.egg.(spider.n.Pix.hp.3.i.t.archer.img.(customImg).i.blindfold#left.k.singleuse.img.(customImg).part.1)&
 (heropool.
 (replica.rogue.n.Aloof.col.r.hp.9
-.sd.105-5:76-2:0:0:112-1.i.top.facade.bas0:0.img.382r062t402v462z482G683HSr93K8605Legbag2lk247000cbeb8dgggIsoqifjccBokEqibsxh9dpeghGejfDa8mmmROEJC1uxAUr9R1GtH6t4r4960HGr580KS1zt809Kt4Q0ks1808596E5020A0ksuzv941m0vts0A6kuG6941icm0t2ls6s169tcjgcr43lsr491cgbgcr030u49841Lc1QuG471epibgm0R086F6Encq0Svv1tCEoe1R080v0fdqecgoqmRzrtfgbbjomRGt4rebbbqoqR0z04rLfeH6rc6iagoqcT0584rd6iad0T50z0wyce0drtRvrKewy0q156S61zteycr56vTrz1w16v0tQ)
-.speech.Wurf:Woofr:Grrhgahg:[sin]Awoooooo[sin]:Wurfggrrg:I could've grgrgwarrff that:Bring it in!:I'm gonna hug you up:Baby I'm preying on you tonight:WUFNF WURDF [i]cough cough[i]:[b]AOOOOO[b]:[wolf]:[alpha]:The beast is free:Try to hide:You know you can't hide:This place is familiar:I know this dungeon like the back of my claws:Run while you can:This dungeon is my hunting ground:Seeking:Hunting:Run faster:Bite me:Bite back:Can't[dot][dot][dot] save you!:Let me forget:Eat your heart out:You think you can hide:I can smell your scent for miles:I'm preying on you:Claws[dot][dot][dot] hungry:Graug:Raghragu:RaHUggg:ragaghhg:I have your scent
-.abilitydata.(statue.n.Howl.sd.72:0:0:0:76-3.i.left.(sticker.(ritemx.1355f.part.0.splice.k.resilient.mrg.(left.hat.housecat).mrg.eyepatch.mrg.facade.bas170:0#k.selfheal#t.bee.doc.[red]We feast[cu])).i.mid.(right.hat.alpha)#togeft#togtime#togfri#k.singleuse#sidesc.Replace all sides with [grey]self[cu][red]heal[cu] damage sides this fight[comma] retaining their original pips[n][purple]singleCast[cu].i.left.enchanted harp.i.mid.togtarg.i.pendulum#rusty plate.img.285000VccH77n56=qq3g8o4o8w4o90oxga1o9o91ogag1j8gpkp)
-+
-(replica.fey.n.Painter.hp.7.sd.76-2:107-1:92-2:106-2:103-2:96-2.i.right.k.pristine#facade.pos105:0
-.img.322v623E8gZ2jj000247LAsb8dmhaIsocbeqifzrgBokjcch9dh68ffibsxejfDa8peguxA084616E4g81g4g68ZYgC6EXh8CgZWh96C8Z5g93v1Eg86c2nc218Z8vc2ej2cq08Xg8vc2kbai2q3g5g8vq3bbu2cQ6c6dq3bbaue2c0dq26q3jiebwm2c6cq2ik2o3w3ieo21vvjkeoA3myk312dvieteokeiyo21dc6Qtsibaikm1d6o72ksibboko1c72726ksbblC2v%2m6ebaoeF2%2n6eaieHRkn2fI386kfk386G69vf3696G983k398D).abilitydata.(ace.n.Splorch.sd.15-1:141:0:0:76-1.i.mid.togpip#sidesc.Add [light]copycat[cu] to target's sides this turn 1 [green]weaken[cu] [orange]singleUse[cu].i.k.weaken.i.pendulum#rusty plate.img.282%jQ000y1w1x2w8w7w6x6x3z1y)
-+
-(replica.fey.n.Nebula.hp.8.sd.34-2:104-1
+.sd.105-5:76-2:0:0:112-1.i.top.facade.bas0:0.img.(customImg).speech.Wurf:Woofr:Grrhgahg:[sin]Awoooooo[sin]:Wurfggrrg:I could've grgrgwarrff that:Bring it in!:I'm gonna hug you up:Baby I'm preying on you tonight:WUFNF WURDF [i]cough cough[i]:[b]AOOOOO[b]:[wolf]:[alpha]:The beast is free:Try to hide:You know you can't hide:This place is familiar:I know this dungeon like the back of my claws:Run while you can:This dungeon is my hunting ground:Seeking:Hunting:Run faster:Bite me:Bite back:Can't[dot][dot][dot] save you!:Let me forget:Eat your heart out:You think you can hide:I can smell your scent for miles:I'm preying on you:Claws[dot][dot][dot] hungry:Graug:Raghragu:RaHUggg:ragaghhg:I have your scent
+.abilitydata.(statue.n.Howl.sd.72:0:0:0:76-3.i.left.(sticker.(ritemx.1355f.part.0.splice.k.resilient.mrg.(left.hat.housecat).mrg.eyepatch.mrg.facade.bas170:0#k.selfheal#t.bee.doc.[red]We feast[cu])).i.mid.(right.hat.alpha)#togeft#togtime#togfri#k.singleuse#sidesc.Replace all sides with [grey]self[cu][red]heal[cu] damage sides this fight[comma] retaining their original pips[n][purple]singleCast[cu].i.left.enchanted harp.i.mid.togtarg.i.pendulum#rusty plate.img.(customImg).fey.n.Painter.hp.7.sd.76-2:107-1:92-2:106-2:103-2:96-2.i.right.k.pristine#facade.pos105:0
+.img.(customImg).abilitydata.(ace.n.Splorch.sd.15-1:141:0:0:76-1.i.mid.togpip#sidesc.Add [light]copycat[cu] to target's sides this turn 1 [green]weaken[cu] [orange]singleUse[cu].i.k.weaken.i.pendulum#rusty plate.img.(customImg).fey.n.Nebula.hp.8.sd.34-2:104-1
 .i.left.(mid.hat.ace.sd.0:34-2.i.left.cast.drop.i.mid.cast.balance#togvis)#k.manacost#facade.Col12:4:-30:-7
-.i.mid.k.singleuse#k.permaboost#k.manacost#facade.bas94:40:-40:0.i.topbot.(mid.hat.ace.sd.116-2:100.i.mid.togres#eyepatch#togpip#k.era)#k.managain#facade.Lem248:74.img.342v422x622z432Ga62mi000247b8dh68cbeDa8IsoqifffijccBokmmmNbah9dSojEqiDe5JC1E2X2L38484g52BxA60385gm582zxB26gv8nmgmg28W2D4hnnm84x8zx06z498gm8363vx136g248gmvieuei25B34hnviudke2vAP48gvekdcke3B38QiekukGe2C2g86bottoao%C4g4ki2boa7ta7Cg82ljbpGo7C4g2vkfkq6qekaxC83ziekddckiqE82zikddc6iqE853qeddjiEv852q4kd7eFv86vr4ecfFz8a3wr2f20aFvo26iuwG3o16C5boxiy36pGE2Goa3a3aoGD).abilitydata.(ace.n.Nova.sd.100:0:0:0:76-8.img.284Sk0t60000R70xgNgyg3gwg5gM5Mg5hM3MgwgM1MgygNgx)
-+
-(replica.fey.n.Angel.hp.6.sd.103-4:76-3:103-2:103-2.i.left.k.pristine#facade.pos105:0.i.topbot.k.shield#k.vitality#facade.Ber107:0.img.342n242va22z8c2D422kj000n7b8dIsoBokLIFqifjcch9dcbemiiffiEAAh68YVJmmmpeguxAJC11nKnn2040n12X21WC253ktbppaW2125taR4ina5125t2imjmum2i4vC2asnmjmui43i4v14ak4m4imui2hgnv0nk4njui2c9cg2kC2k2Wmi2e%zD02W3Dm3=z51nnnm3=6z4CYm3e987cg2C258e2qRcz3En9ecqy3gwe3E528dcarc8wq2GDec=78egFW2e=7qeqGQ48=8fIDh86ercI4vhg86zH4kovfg2d04Hnoafegnok4G4lvhnaoDH5oa4A2ak4kE).abilitydata.(ace.n.Rez.sd.15:74-3:0:0:76-1.i.left.k.swapdeathwish.i.mid.togres.i.pendulum#k.singleuse.i.mid.hat.spade.img.283000SXnWNhw5wh0h0hwg0h0gw0h1h0w0whw0w2gw6w5w3)
-+
-(replica.fey.n.Survivor.hp.7.sd.86-1:113-3:105-3:111-3:110-1:93-2
-.img.342r422ti22z242F2r2li000z7b8dmmmh68qifjccIsoSojfficbeBokDe5h9dv66Ek9EqipegE2lkik3Gg0rk4i7r514Cgrk=7tW2Bgoz=%ik2k5A4og464i%i7k3k215go3=i47rq2k1Wo2i6j6k7tbF15sgtk6t6k3wa25F5o372ctaxaO135o262d2cawyqF052acz8392qc83520rnza87tyc3031Fmcana82amyq2C2XcmfafemcqCr5zcfff8c8EF5mffdcEougu4q4mes9aEsohhuq4meb08C8s2c8hgurb39B9ba2shu4P98B8bac2sovos39K998E)
-.abilitydata.(statue.n.Self.sd.right:76-1.i.left.(sticker.(garnet#ritemx.16efc.splice.(ruby.part.0)))#togtime.img.285000%jQt60M6C=KR294gw8g38p828g9g80o191o18h838183o1o1)
-
-+(replica.fey.n.Metalhead.hp.7.sd.77-1:105-3:105-3:105-3.i.left.eyepatch#k.steel#facade.Dog23:0.i.mid.k.shield#facade.Ber107:0.img.332t202v022z982jk247b8d000cbeIsoqifmmmjccBokffih9dh68EqiFFFxrrDe5peguxADa8JC1536cvddc21X3ididddi60Wt6e0eddj3j250eb0ci73162i65kbiciahpak0=4eb6ago9zak07tbbgzazgavEbahz0o9g2E5ebh91a9g1t50bgaq2E9at605gfem0f1b2175hfemy1kwec1721gaeaga2eagwmt704skvg90zgek06340q40e9azmem272504va99fev60Y0k2g9naGXtl2g8qa12cv51s0ul0b06v73426s2eouAm06c17t47c60eu13ct70tQ70C1RZ).abilitydata.(ace.n.Metallize.sd.80:0:0:0:76-1.i.mid.sticker.(all.mid.hat.ace.sd.12:66-0.i.mid.togtarg#eyepatch#facade.Lem155:20:-90:-10#k.flesh)#togkey.i.pendulum#rusty plate.img.285000mmmuxAPMCeee2w94h93og181b2g090g081og18295og2)
-.part.1)&
+.i.mid.k.singleuse#k.permaboost#k.manacost#facade.bas94:40:-40:0.i.topbot.(mid.hat.ace.sd.116-2:100.i.mid.togres#eyepatch#togpip#k.era)#k.managain#facade.Lem248:74.img.(customImg).abilitydata.(ace.n.Nova.sd.100:0:0:0:76-8.img.(customImg).fey.n.Angel.hp.6.sd.103-4:76-3:103-2:103-2.i.left.k.pristine#facade.pos105:0.i.topbot.k.shield#k.vitality#facade.Ber107:0.img.(customImg).abilitydata.(ace.n.Rez.sd.15:74-3:0:0:76-1.i.left.k.swapdeathwish.i.mid.togres.i.pendulum#k.singleuse.i.mid.hat.spade.img.(customImg).fey.n.Survivor.hp.7.sd.86-1:113-3:105-3:111-3:110-1:93-2
+.img.(customImg).abilitydata.(statue.n.Self.sd.right:76-1.i.left.(sticker.(garnet#ritemx.16efc.splice.(ruby.part.0)))#togtime.img.(customImg).fey.n.Metalhead.hp.7.sd.77-1:105-3:105-3:105-3.i.left.eyepatch#k.steel#facade.Dog23:0.i.mid.k.shield#facade.Ber107:0.img.(customImg).abilitydata.(ace.n.Metallize.sd.80:0:0:0:76-1.i.mid.sticker.(all.mid.hat.ace.sd.12:66-0.i.mid.togtarg#eyepatch#facade.Lem155:20:-90:-10#k.flesh)#togkey.i.pendulum#rusty plate.img.(customImg).part.1)&
 (heropool.
-(replica.monk.n.Maiden.hp.7.col.r.tier.3.sd.77-2:104-2:104-4:104-4:104-2.i.left2.eyepatch#k.steel#facade.Dog23:0.i.mid2.eyepatch#k.repel#facade.Dog14:45:99:10.i.topbot.eyepatch#k.pristine#facade.pos105:0.img.362n8c2rog2vs02z0c2Drm3GDgp2he247000miiaaaLIFYVJEAAb8dmmmfficbeuxAh9dqif70o0syBEv70kEAyAEsE0708k1BEt1t05Ecn1cb9c04sAzn8Dho9BE18hmgqco0AFzGng80s18Gn8k828Gn08go1ch8dac40v9cQoIc0w8wc04sEs1cQoc28o1cCEvQrwcgwkId0Bs1QDgkIno0v8zrlhcwn8pwt08jy84z8t0M0Ihc1wc50FvN0IhIwc73O08goc0Z9om3%c9glgon=z8gkgon6).abilitydata.(ace.n.Globin.sd.107-1:0:0:0:15-2.i.mid.(sticker.Blood Chalice)#togtarg#togpip#k.decay.i.pendulum.img.285Z93000PMCR70twz8wg9gw8w1h1w7o1h1owo0x0ow8grgagpgcha)
-+
-(replica.fate.n.Archdruid.sd.107-2:104-2:16-2:58-2:111-2.i.left2.k.managain#facade.dan7:59.i.mid.eyepatch#k.repel#facade.Dog14:45:99:10.img.352v242G262K2g2Lea2Mqw2lj000v7b8djccIsocbeqifffiEk9Eqih9dh68Soj7f6Bokpeg8o8De5JC104faG25ig2i20iG21afag4a4o4eo4v2i2c1b4g4a482eo4aXi615c42i82fgf2a5g2CGKo2aigL43a4g6213o34ogL2lkvK61KpgoaLGujuvg0Kiogj2LGks9cvc6jg4Q4e3uk98c4G0gvQ4e2kuku9suGm06vbae2k7mjsckG165s62nmRc6mQCbt6mcKo2ku63EL2scmcsum6ckuc2E4e4c2mcsk99s6kF4aAv6u998m6mF3y25u99c7I34k4s8s6mcH2w0vk649dI2Mqv72d0q04D2M4x2yokQr4F2MMqGzm4r5DvM4q4Qo2WF).abilitydata.(statue.n.Naturalism.sd.right:76-3.i.left.enchant.ea.balance#k.singleuse.img.287uSs=KR0004A0%jQM6C8j8hMp0ogMq2g4hw3o9wo1EbohcgayEgw8xEh)
-+
-(replica.thief.n.Analyst.col.r.tier.3.hp.7.sd.187-1:0:111-2:111-2
+(replica.monk.n.Maiden.hp.7.col.r.tier.3.sd.77-2:104-2:104-4:104-4:104-2.i.left2.eyepatch#k.steel#facade.Dog23:0.i.mid2.eyepatch#k.repel#facade.Dog14:45:99:10.i.topbot.eyepatch#k.pristine#facade.pos105:0.img.(customImg).abilitydata.(ace.n.Globin.sd.107-1:0:0:0:15-2.i.mid.(sticker.Blood Chalice)#togtarg#togpip#k.decay.i.pendulum.img.(customImg).fate.n.Archdruid.sd.107-2:104-2:16-2:58-2:111-2.i.left2.k.managain#facade.dan7:59.i.mid.eyepatch#k.repel#facade.Dog14:45:99:10.img.(customImg).abilitydata.(statue.n.Naturalism.sd.right:76-3.i.left.enchant.ea.balance#k.singleuse.img.(customImg).thief.n.Analyst.col.r.tier.3.hp.7.sd.187-1:0:111-2:111-2
 .i.left.k.managain#k.growth
-.i.mid.sticker.(learn.sstatue.abilitydata.(statue.n.Cast.sd.right:76-1.i.left.cast.bandage#eyepatch#k.boost#k.growth#k.singleuse.img.284gfk0000yS6gs0hMwh1hMwh2gMwg3gxg3gxg3MxM1g0MxM0i0x0h))#sidesc.Learn [blue]boosting Cast[cu] this fight [pipsk]#togpip#togkey#facade.ite280:0:50:20
-.i.right.sticker.(learn.sstatue.abilitydata.(statue.n.Cast.sd.right:76-1.i.left.cast.bandage#eyepatch#k.repel#k.growth#k.singleuse.img.284gfk000rS04A00h1hM0h1hw1g1gMw1g1gx1g1gx4xMg2Mxi1Mwh))#sidesc.Learn [orange]repelling[cu] [blue]Cast[cu] this fight [pipsk]#togpip#togkey#facade.ite280:77:50:20
-.i.rightmost.sticker.(learn.sstatue.abilitydata.(statue.n.Cast.sd.right:76-1.i.left.cast.bandage#eyepatch#k.descend#k.growth#k.singleuse.img.284gfk000%jQM6CMh1h0wh1h0wMg1g1xg1g1xg1g1Mx4gxM2iwM1h))#sidesc.Learn [light]descending[cu] [blue]Cast[cu] this fight [pipsk]#togpip#togkey#facade.ite280:30:50:20
+.i.mid.sticker.(learn.sstatue.abilitydata.(statue.n.Cast.sd.right:76-1.i.left.cast.bandage#eyepatch#k.boost#k.growth#k.singleuse.img.(customImg).Learn [blue]boosting Cast[cu] this fight [pipsk]#togpip#togkey#facade.ite280:0:50:20
+.i.right.sticker.(learn.sstatue.abilitydata.(statue.n.Cast.sd.right:76-1.i.left.cast.bandage#eyepatch#k.repel#k.growth#k.singleuse.img.(customImg).Learn [orange]repelling[cu] [blue]Cast[cu] this fight [pipsk]#togpip#togkey#facade.ite280:77:50:20
+.i.rightmost.sticker.(learn.sstatue.abilitydata.(statue.n.Cast.sd.right:76-1.i.left.cast.bandage#eyepatch#k.descend#k.growth#k.singleuse.img.(customImg).Learn [light]descending[cu] [blue]Cast[cu] this fight [pipsk]#togpip#togkey#facade.ite280:30:50:20
 .i.right3.togtarg#togtime.i.ballet shoes#rightmost.hat.statue
-.img.332t242va22wa42kk000t7b8dIsomiicbeqifEAAffijccmmmaaah9dBokh68ZVHDe5bsxpegJC1J5b42Nta5gkg42K3wglg4atFm1342alhkg2wEe082atllkwvwy0e8e34g4hkvg2ot20mfttbkvgvco318e8twgvig2rc2E3m342g2ivq7c2Et2m2h3i2q%c212b9843pocrco20tvqis9emeuQse8352qci4cs8uem92ue1252didcsicqAs2F2Wtc=7qioGQ0si=7sisKti=cjL2o4c7iscM2oi4c7cJ8f82ioi2dL28f8pQ8Lm8fx828nJ9mfemC28nF)
-.abilitydata.(statue.n.Cast.sd.right:76-5.i.left.cast.bandage#eyepatch#k.repel#k.descend#k.boost.img.2870000yS%jQrS0M6C6gs4A0w1E81Mg1E81ogw0E80Moh090ph090pwh9pM0h9p2g9o1)
+.img.(customImg).abilitydata.(statue.n.Cast.sd.right:76-5.i.left.cast.bandage#eyepatch#k.repel#k.descend#k.boost.img.(customImg).witch.n.Horizon.hp.8.sd.0:0:104-4:104-4.i.left2.(mid.hat.ace.sd.116-4:100.i.mid.togres#eyepatch#togpip#k.era)#k.managain#facade.Lem248:74.i.right.(mid.hat.ace.sd.0:34-8.i.left.cast.drop.i.mid.togvis.i.left.right.hat.priestess.m.8.i.togunt)#k.manacost#facade.Col12:4:-30:-7.i.topbot.eyepatch#k.charged#facade.Lem50:0.img.(customImg).abilitydata.(statue.n.Bring.sd.right:76-1.i.left.enchant.(no spells&allitem.sapphire ring.m.2&x9.Peace.splice.5 max mana&x9.Peace.splice.5 max mana&x2.Peace.splice.5 max mana)#sidesc.You cannot use abilities[nh][hp-plus][p]100 max stored mana[nh][hp-plus][p]2 pips to heroes' mana/[blue]managain[cu] sides.img.(customImg).fate.n.Baluarte.sd.114-3:103-2:112-2:112-2:103-2.i.mid2.k.shield#k.vitality#facade.Ber107:0
+.img.(customImg).abilitydata.(ace.n.Shout.sd.34:0:0:0:76-3.i.mid.(sticker.(ritemx.1355f.part.0.splice.soup.mrg.ritemx.d598.mrg.k.boost))#togtarg#sidesc.Replace allied sides with [light]'heal and shield 1 all [blue]boost[cu]'[cu] sides[comma] retaining their other keywords.i.pendulum#rusty plate.img.(customImg).fate.n.Taranta.hp.10.sd.91-1:112-2:95-1:95-1:112-1:111-1.img.(customImg).doc.[(customImg)] [secret]The 10th hp:[cu] learn the spell: [blue]sting[cu] and [violet]permaboost[cu] 1
+.i.triggerhpdata.(lost.hp.30.sd.12-1.i.mid.sticker.(t.lazy.abilitydata.(ace.n.Sting.sd.53-1:0:0:0:76-3.i.left.hat.bee#eyepatch#(wrench.m.-3)#k.tall#k.weaken.img.(customImg).permaboost.i.pendulum)
 +
-(replica.witch.n.Horizon.hp.8.sd.0:0:104-4:104-4.i.left2.(mid.hat.ace.sd.116-4:100.i.mid.togres#eyepatch#togpip#k.era)#k.managain#facade.Lem248:74.i.right.(mid.hat.ace.sd.0:34-8.i.left.cast.drop.i.mid.togvis.i.left.right.hat.priestess.m.8.i.togunt)#k.manacost#facade.Col12:4:-30:-7.i.topbot.eyepatch#k.charged#facade.Lem50:0.img.332rgE2u4k2yco2mf000247Vccq3lDa8b8dh9djccpegIsov66qifBokn56h683uo0u1u=1l5y5ck0uu=l4dk4oy4yu%oc4doudkd4ok3k04fff4y3ok4oewb8wfk2odkcw8gQ7g8wyk2kew8Q76Q8wy3ocwr774Egwck2kEg8r77Q8ro0gbbr74Qbg1kcwhwgbb8gcYuzvxtUoZMIsIwvxtUk%NLtwIMwoU=4MsJDBMso=05ksDBUsU=6lsDIt4%4E9gokIBtI4=4i8pkIAJ4E4%Eg9g8p4J4r4%gbE8o6rr4Zgb8E8kEri4=0g9r5rhZ).abilitydata.(statue.n.Bring.sd.right:76-1.i.left.enchant.(no spells&allitem.sapphire ring.m.2&x9.Peace.splice.5 max mana&x9.Peace.splice.5 max mana&x2.Peace.splice.5 max mana)#sidesc.You cannot use abilities[nh][hp-plus][p]100 max stored mana[nh][hp-plus][p]2 pips to heroes' mana/[blue]managain[cu] sides.img.284000Z93n56H772wgw3gMgMg1Mw0g0wMwg1g1gwg1g1g0Mw0g0wM1gMgMg3wMw1)
-+
-(replica.fate.n.Baluarte.sd.114-3:103-2:112-2:112-2:103-2.i.mid2.k.shield#k.vitality#facade.Ber107:0
-.img.352r142v8h2yog2Ckc3L8402jg000247mmmEDweeetttb8dcbeIsoqifZVHjcch6v9dBokpeg3ry9go33ro8j8k8o338jjCg31v8mv8Co3oh8mdv8E842h8ndkvcE504g9ndk9gkELh9neaCLy9mf9lcL4g9mcGclcEk4r9lcg4p8cEcEc4ro8Cg6pgcFc804syC4Mc5QJ5rot48cIBMJAYM4ru4o8cIWxUIQ1souykAzwMIM1os4t4g8AzK3s4so5pAwU4MA3040s6RoAwB335o8cR4B3348dgeg5o3rg8egfgp432p0y8d8go42)
-.abilitydata.(ace.n.Shout.sd.34:0:0:0:76-3.i.mid.(sticker.(ritemx.1355f.part.0.splice.soup.mrg.ritemx.d598.mrg.k.boost))#togtarg#sidesc.Replace allied sides with [light]'heal and shield 1 all [blue]boost[cu]'[cu] sides[comma] retaining their other keywords.i.pendulum#rusty plate.img.2831OX0008uAg1hw1w1gw4h2w0hw1wgwgw0wk0wh1g0i2whw1wg)
-+
-(replica.fate.n.Taranta.hp.10.sd.91-1:112-2:95-1:95-1:112-1:111-1.img.2ge000qif247IsojccBokh68h9dfebb8dpegDa8NbauxAUosisoW8sEYEs838g6h4l4so18g6gNI4lNo0oE5goNIodNo0s6lgJgdIo80g5n4ge4g80sE4nfck4808FkI5leks9kgE4o9Jo9I808lg5oQ9sEg91gk5l4og4kEp24Agkfdkgs38A4fdogo38Ag4gekgoU8sAgcgq4V8t84kd4UxA8t85gVyAhso9wA3Ay8ho8Ay28Ax9saAx1)
-.doc.[3123092c60005fmRRRkkkbbbBBB1f2878081hE2w30jow0o30jExo30Ejwp31oEhEp31yEgwo32wpwgw30wswg0808782f1] [secret]The 10th hp:[cu] learn the spell: [blue]sting[cu] and [violet]permaboost[cu] 1
-.i.triggerhpdata.(lost.hp.30.sd.12-1.i.mid.sticker.(t.lazy.abilitydata.(ace.n.Sting.sd.53-1:0:0:0:76-3.i.left.hat.bee#eyepatch#(wrench.m.-3)#k.tall#k.weaken.img.285rS02o65d40003Dao1wqg38go83wh8w3g9o8w1w9oiw0g8pg9g0hcg0))#togpip#togtarg#togtime#k.permaboost.i.pendulum)
-+
-(replica.fate.n.Life.hp.8.sd.93-4:93-3:104-6:104-6:93-3:93-2.img.352F242K642La22N622Ok42ll000F7b8dcbeqifffimmmIsoH77jcchcah68h9dBokJC1SoiEqiDe5pegtwzDa8Ig0FaK204GgJg36db47404gGs0ug2Kad472560g0gsgsF26dcacLKKu0u0sFFdcacK3%g0g0sF6acbc6aF37Ggu26ac7da42No7420gva7adK2aKFN13g3LaNdLi82K1FhKLadc2i9F21Y3LbcNixo34GFqKmS438m20F1F2ra8mC3oAi3J258698mi8qAm2IS5i8qffeqioIkTmiqffemimJ96348e8fji2IO9No4fqn82J98K2p4f93OH48k83yp29F84I2k8k82iwyEm2k98OI4k92iy3k9OM4l2s34OJ)
-.abilitydata.(ace.n.Preserve.sd.34-1:117:0:0:76-6.i.mid.togtarg#k.singleuse.i.pendulum#rusty plate.img.2840004A05d42o60wgMw1MwjwM0gM0hMx2wiM1wMwi0wN0MgwMgw1gw0Mw2g1)
-+
-(replica.fate.n.Scar.sd.117:109-3:82-2:82-2:107-2.i.right.k.managain#facade.dan7:59
-.img.362t422v8e2xa62ze42F2c3G8iv2ii000247b8dqifffijcch68cbeBokmmmIsoh9dDe5ZVHpegEqiDa8JC11evt0W2D492tzi952D284z8j4v24A5v24eiG82zA92fjG43z18teieG2nm2tett8cej2xc6m3e2z82ai2i26gcg6203e28b83xc6k620204da83xacl62AFa83c3cahm2A2gaF3ocF6c2B2hxcormsa3C2g647cxgsc2DF4a7glgamDFxllkcacD346glk6bE3m46gbc6E2tn46h6E252on2704DW2auowc2WB252tao3t5D253y352B)
-.abilitydata.(ace.n.Cicatriz.sd.90:74-2:0:0:76-2.i.mid.togres#togvis#sidesc.Heal and shield [pips] to a half hp hero [light]cleanse[cu].i.k.cleanse#pendulum#rusty plate.img.284000SF0qt7SXn2g6gw1x2w0w0wg0wgwg1gwgMwg1wgNgw2gNw4h2)
-
-
-.part.1).mn.R.modtier.0,
+(replica.fate.n.Life.hp.8.sd.93-4:93-3:104-6:104-6:93-3:93-2.img.(customImg).abilitydata.(ace.n.Preserve.sd.34-1:117:0:0:76-6.i.mid.togtarg#k.singleuse.i.pendulum#rusty plate.img.(customImg).fate.n.Scar.sd.117:109-3:82-2:82-2:107-2.i.right.k.managain#facade.dan7:59
+.img.(customImg).abilitydata.(ace.n.Cicatriz.sd.90:74-2:0:0:76-2.i.mid.togres#togvis#sidesc.Heal and shield [pips] to a half hp hero [light]cleanse[cu].i.k.cleanse#pendulum#rusty plate.img.(customImg).part.1).mn.R.modtier.0,
 
 
 
 (heropool.
-(replica.monk.n.Cold.tier.1.hp.5.col.b.sd.61-1:61-1:0:0:80-2.i.top.facade.bas0:0.img.352j422pjj2q992Ei63Hiec2kh000ccs8lx246QGAIsog67Ca8rfev9ammmONKtwzj6435ABAeee1306R7B363ppj6z37ppp6z72ZXOz62ZW2=2y2pp46eifeic063pj46HiffEO4O4cibiceH02ZjgbbaEie03j6O6bqa7cEj756gb98ag62163625chk6gak72y72526kum7gm721HW2bhlowgc216ce25caq9bc2yfi56oq9b261eEE26gaqaga2y707o6ca98da0o6Bkm6csa98agkmkA6ongcsa9g6mkCko6hc%1oDrrrF).abilitydata.(ace.sd.131-1:0:0:0:76-1.n.Grippe.i.left.k.singleuse.img.2840005e3rN6dr01wMh2why0Mg1MxM4gNcMwi1gx2gMwg1)
-+
-(replica.mage.n.Raiser.hp.5.sd.18-3:18-2:0:0:36-1.i.left2.togfri#facade.Spi129:18.img.322jgc2uso2id000QGAmmmrfeIu246eeeb8dg67ABAOKItwzCa8Rsp9os9sRubbos3wcbp9sp82wbatmo8s1ob8g6jku80wb8gYjks8scbo%gwksr9g%glp8qh7h4cku0c5cg9jjjk8o1wjg48cnckokos1wg5g8AldAlu2cgYh4cgu3wgI%hto2wd%h1s2wcw5jgEcAc0s3wckw6kME8Tdkw7jTwdxg5cVwdwmWnV).abilitydata.(ace.n.Prong.sd.36-1:0:0:0:76-6.i.mid.(hat.egg.(lazy.n.Zombie.hp.10.col.p.tier.3.sd.53-2:53-2:36-2:36-2:36-2:36-2.i.t.zombie.img.zombie))#eyepatch.i.left.k.singleuse#sidesc.1 damage [light]cleave[cu][comma] then summon a friendly [purple]Zombie [n]singleCast[cu].img.284000Z93G77uaag1w2gw1g2wgM0wg0Mg0l2MwgM5g6w5Mg2)
-+
-(replica.thief.n.Dropout.hp.6.col.b.sd.115-3:0:93-3:93-3:76-1.i.topbot.k.exert#facade.bas93:25:-5:-13.img.332j842n942pg42ke000rfevklQGAg67Iso246haammm426SoieeeABAtwzWt4gUtV4gt7ngjUs=4bj2j9696b42b48k95hoa14bjcbppngja4kd49glgon8paf9gd4o91ga4cEdkjdko8s1pnfd4dkg814h4jkdkfE4041nd48kw4Io5oIU5ck8dwMq4Mo3nkc9dlxQIoUnpfflVjpkcEfclUj0g5fk8lsXg5gew4okX06gof8kX0g6gokd8X2g6gqXUDX0)
-.abilitydata.(ace.n.Fidget.sd.103-1:90-1:0:0:76-1.i.left.k.damage.i.mid.eyepatch#k.heal#togorf#togpip#k.managain#sidesc.Damage and heal 1 or heal and damage 1[n]Refund 1 mana[nokeyword].i.pendulum#rusty plate.img.284000jt=j==0f=aw1g1g0wM0w1wMhwM1gwhw3wMgM5ga)
-
-+(replica.mage.n.Fool.hp.6.sd.18-1:85-1:0:0:84-1.i.left.k.chain#facade.Lem3:89.img.2fe000QGArfeIsog67246ZVHtwzSoi426eeemmmABACa8osXUqsX2rosgag3rp8dx8g1srsc7w8g0krcZw8kgsos8=cgac8=wbd=w8g9eZwcgkh8cg8kcg5wkgkdgck8Em8El0c9c4IMl9Mkg0ge5c8gc4c8g1kgc%d2k9cZd2k8g8585sk82g8h858Qgc3agk86s83bgldIUAgagmWDAW).abilitydata.(ace.n.Idea.sd.177-2:0:0:0:76-1.i.left.k.boost#k.inflictdeath#k.singleuse.img.284ZVH000eeetwzgw3wgM5M0wg1gw1h1h0M1h1MgwM1Mwi0x0k1i)
-+(replica.mage.n.Subject.sd.18-1:18-1:0:0:77-1.i.left2.k.chain#facade.Lem3:89.i.right.eyepatch#k.fizz#facade.The0:40:-1:-2.img.322n803q0wd2fdIsoQGArfe000246g67mmmtwzeeeOKIMxtABASoifkb8kfd8T8f815Se3E5E1t0ckR6otok8Q7MtEa1nYpE90n8Y0p0k9094081508k849048gwh8gwgk4n4goIh9Igl8Y09041kcknYE6qgko0oZqg8g04s608wgdsa04s08kqB9kno6ogcoBaknw58dsCaogafgtjfe).abilitydata.(ace.n.Unleash.sd.95-1:0:0:0:76-3.i.mid.sticker.(natural.splice.k.exert).i.left.enchanted harp.i.mid.togtarg#togtime.i.left.memory#lawnmower#k.inflictexert#k.cleave#sidesc.[pips] damage [purple]inflictexert [light]cleave[cu][cu][comma] then your [blue]blue[cu] heroes gain [purple]exert[cu] this fight[n][purple]singleCast[cu].img.283000twzeee2h4whw4h2w1h1wg1x1g0g0x0g1g3g2g1g1)
-.part.1)&
+(replica.monk.n.Cold.tier.1.hp.5.col.b.sd.61-1:61-1:0:0:80-2.i.top.facade.bas0:0.img.(customImg).abilitydata.(ace.sd.131-1:0:0:0:76-1.n.Grippe.i.left.k.singleuse.img.(customImg).mage.n.Raiser.hp.5.sd.18-3:18-2:0:0:36-1.i.left2.togfri#facade.Spi129:18.img.(customImg).abilitydata.(ace.n.Prong.sd.36-1:0:0:0:76-6.i.mid.(hat.egg.(lazy.n.Zombie.hp.10.col.p.tier.3.sd.53-2:53-2:36-2:36-2:36-2:36-2.i.t.zombie.img.(customImg).i.left.k.singleuse#sidesc.1 damage [light]cleave[cu][comma] then summon a friendly [purple]Zombie [n]singleCast[cu].img.(customImg).thief.n.Dropout.hp.6.col.b.sd.115-3:0:93-3:93-3:76-1.i.topbot.k.exert#facade.bas93:25:-5:-13.img.(customImg).abilitydata.(ace.n.Fidget.sd.103-1:90-1:0:0:76-1.i.left.k.damage.i.mid.eyepatch#k.heal#togorf#togpip#k.managain#sidesc.Damage and heal 1 or heal and damage 1[n]Refund 1 mana[nokeyword].i.pendulum#rusty plate.img.(customImg).mage.n.Fool.hp.6.sd.18-1:85-1:0:0:84-1.i.left.k.chain#facade.Lem3:89.img.(customImg).abilitydata.(ace.n.Idea.sd.177-2:0:0:0:76-1.i.left.k.boost#k.inflictdeath#k.singleuse.img.(customImg).mage.n.Subject.sd.18-1:18-1:0:0:77-1.i.left2.k.chain#facade.Lem3:89.i.right.eyepatch#k.fizz#facade.The0:40:-1:-2.img.(customImg).abilitydata.(ace.n.Unleash.sd.95-1:0:0:0:76-3.i.mid.sticker.(natural.splice.k.exert).i.left.enchanted harp.i.mid.togtarg#togtime.i.left.memory#lawnmower#k.inflictexert#k.cleave#sidesc.[pips] damage [purple]inflictexert [light]cleave[cu][cu][comma] then your [blue]blue[cu] heroes gain [purple]exert[cu] this fight[n][purple]singleCast[cu].img.(customImg).part.1)&
 (heropool.
-(replica.monk.n.Brand.col.b.hp.7.sd.76-3:76-2:82-2:82-2.i.left2.eyepatch#k.fizz#facade.The0:40:-1:-2.i.topbot.k.chain#facade.eba20:30.img.372n242p2a2q8i2xan2De22F435Hisx082ih000g67n6QGACa8v9arfeC64IsoNbatwzmmmeee426Xi7SoiABA0q208053a9x0aqa85pe9a251pe4pf98jH4999qsH4ae9qqsia2W12Dfiaia3Wb20apeie825vucx3afe8d=hp0aDfDg%i6igcp3a2Dh%eigF5apecg5g7seoF4p6gc4oXc530Fgagomk5dw4O0Fh6dch6oc21F42g%h7gcynn2ck=7gcyX3ck%kmgozenc3mk6m8mcA8Ddnmk6kmoA483dnmloC4xdnGrrrE)
-.abilitydata.(statue.n.Brand.sd.right:15-4.i.left.sticker.(cursed bolt.part.1).i.togfri#togtime#k.singleuse#sidesc.Give an enemy 'When an ability is used[comma] 2 self-damage' [purple]singleCast[cu].img.285000Z93G77t60R700g4gow3wo82o8g081g8g19o92g8w8o2o9w1wg0ogao0)
-+
-(replica.myco.n.Gaia.hp.7.sd.79-2:77-1:58-1:58-1.img.2kn0009h4246rC6QGAIsonob9udrfeGbwxoDbiEb8d8dwg67=7xOFoqhx426GnaOn0mmmtwzLo3TL252d2e7c4ec4M52c6ecj7e24M42ce=uxi6kCyk1rnqc6k6ivu2l2402mwEmq2ywk2iu27e4142mwq3l=6272i0p2mqce%2e%fiCi2pcf7gbamqf3i5Uceca9amqm4oU1o282ocgYqm53513924GI5e24gUK4oa8bagiueba25K4Ucydui9b2O42kEy998gaP4s4ka99baP4sg4g9c24agP4hgsa99gRshs4a9aTttYT0BBS).abilitydata.(ace.n.Petals.sd.34-1:0:0:0:76-2.i.sticker.ritemx.f2567.i.mid.togpip#togtime#k.decay#togtarg.i.pendulum.i.mid.(sticker.fertiliser)#togtarg.img.283000=7xbiE0h1w1h1x0jyh0h0w0h5gy0g2zh0x0x0hw0)
-+
-(replica.myco.n.Scarf.sd.82-2:125-1:91-1:91-1.i.left.k.chain#facade.eba20:30.i.right2.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).img.342vg62Cec2D262Fbl2ki000AewQGAb8dMjGccsv7rfe246Iso8lx6rAReYmmm=3qABAtwzeeeEc280do82cE2cP9o86co8DB6839p8poDcA680298o9oDO6Ad928o9o6chP1D8299o2ejcvD0cR83iWicge1c68PfiYeg7028e83e2iZC612c28e2ejYiCv1682fej2si5CgAc2e5eigc6c62ie6gAcf4ej4quhgCgcB62ei4eXrwyCBv2deiZiCAgbFkjXieBgFnnnnmkbAhbFknnmkh1vbb6Flkh6AgbavFkb=6Evballa6B).abilitydata.(ace.n.Strangle.sd.80-1:0:0:0:76-4.i.mid.(sticker.ritemx.317c.m.4)#togpip#togkey#k.inflictexert#togfri.i.pendulum#rusty plate.img.284000=KRM6C%jQ2wMhM0wMiw0wMw1whMwbwMhw1wMw0wiMw0MiMw1)
-+
-(replica.myco.n.Hue.hp.6.sd.130:107-1:18-1:88-0:18-2:93-4.i.top.k.chain#facade.Lem3:89.i.rightmost.k.exert#facade.bas93:25:-5:-13.i.mid.k.managain#facade.dan7:59.i.right.togfri#facade.Spi129:18.img.342n842v482xw32ygE2jg0004bk246eeommmrfeQGAIsob8dtwz8uAg67eee426ABASoi0g1wdEhcx2cgwcyCicx1MyAUCFdMw918gFBEgc9wndv0MEAFi8wd4f804yAiwevc4ncnjg4fA5I9vwMh4f4Asc4knawndvkpskos9c06c9Ikq4ps407k5ksE8kspYk42w4t4tyM8kg938wskgsogAakU83nIsgkpsAhAMs3wvmrqt358IkIcrpt35wIkIkEuc4sxw58lIcEAysv3nc4lI8cBc531wdwlI9dx2ncvlIa4x285wS331).abilitydata.(ace.n.Concentrate.sd.34-1:0:0:0:76-4.i.mid.(sticker.(ritemx.d693.splice.t.jinx.ea.slice))#togpip#togtarg#k.decay#sidesc.For each undamaged ally: deal 1 damage to all enemies at the end of this turn [orange]deplete[cu].i.pendulum#rusty plate.img.285000j==1OX8uBjt=4gp08g08qgo08wph08wow808gwow828x80g0w9g0o80gw08h1)
-
-+(replica.thief.n.Slinger.col.b.tier.2.hp.6.sd.18-1:18-1:76-2:76-2:18-1.i.left2.k.chain#facade.Lem3:89.img.3523ck2bc82nso2qk02vk82ietwz000246eeeQGAmmmInrfe6hog678uAOKICa8ABAZ32kd=31k2Iq3c6cUk1I0Iq853UAc1J0b5k2qkcAs0I0kb48q318ws8s19w4331vowpsbAw4b30l8pwiowc4ca38AogEjwc48d9bngEjs843chdoMotho853cgosc9Mbt8c4qv0pnkQasQ842bAphoEAqcw42kbAoiEngsw4c1E9AkhEjsc43E8d8ngEhonc6w1vtgEo9os7c2vs8whpsY0kc08sA8cpcZc08vtAa7).abilitydata.(ace.n.Sling.sd.72:0:0:0:76-2.i.mid.sticker.(all.top.hat.mage.i.k.fizz#facade.Lem3:89)#togtarg.i.pendulum#rusty plate.img.2830006ho8uAg5g0w3w1g3g2gxg3w1w3g1g2w3w8)
-+
-(replica.alloy.n.Freak.tier.2.hp.8.col.b.sd.0:0:0:76-2:76-2:85-2.i.mid.facade.bas0:0.img.322b462la42hh000QGArfeIsog672bSoi8Bv0SSZVHCa83cg4tvuxAeeev9ajmoAbd9EbQc48BbU4z8cR6PwybOc265P817Oc2k56O417ObXOq14c63484k5Oq025c34ka6kb2l043437gia5amim063624ejilaeiyb436W6350om0848356O5zeoa6lO6baz84egeoa636aA8W6hfslAXa6hv4B8W8l264sC859J98D).abilitydata.(ace.n.Blast.sd.36-4:0:0:0:76-6.i.left.k.singleuse.img.2850000BY0f=3cg6gs2owg2w3og1g3wo18g1gw29o8go1g9g0gbg2g9w1)
-+
-(replica.cleric.n.Zealot.col.b.hp.7
+(replica.monk.n.Brand.col.b.hp.7.sd.76-3:76-2:82-2:82-2.i.left2.eyepatch#k.fizz#facade.The0:40:-1:-2.i.topbot.k.chain#facade.eba20:30.img.(customImg).abilitydata.(statue.n.Brand.sd.right:15-4.i.left.sticker.(cursed bolt.part.1).i.togfri#togtime#k.singleuse#sidesc.Give an enemy 'When an ability is used[comma] 2 self-damage' [purple]singleCast[cu].img.(customImg).myco.n.Gaia.hp.7.sd.79-2:77-1:58-1:58-1.img.(customImg).abilitydata.(ace.n.Petals.sd.34-1:0:0:0:76-2.i.sticker.ritemx.f2567.i.mid.togpip#togtime#k.decay#togtarg.i.pendulum.i.mid.(sticker.fertiliser)#togtarg.img.(customImg).myco.n.Scarf.sd.82-2:125-1:91-1:91-1.i.left.k.chain#facade.eba20:30.i.right2.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).img.(customImg).abilitydata.(ace.n.Strangle.sd.80-1:0:0:0:76-4.i.mid.(sticker.ritemx.317c.m.4)#togpip#togkey#k.inflictexert#togfri.i.pendulum#rusty plate.img.(customImg).myco.n.Hue.hp.6.sd.130:107-1:18-1:88-0:18-2:93-4.i.top.k.chain#facade.Lem3:89.i.rightmost.k.exert#facade.bas93:25:-5:-13.i.mid.k.managain#facade.dan7:59.i.right.togfri#facade.Spi129:18.img.(customImg).abilitydata.(ace.n.Concentrate.sd.34-1:0:0:0:76-4.i.mid.(sticker.(ritemx.d693.splice.t.jinx.ea.slice))#togpip#togtarg#k.decay#sidesc.For each undamaged ally: deal 1 damage to all enemies at the end of this turn [orange]deplete[cu].i.pendulum#rusty plate.img.(customImg).thief.n.Slinger.col.b.tier.2.hp.6.sd.18-1:18-1:76-2:76-2:18-1.i.left2.k.chain#facade.Lem3:89.img.(customImg).abilitydata.(ace.n.Sling.sd.72:0:0:0:76-2.i.mid.sticker.(all.top.hat.mage.i.k.fizz#facade.Lem3:89)#togtarg.i.pendulum#rusty plate.img.(customImg).alloy.n.Freak.tier.2.hp.8.col.b.sd.0:0:0:76-2:76-2:85-2.i.mid.facade.bas0:0.img.(customImg).abilitydata.(ace.n.Blast.sd.36-4:0:0:0:76-6.i.left.k.singleuse.img.(customImg).cleric.n.Zealot.col.b.hp.7
 .sd.107-1:77-1:0:0:76-1:76-1.i.left.k.managain#facade.dan7:59.i.topbot.(mid.hat.ace.sd.12:66-2.i.mid.togtarg#facade.Lem155:0:20:15)
-.img.332D462Fbb2J022jh8lxccs000b8duxArfe2DmmmCEHeeeQGA6rAIsocbeg67426twzZDq2y36ZDq2J0m0P6Wq2Bn299e64qCnmc8m082i721Om2neh0mJicqPJ19h8m08e473J19hhh8e4c6P08gFas6ei4cP08iFbaci6DPeiFFci5qJ60ecatcbtc6Dy6eaosedcaed6Dy28aolafwio74cz8solllp75c21ecaollkoac74%20e8solofidqD2d62092ibi6cq5c2e9e60hg8eice65cf9he69996Wcej0h83y27Xicviyc6O6W)
-.abilitydata.(ace.n.Smite.sd.88-2:0:0:0:76-3.i.left.eyepatch#k.managain#k.terminal#k.exert.img.284000SXnSF0qt7Mix2wiw4iM3Mhw0yjNw2wM2w7gM2)
-+
-(replica.monk.n.Merchant.hp.8.col.b.sd.95-1:93-3:90-2:90-2:93-3:99-2.img.332q842vog2xk42hf000eeemmmQGArfeIsv67246MAp%Px26ABAGnaZVHSoiZ5bq%495b8Y4b8h4a424a4q8gx9504qq85qdUo50qqqg4okeko40o5g4xvfcgs0o4hxglfcks1g4h4nshwAs1jglqsgwIQw1gmgs8IuwQIAo0okglflcMAMo1gmfelsA2v8dgfxow3o8gdk9g4gMYvokdtl0wYvoskeq%ohos4dq=ohos58=0H=).abilitydata.(ace.n.Restock.sd.0:0:0:0:76-1.i.left.(sticker.k.stasis)#ritemx.dae9.img.285000SF0YVHNm60f=1h92g2o80g0x18080x1o082who8o1gw0809og183o90)
-.part.1)&
+.img.(customImg).abilitydata.(ace.n.Smite.sd.88-2:0:0:0:76-3.i.left.eyepatch#k.managain#k.terminal#k.exert.img.(customImg).monk.n.Merchant.hp.8.col.b.sd.95-1:93-3:90-2:90-2:93-3:99-2.img.(customImg).abilitydata.(ace.n.Restock.sd.0:0:0:0:76-1.i.left.(sticker.k.stasis)#ritemx.dae9.img.(customImg).part.1)&
 (heropool.
-(replica.venom.n.Outcast.col.b.sd.36-2:123:90-3:90-3:95-2:94-1.img.2hj000QGArfeIso246g67eeetwzYXSmmm%PkMxtSoiOFo0SSCa8Iuc4mi8uA194=48G846T64E84V264DcVQ6cC42m656Su4C6nqa5a62omo4C6m6kwqba6upa0y8564l4b5ouay80a36ql8a85a8sA8a2464wh496at808mRwhk84sADa46Q6q46268y818a4Rk6364C8c5iU5Cce58c63ie64aCieW8f4h8eaCjheice%e6Dachei8c43ecFadei8bcaE).abilitydata.(ace.n.Forbidden.sd.90-15:0:1:1:0:1.i.left.eyepatch#k.inflictpain)
+(replica.venom.n.Outcast.col.b.sd.36-2:123:90-3:90-3:95-2:94-1.img.(customImg).abilitydata.(ace.n.Forbidden.sd.90-15:0:1:1:0:1.i.left.eyepatch#k.inflictpain)
 +
-(replica.sparky.n.Oath.tier.3.sd.107-1:0:77-1:77-1.i.left.k.managain#facade.dan7:59.i.right3.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).i.right.wrench.i.mid.(wrench.m.2).img.36230c2ek42u4c2z0h2Dc42E0g2i9%PkMC6000v9aYVHJr9Fj9g67246=Y5cZcl7kcg3bceBeg3as4B4ezks8u4A4e1h3834AD14E38gsck6s2lE04whu6c14l4g4oDhks61m4gp4szm41n0p4scice1n0p5dg3sce04k5o0s0uhktcl1h38c1h4dtyDw9w4z6l5z38xfef4Eu8wzcsc0ulcEu8w5iwk0mpgos81jgck0lp3s8o50iswc0q39c6j4ws4p3ac504wE4xD0==Da).abilitydata.(statue.n.Celerity.sd.right:76-1.i.left.sticker.k.flurry.img.284000YVHUn0=M21wgM2Mjw1xNhMw2wMi3Mi2wix0whMw1Mhw2)
-
-+(replica.ace.n.Smoke.hp.7.sd.77-2:125-1:0:0:123.i.topbot.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).img.382fg42n482qco2rc42ug82x8c2y4f3C8fg2jb000eee246mmmg67ABAtwz426%PkSoiZVH25lrko8ko0r2m8qkxlxk4og1ckok8fk9dx8r24gokyrckfo8ogl8hck4qrohrcgolyqro8rf8404qkydxncnn08yogqycx950Cckgc5gcf8ug0a4gcg6959n084cunc8gwAuwA81849fc8AwEg9gwg2fc5od40qnn3Cqe4158I8n4peg5uI8ngqe40uIC04d41nJ86g04d5uJ8g5h0gqnLsg60bNvsN).abilitydata.(ace.n.Stack.sd.0:0:0:0:76-3.i.left.sticker.((natural.splice.ritemx.317c.m.3)#(natural.splice.t.jinx.ea.blades))#k.singleuse#togtime#sidesc.Target [blue]blue[cu] ally[n]takes 3 damage and[n]deals 2 damage to all[n]enemies at the end of each turn[n][purple]singleCast[cu].img.284000mmmquxcde1gM0MwjwgMxhMgxMw0Miy1hMxM2Mxg2gwgM1gwN3)
-
-+(replica.venom.n.Magma.hp.7.col.b.sd.82-4:83-2:76-2:76-2.i.topbot.k.swapcruel#facade.Spi21:32
-.img.332qgo2uc43y8sw2ggQGA246v9ag67Nba000Ca8rfeIsoeeetwzmmmGna426SoiABAkcp9cnnk8q8d9h8umq8cqgpiulc8cqgaohocmcipqU8og84ljg9g8U8gUckcjoy1w80uc8hoy3w0s5c9osw32w4w49tw3260wy5Aw2sA491x4c5At4A4d80w1cY6sY5ka31JEAwek4c33wsclcocsx30t4kcMg4cIFtwEsEAoNg5sAIFuEIkgNoucAIs1IA4k8gMo85cEIwEI5k8oNoc5EAEAEIA5QMcoSAQBIS).abilitydata.(statue.n.Ignite.sd.right:76-5.i.left.cast.scald.i.mid.(sticker.(cursed bolt.part.1))#togtarg#togres#togfri#togtime#k.singleuse#sidesc.Give all damaged enemies 'When an ability is used[comma] 2 self-damage' [purple]singleCast[cu].i.pendulum#rusty plate.img.286000Wf9t60NC6Nbauaa1g80g8081o8o80go0gp28qg0E0g8ow0gw1x0F8w81g9E0g8xE1)
-+
-(replica.ace.n.Neuro.sd.89-1:125-3:82-3:82-3:77-1:77-1.i.left.hat.demon#(wrench.m.-5)#facade.dan14:0.i.mid.k.exert#facade.pos159:78
-.img.352t4a2Ec82H263Jgvg5L8c0if2kj000pnj246zwuhhheeeb8dv9aFFFg67IsoQGArfek88GbwYPV4HMjGCa8FER9d0cDei0EHh63scs4CifE36hg2sastCf08282J4y5sLc386Jasys4Lc296hgasat2a80fe98Hg7Ra8a2cfi83%J6983aeit368gCig72tcet872a4ir15qt0ieE272irqorio480fa374i5ok4iokt04e837aipi4pqt1etE7g4lkokmok21i05a36gknnmla6C5E36onnlia2C42d3g4nB4kt6C4c24cHi4nmki024C342482gc4lo0HD8acad5cb4KxxxI).abilitydata.(ace.n.Control.sd.168:30-1:0:0:76-3.i.mid.eyepatch#togres#k.hypnotise#k.boost.i.pendulum#rusty plate.img.286000M6C=KRDbH%jQt606g1x80g1w1Eg80w2o0E8g182ogE81o8o0hwo194o0)
-+
-(replica.ace.n.Medium.sd.76-3:82-2:78-2:78-2:77-1.i.rightmost.(mid.hat.trapper.i.eyepatch#k.boned#mid.togkey)#facade.Spi6:0
-.img.342p282q2g3v6c23D2y82jh000246QGAmmmeeeIsob8drfehhhtwzh97426NC6=M2OKIxxxg67zc8d29h8c2Ac9cphd7h8z8dq=6c9hc19qv=6838gcpp%8cg783epgpc3=vebaeq0c87g%3ebWag0dq%3eaWa4a81cO6g2ea5ar4a8ycPeaZ4ecy64ve3o2a5a3y64edb8p2fpDa4acaqiOes2z26l6Xae6u8azOe6Z5bD62ekaZ4eazj8ekiXoi6by86jfwi5o3kaDgjfe26ai5ogApjfk2o6a6goB3i8lki272iCnnnmC).abilitydata.(ace.n.Frail.sd.0:0:0:0:76-2.i.left.enchant.(Small Bonus^1.splice.All Poisoned^4)#k.singleuse.img.283000=M2Ip00wg4i4iw5wgw5wgw5wi4i4gw0)
-+
-(replica.myco.n.Hemo.tier.3.hp.9.sd.92-2:77-2:82-2:82-2:82-2:82-2.i.mid.eyepatch#k.swapcruel#facade.Spi21:32.i.topbot.k.chain#facade.eba20:30.img.
-3723842p402q802uwE2ys02D8k2Ho02kfg67246eee000QGAmmmrfeghjIsov9aCa326NbatwzABAfp8slsqafe48snly8sqep8snks850tqcpylsDs30H8t8c4spkyk85owh0yyc4DsD85owiHs438lqkoujgwHs6kyk0uwjho4q4t1k0uuwiw439sqo8o1Hoxo530s3gHo4kE94o430c058h8uoU6oU50c59ogx0u0lQ8Eo4d94qowh0xhuoe39pkhojw3ep3J0kjQkw8fc0AE0JDhkwD4fAEBEM0I4oxok3oeA0FBEM048oQkpoAdIA0IEB0EMpk32ocIB0JB1M62AodL1aIEBoBK)
-.abilitydata.(ace.n.Bleed.sd.15-1:0:0:0:76-2.i.left.togfri#k.boost#k.engage.img.286Nba000v9aCa8g67YXSagocg1gao3o8g0E3h5p5gwo3gw8wgpgx)
-+
-(replica.ace.n.Horn.hp.9.sd.61-3:77-1.i.topbot.(mid.hat.ace.sd.12:66-2.i.mid.togtarg#facade.Lem155:0:20:15).img.372a8o2igk2n8c2q8k2uso2v8A5Bk8s5c2lcHJF000246eeetwzmmmg67rfeQGAb8dIu426ci849unldA4o78gcasA8g3i8s7kcotA8gOBvtAnhNgcAu5ps9j3hBg8pv1g1khkdp4k180cq2mdkc4pg1i0vg2gdkig4cg28g1kgNhc4okh0cqQic4ockhkonMickc6Ackho9cg1lcgl5adg0utq1hpl4v8d0osGs8loac5bc0qFzEsno59ovg8skzwEuco5odAq9ExspEac7odockaEyEsnoUodq8psElacV8dac8pn9cX4LJX6).abilitydata.(ace.n.Ram.sd.56-2:0:0:0:76-3.i.mid.(sticker.(all.top.hat.scrapper))#togpip#k.shield#sidesc.Replace target's sides with [grey]'1 damage [light]steel[cu]'[cu] this turn[comma] then shield 2 [orange]cooldown[cu][nokeyword].i.pendulum#rusty plate#k.exert.img.285=M2000SF0Ip0Ce492ga1og180o9wo0gcw181g8g5g1og4gw8w1gow8)
-
-.part.1)
+(replica.sparky.n.Oath.tier.3.sd.107-1:0:77-1:77-1.i.left.k.managain#facade.dan7:59.i.right3.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).i.right.wrench.i.mid.(wrench.m.2).img.(customImg).abilitydata.(statue.n.Celerity.sd.right:76-1.i.left.sticker.k.flurry.img.(customImg).ace.n.Smoke.hp.7.sd.77-2:125-1:0:0:123.i.topbot.(mid.hat.ace.sd.12:66-1.i.mid.togtarg#facade.Lem155:0:20:15).img.(customImg).abilitydata.(ace.n.Stack.sd.0:0:0:0:76-3.i.left.sticker.((natural.splice.ritemx.317c.m.3)#(natural.splice.t.jinx.ea.blades))#k.singleuse#togtime#sidesc.Target [blue]blue[cu] ally[n]takes 3 damage and[n]deals 2 damage to all[n]enemies at the end of each turn[n][purple]singleCast[cu].img.(customImg).venom.n.Magma.hp.7.col.b.sd.82-4:83-2:76-2:76-2.i.topbot.k.swapcruel#facade.Spi21:32
+.img.(customImg).abilitydata.(statue.n.Ignite.sd.right:76-5.i.left.cast.scald.i.mid.(sticker.(cursed bolt.part.1))#togtarg#togres#togfri#togtime#k.singleuse#sidesc.Give all damaged enemies 'When an ability is used[comma] 2 self-damage' [purple]singleCast[cu].i.pendulum#rusty plate.img.(customImg).ace.n.Neuro.sd.89-1:125-3:82-3:82-3:77-1:77-1.i.left.hat.demon#(wrench.m.-5)#facade.dan14:0.i.mid.k.exert#facade.pos159:78
+.img.(customImg).abilitydata.(ace.n.Control.sd.168:30-1:0:0:76-3.i.mid.eyepatch#togres#k.hypnotise#k.boost.i.pendulum#rusty plate.img.(customImg).ace.n.Medium.sd.76-3:82-2:78-2:78-2:77-1.i.rightmost.(mid.hat.trapper.i.eyepatch#k.boned#mid.togkey)#facade.Spi6:0
+.img.(customImg).abilitydata.(ace.n.Frail.sd.0:0:0:0:76-2.i.left.enchant.(Small Bonus^1.splice.All Poisoned^4)#k.singleuse.img.(customImg).myco.n.Hemo.tier.3.hp.9.sd.92-2:77-2:82-2:82-2:82-2:82-2.i.mid.eyepatch#k.swapcruel#facade.Spi21:32.i.topbot.k.chain#facade.eba20:30.img.(customImg).abilitydata.(ace.n.Bleed.sd.15-1:0:0:0:76-2.i.left.togfri#k.boost#k.engage.img.(customImg).ace.n.Horn.hp.9.sd.61-3:77-1.i.topbot.(mid.hat.ace.sd.12:66-2.i.mid.togtarg#facade.Lem155:0:20:15).img.(customImg).abilitydata.(ace.n.Ram.sd.56-2:0:0:0:76-3.i.mid.(sticker.(all.top.hat.scrapper))#togpip#k.shield#sidesc.Replace target's sides with [grey]'1 damage [light]steel[cu]'[cu] this turn[comma] then shield 2 [orange]cooldown[cu][nokeyword].i.pendulum#rusty plate#k.exert.img.(customImg).part.1)
 .mn.B.modtier.0,
 
 
 (heropool.
-(replica.thief.n.Blade.hp.5.col.n.sd.21-5:23-3:0:0:15-1.i.rightmost.facade.bas1:0#bowl.img.372i4T2r242u4Q2vu42uir3y8cu3BEvs2jc000435g67qhxb8deeen90CEHzg3mpsYVJtwzPktET1ksA4IET0ksk4AsT04kIAIi14yhuygcuygc4O9M4ao4raoa4g8g8owo9oxo8ofcog8owpz9odo85awWM4kh484hvIh6gsvIch4lsvscl4lBdk4kABAd4cABId4cAE4RkIdgcAEM).doc.[2e6000CEHn90mpszg3b8dTTTTQgOhwgwNoEoO8E8O8o8P8TTT]: Shielded allies have [hp-plus][p]1 pip to damage sides.speech.Slash Slash:Clash Clash:Nothing personnel kid.i.t.jinx.allitem.ritemx.7545.splice.gauntlet
+(replica.thief.n.Blade.hp.5.col.n.sd.21-5:23-3:0:0:15-1.i.rightmost.facade.bas1:0#bowl.img.(customImg).doc.[(customImg)]: Shielded allies have [hp-plus][p]1 pip to damage sides.speech.Slash Slash:Clash Clash:Nothing personnel kid.i.t.jinx.allitem.ritemx.7545.splice.gauntlet
 +
-((replica.tinder.n.Berry.hp.5.sd.52-2:103-2:104-2:104-2:104-2.img.3224og37g402g56mu000ahk8bfgkfcw8w9wfw8y8wgfowgwgxW4owgU46gcgFgaoHo9gI8o3gEgo04Ggo0h1h0g2g0740h3j8hpg2pho0g84pgpgp7o94t7gb4pi2godg5goUsb).i.t.jinx.t1.(Youth.part.1.splice.allitem.ghost shield).doc.[2c40006mugkfahkfff3w0w9w9i7MiM7iff8][nh]Tier 2 heroes start with 2 shield)
+((replica.tinder.n.Berry.hp.5.sd.52-2:103-2:104-2:104-2:104-2.img.(customImg).i.t.jinx.t1.(Youth.part.1.splice.allitem.ghost shield).doc.[(customImg)][nh]Tier 2 heroes start with 2 shield)
 
 .part.1)&(heropool.
-(replica.alloy.n.Stalk.col.n.tier.2.sd.83-1:0:162-1:162-1.i.mid2.(sticker.k.focus)#facade.pos31:0.img.32214827842ea000k33y66CbbS0l435LIFqhxYVJEAAE58e8E1hfc828cg94l1c804cg7sqA1cag8sowsgoA491c4Awsk4xk58c4kowglsokd8d4swAgspkd4k8g4sxpkc8c4k1g4soAkc7g7k1he70g1404b424g1K4g7K4g7J594G.abilitydata.(statue.n.Aim.sd.0:0:1:76-1:0:103-1.i.left.sticker.(k.duplicate#k.mandatory)#togtime#sidesc.Add [blue]duplicate[cu] and [red]mandatory[cu] to target's sides this fight)).speech.Stare:Wink:Watch:Blink
+(replica.alloy.n.Stalk.col.n.tier.2.sd.83-1:0:162-1:162-1.i.mid2.(sticker.k.focus)#facade.pos31:0.img.(customImg).abilitydata.(statue.n.Aim.sd.0:0:1:76-1:0:103-1.i.left.sticker.(k.duplicate#k.mandatory)#togtime#sidesc.Add [blue]duplicate[cu] and [red]mandatory[cu] to target's sides this fight)).speech.Stare:Wink:Watch:Blink
 +
-((replica.monk.col.n.hp.10.n.Roller.sd.125-3:125-3:125-1:125-1:6:12-1.i.left.k.decay#facade.pos163:0.i.mid.k.sticky#facade.pos172:0.i.rightmost.(mid.hat.tainted.sd.mid:12-1.i.mid.facade.bas12:80#togkey).img.dice.hsv.50:0:-40).i.t.jinx.fewer reroll.doc.[3329182b282c3g2j60008h7au76d5H777m52UNo0858782on84obg489bc48bb2og4o380oc6wb0oc5x3Eo2g7wc081g8o0y1wc0o97w3E995y92o1o5o383895o94ao589M858EN8m82] -1 reroll)
+((replica.monk.col.n.hp.10.n.Roller.sd.125-3:125-3:125-1:125-1:6:12-1.i.left.k.decay#facade.pos163:0.i.mid.k.sticky#facade.pos172:0.i.rightmost.(mid.hat.tainted.sd.mid:12-1.i.mid.facade.bas12:80#togkey).img.(customImg).hsv.50:0:-40).i.t.jinx.fewer reroll.doc.[(customImg)] -1 reroll)
 +
-((replica.spine.n.Needles.hp.16.sd.157:19-3:19-3:19-3:121-5:121-5.img.3427g82d0w2egw2fw82m6FkZv9Nl5L00084i04rqw74818gq90pfO9fd0owgM82828phc6w0gxpwgah9380x08qwag27581wpg9gd81gag5p9e08f0gb5phd181gc38ph0e2wgagcgph8gAbwa7wpwh9ybd87weqi9wa77hwerxi9777g9g09q70E087ffw0eo1p0Edhddddet2px728gu).i.onhitdata.(ace.sd.12:56-1.i.mid.cast.bind#togtarg.i.pendulum).i.onhitdata.(ace.sd.56:34-1.i.left.k.generous.i.mid.togfri.i.pendulum).doc.[2c3000v9NFkZ=Pi7gwgwg6hwh6gwgwg7i=8][nh][orange]On-hit[cu]: Become immune to damage this turn[comma] then 1 damage to all other allies)
+((replica.spine.n.Needles.hp.16.sd.157:19-3:19-3:19-3:121-5:121-5.img.(customImg).i.onhitdata.(ace.sd.12:56-1.i.mid.cast.bind#togtarg.i.pendulum).i.onhitdata.(ace.sd.56:34-1.i.left.k.generous.i.mid.togfri.i.pendulum).doc.[(customImg)][nh][orange]On-hit[cu]: Become immune to damage this turn[comma] then 1 damage to all other allies)
 +
-(replica.spine.n.Bonsai.hp.12.sd.16-5:16-4:58-3:58-3:16-4:16-3.i.row.eyepatch#k.decay#facade.Eme9:0.img.332eo42foc2mck2i9000qyhvkd9b8247kg8gr6zuh1k50c4g5og5cecwe1g4o6coho5p4g1cewcw7ecf1o6goQpch0g6fQxgc4w0gefo7p5ec1xmh5m6f2c4c8w4fkw5m5h6c8i8gd85oho6kacl8gfg1gcpds9s8lcEkakcGc9scGk8c9cg9kCk8m8dkcg8kBksglm9kg8kAksgk8kakgskAc8sgcjdscAgk8vu8kCk=8cCg=kc3).gift.(Arthritis^1.splice.iron helm.m.-2.mn.Tier 3 heroes have 12 less health.modtier.-10)
+(replica.spine.n.Bonsai.hp.12.sd.16-5:16-4:58-3:58-3:16-4:16-3.i.row.eyepatch#k.decay#facade.Eme9:0.img.(customImg).gift.(Arthritis^1.splice.iron helm.m.-2.mn.Tier 3 heroes have 12 less health.modtier.-10)
 
 .part.1)&(heropool.
-(replica.monk.n.Hacker.col.n.hp.7.tier.3.sd.0:0:0:0:15-4:187-20.i.left2.cast.hack.img.312j8g2ge000435idbCogc98skf=3qt67865z0Eqhxe66da8CwgVg9X18BpAgXsAw4wgpAg3sBwtkeso8Uw5B8dkso81skg4Aw4o8dlog2gA4J4okdko80sg8o4JsogeAk08ck8Egso4gkdsk80wckMp5wkekhjkc4tw8fj0gjcM59kdk81h8ckE6w8kj1gkjkc8YM1g8ljdEY28l848QZE38k84w85E4gXjxhw2)
-.gift.(
-((ch.oi(ice cube#orbit.n.Ice Corbit.tier.9.img.2e94350008uA0hrmpssSS6NMbHHhjlKXOc9c0wgB9e90g38okvtg38lrokg38dn8cwAdl80cwBw8o9h5Ag0odhDiwPJ)@4i(statuette#faerie dust.n.Statue Dust.tier.9.img.2eb4350002o62d5qDmNm6JD2ra0ZUi1OX8LpWKW0c835ks1wk8Ac250koks8c8c251sowg8I53o8gI53AE9353AEgc8252skg8A8252o0hd8151o1g8d8150skxoge1WKWK)@4i(boots of speed#rusty plate.n.Boots of Rust.img.2em435KvhBi7Gmh0SSAqcoljNKzquxdgdjlolhcIh0uokuSSadbi70m==t89bvHaGGkf8RROgyg024Li9ce20e4Jigdc264e24Ikin6S4eoKum626oweoLu62q4w4AMc2q4CNka2q8NkaE96Li8tsg6MbbGRO)@4i(catnip#singularity.n.Catgularity.tier.9)@4i(rain of arrows#pauldron.n.Pauldrof Arrows.tier.9.img.2ec435quxgjlaaaHg1EGJYVJjcnRo0t89uxABEGTTNA0A0ko8Og0g14rc2i0ok85kc2swsA0ok85c3w0gc84k8cME0gsg5c0c3E0xg50c83I0sw8k4c93I148c4093s1609cOskc0dT3)
-)&(ch.oi(scoundrel stash.part.0#face of horus#second heart.n.Eye of Scoundrel.tier.0.img.scoundrel stash)@4i(whetstone.mrg.k.possessed.n.Monsterstone.tier.0)@4i(siphon#dull wit.n.dullphone.tier.0)@4i(origami#wild seeds.n.Origami Seeds.tier.0.img.31314sg2e9435ftilDorlfGMOGxdFDx9ibSLsPH48g2dA49g0kpc34agpkc3QglBYgcp0c2704ow0d2a1wckcA91ckcC81kcE1cPJ)
-))
-.mn.leaked items.modtier.10)
+(replica.monk.n.Hacker.col.n.hp.7.tier.3.sd.0:0:0:0:15-4:187-20.i.left2.cast.hack.img.(customImg).gift.(
+((ch.oi(ice cube#orbit.n.Ice Corbit.tier.9.img.(customImg).n.Statue Dust.tier.9.img.(customImg).n.Boots of Rust.img.(customImg).n.Catgularity.tier.9)@4i(rain of arrows#pauldron.n.Pauldrof Arrows.tier.9.img.(customImg).oi(scoundrel stash.part.0#face of horus#second heart.n.Eye of Scoundrel.tier.0.img.(customImg).mrg.k.possessed.n.Monsterstone.tier.0)@4i(siphon#dull wit.n.dullphone.tier.0)@4i(origami#wild seeds.n.Origami Seeds.tier.0.img.(customImg).mn.leaked items.modtier.10)
 
-+(replica.statue.n.Excalibur.tier.3.hp.9.sd.21-6:15-4:23-5:23-5:34-1.img.342fk82jhc2n043rEcj2md00084iUccqhxtwzCa8o7bk33o0sg67S0lLIF89e0koW4Sk9U84To9kSkw4U4fkQ8A4W4fk1fow4X4okacsw4Xno9dgdXnfej4X48ocKj4W8koAI4Icj4UkBcAgJEic5R8xsdoAfrwQ4w05wscBfr43434w4cN4ArtTwnkNo0E8h8EwS414fp1aE4Ws8q0A8tXs48p2sXn0sEfAnX2sFtXR4xXX2)
-.abilitydata.(ace.n.Wield.sd.34-2:0:15-4.i.mid.(sticker.(gauntlet.splice.k.bloodlust))#togpip#k.damage#togtarg#togtime#k.singleuse.i.pendulum#rusty plate)
++(replica.statue.n.Excalibur.tier.3.hp.9.sd.21-6:15-4:23-5:23-5:34-1.img.(customImg).abilitydata.(ace.n.Wield.sd.34-2:0:15-4.i.mid.(sticker.(gauntlet.splice.k.bloodlust))#togpip#k.damage#togtarg#togtime#k.singleuse.i.pendulum#rusty plate)
 
-+(replica.dabble.n.Biome.col.n.tier.3.hp.3.sd.57-0:113-2:91-1:161-2.i.right.facade.bas0:0.img.342b8c2fog2n852v4c2jc000qyhgr6kg8asf846CLahkqhxltBtwzcTM1cg4b5bPc87g6bOg7h6gQ58k8vb2APlhc2A0FNckNcEwAEkMe18i9cAwNe8lu08kc3wAwkc50gfs0k83kEAc5grf0v1wlv5gpJf581w8VsgJgs61cUn0f40n1nnl84o5dv1b96mgk0c9c1wFbnkgk292c8A0ck6w29c1s05090n80cb1f08v9c04g1c2os2b091h3qs1c4191sg0spgM82c2wgfsNcT2).doc.The 1st turn: Monster deaths grant [hp-plus][p]1 permanent health to green heroes
++(replica.dabble.n.Biome.col.n.tier.3.hp.3.sd.57-0:113-2:91-1:161-2.i.right.facade.bas0:0.img.(customImg).doc.The 1st turn: Monster deaths grant [hp-plus][p]1 permanent health to green heroes
 .i.t.jinx.t1.alliteme.t.vase.(allitem.rgreen&hidden.mn.Enlarge)
 .i.t.jinx.t1.alliteme.t.orb.slost.abilitydata.(ace.n.Enlarge.sd.34.i.mid.sticker.(rgreen)#togtime#togtarg#togfri.i.pendulum#rusty plate)
 
-+((replica.tainted.n.Puppy.sd.137-2:108-1:126-1:126-1:105-3:105-3.i.mid.facade.bas108:0.img.352h802m8c2qhc2r825vg8owk2i9s9b000n5m34247HyuCbbztiy66V1V04h4hm6087340cm5184h91cqm481c52c93h96m18Ch62c9Cq5r918d190508erdY5rc939096qYA952g81wocr90481gho8kwoc0cq4cqg8sgkgkghh8419gcwsjsk5s4rcvgl4t5ghfv5s7caf48pw8QgfdX4jgU)
-.i.t.jinx.alliteme.onhitdata.(ace.sd.181-1.i.k.boost#sidesc.[blue]Boost[cu] 1)
-.doc.[2c2000H77vkwaw8x0x8wawv9][nh]Monsters [blue]boost[cu] 1 to attackers [orange]on-hit[cu])
++((replica.tainted.n.Puppy.sd.137-2:108-1:126-1:126-1:105-3:105-3.i.mid.facade.bas108:0.img.(customImg).i.t.jinx.alliteme.onhitdata.(ace.sd.181-1.i.k.boost#sidesc.[blue]Boost[cu] 1)
+.doc.[(customImg)][nh]Monsters [blue]boost[cu] 1 to attackers [orange]on-hit[cu])
 
 .part.1).mn.N.modtier.0,
 
 
 (heropool.
 (replica.monk.n.Fancy.tier.1.hp.3.col.h.sd.15-1:15-1:56-1:56-1:103-2
-.img.2ic000IsoBmg247c88jccROENEOuxAqifnmmmmmMEwsoswEcPgEwsrswcNkAgtpsqwc3Aakgsotososc1gbA58gcuow1AaA878gcEpc0AYV8cExcAYW8e0gbXk3l9V9kc3k585kcIcBcI3g4k58IxdkwcMk487h848gMcE9W8kMcwk8WAkMcwkg8U9gNgkh5gAk9Oclh5g9Qclcg58SdT)
-.doc.[2c6000uxAmmmeeeZVHSoj0wNyNw0g848g39q94g9g9g4oco4og8g8go3hwogowh3EcE4hah3o0gao0o5oEo2][p][light]Houserat[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Likes sharing cheese with others
+.img.(customImg).doc.[(customImg)][p][light]Houserat[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Likes sharing cheese with others
 .gift.(add.(((replica.lost.n.Houserat.sd.0:0:0:0:7:0.col.w.hp.3.tier.3.i.left2.hat.rat#k.lucky#all.facade.Eme156:0.i.topbot.(right.hat.fey.sd.left:43-0.i.wrench.m.-1#togres)#facade.ite367:97:40:0
-.img.322fgc2hg82g9uxA000mmmeee6ad352435BBBSojk28c6k825k0f2a0ch5k8chA8f86hhC87kc8D8Qf92c81c5kc28ohdof6f8190818ck4k8Et8d4k8Bbxc5kf1Ycfg7f8d9codRkh0cpfgTkh1cgWkhc6)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.b).mn.Add Houserat)
+.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.b).mn.Add Houserat)
 +
-(replica.thief.n.Walker.hp.4.col.h.sd.108-1:146:0:0:146.i.left.k.singleuse#facade.ite45:-8:30:-25.i.mid2.k.exert.img.35230426g42rck3vmmm3y1kf2gbc88jcc000IsoqifBmg247xmgnvmmuxAao3hsh40Y0gt6wsi4094tg7xi4o8isg15w062u60r3wI4h40gdk31g3t4ymg0o3xlfdkg3xyek4o314ff6o80c6kr6ol4o9orgkoAEp6p9o0re1gkc5ao3frdk4aoyh0o09o414kdk7a324gk505095o1o4hlgb3go1o0h4Zo46=9)
-.doc.[2c6000k88g67ZVHtdbb8d0oNqNoRgcg3U28gcg828goiog83gw8g8wg5c6gag7aNE3][p][light]Dachs[cu][n][red]5 [hp][p][hp][p][hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Damages the [orange]previous target[cu] of other heroes
-.gift.(add.(((replica.lost.n.Dachs.col.w.hp.5.tier.3.sd.32:170-3:171-1:171-1:7:0.i.col.k.sticky#togres#sidesc.[pips] damage to the target of the previous dice.i.peaked cap.i.mid.facade.bas170:0.img.2h8k88000g67ccsb8d435Soj=O2bg4gf8g6geg70g2g973wp8g3Eg5Ewh1g72w3g70gFg3g4gEOg5g5N1h3h6gbh81lf8g5f8pg4ofwvwf8wrVwfdVb)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Ruff ruff:Awch:[smelly manure]:[tracked]:Awowoowo:[pink]blep[cu] [violet]blep[cu] [red]blep[cu]:[i]growl growl[i]).mn.Add Dachs)
+(replica.thief.n.Walker.hp.4.col.h.sd.108-1:146:0:0:146.i.left.k.singleuse#facade.ite45:-8:30:-25.i.mid2.k.exert.img.(customImg).doc.[(customImg)][p][light]Dachs[cu][n][red]5 [hp][p][hp][p][hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Damages the [orange]previous target[cu] of other heroes
+.gift.(add.(((replica.lost.n.Dachs.col.w.hp.5.tier.3.sd.32:170-3:171-1:171-1:7:0.i.col.k.sticky#togres#sidesc.[pips] damage to the target of the previous dice.i.peaked cap.i.mid.facade.bas170:0.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Ruff ruff:Awch:[smelly manure]:[tracked]:Awowoowo:[pink]blep[cu] [violet]blep[cu] [red]blep[cu]:[i]growl growl[i]).mn.Add Dachs)
 +
-(replica.statue.n.Catcher.tier.1.hp.3.col.h.sd.mid2:115-2.i.left.(mid.hat.ace.sd.116:181-2.i.mid.togres#k.fierce#k.singleuse#facade.eba33:0:10:0#sidesc.Target enemy with [pips] or less hp flees).img.342ecs2vwo2CA42D332jg000jccIso247Bmgmhazrgc88LAsqifda68lxcenmmuxC353EkozvEc32Ekovzvkc2c0ckpkwkzvEc1IcEmokokvxokc1MJlYEmokplEc0cKEqvvyolc0EMpe74s5scEk0Epe6A6Ctckckoe6jhucFke4sAhdiCcE0Fc8Ch4QdCd3e8gAgQVtAgd30s4b8g4Ag8gs30t4Abbg431t4gb8gAg432s5g9Aags32sA5a49ADcB5bAD1sBehAD3dD2)
-.doc.[332480278g5evo8l42j6000b8d3528lxccsZVHQ919Q79g8R8i838sw827828wuwbg818Aqw8k81e8e8vw7Fi48uxhFj4wsx8l748A8i9h4908n818h828h8h9h81a379h9g8N9090a6][p][light]Bug[cu][n][red]2 [hp][p][hp][p][cu][nh][huish]Pet[cu]:Shields alliles[comma] damages enemies with [yellow]more health[cu]
-.gift.(add.(((replica.statue.n.Bug.hp.2.tier.3.col.w.sd.0:56-2:0:0:56-2.i.left.(mid.hat.ace.sd.15:15-2.i.(left.k.underdog)#mid.togres#left.(right.hat.boar)#togvis).img.332480278g5evo8l42j6000b8d3528lxccsZVHQ919Q79g8R8i838sw827828wuwbg818Aqw8k81e8e8vw7Fi48uxhFj4wsx8l748A8i9h4908n818h828h8h9h81a379h9g8N9090a6)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[i]grub grub[i]:Creek:Ouuuuuwchhhh:[i]nice shot[i]).mn.Add Bug)
+(replica.statue.n.Catcher.tier.1.hp.3.col.h.sd.mid2:115-2.i.left.(mid.hat.ace.sd.116:181-2.i.mid.togres#k.fierce#k.singleuse#facade.eba33:0:10:0#sidesc.Target enemy with [pips] or less hp flees).img.(customImg).doc.[(customImg)][p][light]Bug[cu][n][red]2 [hp][p][hp][p][cu][nh][huish]Pet[cu]:Shields alliles[comma] damages enemies with [yellow]more health[cu]
+.gift.(add.(((replica.statue.n.Bug.hp.2.tier.3.col.w.sd.0:56-2:0:0:56-2.i.left.(mid.hat.ace.sd.15:15-2.i.(left.k.underdog)#mid.togres#left.(right.hat.boar)#togvis).img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[i]grub grub[i]:Creek:Ouuuuuwchhhh:[i]nice shot[i]).mn.Add Bug)
 +
-(replica.statue.n.Rascal.hp.2.tier.1.col.h.sd.46-2:46-1:0:0:46-1.i.mid2.k.underdog#facade.Ber109:0.img.35268c2b842v4g2y602zog2ja000jccc88247qifIsoxmgBmguxAnmm0dF95ye0c4c0bgqh495c0dvrzoi4ycg8qgbpgv4bycgrz4p95yc4hvzp4949c6vzbg8gobh4cycbz8t8go4tg61595sls9tg9c0859snug461c8kg8l49d4c435lgkcAwdvd385ntvt53cbbnkAxA43594snms4Ed85sksmt83cwA8g48lx4sgEcxch48msgFcAxchc8tgHdAwAcL)
-.doc.[2c7000tdbg67k88ZVHSojccs0wVyVw09g2g92aqa28gcg82ogcgo2o8gag8o3gwogowg3oEgagEo3oco5g0M0g7ogo2][p][light]Mutt[cu] [p] [red]6 [hp][p][hp][p][hp][p][hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Hits damaged enemies
-.gift.(add.(((replica.veteran.n.Mutt.hp.6.tier.3.col.w.sd.0:170-3:0:0:170-3:7.i.left.cast.scald.i.mid2.togres#sidesc.[pips] damage to a damaged target#k.exert.i.peaked cap.img.332jog2lEw2moh2k8Cj000vkdtdbg67k88247426bMwEslMeMEg6golMbMo70hpEMaM4g4gMola4g5hMFw8j2gM5iwF8m0gFo2gphMFwm1Mlg1EswFwj0EoEOxpwMxF8wiwgoExmoxMF9mwg6gFwl9wFj3g2oFUbwoi3oyoEUbUm5oNhUcUwo6MiUdVj3owhwf9Uw1oxEoMfbxaxa)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[i]woof woof[i]:Grrr:Wrrr:Wurf Grrr:[i]lick lick[i]:[i]nice shot[i]).mn.Add Mutt)
+(replica.statue.n.Rascal.hp.2.tier.1.col.h.sd.46-2:46-1:0:0:46-1.i.mid2.k.underdog#facade.Ber109:0.img.(customImg).doc.[(customImg)][p][light]Mutt[cu] [p] [red]6 [hp][p][hp][p][hp][p][hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Hits damaged enemies
+.gift.(add.(((replica.veteran.n.Mutt.hp.6.tier.3.col.w.sd.0:170-3:0:0:170-3:7.i.left.cast.scald.i.mid2.togres#sidesc.[pips] damage to a damaged target#k.exert.i.peaked cap.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[i]woof woof[i]:Grrr:Wrrr:Wurf Grrr:[i]lick lick[i]:[i]nice shot[i]).mn.Add Mutt)
 +
 (replica.statue.n.Hopper.hp.3.tier.1.col.h.sd.right:66-2.i.left2.(mid.hat.ace.sd.115:15-1.i.mid.togvis#k.step#facade.pos147:0)
-.img.332yo42zc02Dk72kf000qifvHb247IsojccBmgrCgb8dju86e8OFp435mmmuxA1cA9AEzcEA9Ac3cA8J8As9s8gJAc2E8IMcgsbscMIAc1cEsIMcAb9sBE2cAthaEs9E9Ac1EAsbbb8AEzEtbA5D4wEzEu8s7wD4c1Ev7wpDk1wAtDkpkok6zcwDoirockzcwk5kohyw4kw4fclgokhowelc3lwhog4cQUd4d3njpw4ogy3wlAw8jjy3cmskoji4k3cxclwogoipw3d1mwhyky=0wmwiy=2clckp4=Yd=3)
-.doc.[2c4000vHbZVHSoj0w9y9wdh2h3gxg0gxg2gxixg3m3o2hQh3Nj4N9N6][p][light]Frogge[cu] [p] [red]4 [hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Poison[comma] Deathwish/Cruel
-.gift.(add.(((replica.alloy.n.Frogge.hp.4.tier.3.col.w.sd.91-1:143:14-2:14-2:14-1.img.312bg02e7000ju8xt5rC6MJw9h45473Eo8E2o82E8oxgFogx0EqNwo9wN0raqg9EqaEOEb9Eg9MzM80hEh8A8bEhFg8y8E28g80Eg1E8g2bbbg1bb)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.I saw two frogs:Ribbeet:Ribbit:rib ribt:ribit:[sin]CROAK[sin]:Hello my baby).mn.Add Frogge)
+.img.(customImg).doc.[(customImg)][p][light]Frogge[cu] [p] [red]4 [hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Poison[comma] Deathwish/Cruel
+.gift.(add.(((replica.alloy.n.Frogge.hp.4.tier.3.col.w.sd.91-1:143:14-2:14-2:14-1.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.I saw two frogs:Ribbeet:Ribbit:rib ribt:ribit:[sin]CROAK[sin]:Hello my baby).mn.Add Frogge)
 .part.1)&
 (heropool.
-(replica.alloy.n.Tracker.hp.5.tier.2.col.h.sd.0:91-1:0:0:53-1.i.left.(mid.hat.ace.sd.116-3:123.i.togpip#togres#togtarg)#facade.ite86:88:20:11.img.372vag2E622Gv22Jki2K262M982N2c2mh000247LIFc888lxuxAcbejccnmmBmgqifccsIso6rA4K435mmmB7dddED36cm99MnEAKc8rr8mcga5ac2z6Mrq8maZGyc9MmcZWG16mMmcYgfugb6y6m9cWG6feugacy6MWv7KfeuG1c9a5a6ekjkff6a6069g5a7jjik6f2acN9a52kje2jl72ac2mq8W2ie3e2eQG8qm5aKwa3keK3cG8n5g6pi6Joie3cGng4a6Jpppj3gaEmga4g2eJoipoj3h206bvc6lJlJEcg612baN2ekewa2fNgEy6bNElJkeNgCh2dEele2d2C6g2dcPItttH
-)
-.doc.[2c6000k88=O2ZVHHnb4350oNqNo2808087a7c5e4e48owgwo839EiE938wiw858i8Mg3][p][light]Feathers[cu][n][red]3 [hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Damages [purple]dying[cu] enemies and helps [purple]dying[cu] allies
+(replica.alloy.n.Tracker.hp.5.tier.2.col.h.sd.0:91-1:0:0:53-1.i.left.(mid.hat.ace.sd.116-3:123.i.togpip#togres#togtarg)#facade.ite86:88:20:11.img.(customImg).doc.[(customImg)][p][light]Feathers[cu][n][red]3 [hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Damages [purple]dying[cu] enemies and helps [purple]dying[cu] allies
 .speech.My aim is [light]true[cu]:I see ya:There!:Strike now!:Nice shot:[grey][i]hiding[i][grey]
 .gift.(add.(((replica.statue.n.Feathers.hp.3.tier.4.col.w.sd.15:171-2:71-2:71-2:110-2:110-2.i.left.k.swapdeathwish.i.togres.i.mid.sidesc.[pips] damage to a dying target#facade.dan8:0.i.peaked cap.i.topbot.sidesc.Shield [pips] to a dying target.i.right2.sidesc.Heal [pips] to a dying target
-.img.2l7000k88g67=O2JD2435Hnb29=2g9=2g9ZgdgYag9gdgUgfbg5bg9geg3ag0g8Ggdow1h2aMEoEbqw4bibsw3gagbMu4gewoNxp5gdg91Mwo3gegWgf9Vf8g8g7gf8g97f8g097fg1g87eg2g6
-)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Caw:[caw egg]).mn.Add Feathers)
+.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Caw:[caw egg]).mn.Add Feathers)
 +
-(replica.monk.n.Warrior.hp.3.col.h.sd.29-3:23-3.i.top.(mid.hat.ace.sd.34-1:15-2.i.mid.togunt#togfri#facade.spe20:17).i.bot.(mid.hat.ace.sd.15-1:34-3.i.left.k.tall.i.mid.togres.i.pendulum#togunt#togfri#blindfold#sidesc.[pips] damage to an ally[comma] then 2 damage to the top-most enemy#facade.spe20:0).img.2hf000IsoBmgqif247k88c88NEOROEuxAw9axmgmmmw7aNC6%g0h1h%gosgtgswsgYoAtxAxsgYokeAzAi1ocadszwsg1cb8k8Axsog1obck848csAk2bckE79c2c9l87682ek97F482f96F5k2kdk95Elcko2o4Ic84gcMhkh34kI4QMAhkckg3c74ko858oYUk85E78kYgo8758ckYAp85oBo8o1gdAsp5ho8c2geAsp68c3gketgo9k%pkAsi%)
-.doc.[2h8k88000Bmgg67Iso247435b8df080do3o8o1o8o2p0h1o3o1hoE0i6oiE8o0go7ogoao72oao74o97697695h2h19o2q4p0ao1pMo2oMob6gxg2ao3ogzg0oa0phCg0cE0hBgEdE0hxVw0EeE0l0f8F0i0E9][p][light]Cub[cu][n][red]4 [hp][p][hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Becomes stronger if at [orange]half health[cu]
-.gift.(add.(((replica.thief.n.Cub.hp.4.tier.4.col.w.sd.171-1:171-1:56-2:56-2:170-2.i.right.facade.bas170:-10:5:7.i.left2.facade.bas171:-10:5:7.i.k.swapcruel.img.2h8k88000Bmgg67Iso247435b8df080do3o8o1o8o2p0h1o3o1hoE0i6oiE8o0go7ogoao72oao74o97697695h2h19o2q4p0ao1pMo2oMob6gxg2ao3ogzg0oa0phCg0cE0hBgEdE0hxVw0EeE0l0f8F0i0E9))
-.i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[purple][b][sin]ZZZ[sin][b][cu]:[i]Growl[i]:[honeycomb][bee]).mn.Add Cub)
+(replica.monk.n.Warrior.hp.3.col.h.sd.29-3:23-3.i.top.(mid.hat.ace.sd.34-1:15-2.i.mid.togunt#togfri#facade.spe20:17).i.bot.(mid.hat.ace.sd.15-1:34-3.i.left.k.tall.i.mid.togres.i.pendulum#togunt#togfri#blindfold#sidesc.[pips] damage to an ally[comma] then 2 damage to the top-most enemy#facade.spe20:0).img.(customImg).doc.[(customImg)][p][light]Cub[cu][n][red]4 [hp][p][hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Becomes stronger if at [orange]half health[cu]
+.gift.(add.(((replica.thief.n.Cub.hp.4.tier.4.col.w.sd.171-1:171-1:56-2:56-2:170-2.i.right.facade.bas170:-10:5:7.i.left2.facade.bas171:-10:5:7.i.k.swapcruel.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[purple][b][sin]ZZZ[sin][b][cu]:[i]Growl[i]:[honeycomb][bee]).mn.Add Cub)
 +
 (replica.monk.n.Singer.col.h.hp.4
 .sd.103-5:56-3:0:0:15-1
-.img.3326gc2nc43yk8k2ke000247Isojccc88Bmgra0qifJr9Gja8lxk88ccsb8dX504XW4goxog4A4Vh4pAx6wAo4UctnAzwAo71cucxAogoAxBp0vnotgdgoBn1u4h4ogoy6oA414dhcgkokaEkIco40g566kbElJ416gekbEMknJ41eglaFkgQ40I41c8scktkE4ksn340g8ksk5Mg4d5Wc8lMEdQyQV5gsyFk9kcU4w5gkaEakcU4ow4h9kalgV4xg4c9scgksVpxh4c9g8cWqAwh4s9cX0pBwgXXoAoAXU)
-.doc.[2c6000ewh9h4ZVHLIFq660oNqNo48Na7c5gcg4gw8E8wg3g8oGo8g2h8EwE8h3g8y8g5g8w8gMg3][p][light]Parrot[cu][n][red]3 [hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: [blue]Echoes[cu] and [light]copies[cu] other heroes
-.gift.(add.(((replica.lost.n.Parrot.col.w.hp.2.tier.4.sd.97-1:97-1:0:0:67-1.img.2dbewh000aso2o69h4LIF594uxAq66mmm4357o828cUc8sl0x8w5o8skEl0x6g9Akt0gsk5a3lwk4c93tm493cAtok492ci5oc91c8hco5g9282co4g9Lc4oc8M5g8M5ogc8K6pc81c1c7pc1g8cgUogc8gc6)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Jackpot!:Snake eyes:lock it:Nice shot:I saw three frogs).mn.Add Parrot)
+.img.(customImg).doc.[(customImg)][p][light]Parrot[cu][n][red]3 [hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: [blue]Echoes[cu] and [light]copies[cu] other heroes
+.gift.(add.(((replica.lost.n.Parrot.col.w.hp.2.tier.4.sd.97-1:97-1:0:0:67-1.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Jackpot!:Snake eyes:lock it:Nice shot:I saw three frogs).mn.Add Parrot)
 +
 (replica.rogue.n.Magician.col.h.hp.5.sd.127-3:103-4:15-2:56-2:127-3
-.img.362ywc2zh72Cck3H4g73K8z43Lg8Z2lf000b8d247jccddgc88mmmIsoqifk88Bmgxmgq66uxA8lxHa=3grqzp834zgrpg483Kj5g8Y8H4i6LKh6LKzL4zH48Z8h5BND9Z8NAhrro481grq48cA8BCb8758AyyIkdlcb8BdIwkJkfc80A8AIyJyJcFkCd9AIwAJyIyGwAk908wAnd9GykB9k8kslxko9y9kA90kdsEy8oQ5d90918kdsFtCwEswk280kC8UcEvuxY90Ccwvctxk=kCEtctd8c=kcltECEy=08dkwt8Ew=3e8wtw=Zd=Y)
-.doc.[2c5000LIFSojmmmZVH0wFyFw09o2o92h828h28ho0oh838g8o8g85c5oco48wo8ow84e59g97a2][p][light]Bunny[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Moves sides
-.gift.(add.(((replica.statue.n.Bunny.col.w.hp.3.tier.4.i.left.sticker.(abacus.part.0)#facade.ite281:0.i.mid.(sticker.compass)#facade.ite414:0.i.right.(sticker.pendulum)#facade.Bal5:0.img.332f8p2i8g2kfi2g6000ZVHLIFSojmmm435Pw919g7agbw5wagbgw4wkk4gf8wfg8w3ip80gk3ipg1gf8w2k1wk1wgp83gbja3wVw4gUw5Ug4waE9hE8w3wfgdg4geoi5gcEg87wgbg1)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[dot]).mn.Add Bunny)
+.img.(customImg).doc.[(customImg)][p][light]Bunny[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Moves sides
+.gift.(add.(((replica.statue.n.Bunny.col.w.hp.3.tier.4.i.left.sticker.(abacus.part.0)#facade.ite281:0.i.mid.(sticker.compass)#facade.ite414:0.i.right.(sticker.pendulum)#facade.Bal5:0.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[dot]).mn.Add Bunny)
 +
-((replica.thief.n.Geneticist.col.h.hp.5.tier.2.sd.92-3:31-2:93-2:93-2:31-2.i.topbot.k.exert#facade.bas93:25:-5:-13.img.342ngc2r4c2vsb5zgwF5c2kd000jccIsoc88247qifxmgBmguxAmmmNEOZVH8uAkonkpcq4g5g2h4or4p4pkd5ng0k5pckoc4p7cg0npkpr4dokc6h0g4qko4ks4kcs5ng05kpk5v8krg1n5kc4kb9s5g14d5ckv9sr2g4drtb8sc4g2gDAyBxBc3g48seAIwA4gIwgQc8k8ckgwIMlwIMQgv8rks8scSn4vas4Sn4kbakcQGgrv8kscQzs9c4skSzs9skSxAG4nlcUxBwEwiU)
-.doc.[31368h82c5000LIFSojZVHCa80oFqFoJ929360626063e5c58waw84gcg4aga5c1][p][light]Altered[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Needs [violet]certain keywords[cu] to be used
-.gift.(add.(((replica.monk.n.Altered.col.w.hp.3.tier.3.sd.38.sd.right5:170-2.i.right5.togres#sidesc.[pips] damage if this shares a keyword with your last dice.i.topbot.facade.bas57:94#k.selfheal#k.pain.i.mid.facade.bas57:74#k.managain#k.exert.i.right2.facade.bas57:8#k.cruel#k.singleuse.i.peaked cap.img.2i9000ZVHIsoQGAmmmCa8SojLIF4350c4Fc4g1c95C58s1ac5Ac4as0pk95ci49kos08pwk8c7s8wos1gcpw8Rc8sg3gdSdgC8SdsBg6l49dlAc6lcbl83cSc9e82gcWcs38cUp8A8cRdw9Cg85cgx9Fg9d8g1)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[dot])
+((replica.thief.n.Geneticist.col.h.hp.5.tier.2.sd.92-3:31-2:93-2:93-2:31-2.i.topbot.k.exert#facade.bas93:25:-5:-13.img.(customImg).doc.[(customImg)][p][light]Altered[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Needs [violet]certain keywords[cu] to be used
+.gift.(add.(((replica.monk.n.Altered.col.w.hp.3.tier.3.sd.38.sd.right5:170-2.i.right5.togres#sidesc.[pips] damage if this shares a keyword with your last dice.i.topbot.facade.bas57:94#k.selfheal#k.pain.i.mid.facade.bas57:74#k.managain#k.exert.i.right2.facade.bas57:8#k.cruel#k.singleuse.i.peaked cap.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[dot])
 .mn.Add Experiment))
 .part.1)&
 (heropool.
-((replica.thief.n.Kindred.hp.5.tier.3.col.h.sd.15-2:65-3:17-2:59-2:74-2.i.left.k.engage#k.pristine#facade.dar27:70:40:0.img.382p492rk22teb2vem2Dg22G4c2Hz23LDy22lh000247NC6=QjUJoROEFocNEOjccb8dnmmuxAqifw7aS0lq66mmm12kmrKmtv2Itbaei202mve2AmatvkimbafeiHbvltbfkOynealtber864Lkmkbbaek475cLkbeaer478csqcg12teaer8%c2qsco212var4=65uqG202ver4=98Wd203c=68WchhcLgpGjjjjDzcpGjPi3i2Hgc5ciwm3ih2i2Hio487hihhi2B2ioc9=685oB2o2cp8%8GoBd62ip99dgH656Dop9Go2H6W6Dop8diA2c6G48hcpco2B38d48g3ihiz
-)
-.doc.[2c8000=O2mmmLIFuxAb8dZVHJD20M71O71M1og2go4ow2wo4gcg4e48MiM83EUEqEUE2EgsgE3gAg4EAE5Eg0gE1][p][light]Steed[cu][n][red]6 [hp][p][hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Shields and buffs [light]undamaged[cu] allies
+((replica.thief.n.Kindred.hp.5.tier.3.col.h.sd.15-2:65-3:17-2:59-2:74-2.i.left.k.engage#k.pristine#facade.dar27:70:40:0.img.(customImg).doc.[(customImg)][p][light]Steed[cu][n][red]6 [hp][p][hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Shields and buffs [light]undamaged[cu] allies
 .speech.Together!:Shoulder to shoulder:With me!:[i][light]Whistle[cu][i]
 .gift.(add.(((
 replica.ace.n.Steed.tier.5.hp.6.col.w
 .sd.59-2:72-2:0:0:146:151.i.right5.togres.i.peaked cap#row.togtarg#right.sidesc.Add [grey]self[cu][light]shield[cu] to undamaged allied sides#rightmost.sidesc.Add [green]growth[cu] to undamaged allied sides
-.img.342fc42nc82wc12B482ja000b8dmmm247uxAJD2=O2LIFZVH43514sgw4g8cH4t8wh8cH4s8414g84Icg4kpzk4Gnkrzo4Fckqkpzo4E4pkc5loyo42ckpfA4olrowcpk6olRwcpc5olBgv8c04pfmBiv8fpflni4cugfpnkf9i4jfoknf9Bjh8flcYc9j840cm4b4ngf8wcmnga4nhc34lfha4eEcmBhacHcmBh9cF
-))
-.i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round
+.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round
 ).mn.Add Steed))
 +
 ((replica.monk.n.Scout.tier.3.col.h.hp.6.sd.48-2:47-2:104-6:104-6.i.right2.(mid.hat.ace.sd.116-6:123.i.togpip#togres#togtarg)#facade.ite86:88:20:11
-.img.332v402y042z052kg247b8d0008lxccsLIFnmmuxAsrnIsojcc6rAqifcbemmmBmgbygfhvb9yhffgvb8ifdJci0a0hfdIg7h09ygegJg0oszh08yegcIvwlszg080dhcIvolps06ycic0owslsokwo5ychcvownsksozg5gI4Fv41Ey15gvgI4E0Us1ME37yc0OyMBF14141g0EMDBME1v80vg0wEYDMwo0vasvgownswo1v8wlsovomspQ149wnwvQlpQ14aonkwv4tQzb8oskokz3ba)
-.doc.[2c5000nkjHnbZVHeee0oFqFoL8w87waw6c5wcw48oao849i958i87gwgFw3][p][light]Hawk[cu][n][red]7 [hp][cu][nh][huish]Pet[cu]: Shows enemy vulnerabilities
-.gift.(add.(((replica.thief.n.Hawk.col.w.tier.5.hp.7.sd.181-1:181-1:0:0:181-1:181-1.i.left.hat.caw.i.row.k.vulnerable#k.sticky#togvis#facade.dan15:0.i.peaked cap.i.topbot.(sticker.k.critical)#facade.pos51:0#k.generous.i.k.cantrip#k.unusable.img.342ig82mc42rcg2uc52lb000wqlb8dnkjeeeJD2HnbUJog67=O2435L8j8Q8ge6ciLg7c828iL86rwA0h4ktoJ8g4Emigcot0sg38c6fmn8gIhfd0olp9Jidh90gp18K87gaPcUrP84m0mihMgmi08h0iM8digd80808Kmuh5haJg5ud5c8h8I8c7gd5ig93ur5c85c0ga2cUrd580a37ugd840b34ug5858c0b3g0m8d8r0Z3)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Hawk)
+.img.(customImg).doc.[(customImg)][p][light]Hawk[cu][n][red]7 [hp][cu][nh][huish]Pet[cu]: Shows enemy vulnerabilities
+.gift.(add.(((replica.thief.n.Hawk.col.w.tier.5.hp.7.sd.181-1:181-1:0:0:181-1:181-1.i.left.hat.caw.i.row.k.vulnerable#k.sticky#togvis#facade.dan15:0.i.peaked cap.i.topbot.(sticker.k.critical)#facade.pos51:0#k.generous.i.k.cantrip#k.unusable.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Hawk)
 )
 +
 (replica.monk.n.Siege.hp.9.tier.3.col.h.sd.118-1:118-1:56-2:56-2:118-1
-.img.342a482vAs2ycg5z85g9E2jb000g67247jccqifuxAxmgdiilorbff799KW9L4ypjcaJyriogca34grhodB5818yojoc4s8sEa14icoho4xsxa08chyoch8x8xE408hdgdo8AxAwkE404gfco8vl8lsa4fcoEwnsmafyoAtwnks84c4egosA9Esw8EA86dg4ExsvwlB0Ug8Esxnkw805zBsnkw84ca4o9Etvwn80d85o9At8s8s8A2d85o8EvvBEJzvxEL5c1Y3)
-.doc.[2c6000qifjccuxAZVHb8d0wNyNw48O86g9g8g9g2gE181Eg2E8g080g8E3g8g8g8g6gog7s7qNo3][p][light]Ballista[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [light]Back-row[cu] and [red]eliminate[cu] damage
+.img.(customImg).doc.[(customImg)][p][light]Ballista[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [light]Back-row[cu] and [red]eliminate[cu] damage
 .speech.[sin][b][dot][dot][dot][sin][b]
-.gift.(add.(((replica.bard.n.Ballista.col.w.tier.5.hp.3.sd.46-2:46-2:46-1:46-1:46-0:46-0.i.k.eliminate#k.critical#all.facade.ite258:11:10:0#k.sticky.img.3226og3hg=62l7000qifjccb8d435uxAmmm0gcgZfgXojbgYrgahah9h9g7oeozo0HM0gfcgMHMolzp0MGMo1sw6aWz6ago7okbgpio3f8g06x63eg3oio3lp=oyo=s=rZ)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[dot][dot][dot]).mn.Add Ballista)
+.gift.(add.(((replica.bard.n.Ballista.col.w.tier.5.hp.3.sd.46-2:46-2:46-1:46-1:46-0:46-0.i.k.eliminate#k.critical#all.facade.ite258:11:10:0#k.sticky.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.[dot][dot][dot]).mn.Add Ballista)
 +
 ((replica.monk.n.Maddened.sd.87-0:93-1:18-3:18-3.i.left.k.pain.i.topbot.togfri#facade.Spi129:18
 .hp.5.tier.3.col.h
-.img.3423oc26kc2fs83iksc2gcFEy000ZVHeeewvo247nmmLIFc88b8dS0l8uA4m0ciik0c5ifcfo8sosgk4A8t=tk4oYfs08t0c4csa03hsgo0g4A0903Mgcgo8093OodasogOowko9shNgoxc0fh0gl0gkwc4xcshk3kd65c03ofE8otE8k4w1og38I6o8Ik4koMckog065wcogPh7wcg0ch1gcg76o1bkgw76wo19kgcUkdwo1hcWe6hwX4dwmU)
-.doc.[2c7000FEy435febwvoZVHLIF0EVGVE1u3omo2ogM8jo2ohbgo28gwawg82wgEyEg83wcx3ow8w8wo4owogowo5waw1][p][light]Creation[cu][n][red]12 [hp][cu][nh][huish]Pet[cu]: Attacks only using mana
+.img.(customImg).doc.[(customImg)][p][light]Creation[cu][n][red]12 [hp][cu][nh][huish]Pet[cu]: Attacks only using mana
 .gift.(add.(((replica.thief.n.Creation.sd.34-2:174-4:174-2:174-2.i.blindfold.i.mid.k.descend#togunt#facade.the36:0:-50:20.i.topbot.k.cleave#facade.eba39:3.i.k.manacost#peaked cap
 .hp.12.tier.5.col.w
-.img.372ak02nco2rak2C8c2Dg82Gc52P852jb000FEyfebwvo435b8dohn7bLIFZVHuxA3k8z%k2k8AgAfjirhwgwcB8jirjCx9DDhriC4D4C8dsgriC7fcsori8Usfso1k8hcU9s8sl06cgGcsqDkp04Pgc4nbgskoan5PkEwDoc48gan84Gc9sko58t0Pd6k8soG8s815knc7cPo8k19kcpc4n95c8k3kocpct4c8h8J8ocqGc8tKCpd9m8Kko4d8ki8MPogGckNo7dokOk6dok2
-))
-.i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Urghh).mn.Add Creation))
+.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Urghh).mn.Add Creation))
 +
 ((replica.ace.n.Paleo.col.h
-.sd.105-3:0:56-3:56-3.i.mid2.(mid.hat.ace.sd.34-1:15-1.i.mid.togunt#togfri#facade.spe20:17).img.352b8g2r312yc82Dcg2Gco2jg000Bmg247y8jccxmgqifju8Iso6e8k889h4435mmmuxAJC12DpGgEog8rblgEmo8DE82blgnEAvA81Gkolo8AvuA80Egogkg8AvvsA0gEgb8AtA8EgFgMA0ED8EBsEGlogpE8EcEcCEnnlEdEBboloDlglE8dAboho5Mdpg9dA8pE77y18dbo6oh6g38c4D5yIbo93085g48QU9g49rg7xG4w4or8Ygo4zx530aG4zxo4308Jdozw5crAse4xgc5rAItyc4x5rLtyc5o32JA9AsI330)
-.doc.[2c6000qifBmgjccZVHLIF0wNyNw3q6oco4e4e3g8wo8ow8g2gocog3gcg4goaog5gEoEg7i2][p][light]Fossil[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Breaks and summons the apex predator[n]Make sure it doesn't break permanently!
-.gift.(add.(((replica.monk.n.Fossil.hp.3.tier.5.col.w.sd.14-3:14-3:14-1:14-1:14-1:14-1.img.342ek02mk42ns03v24k2iaqifk88000247uxAb8dBBB435Ih0uaabcm04vcZc4v25cbc4Emvcak2mhk505c9c41sgqg07c9c1sg050p0t4k9e4go4sw40pg0s4degpgsAs4os4gosdegrpis4ogdengqjgqde4ni04ehogdk14tktlumdm1einen4c8cm1njgo05cack1sei06cbck1TkZck7k6kc%ffd9)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Cree:[violet]chip[cu].i.t.orb.slost.abilitydata.(statue.n.Cretaceous.i.left.(hat.egg.((replica.veteran.n.Rexa.col.w.tier.6.hp.15.sd.170-6:170-6:171-2:171-2:170-6:170-6.i.row.k.heavy#facade.bas170:4:45:10.i.k.sticky.img.352tck2vt82x8k2ycX2zc82obqif000jcc247Bmgb8dIsoZVHLIFIh0uaa7vIxy6vMxyvOxWtaO8WkbOkWb1xc938cWa38enkcWaIdAv28cUY2kcE9J8c68g8v2k9M8c4i0zT0chog0vMk8380r0d80xa2t2k8grgkfka2c2d8ipgkfsk9K4ziphsdwcsk8J5zjgowkewv3c6c0jp8sfcstdUz0jow8selgX4z0iowsgsl8wy5djows9sgy7c0iqg0yVd2h0c7).speech.[b]roar[b]))#eyepatch)).mn.Add Rex)
+.sd.105-3:0:56-3:56-3.i.mid2.(mid.hat.ace.sd.34-1:15-1.i.mid.togunt#togfri#facade.spe20:17).img.(customImg).doc.[(customImg)][p][light]Fossil[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Breaks and summons the apex predator[n]Make sure it doesn't break permanently!
+.gift.(add.(((replica.monk.n.Fossil.hp.3.tier.5.col.w.sd.14-3:14-3:14-1:14-1:14-1:14-1.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.speech.Cree:[violet]chip[cu].i.t.orb.slost.abilitydata.(statue.n.Cretaceous.i.left.(hat.egg.((replica.veteran.n.Rexa.col.w.tier.6.hp.15.sd.170-6:170-6:171-2:171-2:170-6:170-6.i.row.k.heavy#facade.bas170:4:45:10.i.k.sticky.img.(customImg).speech.[b]roar[b]))#eyepatch)).mn.Add Rex)
 )
 +
 ((replica.ace.n.Conductor.col.h
 .sd.37-2:62-2:56-2:56-2
-.img.342rsh2v4w2yEh3z9oc2je000247IsoqifNEOjccBmguxAb8dcjnmmmnmmw7aq66W=614JvAsyAhyE405AIAsgrrrs41vsAhEgrrsg40vgIsgyryAg14AsItyAEBEAk424DBFjhs05wLEreodks4kdldlezkI0xkeodob8wc05kepbzw0c4dk9o9c5wdw42wkw8c9cEs5l524dkbpwco8ok15ck4scbbok14c4lwkob9c4k36wlob8pw34Mvclo9clcV4Nd4kozV4SMdvpcX2RNQX)
-.doc.[3121g82c7000eee9abmmmZVHJr9Ca80wVyVw38E87gEwEg7oEoU1g7gag69o951oMo8g41go1g48ga14o811o0][p][light]Train[cu][n][red]12 [hp][cu][nh][huish]Pet[cu] [minus] Late Arrival: Is [grey]unusable[cu] and undying the first 3 turns
+.img.(customImg).doc.[(customImg)][p][light]Train[cu][n][red]12 [hp][cu][nh][huish]Pet[cu] [minus] Late Arrival: Is [grey]unusable[cu] and undying the first 3 turns
 .gift.(add.
 (((replica.ace.n.Train.tier.5.col.w.hp.12
 .sd.34-3.i.mid.right.hat.alpha#togeft#togpip#togtarg#k.pain#facade.Yca77:47.i.self.reliable#peaked cap
-.i.topbot.sticker.k.era#facade.pos25:0.img.3d2dg82fdd2ik02jco2vc82yii2zv42Bgk2Doc3ocgc5Fpep8656DMj855p2c28t2hceee0009abmmm352999uxACa8Jr9=O2435ZVH58jz0c0XBvg0wAw0WBDgcAIAcWgjcdwAw8Wgeg4808XB180q08UB81Fd26k2D28c1j58pc1z3c18sjs1z82c1Es0cs1zkp81zd1D2E81j5l816ndFlad0q08g94gbkfdBagb0g0yg0ag9ogckckogzgyyyi5B8fff78ffdg9))
-.doc.First 3 turns: Replace all sides with [grey]'blank'[cu] and cannot die.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round
+.i.topbot.sticker.k.era#facade.pos25:0.img.(customImg).doc.First 3 turns: Replace all sides with [grey]'blank'[cu] and cannot die.doc.Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round
 .i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f
 .i.self.Quick Nap^3.splice.k.unusable.i.self.Quick Nap^3.splice.unpack.pentagram
 ).mn.Add Train))
 .part.1).mn.Huish.modtier.1,
 
 (heropool.
-(replica.thief.n.Birdwatch.col.h.hp.3.sd.24-1:118-1:0:0:118-1.img.2kf000ROELAsLIFzrg247IsouxAjccqifBmg4jtc888uAmmm3kI2RKUk=0kLIQUl%kAgaiAw1Aaw0kgbaiA8jg0kbbh9jgw0Abb9jgAw1gb8gAc5kes3AhAc4k7sfk2s4c6c7wfsk0k5c6A6swsek1c5s5csc4cCwt2cswAdGrEwYtoEdFwmAlYksos5EUsckxskYAsEc5cpNEoEMYuc6rpEwYsws4c5croxZkc4A7cpFMZAdw6EpxAZksckx4MApEA=2kxkMAF=)
-.doc.[2c60008uAZVH4jt898mmm0gNiNgT18No8o7oao6c69w96gyg6owEwo7GNE2][p][light]Jay[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [orange]Pecks[cu] enemies
-.gift.(add.(((replica.alloy.n.Jay.col.w.tier.3.hp.2.sd.0:181-1:0:0:181-1:7.i.left.hat.caw.i.mid2.k.vulnerable#k.sticky#togvis#facade.dan15:0.i.peaked cap.img.2i90008uA4jtEAAmmmLIF8982474bkA8R8G8S8Fo84cko8oD84pctkpC858ogtgo8gA878omjg1o6bo8dA8ko8Rcl385kcp84nkA6ld8cmc3R8ofcAi58ofgDxhfEwh1g2gJg2gB)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round)
+(replica.thief.n.Birdwatch.col.h.hp.3.sd.24-1:118-1:0:0:118-1.img.(customImg).doc.[(customImg)][p][light]Jay[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [orange]Pecks[cu] enemies
+.gift.(add.(((replica.alloy.n.Jay.col.w.tier.3.hp.2.sd.0:181-1:0:0:181-1:7.i.left.hat.caw.i.mid2.k.vulnerable#k.sticky#togvis#facade.dan15:0.i.peaked cap.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round)
 .mn.Add Bluejay)
 +
-(replica.witch.n.Rake.tier.1.col.h.hp.3.sd.36-1:56-1:0:0:56-1.img.342D4g2H8g2K4k2Pck2mf000qifLAsc88zrgjcc247IsonmmNEOROEuxABmgrldmmmZDba4c=0Dbgah4=4bH9g7c5k3kbg9g7K6k1Pg9k8h7K7g0cK8hk76c7D4HKi75c7DcHDKP5ld7Dc0g48c8cHoh76gc1Q948o8o9iDDkw3QgHHH9g8hewYcQb9h4fc4YxPycpUodkok3cBPIwIoUIqkp3cIwJcAIEl4dMsMc3wBcwoAFA4vsMk3wCcoIGMvsKYwIAwocAGAuM4c=1Pd4Es4l4=2old4tM4=YolocN4=%p=3)
-.doc.[2c7000Esjumgihbd95ZVHSoj0EVGVE3o0o0o7q68oao84e5gag6xgx6MaM6gag59g8g94gw0g0wg][p][light]Grove[cu][n][red]5 [hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Gives [green]growth[cu] to allies
-.gift.(add.(((replica.monk.n.Grove.tier.3.col.w.hp.5.sd.151:151:14-2:14-2:151.img.342a8g2f8c2n4c3p8Bf2g9000Esjd95umgqg9ihbC88Je6Sv3DadgFa2f8DgBgpBa2k1gpk0l0kc1k341k8la0k80k042gn8n9l1c2g5g5kck4g1g1fQ8n1ql85cn52sos0kgc9h83ox0f7c8CgRep7cgD6g5g5B84gacganAdgB9cg2)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Grove)
+(replica.witch.n.Rake.tier.1.col.h.hp.3.sd.36-1:56-1:0:0:56-1.img.(customImg).doc.[(customImg)][p][light]Grove[cu][n][red]5 [hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Gives [green]growth[cu] to allies
+.gift.(add.(((replica.monk.n.Grove.tier.3.col.w.hp.5.sd.151:151:14-2:14-2:151.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Grove)
 +
-(replica.monk.n.Swimmer.tier.1.col.h.hp.5.sd.103-4:125-1:0:0:56-1.img.3229s82nsk2gb000Iso8uBjccBmg8lxc88IGxqif247ROE2ok9sFn4o3ka9sF94o1kY9u8sc0oZ9sE9nokYkdqclolacgUgokom8hWgc0mcgXgo0mog6gzc1k4czA8nB8k0o4gcicnsdn1cgwg6i4go3cwgWgc3cowWwc3dAgVgo3eAUcgIAeA6hKodAo5gwLBN)
-.doc.[2c4000Ih0ZVHC880w9y9wff7N0N7gMg9g9MgM8i7wiw7i1][p][light]Goldie[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Lives in [light]pristine[cu] but frail vessel
-.gift.(add.(((replica.thief.n.Goldie.tier.3.col.w.hp.3.sd.28-1:65-2:0:0:65-1:7.img.2h7000uxAIh0mmmC88ZVHeee19oM4MoE838WE28oWo8183wg6E085whw491w3h0g3E82g1k3E82wgwj4E83h1g0w38o4gUo08Y81oYo2oWo4968o7oco4)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Goldfish)
+(replica.monk.n.Swimmer.tier.1.col.h.hp.5.sd.103-4:125-1:0:0:56-1.img.(customImg).doc.[(customImg)][p][light]Goldie[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: Lives in [light]pristine[cu] but frail vessel
+.gift.(add.(((replica.thief.n.Goldie.tier.3.col.w.hp.3.sd.28-1:65-2:0:0:65-1:7.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Goldfish)
 
 .part.1)&
 (heropool.
-(replica.monk.n.Diver.col.h.hp.3.sd.30-2:125-1:66-1:66-1.img.2ge000lorIsouxAROEbffNEOjccnmm247Bmgc88qifmmmWy1wXwcogocwcVIwcojod3sMIphoid1whcswogpgocw0Ioios8Expx0woicsaEIAw1wiosb9EA1wogcsEbaEA0IocwEakYk0tcwakZk0s9w9kchococ4kI8s9EQohcod4k0s8E9k4d4Bck2AF95kA5k3AsE9m4ek1AuE8D72vA5k6dk1AtA6A6dk2Ask5Am5kUAk4kX)
-.doc.[2c5000hptekrZVHSoj0oFq483o4g8g7gag5goaog5waw6gag7aEg8gEg8gF8Gg2][p][light]Pierce[cu][n][red]4 [hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [purple]Rampages[cu] through enemies
-.gift.(add.(((replica.dabble.n.Pierce.col.w.hp.4.tier.4.sd.0:0:0:0:52-2.i.left2.(mid.hat.ace.sd.115.i.cast.drop#togvis)#(wrench.m.-2)#k.rampage#facade.ite425:45:7:5.img.2qa000ekrhpt89h8go898435LIFZVHk88142gP2c04g148cP1dh0gacP0c4g0c4acP051gbcNc61g4b4Lc5g26bkK6c17cg49cJ7c6grdkJcScoswlgscJgSkxsk494Jg6g6olgY4Icgc49SY4Ig9g0cgA1d6a4Fc9g3cgEd4a42c5P3)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round)
+(replica.monk.n.Diver.col.h.hp.3.sd.30-2:125-1:66-1:66-1.img.(customImg).doc.[(customImg)][p][light]Pierce[cu][n][red]4 [hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [purple]Rampages[cu] through enemies
+.gift.(add.(((replica.dabble.n.Pierce.col.w.hp.4.tier.4.sd.0:0:0:0:52-2.i.left2.(mid.hat.ace.sd.115.i.cast.drop#togvis)#(wrench.m.-2)#k.rampage#facade.ite425:45:7:5.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round)
 .mn.Add Swordfish)
 +
-(replica.dabble.n.Climber.hp.5.tier.2.col.h.sd.95-1.i.mid2.(mid.hat.ace.sd.116:181-2.i.mid.togres#k.fierce#k.singleuse#facade.eba33:0:10:0#sidesc.Target enemy with [pips] or less hp flees).img.352te32D622F8c2H4a3K3632jh000Jr9ROEGjauxANEOnmmra0435IsoJe6c88qifBmg247Sk0jccAm6Q7gCmeO6Wa86gAm6Oo5aWFgym%2oWbHHcye=8H5sba48g0g=sbb5msc5c0g2728acqoaHosc9cte24cjiqoaps8s0tD4qjjqpwgc1Dt4rlvuleg1Dtel8a98dkg1K4kua9clckcg0KWvukqoke9gKa5qjjqwgF0D638aHjjoc9g0g2tm9d5aFgc1g6tn8a4qxFzgDDenaW9gzge2e6fsm85FEe6f1dcB)
-.doc.[2c9000CogONKjccZVHtwzvkdSoj3520gFiFgPCo6oBS3cSc2dgo4ogd2ct8w8tc3k9k9kAk9k9kB9c91][p][light]Bernard[cu][n][red]5 [hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [yellow]Rescues[cu] allies
-.gift.(add.(((dabble.n.Bernard.hp.5.col.w.tier.4.sd.71-3:170-3:64-1:64-1.i.left.k.regen#k.singleuse#facade.ite381:0.img.2kd000898352jccLIFtwzONKtdbCogvkdGnauxAEsj186sAzg8S87Aysdg8Q8Zxc6gsQ%wsa5kQZAw5Ig84khkc1YAM585kgp9c0e5cwc6kgqg50f4cAs6hrg408d58sc5chrg41869c5cgqgkc28c5c95kjk52ctFscahk5gk2csAGAlb8S8dAFsn8V9cBsm8X9ctck8Q)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Bernard)
+(replica.dabble.n.Climber.hp.5.tier.2.col.h.sd.95-1.i.mid2.(mid.hat.ace.sd.116:181-2.i.mid.togres#k.fierce#k.singleuse#facade.eba33:0:10:0#sidesc.Target enemy with [pips] or less hp flees).img.(customImg).doc.[(customImg)][p][light]Bernard[cu][n][red]5 [hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: [yellow]Rescues[cu] allies
+.gift.(add.(((dabble.n.Bernard.hp.5.col.w.tier.4.sd.71-3:170-3:64-1:64-1.i.left.k.regen#k.singleuse#facade.ite381:0.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Bernard)
 +
-(replica.witch.n.Apiarist.hp.4.tier.2.col.h.sd.0:111-2:0:0:111-1.i.left.(mid.hat.ace.sd.116:187-3.i.mid.togtarg#togres#sidesc.Target ally with [pips] or less hp [purple]decay[cu][comma] then summon a [light]Bumble[cu].i.left.(hat.egg.(replica.dabble.n.Bumble.hp.2.tier.4.col.w.sd.21-4:15-2:0:0:15-2:7.i.mid2.k.sticky.img.3326k92d142f0c2ja000eeeLIF898mmmuxAHzbHnbyl9247F6J6k1bIbk1gaHa6161g43ka60g8k0g24g1lak80kdd1c3ka4gw4icFwsgk8gw4jgc3tg4gk4o5AkAhc2pQo5c8chA2soc4c5sc5Bi2woe5wARc2ct4e4wA7cEcwp4eoc0wIsof1sdHc4cff4f4G5cfddOcH))#eyepatch.i.mid.togunt)#k.decay#facade.ite70:0.i.topbot.(mid.hat.ace.sd.116-3:123.i.togpip#togres#togtarg)#facade.ite86:88:20:11
-.img.352vgf2ys02z4x3C09g5Gs905w2odqpj247000ROEHErbffBmgghlc88jccqifmmmuxAbayvg0k4bbbsvcQ4bb60hegQkb94sejhRku48yfc0jQl3tvd1lYkQs40vdhX48yvfgUs9k5kyvdgQs4k9k5Dt1jg0sk5k9s5AxDAwz4w7GFAFw4I5wZGoBEAINzIYC6EoEpEBwEoEw7C4t4wArrEwu4CslzErqAwmy9c0lzArpFwnCc0skzApEAwF4m194gek5wEqF5s2ka40f05ApE53kb94vei2k4a)
-.doc.[2c6000SF0LIFZVHmmmSoj0oNqNoT1w7h0w0h4hah4hyh5waw6c6oao6EaE7a1][p][light]Bumble[cu][n][red]2 [hp][p][hp][cu][nh][huish]Pet[cu]: Not the bees!
-.gift.(add.(((replica.dabble.n.Bumble.hp.2.tier.4.col.w.sd.21-4:15-2:0:0:15-2:7.i.mid2.k.sticky.img.3326k92d142f0c2ja000eeeLIF898mmmuxAHzbHnbyl9247F6J6k1bIbk1gaHa6161g43ka60g8k0g24g1lak80kdd1c3ka4gw4icFwsgk8gw4jgc3tg4gk4o5AkAhc2pQo5c8chA2soc4c5sc5Bi2woe5wARc2ct4e4wA7cEcwp4eoc0wIsof1sdHc4cff4f4G5cfddOcH)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Bumblebee)
+(replica.witch.n.Apiarist.hp.4.tier.2.col.h.sd.0:111-2:0:0:111-1.i.left.(mid.hat.ace.sd.116:187-3.i.mid.togtarg#togres#sidesc.Target ally with [pips] or less hp [purple]decay[cu][comma] then summon a [light]Bumble[cu].i.left.(hat.egg.(replica.dabble.n.Bumble.hp.2.tier.4.col.w.sd.21-4:15-2:0:0:15-2:7.i.mid2.k.sticky.img.(customImg).i.mid.togunt)#k.decay#facade.ite70:0.i.topbot.(mid.hat.ace.sd.116-3:123.i.togpip#togres#togtarg)#facade.ite86:88:20:11
+.img.(customImg).doc.[(customImg)][p][light]Bumble[cu][n][red]2 [hp][p][hp][cu][nh][huish]Pet[cu]: Not the bees!
+.gift.(add.(((replica.dabble.n.Bumble.hp.2.tier.4.col.w.sd.21-4:15-2:0:0:15-2:7.i.mid2.k.sticky.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Bumblebee)
 
 +
-(replica.witch.n.Archeo.tier.2.hp.3.col.h.sd.0:51-2.i.left.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0).i.topbot.(mid.hat.ace.sd.34-1:15-3.i.mid.togunt#togfri#facade.spe20:17).img.2me000Bmgqifk88uxAIso247c88nmmjccmeeNEOROEmmm2osEbb9csWoseE878FsUodofcbEdUcE8EcwfaEeUEbEwhw9Eews3c978sjiwscs2odEY8EwhwcE84c0ogKdE8=68coKgNIcEaZ8EsogJgJg6tfes0iwgN=8gw3ogsAwIM68A5BgUhAk4I5AoQo9pwUhsk4N4QhpAgowUogwA4N4k48s4k4sgUyowIMnm4AgUyogA4nm8AwVxogAs4nk9sX1sAtm4B8X2oBtm48XUoBos85XWpXV)
-.doc.[2c5000rC6qrdfebZVH0wFyFw1g8o0o8g3g8og0go8g28pip828ogago828oco828gwawg82hch2o0go8og0o5aEg8g2][p][light]Pteryx[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: An easily scared creature[n][secret]doesn't do much damage[cu]
-.gift.(add.(((replica.sinew.n.Pteryx.hp.3.tier.4.col.w.sd.130:124:7:7:123.img.2kf000gm8qrdrC6febgpkd95gr6435Fwak88Sv3Ih0LIFwvo2hZEl=g6g3gmZg4k4lg1g494EY4k6l4sf8g3gk74k8fd4g2768ff82874asfd82c749ufc42c74g8scsa4l2c87g59wgkhk41s958wg5wMAohk81gAb4w5oIw8h481osAbgw58d8h34Bbo4kw4f841o4AIA9ogkgwQ9gd41og4t4hw8qs8dg2pwoiow4o0U4tY4ka5x=1gma5o=3oh485h=Zro%)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Pteryx)
+(replica.witch.n.Archeo.tier.2.hp.3.col.h.sd.0:51-2.i.left.(mid.hat.ace.i.mid.hat.wisp#blindfold#k.chain#k.ranged#facade.Lem9:0).i.topbot.(mid.hat.ace.sd.34-1:15-3.i.mid.togunt#togfri#facade.spe20:17).img.(customImg).doc.[(customImg)][p][light]Pteryx[cu][n][red]3 [hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: An easily scared creature[n][secret]doesn't do much damage[cu]
+.gift.(add.(((replica.sinew.n.Pteryx.hp.3.tier.4.col.w.sd.130:124:7:7:123.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Pteryx)
 
 .part.1)&
 (heropool.
-((replica.ace.n.Harpoon.hp.6.col.h.sd.36-2:30-2:0:0:122-2.img.332w262zi42C8f2li000247ROE4bkBmg4jtNEOIsoeeouxAc88jccE56Hbbnmmq66qifmmmB3gad4cisdhD6g6bcXcidcgBwag6ka5cWic4aB2gb72c4czc4zaB6bbh6zs4ic5iA2gagba3kc25s5ci16hgb28e8k8525dw2hkg2Cf8z8c5ic3hkg29ff9824c2c06g6kag98m29m3ic307fga8m2ykxl02z0%emb86j3mi2124ww8ega97a8e8kAc3062smaCCe8mD%ikmgeCeqomD7sis2qCeqpkD6wkmlqorpoE2062nlppouG202n2koroK3AvuE)
-.doc.[2c6000uxALIF89hZVHhpt0wNyNwTOwaw5oco49wow948gqg848s849i948k84EkE0][p][light]Bait[cu][n][red]3 [hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Leaves after the first turn[dot] On boss fights[comma] a powerful ally follows
-.gift.(add.(((replica.dabble.n.Bait.tier.5.col.w.hp.3.sd.74-3:74-2:56-5:56-5:74-2:56-4.i.k.sticky.img.2i6247b8d000Ih0Ae8oefkfnXkb5biaNah9P9h85wE58g96x4b0ow1wt1b1oxsEp0b0oyEoEs0b1ow0EwEr1b0w5x39g86x48h9P9haNaia7alVnhdl)).i.t.jinx.e4.ea.slost.abilitydata.(ace.n.Baiting Time.sd.0.i.left.(hat.egg.((replica.sinew.n.Nib.col.s.tier.6.hp.15.sd.170-10:170-6:26-2:26-2:170-4:170-4.i.row.k.heavy#facade.bas170:4:45:10.i.k.sticky.img.352qok2tow2vk52yo45zsb5yk2r9000LIFmmm247eahuxAoefkilsrnIbP18k6kOs8k7kMg9vr8Jgs9vo58k8Igsdg5qi84Is8dk4t5ch4Hg9sk4kwkgegkGgb5k6kdg82k04Azfcg4pk4k3gbvwhfc4tk7k1gb5o6fg8q6k3zfcktQ3Y5qgfg4q7k41gbvw5fgo8Qs2sbvqwf4oRg2sb6ygeg8kQk3Y6xge4oQks2gY6yegt7l3gY6tgd4q7ks3sY6wycgswQkg3sY7ogc4qQkAgY7wogtRsAhbk7o8qRgDjiawZgB).speech.Tudu tudu tun:[i]Swim[i]))#eyepatch).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f#self.unpack.Crumbling Castle.part.1.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.doc.[big fish][n]Flees at the end of the turn[n]If this is a boss fight summon The Apex Predator.speech.Gulp)
+((replica.ace.n.Harpoon.hp.6.col.h.sd.36-2:30-2:0:0:122-2.img.(customImg).doc.[(customImg)][p][light]Bait[cu][n][red]3 [hp][p][hp][p][hp][p][cu][nh][huish]Pet[cu]: Leaves after the first turn[dot] On boss fights[comma] a powerful ally follows
+.gift.(add.(((replica.dabble.n.Bait.tier.5.col.w.hp.3.sd.74-3:74-2:56-5:56-5:74-2:56-4.i.k.sticky.img.(customImg).i.t.jinx.e4.ea.slost.abilitydata.(ace.n.Baiting Time.sd.0.i.left.(hat.egg.((replica.sinew.n.Nib.col.s.tier.6.hp.15.sd.170-10:170-6:26-2:26-2:170-4:170-4.i.row.k.heavy#facade.bas170:4:45:10.i.k.sticky.img.(customImg).speech.Tudu tudu tun:[i]Swim[i]))#eyepatch).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f#self.unpack.Crumbling Castle.part.1.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round.doc.[big fish][n]Flees at the end of the turn[n]If this is a boss fight summon The Apex Predator.speech.Gulp)
 .mn.Add Bait))
 +
-(replica.ace.n.Redscale.col.h.hp.5.sd.52-2:52-2:90-3:90-3.i.topbot.eyepatch#k.cruel#k.exert#facade.kas43:5.img.342b802rgk2uc03ydog2fcC88IsoJe6x24000247jccc88BmgqifRvc%Pkjkc90bs0cjr09c909srus0bcbacr08dNbcra0os3egs090A5w1yc91u5byc2x70ycM4c85dwgs2wXo8p16w1xok7w5okFkAkEk4os9wEJloIkr84914tw4wchko28406wchkp1VAokc8ps087xsubot5sAowAg0acot6wckg0a0pks2ckhuulhnh)
-.doc.[2c8000l88x24ZVHC88i33Soj4350o71q71o76c5e4e3g8pEp8g2gwpgpwg3NyN3gwgUgUgwg4EiE7EgE2][p][light]Jet[cu][n][red]16 [hp][cu][nh][huish]Pet[cu]: A small dragon with angry parents
-.gift.(add.(((replica.ace.n.Jet.hp.16.col.w.tier.5.sd.0:0:170-7:170-7:169-1:169-1.i.left2.(mid.hat.ace.sd.90:34-2.i.mid.togvis)#facade.The1:0.i.topbot.k.heavy#facade.bas170:4:45:10.img.2ja000C88x24i33l88Je6ZVH435Sv3LIFGfh0dGgdwAqwcwAFfwrwcwoc3fiqhcoc2fg6d4hd3eg5sl94ht28i48sxc84l490di8l8d4l8c9c9h8nQYsch8m48Qb5hcVbc48gs8Ub0c8wg586sc85a0dh8kQbc9Ec8k7ac0scEcbtcIcY4l48Hca5m58Id84n53)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round)&20.add fight&1.fight.dragon&1.t1.summon.dragon.mn.Dragon Baby)
+(replica.ace.n.Redscale.col.h.hp.5.sd.52-2:52-2:90-3:90-3.i.topbot.eyepatch#k.cruel#k.exert#facade.kas43:5.img.(customImg).doc.[(customImg)][p][light]Jet[cu][n][red]16 [hp][cu][nh][huish]Pet[cu]: A small dragon with angry parents
+.gift.(add.(((replica.ace.n.Jet.hp.16.col.w.tier.5.sd.0:0:170-7:170-7:169-1:169-1.i.left2.(mid.hat.ace.sd.90:34-2.i.mid.togvis)#facade.The1:0.i.topbot.k.heavy#facade.bas170:4:45:10.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round)&20.add fight&1.fight.dragon&1.t1.summon.dragon.mn.Dragon Baby)
 +
-((replica.witch.n.Imperator.col.h.hp.4.sd.0:0:15-3:15-3:56-4.i.left2.(mid.hat.ace.sd.34-2.i.mid.(sticker.k.skill)#togpip#k.weaken#k.singleuse)#facade.ite374:8:-50:0.img.322asc2rgA2je000IsoROENEOjcc247BmguxAnmmc88qifHbbE56JD23gwa8c8swgkWwab9cawUwcbb9dsk1gsb8c8f8ck2gbc8fcasw2wbaasocwuk1se8aoc5soksxk0tcwcwoZokwk1swswgp5A6rw2ysEq4Agpr3w4gwqEglElA3g4og4ogkBkgskUkwoE6Bgo4oAUkwgEo5go6ogVAro%EgVIhEoYFA3NJrE6EhEA3MKMrE7oAUAIRIhkAo5EVkMRIAnmWkCkXU)
-.doc.[2c7000Ae8RvcFkck88ZVHSoj0EVGVE180a083wew28oh8ho828g8gog8g828oko828gwiwg828oE8o8Eo82woMogoMow3woyow58owo81][p][light]Leon[cu][n][red]6 [hp][p][hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: A fierce beast
-.gift.(add.(((replica.bash.n.Leon.hp.6.col.w.tier.5.sd.170-2:170-1:0:0:171-1:7.i.lion.img.352rc42xoc2y802z4c2C4g2xLqdFkcRvcAe8k8y00i33777435Je6mmmLIFnodkgyz14o5gonlr08gcaryg0Cogpmg4a4%2csholhd0ac0yy41Cshkr1590gc0c7rcikca18rdgprejk0b1e08cogeh40gkxb04r8tc5cgwco0gksa18z1gs904th4l09081d0h092cgzokxA18zg6a05d4h4y515s5094fcsgks49z1cgd40wpwgcoisg0b0c5dgEIwEhwi0b341BCx5cguA4191d293zosksd52C4Powgoko4093AxU2wcolgr0a1AscU1ognqr2Ckx6gpnnnnltc5gl)).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[2c3000WVRCzw=3hw0wgw0i0g0g0g3g1hw0hw1g1g2g3g1w2wgw1w=N][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Leon))
+((replica.witch.n.Imperator.col.h.hp.4.sd.0:0:15-3:15-3:56-4.i.left2.(mid.hat.ace.sd.34-2.i.mid.(sticker.k.skill)#togpip#k.weaken#k.singleuse)#facade.ite374:8:-50:0.img.(customImg).doc.[(customImg)][p][light]Leon[cu][n][red]6 [hp][p][hp][p][hp][p][hp][p][hp][p][hp][cu][nh][huish]Pet[cu]: A fierce beast
+.gift.(add.(((replica.bash.n.Leon.hp.6.col.w.tier.5.sd.170-2:170-1:0:0:171-1:7.i.lion.img.(customImg).i.(t.tw1n.part.0)#(cart.part.1)#t.housecat#ritemx.16c9f.doc.[(customImg)][n]Cannot equip items or level up[nh][pink]Death is permanent[cu] if this died last round).mn.Add Leon))
 .part.1).mn.Huish also.modtier.2,
 
 
@@ -660,75 +390,33 @@ replica.ace.n.Steed.tier.5.hp.6.col.w
 
 
 (itempool.
-((col.hat.ace.sd.all:12-1)#(iron helm)).tier.2.n.Pin Cushion.img.
-2e9000KKKVccH77t89ewhMbbg332o6M4B4C4341424141414340swkskw4B4nms3s4owkckwog414g9kak84s1s49oao9g1sg4oco9g8og2gcogqcocg2sgfcgds3sgcgdhsL
+((col.hat.ace.sd.all:12-1)#(iron helm)).tier.2.n.Pin Cushion.img.(customImg).mid.hat.ace.sd.12:104-1.i.mid.togtarg#k.groooooowth#all.facade.ite31:0:-99:0)).tier.2.n.Sardines.img.(customImg).mid.hat.ace.sd.12:104-1.i.mid.togtarg#k.groooooowth#facade.ite31:0:-99:0)).tier.2.n.Fishe.img.(customImg).splice.wrench.m.-1.mrg.k.cantrip.mrg.k.ranged)).n.Singblade.tier.7.img.(customImg).draw.(stream.p.fff:f5f:99.hsv.15:99:20):-1:1.draw.(shortsword.p.fff:f0f:99.hsv.0:-50:30):0:0
 +
-((col.mid.hat.ace.sd.12:104-1.i.mid.togtarg#k.groooooowth#all.facade.ite31:0:-99:0)).tier.2.n.Sardines.img.
-2e9000xqkECscccd74kkkquxigmgjlP0ck49gAc484gch81gk58csowsc81484k8wowsp81858c4cpws8185apsd8186k8sd94187kalg1497lch1ck5lfg2hfcgCgdgP1
+((mid.hat.fighter.i.k.rite#togkey#k.pain#facade.The20:30:0:0)).n.Energy Blast.tier.6.img.(customImg).draw.(Eucalyptus.p.fa0:0fa:90):-1:0.draw.(void.img.(customImg).p.fa0:0fa:60):2:-1
 +
-((left2.mid.hat.ace.sd.12:104-1.i.mid.togtarg#k.groooooowth#facade.ite31:0:-99:0)).tier.2.n.Fishe.img.
-2e6000jL=nwX6hNb8x435TTojoMwjw3o1wgbgo2g0w9o9E9w1og9oe2w9wbgEw1ogog8oco1gw0wgbgo2g2wohwMhwTT1
+(bot.mid.hat.fey).n.Ice Spike.tier.3.img.(customImg).draw.(learn Poultice):0:4.draw.(Emerald Shard):0:-1.hsv.20:0:0
 +
-((whetstone.splice.wrench.m.-1.mrg.k.cantrip.mrg.k.ranged)).n.Singblade.tier.7.img.Void.draw.(stream.p.fff:f5f:99.hsv.15:99:20):-1:1.draw.(shortsword.p.fff:f0f:99.hsv.0:-50:30):0:0
+((topbot.k.selfheal)#(leather vest.m.7)#(Copper Ring.m.7.part.0)).n.Dragonplate.tier.9.img.(customImg).hat.ace.sd.34-1:34-1:0:0:53-1:53-1)).n.Dragon Toy.tier.5.img.(customImg).jinx.allitem.t.lost.abilitydata.(statue.n.Wear.sd.15-3.i.mid.sticker.(all.cloak)#togpip#k.damage#k.exert#sidesc.[pips] damage to an ally[comma] then replace its sides with dodge sides this turn.i.pendulum#rusty plate))#cleardesc#t.lost.doc.[dark][cu]Learn the tactic: [orange]wear[cu][nh]3 damage to an ally and replace its sides with [grey]'Dodge all damage and enemy effects this turn'[cu] [orange]cooldown[cu]).n.Runic Ring.tier.1.img.(customImg).boned.mrg.taxes)#(t.sarcophagus.part.0)).n.Bone Armor.tier.2.img.(customImg).splice.k.heavy.mrg.k.weaken)#(splinter.m.3)).n.Glacial Battleaxe.tier.7.img.(customImg).golden thread)#(first aid kit.splice.leather vest.m.3)).n.Wheat.tier.8.img.(customImg).lost.abilitydata.(ace.n.Scam.sd.76-1:0:0:0:76-1.i.left.(sticker.(k.potion.mrg.eye of horus))#k.exert.img.(customImg).tier.5.n.Learn Scam
 +
-((mid.hat.fighter.i.k.rite#togkey#k.pain#facade.The20:30:0:0)).n.Energy Blast.tier.6.img.void.draw.(Eucalyptus.p.fa0:0fa:90):-1:0.draw.(void.img.The16.p.fa0:0fa:60):2:-1
-+
-(bot.mid.hat.fey).n.Ice Spike.tier.3.img.void.draw.(learn Poultice):0:4.draw.(Emerald Shard):0:-1.hsv.20:0:0
-+
-((topbot.k.selfheal)#(leather vest.m.7)#(Copper Ring.m.7.part.0)).n.Dragonplate.tier.9.img.32278g2d8o2e6000I99ta9Ycci22=w2T0gxg9hw2wg1g7w5wbw09g4g9w08qg3w70oFodw2go78Fd71gpw7pE9o1ag0gdd71o9g07ag2gp8w0ogx082whxdg0go3whw0goFT
-+
-((row.hat.ace.sd.34-1:34-1:0:0:53-1:53-1)).n.Dragon Toy.tier.5.img.32269w27og2e5000Yccta9i22I99Mg9g1o62626go1690g8g74o9o8g0g72o97wo172g9g6o1o26cwo3wbgbg27agwao3h9oh94g0x0gox3g090g09M
-+
-((t.jinx.allitem.t.lost.abilitydata.(statue.n.Wear.sd.15-3.i.mid.sticker.(all.cloak)#togpip#k.damage#k.exert#sidesc.[pips] damage to an ally[comma] then replace its sides with dodge sides this turn.i.pendulum#rusty plate))#cleardesc#t.lost.doc.[dark][cu]Learn the tactic: [orange]wear[cu][nh]3 damage to an ally and replace its sides with [grey]'Dodge all damage and enemy effects this turn'[cu] [orange]cooldown[cu]).n.Runic Ring.tier.1.img.2e7000d74Mh4ta9=O2=w2ZUi==oho87gEoao5owg29o4Ew83a3x848o3wMg48g3FMg818Eg3owEOwEgo4gwOwh6gEwEgo==
-+
-((k.boned.mrg.taxes)#(t.sarcophagus.part.0)).n.Bone Armor.tier.2.img.2e6000igmbbesssmtnECsTFo0h08x2Fw08Eo80x81o808Eg8o808g1g0Eo0Eo0x0g2o8gEhog8w3gF0Eo0xg480Eho085oE0ow0ow68og8w8N9MgoE8gxg78ow8T2
-+
-((standard.splice.k.heavy.mrg.k.weaken)#(splinter.m.3)).n.Glacial Battleaxe.tier.7.img.2e9000Nn58uAYVJ1OXe669AUuaa0dONgdgoC418gdgBksk08odgBk4wad829w04w9ocg2gpw0418oc2gow0ks418c3g3k41oFs4kH5sGk5kGk4sK
-+
-((unpack.golden thread)#(first aid kit.splice.leather vest.m.3)).n.Wheat.tier.8.img.3221o02a8g2e5000XOnNC6Hnb=XKS80wFgwow8618owo7hwg093g0g0a0a4goax85g0a80oho2oaw19g419w8o7oa1g6og197g1pR
-+
-(t.lost.abilitydata.(ace.n.Scam.sd.76-1:0:0:0:76-1.i.left.(sticker.(k.potion.mrg.eye of horus))#k.exert.img.housecat)).tier.5.n.Learn Scam
-+
-((top.left.hat.gladiator)).n.Shiny Spear.tier.3.img.2e5000JD2ZUiNm6=XKT8hGo0gG8o8FoHoH8H8Fg08G8gG8g8gFw8GgT1
-+
-((rightmost.hat.herbalist)).n.Broccoli.tier.1.img.2e6000qDmdlaewh2d5bd4T1wEag5wg8oaog4obogo8og1oEaohao1hEogwEgag2wFwEgwgow5g0p0F6owgoENog8ENg9gMwoawMwhwT2
-+
-((left.wrench.m.6)).n.Golden Eggs.tier.14.img.2e8000mc9=XKXOntkfJD2ErkTIp7777748E3oE48hE9Eh83i8oEoho28ogEohEpE828o8io0E82wMw0ohE8y28Vw9y848wVNw878N877770
-+
-((natural.splice.gauntlet)#(unpack.golden thread.m.-1)).n.Fire Breath.tier.5.img.2e6000Mh4i70=w2=O2ZUiTN8P84g2g1og481808w8580g8owo58h8owo0g3gogx8o948o8oEw8g58xEowg6oFw8h9g3wFwp86Ewo9gT4
-+
-((ritemx.699302.splice.eyepatch.mrg.Tin Foil Hat.mrg.wrench)#(ritemx.486773.splice.eyepatch.mrg.Tin Foil Hat.mrg.wrench)#cleardesc#t.lost.doc.[dark][cu]Remove keywords and [hp-plus][p]1 pip to all [light]copycat[cu] and [pink]cantrip[cu] sides).n.Cat Toy.tier.1.img.2e6000Nn5uaa3DarS0XOnT49gN8g0EM8g2E783E68g4E586E38g6o386o38g5ow3g6xo1h5ow0w1g6woT0
-.part.1)&
+((top.left.hat.gladiator)).n.Shiny Spear.tier.3.img.(customImg).hat.herbalist)).n.Broccoli.tier.1.img.(customImg).wrench.m.6)).n.Golden Eggs.tier.14.img.(customImg).splice.gauntlet)#(unpack.golden thread.m.-1)).n.Fire Breath.tier.5.img.(customImg).699302.splice.eyepatch.mrg.Tin Foil Hat.mrg.wrench)#(ritemx.486773.splice.eyepatch.mrg.Tin Foil Hat.mrg.wrench)#cleardesc#t.lost.doc.[dark][cu]Remove keywords and [hp-plus][p]1 pip to all [light]copycat[cu] and [pink]cantrip[cu] sides).n.Cat Toy.tier.1.img.(customImg).part.1)&
 (itempool.
 (ritemx.9be9)#(t.jinx.bones.spirit)
 +
-(mid.right.hat.Meddler).m.2#(t.jinx.Small Bonus^1.splice.Damaged Monsters).tier.4.n.Tiny Soldier.img.2e4000ewhdla2d5fff0gwbgM9hw9g0g0wM7w0wgbM0g9w1w8Mjwffd
+(mid.right.hat.Meddler).m.2#(t.jinx.Small Bonus^1.splice.Damaged Monsters).tier.4.n.Tiny Soldier.img.(customImg).mid.hat.Trapper.i.Eyepatch#k.boned#mid.togkey#facade.Spi6:0).tier.1.n.Deathly Cape
 +
-(rightmost.mid.hat.Trapper.i.Eyepatch#k.boned#mid.togkey#facade.Spi6:0).tier.1.n.Deathly Cape
+(left2.k.pain)#(t.jinx.Sickly^3.splice.t.gnoll).tier.6.n.Petmasters Badge.img.(customImg).deaths door)#(t.jinx.Sickly^3.splice.Troll blood).tier.5.n.Bandages.img.(customImg).hat.ace.sd.0:96-2:0:0:99-2).n.Flashlight.tier.5.img.(customImg).draw.bas99:1:-1.p.f00:fff:40.p.0ff:ff0:99
 +
-(left2.k.pain)#(t.jinx.Sickly^3.splice.t.gnoll).tier.6.n.Petmasters Badge.img.2ea000YPVtttKKKSF0YVJigmcccFwaqhxPPN8c5c8G84whw48F4wjw4F4nl4FcoDocFcovocF8cotoc8G878PPN
+(ritem.354fd5).n.Singers Silk.img.(customImg).hsv.4:-50:20
 +
-(self.deaths door)#(t.jinx.Sickly^3.splice.Troll blood).tier.5.n.Bandages.img.2e4000PEyIsotffff1whw8wjw5Mwlw3Mwn2Mwnw2gxmM2zkM3AiM4MzgwM6MygM9Of4
+(splinter.m.3)#(t.jinx.h.top.2 hero hp).tier.1.n.Red Thread.img.(customImg).hat.Ace.sd.94-1.i.mid.(sticker.self.Top 1 hp)#togpip#togkey#facade.Eme182:94).n.Seedify.img.(customImg).draw.Eme182:0:-1.hue.94
++(mid.hat.Ace.sd.56:123.i.mid.togtarg#k.descend#k.singleuse#facade.The27:88:-90:-10).n.Smokebomb.tier.4.img.(customImg).draw.The27:1:-1.hsv.88:-90:-10
 +
-(mid2.hat.ace.sd.0:96-2:0:0:99-2).n.Flashlight.tier.5.img.void.draw.bas99:1:-1.p.f00:fff:40.p.0ff:ff0:99
-+
-(ritem.354fd5).n.Singers Silk.img.golden thread.hsv.4:-50:20
-+
-(splinter.m.3)#(t.jinx.h.top.2 hero hp).tier.1.n.Red Thread.img.2e4000HbbYccA04f9g9Mwg8Mgwg8gxM9xg9gwg9MwgagwagwbwbgMagf9
+(Dumbbell.splice.Origami)#(cleardesc#t.Lost.doc.[dark][cu]Replace each side with 4 or more pips with its opposite).n.Cardboard.tier.1.img.(customImg).hsv.50:40:0
++(top.left.hat.Mage.i.left.k.selfheal#facade.The45:53).n.Manacola.tier.2.img.(customImg).draw.The45:0:-2.hue.53
++(right.hat.Ace.sd.12.i.right.sticker.Gauntlet#togtarg#togtime#facade.The39:6).n.Beer.tier.4.img.(customImg).draw.The39:1:-1.hue.6
++(ritemx.686767.splice.self.unpack.Boss Smash^99.m.9).n.Trauma.tier.0.img.(customImg).hsv.20:-50:0
 
-+(mid.hat.Ace.sd.94-1.i.mid.(sticker.self.Top 1 hp)#togpip#togkey#facade.Eme182:94).n.Seedify.img.void.draw.Eme182:0:-1.hue.94
-+(mid.hat.Ace.sd.56:123.i.mid.togtarg#k.descend#k.singleuse#facade.The27:88:-90:-10).n.Smokebomb.tier.4.img.void.draw.The27:1:-1.hsv.88:-90:-10
-+
-(Dumbbell.splice.Origami)#(cleardesc#t.Lost.doc.[dark][cu]Replace each side with 4 or more pips with its opposite).n.Cardboard.tier.1.img.Paper.hsv.50:40:0
-+(top.left.hat.Mage.i.left.k.selfheal#facade.The45:53).n.Manacola.tier.2.img.void.draw.The45:0:-2.hue.53
-+(right.hat.Ace.sd.12.i.right.sticker.Gauntlet#togtarg#togtime#facade.The39:6).n.Beer.tier.4.img.void.draw.The39:1:-1.hue.6
-+(ritemx.686767.splice.self.unpack.Boss Smash^99.m.9).n.Trauma.tier.0.img.conscience.hsv.20:-50:0
-
-+(Karma.part.2.splice.k.rampage.mrg.k.groupdecay).n.Might Sigil.tier.4.img.2e7000twzcccKKKnifkfcYVJ==1w9q4gw8p0h8w29qgNg91EaogM8o091bgM0o0a1ag0wo09wg1w90w18wh2gx18wEhE3EmE6Ej==0
-+(Karma.part.0.splice.k.rescue.mrg.k.groupdecay).n.Curing Rune.tier.3.img.2e8000Dlija8LxrsaakfcYVJi707777gw8pwg5w9sw3w8g0w0gq38gpU9gp3808Oo0p38g08M80wo83E908waw3Ew90awg3Ugwawh5El7EiE772
-+(Karma.part.1.splice.k.doubleuse.mrg.k.groupdecay).n.Warding Sigil.tier.3.img.2e7000mkaHHywwmCCregiYVJ==0oxhwo5wgahw83wg8i8i2wg8hMh8h2xEwOwEx2ow0o8g8o0p28ow0ogo0p82ao18o8E4Eao9E6c==0
-+(Tiara.splice.k.cantrip.mrg.k.groupdecay).n.Magick Rune.tier.5.img.2e9000nxF8uBabgnifagl6gseeeYVJPHo58osC85k05cB5cw8048B4cw40o5c3g408w4s5c351wo04gc384k4k05sAg8s15gBcg948kcCckhkcPI
-.part.1)
++(Karma.part.2.splice.k.rampage.mrg.k.groupdecay).n.Might Sigil.tier.4.img.(customImg).part.0.splice.k.rescue.mrg.k.groupdecay).n.Curing Rune.tier.3.img.(customImg).part.1.splice.k.doubleuse.mrg.k.groupdecay).n.Warding Sigil.tier.3.img.(customImg).splice.k.cantrip.mrg.k.groupdecay).n.Magick Rune.tier.5.img.(customImg).part.1)
 .mn.Items,
 
 versatile^2.doc.Made by [blue]TheBGamer12[cu][n]All images used were drawn by [blue]TheBGamer12[cu] (or are base game)[nh]Special thanks to:[n][red]Emerald Fart[cu][scar[dot]b[dot]f00][n][green]TheGreenDigi[myco][cu][n][yellow]Nano[cu][updog].mn.Versatile and Credits

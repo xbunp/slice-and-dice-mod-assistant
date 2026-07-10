@@ -33,16 +33,24 @@ public static class StringCleanerUtility
         {
             string content = File.ReadAllText(absolutePath);
 
-            // Matches "img." followed by any character that is not a literal dot, 
+            // Pattern 1: Matches "img." followed by any character that is not a literal dot, 
             // stopping right before the next dot.
-            string pattern = @"img\.[^.]+";
-            string replacement = "img.(customImg)";
+            string pattern1 = @"img\.[^.]+";
+            string replacement1 = "img.(customImg)";
 
-            string cleanedContent = Regex.Replace(content, pattern, replacement);
+            // Pattern 2: Matches base64 strings within square brackets [].
+            // To avoid matching rich text formatting tags, we require a minimum length (e.g., 100 characters)
+            // and restrict characters to valid base64 characters, optionally allowing a data URI prefix.
+            string pattern2 = @"\[(?:data:image\/[a-zA-Z]+;base64,)?[A-Za-z0-9+/=]{20,}\]";
+            string replacement2 = "[(customImg)]";
+
+            // Apply both clean-up patterns
+            string cleanedContent = Regex.Replace(content, pattern1, replacement1);
+            cleanedContent = Regex.Replace(cleanedContent, pattern2, replacement2);
 
             if (content == cleanedContent)
             {
-                Debug.Log("No base64 image strings matching the pattern were found. No changes made.");
+                Debug.Log("No base64 image strings matching the patterns were found. No changes made.");
                 return;
             }
 

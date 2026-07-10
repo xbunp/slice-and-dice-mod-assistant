@@ -29,6 +29,7 @@ public abstract class EntityData : SDData, IPayloadContainer
 
     [Header("Shared Extended Modifiers")]
     public List<string> items = new List<string>();
+
     public List<string> traits = new List<string>();
     public List<string> blessings = new List<string>();
     public List<string> curses = new List<string>();
