@@ -596,7 +596,6 @@ public class ItemUI : RootUI
                 }
 
                 // 2. Separate Hat core from nested item packs
-                // e.g. "Fey.sd.66.i.togorf#togfri" -> Core: "Fey.sd.66", Pack: "i.togorf#togfri"
                 string hatCore = rawPayload;
                 string nestedPackStr = "";
 
@@ -616,10 +615,18 @@ public class ItemUI : RootUI
                     string nextPrefix = nextMech.Prefix?.ToLower() ?? "";
                     string nextPayload = nextMech.PayloadString ?? "";
 
-                    if (nextPrefix == "i" && (nextPayload.Contains("facade") || nextPayload.Contains("sidesc") || nextPayload.Contains("img")))
+                    // FIX: Explicitly check for the facade prefix
+                    if (nextPrefix == "facade" || (nextPrefix == "i" && nextPayload.Contains("facade")))
+                    {
+                        string targetStr = nextMech.Targets.Count > 0 ? nextMech.Targets[0] : "all";
+                        string facadeStr = nextPrefix == "facade" ? $"{targetStr}.facade.{nextPayload}" : nextPayload;
+                        ApplyFacadeToHeroData(heroData, facadeStr);
+                        i++; // Consume this mechanic
+                    }
+                    else if (nextPrefix == "sidesc" || nextPrefix == "img" || (nextPrefix == "i" && (nextPayload.Contains("sidesc") || nextPayload.Contains("img"))))
                     {
                         ApplyFacadeToHeroData(heroData, nextPayload);
-                        i++; // Consume this mechanic, preventing it from spawning its own card
+                        i++;
                     }
                     else
                     {
@@ -627,15 +634,38 @@ public class ItemUI : RootUI
                     }
                 }
 
-                // 4. Spawn nested Item Pack inside Hat's Payload Port
+                // 4. Process nested Item Pack inside Hat's Payload Port
                 if (!string.IsNullOrWhiteSpace(nestedPackStr))
                 {
                     ItemData nestedPack = new ItemData();
                     nestedPack.Parse(nestedPackStr);
 
+                    List<string> remainingPackParts = new List<string>();
+
                     foreach (var childMech in nestedPack.Mechanics)
                     {
-                        LoadMechanicIntoUI(childMech, hatCard.PayloadPort, 1);
+                        // FIX: Intercept native Hat features and fold them instead of spawning cards
+                        if (childMech.Prefix == "k")
+                        {
+                            ApplyKeywordToHeroData(heroData, childMech);
+                        }
+                        else if (childMech.Prefix == "sticker")
+                        {
+                            ApplyStickerToHeroData(heroData, childMech);
+                        }
+                        else
+                        {
+                            // Keep tog items, ritems, and base items as part of the nested base pack
+                            remainingPackParts.Add(childMech.Export());
+                        }
+                    }
+
+                    // FIX: Recombine remaining Base Items into a SINGLE node payload 
+                    if (remainingPackParts.Count > 0)
+                    {
+                        string packedString = string.Join("#", remainingPackParts);
+                        ItemMechanic packMech = new ItemMechanic { PayloadString = packedString };
+                        LoadMechanicIntoUI(packMech, hatCard.PayloadPort, 1);
                     }
                 }
             }
@@ -649,39 +679,68 @@ public class ItemUI : RootUI
         AutoCompile();
     }
 
-    private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
+    private void ApplyKeywordToHeroData(HeroData heroData, ItemMechanic mech)
     {
-        string prefix = mechanic.Prefix?.ToLower() ?? "";
-        ItemNodeType type = ItemNodeType.BaseItem;
+        int mask = GetMaskFromTargets(mech.Targets);
 
-        if (prefix.EndsWith("hat")) type = ItemNodeType.Hat;
-        else if (prefix.EndsWith("facade") || prefix.EndsWith("sidesc") || prefix.EndsWith("img") || prefix.EndsWith("doc")) type = ItemNodeType.Appearance;
-        else if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
+        List<string> kws = new List<string>();
+        if (!string.IsNullOrEmpty(mech.PayloadString)) kws.Add(mech.PayloadString);
 
-        EntityCard mechCard = CreateEntityCard(type) as EntityCard;
-        mechCard.MechanicData = mechanic;
-        targetZone.AddEntrant(mechCard);
-
-        if (mechanic.PayloadData is ItemData nestedItem)
+        // Ensure chained keywords are caught if they were grouped
+        foreach (var chain in mech.ChainedKeywords)
         {
-            foreach (var childMech in nestedItem.Mechanics)
+            kws.Add(chain.StartsWith("k.", StringComparison.OrdinalIgnoreCase) ? chain.Substring(2) : chain);
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            if ((mask & (1 << i)) != 0)
             {
-                LoadMechanicIntoUI(childMech, mechCard.PayloadPort, depth + 1);
+                if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
+                foreach (var kw in kws)
+                {
+                    string cleanKw = kw.ToLower().Trim();
+                    if (!heroData.diceSides[i].keywords.Contains(cleanKw))
+                        heroData.diceSides[i].keywords.Add(cleanKw);
+                }
             }
         }
     }
+    private void ApplyStickerToHeroData(HeroData heroData, ItemMechanic mech)
+    {
+        int mask = GetMaskFromTargets(mech.Targets);
+        for (int i = 0; i < 6; i++)
+        {
+            if ((mask & (1 << i)) != 0)
+            {
+                if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
+                heroData.diceSides[i].sticker = mech.PayloadString;
+            }
+        }
+    }
+    private int GetMaskFromTargets(List<string> targets)
+    {
+        if (targets == null || targets.Count == 0 || targets.Contains("all", StringComparer.OrdinalIgnoreCase))
+            return 63; // Defaults to All Faces
 
+        int combinedMask = 0;
+        foreach (var t in targets)
+        {
+            var alias = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.name != null && a.name.Equals(t, StringComparison.OrdinalIgnoreCase));
+            if (alias.name != null) combinedMask |= alias.mask;
+        }
+        return combinedMask == 0 ? 63 : combinedMask;
+    }
     private void ApplyFacadeToHeroData(HeroData heroData, string facadePayload)
     {
-        // Extracts the face and facade ID from strings like "left.facade.bas171:0"
         string[] tokens = facadePayload.Split('.');
-        string targetFace = "left";
+        string targetFace = "all"; // Defaults to all faces
         string facadeId = "";
 
         for (int j = 0; j < tokens.Length; j++)
         {
             string tokenLower = tokens[j].ToLower();
-            if (DiceTargetHelper.FaceNames.Contains(tokenLower))
+            if (DiceTargetHelper.FaceNames.Contains(tokenLower) || tokenLower == "all")
             {
                 targetFace = tokenLower;
             }
@@ -691,12 +750,72 @@ public class ItemUI : RootUI
             }
         }
 
-        int faceIndex = Array.IndexOf(DiceTargetHelper.FaceNames, targetFace);
-        if (faceIndex >= 0 && faceIndex < 6 && !string.IsNullOrEmpty(facadeId))
+        if (!string.IsNullOrEmpty(facadeId))
         {
-            heroData.diceSides[faceIndex].facadeID = facadeId;
+            if (targetFace == "all")
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
+                    heroData.diceSides[i].facadeID = facadeId;
+                }
+            }
+            else
+            {
+                int faceIndex = Array.IndexOf(DiceTargetHelper.FaceNames, targetFace);
+                if (faceIndex >= 0 && faceIndex < 6)
+                {
+                    if (heroData.diceSides[faceIndex] == null) heroData.diceSides[faceIndex] = new DiceSideData();
+                    heroData.diceSides[faceIndex].facadeID = facadeId;
+                }
+            }
         }
     }
+    private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
+    {
+        string prefix = mechanic.Prefix?.ToLower() ?? "";
+        ItemNodeType type = ItemNodeType.BaseItem;
+
+        if (prefix == "hat") type = ItemNodeType.Hat;
+        else if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.Appearance;
+        else if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
+
+        EntityCard mechCard = CreateEntityCard(type) as EntityCard;
+
+        if (type == ItemNodeType.BaseItem)
+        {
+            ItemMechanic flatMech = new ItemMechanic();
+            string rawExport = mechanic.Export();
+
+            // Strip structural 'i.' from root so BaseItemNodeDef regex doesn't choke on it.
+            // The compiler will automatically restore the 'i.' prefix at the root zone on export.
+            if (rawExport.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+            {
+                rawExport = rawExport.Substring(2);
+            }
+
+            flatMech.PayloadString = rawExport;
+            mechCard.MechanicData = flatMech;
+        }
+        else
+        {
+            mechCard.MechanicData = mechanic;
+        }
+
+        targetZone.AddEntrant(mechCard);
+
+        // CRITICAL FIX: Only recurse and spawn children for non-BaseItem nodes.
+        // Pure BaseItem packs are handled natively inside the single BaseItem node.
+        if (mechanic.PayloadData is ItemData nestedItem && type != ItemNodeType.BaseItem)
+        {
+            foreach (var childMech in nestedItem.Mechanics)
+            {
+                LoadMechanicIntoUI(childMech, mechCard.PayloadPort, depth + 1);
+            }
+        }
+    }
+
+
     /// <summary>
     /// Evaluates the metadata and flags on a mechanic instance, spawns its card UI representation, 
     /// and proceeds to identify and pass on its sub-payload elements.
@@ -1140,7 +1259,6 @@ public class ItemUI : RootUI
 
         return result;
     }
-
     private bool ValidateWorkspaceOperators(ReorderableZone zone)
     {
         if (zone == null) return false;
@@ -1191,7 +1309,6 @@ public class ItemUI : RootUI
 
         return layoutChanged;
     }
-
     private void ValidateWorkspaceOperatorsRecursive(ReorderableZone zone)
     {
         if (zone == null) return;
@@ -1206,7 +1323,6 @@ public class ItemUI : RootUI
             }
         }
     }
-
     public ReorderableItem CreateEntityCard(ItemNodeType nodeType)
     {
         var def = NodeRegistry.Get(nodeType);

@@ -49,6 +49,9 @@ public abstract class EntityData : SDData, IPayloadContainer
     [JsonProperty]
     [SerializeField] public List<OrbData> customOrbs = new List<OrbData>();
 
+    [System.NonSerialized]
+    protected List<ItemData> _itemPipeline = new List<ItemData>();
+
     //ADD ORB SUPPORT.
 
     // Interface mappings
@@ -70,7 +73,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             return combined;
         }
     }
-
     public virtual void AddCustomAbility(AbilityData ability)
     {
         if (ability == null) return;
@@ -92,7 +94,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             if (!customTriggerHPs.Any(t => t.entityName == trig.entityName)) customTriggerHPs.Add(trig);
         }
     }
-
     protected void ProcessTraitPayload(string tPayload)
     {
         if (string.IsNullOrWhiteSpace(tPayload)) return;
@@ -125,7 +126,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
     }
-
     protected bool TryProcessEntityMetadata(List<string> tokens, ref int i, string tokenLower)
     {
         if (tokenLower == "hp")
@@ -139,7 +139,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-
     public string BuildFaceModifiers(bool includeInlineFacades)
     {
         StringBuilder modSb = new StringBuilder();
@@ -231,7 +230,6 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return modSb.ToString();
     }
-
     protected bool TryProcessDiceSides(List<string> tokens, ref int i, string tokenLower)
     {
         if (tokenLower != "sd" || i + 1 >= tokens.Count) return false;
@@ -297,7 +295,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             ProcessTraitPayload(tPayload); // Routed
         }
     }
-
     protected bool TryProcessOrbData(List<string> tokens, ref int i, string tokenLower)
     {
         if (tokenLower == "orb")
@@ -338,7 +335,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-
     protected bool TryProcessTriggerData(List<string> tokens, ref int i, string tokenLower)
     {
         if (tokenLower == "triggerhpdata")
@@ -365,7 +361,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-
     protected void AppendColorModifier(StringBuilder sb)
     {
         if (phue != null && phue.colorRange != 0) // Prevents adding empty payloads if unassigned
@@ -386,7 +381,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             sb.Append($".hue.{hue}");
         }
     }
-
     public void InitializeDiceFaces()
     {
         // Ensure the array itself exists
@@ -406,7 +400,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
     }
-
     protected void AppendDiceSides(StringBuilder sb)
     {
         // Find the last modified side so we can truncate trailing zeroes
@@ -477,6 +470,165 @@ public abstract class EntityData : SDData, IPayloadContainer
                 // Non-item custom payloads default to InnerEntity
                 string exported = payload.Export();
                 if (!string.IsNullOrEmpty(exported)) innerPayloads.Add(exported);
+            }
+        }
+    }
+
+    // Derived classes MUST define how they identify the end of a block
+    protected abstract int GetEndOfBlockIndex(List<string> tokens, int startIndex);
+    protected void ExecuteItemPipeline()
+    {
+        if (_itemPipeline.Count > 0)
+        {
+            ResolveItemPipeline(_itemPipeline);
+            _itemPipeline.Clear();
+        }
+    }
+    private void ResolveItemPipeline(List<ItemData> pipeline)
+    {
+        // 1. Resolve Coupling (Hat + Facade)
+        for (int i = 0; i < pipeline.Count - 1; i++)
+        {
+            var currentItem = pipeline[i];
+            var nextItem = pipeline[i + 1];
+
+            bool hasHat = currentItem.Mechanics.Any(m => m.Prefix == "hat");
+            bool hasFacade = nextItem.Mechanics.Any(m => m.Prefix == "facade");
+
+            if (hasHat && hasFacade)
+            {
+                currentItem.Mechanics.AddRange(nextItem.Mechanics);
+                pipeline.RemoveAt(i + 1);
+                i--;
+            }
+        }
+
+        // 2. Stable Sort by Priority
+        var sortedPipeline = pipeline.OrderBy(item => GetItemPriority(item)).ToList();
+
+        // 3. Hydrate Entity State
+        foreach (var item in sortedPipeline)
+        {
+            HydrateEntityFromItem(item);
+        }
+    }
+    private int GetItemPriority(ItemData item)
+    {
+        int priority = 50;
+        foreach (var mech in item.Mechanics)
+        {
+            string payloadLower = mech.PayloadString?.ToLower() ?? "";
+            if (mech.Prefix == "k" && payloadLower == "permissive") return 0;
+            if (mech.Prefix == "k" && payloadLower == "stasis") priority = 99;
+            else if (mech.Prefix == "facade") priority = 100;
+        }
+        return priority;
+    }
+    private void HydrateEntityFromItem(ItemData item)
+    {
+        bool canMapNatively = true;
+        foreach (var mech in item.Mechanics)
+        {
+            string pfx = mech.Prefix?.ToLower() ?? "";
+            if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "")
+            {
+                canMapNatively = false;
+                break;
+            }
+        }
+
+        if (!canMapNatively)
+        {
+            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
+            return;
+        }
+
+        if (item.LearnedAbilities != null && item.LearnedAbilities.Count > 0)
+        {
+            baseAbilityData.AddRange(item.LearnedAbilities);
+        }
+
+        foreach (var mech in item.Mechanics)
+        {
+            if (mech.Prefix == "t")
+            {
+                if (mech.PayloadString != null && mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+                    curses.Add(mech.PayloadString.Substring(5));
+                else
+                    traits.Add(mech.PayloadString);
+            }
+            else if (mech.Prefix == "gift")
+            {
+                blessings.Add(mech.PayloadString);
+            }
+            else if (mech.Prefix == "learn" || mech.Prefix == "abilitydata")
+            {
+                baseAbilityData.Add(mech.PayloadString);
+            }
+            else if (mech.Prefix == "k" || mech.Prefix == "facade" || mech.Prefix == "sticker" || mech.Prefix == "")
+            {
+                if (mech.Targets != null && mech.Targets.Count > 0)
+                {
+                    List<int> targetFaces = new List<int>();
+                    foreach (string target in mech.Targets)
+                    {
+                        targetFaces.AddRange(DiceTargetHelper.GetIndicesForTarget(target));
+                    }
+                    ApplyMechanicToDiceSides(targetFaces.Distinct().ToList(), mech);
+                }
+            }
+        }
+
+        if (item.Mechanics.Count == 0 && !string.IsNullOrEmpty(item.entityName))
+        {
+            items.Add(item.entityName);
+        }
+    }
+    protected void ApplyMechanicToDiceSides(List<int> targetFaces, ItemMechanic mech)
+    {
+        foreach (int faceIdx in targetFaces)
+        {
+            if (faceIdx < 0 || faceIdx >= 6) continue;
+            if (diceSides == null) InitializeDiceFaces();
+            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+
+            string lowerPrefix = mech.Prefix?.ToLower() ?? "";
+            string payload = mech.PayloadString?.Trim() ?? "";
+
+            if (lowerPrefix == "k" || lowerPrefix == "")
+            {
+                string keyword = payload.ToLower();
+                if (keyword == "ritemx.dae9" || keyword == "unpack.ritemx.644f") keyword = "future";
+
+                if (!string.IsNullOrEmpty(keyword) && !diceSides[faceIdx].keywords.Contains(keyword))
+                    diceSides[faceIdx].keywords.Add(keyword);
+
+                foreach (string chainKw in mech.ChainedKeywords)
+                {
+                    string cleanKw = chainKw.Trim().ToLower();
+                    if (cleanKw.StartsWith("k.")) cleanKw = cleanKw.Substring(2);
+                    if (!diceSides[faceIdx].keywords.Contains(cleanKw))
+                        diceSides[faceIdx].keywords.Add(cleanKw);
+                }
+            }
+            else if (lowerPrefix == "facade")
+            {
+                string[] facadeParts = payload.Split(':');
+                diceSides[faceIdx].facadeID = facadeParts[0];
+                if (facadeParts.Length > 1)
+                {
+                    var colorParts = facadeParts.Skip(1).Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim()).ToList();
+                    if (colorParts.Count == 0 || colorParts.All(p => p == "0")) diceSides[faceIdx].facadeColor = null;
+                    else
+                    {
+                        while (colorParts.Count < 3) colorParts.Add("0");
+                        diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
+                    }
+                }
+            }
+            else if (lowerPrefix == "sticker")
+            {
+                diceSides[faceIdx].sticker = payload;
             }
         }
     }

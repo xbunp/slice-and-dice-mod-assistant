@@ -4,6 +4,41 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
+/// <summary>
+/// Central authority for custom item domain parsing rules, syntax token definitions, and structural grammar constraints.
+/// 
+/// ============================================================================================
+/// SYNTAX GRAMMAR & OPERATOR RULES (THE MASTER SPECIFICATION)
+/// ============================================================================================
+/// 
+/// 1. THE LEFT-TO-RIGHT STATE RULE
+///    The custom item syntax is evaluated left-to-right as a stateful token stream. Contextual state 
+///    (such as target directions) propagates forward through the chain until explicitly overridden or reset.
+/// 
+/// 2. THE '#' (AND / CONTEXT PROPAGATION) OPERATOR
+///    - PURPOSE: Joins multiple distinct mechanics or keywords under a shared target context.
+///    - BEHAVIOR: Represents a semantic "AND" branch. The mechanic directly to the right of '#' inherits the 
+///      target context (and scaling properties like pertier) of the mechanic to its left, unless the right 
+///      mechanic explicitly defines a new target prefix.
+///    - EXAMPLE: "left.k.armoured#k.bloodlust" evaluates both "armoured" and "bloodlust" targeting the left side.
+/// 
+/// 3. THE '.i.' (INHERENT / BOUNDARY) OPERATOR
+///    - PURPOSE: Syntactically acts as a hard boundary and context-reset token in flat chains.
+///    - BEHAVIOR: Delimits separate functional items or distinct mechanical blocks. When encountered, 
+///      it halts any active payload accumulation (such as reading trailing keywords), resets target 
+///      context back to the default (all/none), and starts a fresh mechanic evaluation.
+///    - EXAMPLE: "k.bloodlust.i.mid.k.antipair" parses "bloodlust" with default targets, terminates the payload 
+///      at ".i.", and parses "antipair" targeting the mid face.
+/// 
+/// 4. HAT ENCAPSULATION RULE
+///    - FORMAT: target.hat.( [EntityData] .i. [Nested Base Items] )
+///    - BEHAVIOR: The first ".i." token encountered inside a Hat's outer parentheses serves as the strict 
+///      architectural boundary separating the entity's native parameters (e.g., base replica, dice faces, 
+///      inline keywords, facades) from the nested Base Item payloads intended for the Hat card's visual Payload Port.
+/// 
+/// ============================================================================================
+/// </summary>
+
 public static class ItemDomainRules
 {
     public static readonly HashSet<string> ValidItemProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -137,6 +172,8 @@ public class ItemMechanic
     public int? PartIndex { get; set; }
 
     public ItemMechanic AddTarget(string target) { Targets.Add(target); return this; }
+
+    /*
     public string Export()
     {
         List<string> parts = new List<string>();
@@ -167,6 +204,72 @@ public class ItemMechanic
         if (Multiplier != 1) parts.Add($"m{Multiplier}");
         if (!string.IsNullOrEmpty(MergedItem)) parts.Add($"mrg.{MergedItem}");
         if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
+        return string.Join(".", parts);
+    }
+    */
+
+    public string Export()
+    {
+        List<string> parts = new List<string>();
+        if (Targets.Count > 0) parts.AddRange(Targets);
+        if (RepeatTimes != 1) parts.Add($"x{RepeatTimes}");
+        if (PerTier) parts.Add("pertier");
+        if (Unpack) parts.Add("unpack");
+        if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
+
+        string corePayload = PayloadString;
+
+        // DYNAMIC EXPORT: Pulls fresh data from the nested object if mutated.
+        if (PayloadData != null)
+        {
+            string exportedData = "";
+
+            // Route Hats to the specialized clean export method
+            if (Prefix == "hat" && PayloadData is HeroData hd)
+            {
+                exportedData = hd.ExportAsHat();
+            }
+            else if (PayloadData is SDData sdData)
+            {
+                exportedData = sdData.Export();
+            }
+
+            if (!string.IsNullOrEmpty(exportedData))
+            {
+                // Certain nested mechanics require parenthetical wrapping in textmod syntax
+                if (Prefix == "hat" || Prefix == "enchant" || Prefix == "self" ||
+                    Prefix == "triggerhpdata" || Prefix == "onhitdata" || Prefix == "sticker")
+                {
+                    if (!exportedData.StartsWith("(")) corePayload = $"({exportedData})";
+                    else corePayload = exportedData;
+                }
+                else
+                {
+                    corePayload = exportedData;
+                }
+            }
+        }
+
+        if (ChainedKeywords.Count > 0)
+        {
+            string chains = "#" + string.Join("#", ChainedKeywords);
+            // Inject chained keywords inside parens if the payload is a wrapped group
+            if (corePayload.StartsWith("(") && corePayload.EndsWith(")"))
+            {
+                corePayload = corePayload.Substring(0, corePayload.Length - 1) + chains + ")";
+            }
+            else
+            {
+                corePayload += chains;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(corePayload)) parts.Add(corePayload);
+        if (PartIndex.HasValue) parts.Add($"part.{PartIndex.Value}");
+        if (Multiplier != 1) { parts.Add("m"); parts.Add(Multiplier.ToString()); }
+        if (!string.IsNullOrEmpty(MergedItem)) parts.Add($"mrg.{MergedItem}");
+        if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
+
         return string.Join(".", parts);
     }
 }
@@ -270,11 +373,25 @@ public class ItemData : SDData
         itemCore = StaticBranchTracing.StripOuterParens(itemCore);
 
         List<string> chains = StaticBranchTracing.TopLevelSplit(itemCore, '#');
+
+        // FIX: Track and propagate targets across '#' splits. Because '#' is a semantic 'AND',
+        // the subsequent split chunk must inherit the target context of the chunk directly to its left
+        // if it doesn't declare an explicit target of its own.
+        List<string> lastTargets = null;
+
         foreach (var chain in chains)
         {
             if (string.IsNullOrWhiteSpace(chain)) continue;
             List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-            ExtractKnowledge(tokens, this);
+
+            // Pass the targets down to be inherited
+            ExtractKnowledge(tokens, this, lastTargets);
+
+            // Update the tracked targets to whatever the last parsed mechanic used
+            if (Mechanics.Count > 0)
+            {
+                lastTargets = Mechanics.Last().Targets.ToList();
+            }
         }
     }
 
@@ -343,8 +460,11 @@ public class ItemData : SDData
     }
     */
 
-    private void ExtractKnowledge(List<string> tokens, ItemData item)
+    // FIX: Add inheritedTargets parameter
+    private void ExtractKnowledge(List<string> tokens, ItemData item, List<string> inheritedTargets = null)
     {
+        bool isFirstMechanic = true; // Track if we are at the start of a # chain
+
         for (int i = 0; i < tokens.Count; i++)
         {
             string tokenLower = tokens[i].ToLower();
@@ -352,18 +472,16 @@ public class ItemData : SDData
 
             if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
-                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, item));
+                // We pass null into recursive parentheses to prevent unexpected deep inheritance
+                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, item, null));
                 continue;
             }
 
             if (TryProcessCommonMetadata(tokens, ref i, tokenLower))
             {
-                // Sync specific ItemData variables with the parsed base class values
                 if (tokenLower == "hsv") item.HsvShift = new ItemHsvShift(h, s, v);
                 else if (tokenLower == "hue") item.SimpleHue = hue;
-
                 else if (tokenLower == "thue") item.thue = UnpackTHue(tokens[i]);
-
                 else if (tokenLower == "p") item.PaletteOverride = p;
                 else if (tokenLower == "b") item.BorderColorCode = b;
                 else if (tokenLower == "draw") item.UiDrawInstructions = draw;
@@ -382,10 +500,91 @@ public class ItemData : SDData
 
                 default:
                     if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken)) { }
-                    else if (IsMechanicTriggerToken(tokenLower)) ProcessMechanicChain(tokens, ref i, originalToken);
+                    else if (IsMechanicTriggerToken(tokenLower))
+                    {
+                        // FIX: Pass inherited targets ONLY to the first mechanic, then turn it off
+                        ProcessMechanicChain(tokens, ref i, originalToken, isFirstMechanic ? inheritedTargets : null);
+                        isFirstMechanic = false;
+                    }
                     break;
             }
         }
+    }
+
+    // FIX: Add inheritedTargets parameter
+    private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken, List<string> inheritedTargets = null)
+    {
+        ItemMechanic mech = new ItemMechanic();
+        bool hasExplicitTargets = false; // Track if this specific item defined its own targets
+
+        while (i < tokens.Count)
+        {
+            string originalToken = tokens[i];
+            string tLower = originalToken.ToLower();
+
+            if (tLower == "i")
+            {
+                i++;
+                continue;
+            }
+
+            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
+            {
+                mech.Prefix = tLower;
+                i++; // Move past the prefix
+                mech.PayloadString = BuildPayloadString(tokens, ref i);
+                break; // Exits the mechanic loop immediately once the payload is assigned
+            }
+            else if (ItemDomainRules.ValidTargets.Contains(tLower))
+            {
+                // FIX: If this item explicitly declares a target, clear out anything we were going to inherit
+                if (!hasExplicitTargets)
+                {
+                    mech.Targets.Clear();
+                    hasExplicitTargets = true;
+                }
+                mech.AddTarget(originalToken);
+            }
+            else if (ItemDomainRules.IsRepeatPrefix(tLower, out int reps))
+            {
+                mech.RepeatTimes = reps;
+            }
+            else if (tLower == "pertier") mech.PerTier = true;
+            else if (tLower == "unpack") mech.Unpack = true;
+            else
+            {
+                List<string> payloadTokens = new List<string> { originalToken };
+                i++;
+
+                string subsequent = BuildPayloadString(tokens, ref i);
+                if (!string.IsNullOrEmpty(subsequent)) payloadTokens.Add(subsequent);
+
+                mech.PayloadString = string.Join(".", payloadTokens);
+                break;
+            }
+            i++;
+        }
+
+        // FIX: If no explicit targets were found, but we inherited some from a '#' split, apply them!
+        if (!hasExplicitTargets && inheritedTargets != null && inheritedTargets.Count > 0)
+        {
+            mech.Targets.AddRange(inheritedTargets);
+        }
+
+        // Process trailing suffixes (part, multiplier, mrg, splice)
+        while (i + 1 < tokens.Count)
+        {
+            string nextTokenLower = tokens[i + 1].ToLower();
+
+            if (nextTokenLower == "part" && i + 2 < tokens.Count) { if (int.TryParse(tokens[i + 2], out int pIdx)) { mech.PartIndex = pIdx; i += 2; } else break; }
+            else if (nextTokenLower == "m" && i + 2 < tokens.Count) { if (int.TryParse(tokens[i + 2], out int mult)) { mech.Multiplier = mult; i += 2; } else break; }
+            else if (nextTokenLower == "mrg" && i + 2 < tokens.Count) { mech.MergedItem = tokens[i + 2]; i += 2; }
+            else if (nextTokenLower == "splice" && i + 2 < tokens.Count) { mech.SplicedItem = tokens[i + 2]; i += 2; }
+            else break;
+        }
+
+        AssignDomainPayload(mech);
+        Mechanics.Add(mech);
     }
 
     private bool TryProcessGenericContainer(List<string> tokens, ref int i, string tokenLower, string originalToken)
@@ -443,6 +642,7 @@ public class ItemData : SDData
             if (mech.PayloadString.StartsWith("(")) { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         }
     }
+
 
     public override string Export()
     {
@@ -600,86 +800,38 @@ public class ItemData : SDData
     }
 
     // Helper method to safely collect forward payload tokens without suffix collisions
+    // Inside ItemData.cs class
+    /// <summary>
+    /// Accumulates tokens for a mechanic's payload.
+    /// NOTE: Must explicitly halt if it encounters 'i'. Because 'i' is the universal 
+    /// delimiter for a new mechanic context, allowing a payload (like a keyword) to 
+    /// swallow it will corrupt the parser's state machine and merge distinct mechanics.
+    /// </summary>
     private string BuildPayloadString(List<string> tokens, ref int i)
     {
         List<string> payloadTokens = new List<string>();
+
+        // Define major structural prefixes that should break inline payload accumulation
+        HashSet<string> majorPrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "hat", "sticker", "enchant", "cast", "facade", "sidesc", "onhitdata", "triggerhpdata"
+        };
+
         while (i < tokens.Count)
         {
             string peek = tokens[i].ToLower();
             if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
                 break;
+
+            // CRITICAL FIX: Add 'i' to the break condition so keywords don't swallow adjacent item chains
+            if (payloadTokens.Count > 0 && (majorPrefixes.Contains(peek) || peek == "i"))
+                break;
+
             payloadTokens.Add(tokens[i]);
             i++;
         }
-        i--; // Backtrack so that the suffix parser can evaluate the boundary token
+        i--;
         return string.Join(".", payloadTokens);
-    }
-
-    private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken)
-    {
-        ItemMechanic mech = new ItemMechanic();
-
-        while (i < tokens.Count)
-        {
-            string originalToken = tokens[i];
-            string tLower = originalToken.ToLower();
-
-            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
-            {
-                mech.Prefix = tLower;
-                i++; // Move past the prefix
-                mech.PayloadString = BuildPayloadString(tokens, ref i);
-                break; // Exits the mechanic loop immediately once the payload is assigned
-            }
-            else if (ItemDomainRules.ValidTargets.Contains(tLower))
-            {
-                mech.AddTarget(originalToken);
-            }
-            else if (ItemDomainRules.IsRepeatPrefix(tLower, out int reps))
-            {
-                mech.RepeatTimes = reps;
-            }
-            else if (tLower == "pertier") mech.PerTier = true;
-            else if (tLower == "unpack") mech.Unpack = true;
-            else
-            {
-                // The current token is the start of the payload
-                List<string> payloadTokens = new List<string> { originalToken };
-                i++; // Move past the first payload token
-
-                string subsequent = BuildPayloadString(tokens, ref i);
-                if (!string.IsNullOrEmpty(subsequent))
-                {
-                    payloadTokens.Add(subsequent);
-                }
-
-                mech.PayloadString = string.Join(".", payloadTokens);
-                break; // Exits the mechanic loop immediately once the payload is assigned
-            }
-            i++;
-        }
-
-        // Process trailing suffixes (part, multiplier, mrg, splice)
-        while (i + 1 < tokens.Count)
-        {
-            string nextTokenLower = tokens[i + 1].ToLower();
-
-            if (nextTokenLower == "part" && i + 2 < tokens.Count)
-            {
-                if (int.TryParse(tokens[i + 2], out int pIdx)) { mech.PartIndex = pIdx; i += 2; }
-                else break;
-            }
-            else if (nextTokenLower.StartsWith("m") && nextTokenLower.Length > 1 && int.TryParse(nextTokenLower.Substring(1), out int mult))
-            {
-                mech.Multiplier = mult; i++;
-            }
-            else if (nextTokenLower == "mrg" && i + 2 < tokens.Count) { mech.MergedItem = tokens[i + 2]; i += 2; }
-            else if (nextTokenLower == "splice" && i + 2 < tokens.Count) { mech.SplicedItem = tokens[i + 2]; i += 2; }
-            else break;
-        }
-
-        AssignDomainPayload(mech);
-        Mechanics.Add(mech);
     }
 }
 

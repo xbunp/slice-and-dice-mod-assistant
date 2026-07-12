@@ -1,8 +1,5 @@
-using System;
-using UnityEditor.PackageManager.UI;
-
 mergeInto(LibraryManager.library, {
-DownloadFileWebGL: function(fileNamePtr, base64DataPtr) {
+    DownloadFileWebGL: function(fileNamePtr, base64DataPtr) {
         var fileName = UTF8ToString(fileNamePtr);
         var base64Data = UTF8ToString(base64DataPtr);
 
@@ -15,11 +12,11 @@ DownloadFileWebGL: function(fileNamePtr, base64DataPtr) {
         var byteArray = new Uint8Array(byteNumbers);
         var blob = new Blob([byteArray], { type: "image/png" });
 
-    var link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
+        var link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 });

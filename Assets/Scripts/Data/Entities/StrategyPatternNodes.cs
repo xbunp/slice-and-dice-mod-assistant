@@ -1650,16 +1650,18 @@ public class BaseItemNodeDef : AuthoringNodeDef
         if (refs.Inputs.TryGetValue($"Mult_{i}", out var inpM)) inpM.SetTextWithoutNotify(entry.Multiplier.ToString());
         if (refs.Toggles.TryGetValue($"Tier_{i}", out var tglT)) tglT.SetIsOnWithoutNotify(entry.PerTier);
 
+        // FIX: Case insensitive lookup for Item Names
         if (refs.FilteredDropdowns.TryGetValue($"Item_{i}", out var drop))
         {
             string[] sourceArray = GetOptionArray(entry.Type);
-            int dropIdx = Array.IndexOf(sourceArray, entry.ItemName);
+            int dropIdx = Array.FindIndex(sourceArray, x => x.Equals(entry.ItemName, StringComparison.OrdinalIgnoreCase));
             if (dropIdx >= 0) drop.SetValueWithoutNotify(dropIdx);
         }
 
+        // FIX: Case insensitive lookup for Targets
         if (refs.FilteredDropdowns.TryGetValue($"Target_{i}", out var targetDrop))
         {
-            int targetIdx = Array.IndexOf(GetTargetOptions(), entry.Target);
+            int targetIdx = Array.FindIndex(GetTargetOptions(), x => x.Equals(entry.Target, StringComparison.OrdinalIgnoreCase));
             if (targetIdx >= 0) targetDrop.SetValueWithoutNotify(targetIdx);
         }
     }

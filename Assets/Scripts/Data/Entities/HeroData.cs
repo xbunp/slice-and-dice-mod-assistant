@@ -60,13 +60,11 @@ public class HeroData : EntityData
             return combined;
         }
     }
-
     public void InitializeAsDefault()
     {
         InitializeAsBlank();
         entityName = "NewEntity"; baseReplica = "Statue"; colorClass = "y"; imageOverride = "None"; hp = 7; tier = 1;
     }
-
     public void InitializeAsBlank()
     {
         entityName = null; imageOverride = null; baseReplica = null; colorClass = null;
@@ -93,13 +91,10 @@ public class HeroData : EntityData
 
     public override void Parse(string data)
     {
-        InitializeAsBlank(); // Ensure we start completely clean
+        InitializeAsBlank();
         if (string.IsNullOrWhiteSpace(data)) return;
-
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string heroCore = StaticBranchTracing.StripOuterParens(chunks[0]);
-
-        // FIX: Do NOT split by '#' at the top level. Process as a single chain.
         List<string> tokens = StaticBranchTracing.TopLevelSplit(heroCore, '.');
 
         if (tokens.Count > 0)
@@ -112,18 +107,75 @@ public class HeroData : EntityData
         }
 
         ExtractKnowledge(tokens);
+        ExecuteItemPipeline();
     }
-
     private void ExtractKnowledge(List<string> tokens)
     {
         for (int i = 0; i < tokens.Count; i++)
         {
             string tokenLower = tokens[i].ToLower();
             string originalToken = tokens[i];
-
             if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
                 ProcessRecursiveParentheses(originalToken, ExtractKnowledge);
+                continue;
+            }
+
+            if (TryProcessCommonMetadata(tokens, ref i, tokenLower)) continue;
+            if (TryProcessEntityMetadata(tokens, ref i, tokenLower)) continue;
+            if (TryProcessHeroSpecificMetadata(tokens, ref i, tokenLower)) continue;
+            if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
+            if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
+            if (TryProcessOrbData(tokens, ref i, tokenLower)) continue;
+
+            // Unified Collection Extractor using the smart boundary detector
+            if (tokenLower == "i" || tokenLower == "t" || tokenLower == "gift" || tokenLower == "learn" || tokenLower == "abilitydata")
+            {
+                int startIndex = i + 1;
+                if (startIndex >= tokens.Count) continue;
+
+                int endIndex = GetEndOfBlockIndex(tokens, startIndex);
+                int count = endIndex - startIndex;
+
+                if (count > 0)
+                {
+                    List<string> subTokens = tokens.GetRange(startIndex, count);
+                    i = endIndex - 1;
+                    string payload = string.Join(".", subTokens);
+
+                    if (tokenLower == "i")
+                    {
+                        ItemData parsedItem = new ItemData();
+                        parsedItem.Parse(StaticBranchTracing.StripOuterParens(payload));
+
+                        // Fallback for simple standalone names (e.g. i.Sword) that lack mechanics
+                        if (string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0)
+                            parsedItem.entityName = payload;
+
+                        _itemPipeline.Add(parsedItem);
+                    }
+                    else if (tokenLower == "t") ProcessTraitPayload(payload);
+                    else if (tokenLower == "gift") blessings.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
+                    else if (tokenLower == "learn" || tokenLower == "abilitydata")
+                    {
+                        if (payload.StartsWith("(")) AddCustomAbility(AbilityData.CreateAbility(payload));
+                        else baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
+                    }
+                }
+                continue;
+            }
+        }
+    }
+
+    private void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline)
+    {
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            string tokenLower = tokens[i].ToLower();
+            string originalToken = tokens[i];
+            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
+            {
+                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, itemPipeline));
                 continue;
             }
 
@@ -139,7 +191,6 @@ public class HeroData : EntityData
                 ProcessTraitToken(tokens, ref i, HeroDomainRules.HeroPropertyKeys);
                 continue;
             }
-
             if (TryProcessCollections(tokens, ref i, tokenLower)) continue;
 
             if (tokenLower == "i")
@@ -147,9 +198,6 @@ public class HeroData : EntityData
                 int startIndex = i + 1;
                 if (startIndex >= tokens.Count) continue;
 
-                string subToken = tokens[startIndex].ToLower();
-
-                // 1. Find where this entire segment ends (at the next metadata key or end of string)
                 int endIndex = startIndex;
                 while (endIndex < tokens.Count && !HeroDomainRules.HeroPropertyKeys.Contains(tokens[endIndex].ToLower()))
                 {
@@ -160,124 +208,25 @@ public class HeroData : EntityData
                 if (count > 0)
                 {
                     List<string> subTokens = tokens.GetRange(startIndex, count);
-                    i = endIndex - 1; // Advance the parser's main loop past this parsed segment
+                    i = endIndex - 1;
 
-                    // 2. Route Traits / Curses (.i.t.traitName or .i.t.jinx.curseName)
-                    if (subToken == "t")
+                    // DELEGATION: ItemData is the absolute authority on interpreting .i. strings
+                    string itemString = string.Join(".", subTokens);
+                    ItemData parsedItem = new ItemData();
+                    parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
+
+                    // Fallback for simple standalone names (e.g. i.Sword) that lack mechanics
+                    if (string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0)
                     {
-                        string tPayload = string.Join(".", subTokens.Skip(1));
-                        ProcessTraitPayload(tPayload); // Routed through unified processing
+                        parsedItem.entityName = itemString;
                     }
-                    // 3. Route Abilities (.i.learn.abilityName)
-                    else if (subToken == "learn")
-                    {
-                        baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(string.Join(".", subTokens.Skip(1)), '#'));
-                    }
-                    // 4. Route Dice Face Modifiers (Check indices using your helper class)
-                    else if (DiceTargetHelper.GetIndicesForTarget(subToken).Count > 0)
-                    {
-                        List<int> targetFaces = DiceTargetHelper.GetIndicesForTarget(subToken);
-                        string modPayload = string.Join(".", subTokens.Skip(1));
-                        ApplyDiceModifiers(targetFaces, modPayload);
-                    }
-                    // 5. Default: Route Items
-                    else
-                    {
-                        string itemString = string.Join(".", subTokens);
-                        if (itemString.Contains("("))
-                        {
-                            ItemData customItem = new ItemData();
-                            customItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
-                            customPayloads.Add(new CustomPayload { Prefix = "i", Data = customItem });
-                        }
-                        else
-                        {
-                            items.Add(itemString);
-                        }
-                    }
+
+                    itemPipeline.Add(parsedItem);
                 }
                 continue;
             }
-
         }
     }
-
-    private void ApplyDiceModifiers(List<int> targetFaces, string modPayload)
-    {
-        string[] chunks = modPayload.Split('#');
-        foreach (int faceIdx in targetFaces)
-        {
-            if (faceIdx < 0 || faceIdx >= diceSides.Length) continue;
-            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
-
-            foreach (string chunk in chunks)
-            {
-                if (string.IsNullOrWhiteSpace(chunk)) continue;
-
-                // FIX: Detect standalone future keyword IDs (like ritemx.dae9 or unpack.ritemx.644f)
-                string trimmedChunk = chunk.Trim();
-                string lowerChunk = trimmedChunk.ToLower();
-                if (lowerChunk == "ritemx.dae9" || lowerChunk == "unpack.ritemx.644f" || lowerChunk == "k.future")
-                {
-                    if (!diceSides[faceIdx].keywords.Contains("future"))
-                    {
-                        diceSides[faceIdx].keywords.Add("future");
-                    }
-                    continue;
-                }
-
-                string[] parts = chunk.Split(new char[] { '.' }, 2);
-                if (parts.Length < 2) continue;
-
-                string type = parts[0].ToLower();
-                string value = parts[1];
-
-                if (type == "k")
-                {
-                    string lowercaseKeyword = value.Trim().ToLower();
-
-                    // FIX: Normalization fallback in case of mixed formats
-                    if (lowercaseKeyword == "ritemx.dae9" || lowercaseKeyword == "unpack.ritemx.644f" || lowercaseKeyword == "future")
-                    {
-                        lowercaseKeyword = "future";
-                    }
-
-                    if (!diceSides[faceIdx].keywords.Contains(lowercaseKeyword))
-                    {
-                        diceSides[faceIdx].keywords.Add(lowercaseKeyword);
-                    }
-                }
-                else if (type == "facade")
-                {
-                    string[] facadeParts = value.Split(':');
-                    diceSides[faceIdx].facadeID = facadeParts[0];
-
-                    if (facadeParts.Length > 1)
-                    {
-                        var colorParts = facadeParts.Skip(1)
-                                                    .Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim())
-                                                    .ToList();
-
-                        if (colorParts.Count == 0 || colorParts.All(p => p == "0"))
-                        {
-                            diceSides[faceIdx].facadeColor = null;
-                        }
-                        else
-                        {
-                            while (colorParts.Count < 3) colorParts.Add("0");
-                            diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
-                        }
-                    }
-                    else
-                    {
-                        diceSides[faceIdx].facadeColor = null;
-                    }
-                }
-            }
-        }
-    }
-
-    // Separates the hero-specific properties from the shared metadata
     private bool TryProcessHeroSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
     {
         if (i + 1 >= tokens.Count) return false;
@@ -295,7 +244,6 @@ public class HeroData : EntityData
         i++;
         return true;
     }
-
     private bool TryProcessCollections(List<string> tokens, ref int i, string tokenLower)
     {
         if (i + 1 >= tokens.Count) return false;
@@ -316,7 +264,6 @@ public class HeroData : EntityData
         }
         return false;
     }
-
     public override string Export()
     {
         StringBuilder heroSb = new StringBuilder();
@@ -445,6 +392,62 @@ public class HeroData : EntityData
         return fullContentString;
     }
 
+    public string ExportAsHat()
+    {
+        StringBuilder heroSb = new StringBuilder();
+
+        // Hats do not use the "replica." prefix, they just state the name directly.
+        if (!string.IsNullOrEmpty(baseReplica))
+        {
+            heroSb.Append($"{FormatName(FormatSpecialImageName(baseReplica))}");
+            AppendColorModifier(heroSb);
+        }
+
+        if (!string.IsNullOrEmpty(entityName)) heroSb.Append($".n.{FormatName(entityName)}");
+
+        // Hats shouldn't force default tiers/hp to 0. We only export them if they are explicitly > 0.
+        //if (hp > 0) heroSb.Append($".hp.{hp}");
+        //if (tier > 0) heroSb.Append($".tier.{tier}");
+
+        //if (!string.IsNullOrEmpty(colorClass)) heroSb.Append($".col.{colorClass}");
+        //if (!string.IsNullOrEmpty(p)) heroSb.Append($".p.{p}");
+        //if (adj.HasValue) heroSb.Append($".adj.{adj.Value}");
+        //if (!string.IsNullOrEmpty(b)) heroSb.Append($".b.{b}");
+        //if (!string.IsNullOrEmpty(rect)) heroSb.Append($".rect.{rect}");
+        //if (!string.IsNullOrEmpty(draw)) heroSb.Append($".draw.{draw}");
+
+        AppendDiceSides(heroSb);
+
+        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
+        if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
+
+        // Append internal items/traits
+        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
+
+        StringBuilder innerSb = new StringBuilder();
+        //if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) innerSb.Append($".i.t.{FormatName(t)}");
+        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
+        //if (blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) innerSb.Append($".gift.{FormatName(bl)}");
+        //if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) innerSb.Append($".i.t.jinx.{FormatName(c)}");
+
+        foreach (var inner in innerPayloads)
+        {
+            innerSb.Append($".{inner}");
+        }
+
+        heroSb.Append(innerSb.ToString());
+
+        /*
+        if (!string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica)
+        {
+            heroSb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
+            AppendColorModifier(heroSb);
+        }
+        */
+
+        // Return without outer parentheses, as ItemMechanic.Export() handles the wrapping
+        return heroSb.ToString();
+    }
     public override void AddCustomAbility(AbilityData ability)
     {
         if (ability == null) return;
@@ -457,7 +460,6 @@ public class HeroData : EntityData
         else if (ability is OrbData orb) { if (!customOrbs.Any(o => o.entityName == orb.entityName && o.hardcodedAbilityName == orb.hardcodedAbilityName)) customOrbs.Add(orb); }
         else base.AddCustomAbility(ability);
     }
-
     public void DebugContentsToConsoleCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -526,7 +528,6 @@ public class HeroData : EntityData
         }
         if (sb.Length > 0) UnityEngine.Debug.Log($"{indent}--- HERO DATA DEBUG (COMPACT) ---\n" + sb.ToString());
     }
-
     public int GetEffectiveTier()
     {
         if (tier >= 0) return tier;
@@ -539,4 +540,413 @@ public class HeroData : EntityData
 
         return 1;
     }
+    protected override int GetEndOfBlockIndex(List<string> tokens, int startIndex)
+    {
+        int endIndex = startIndex;
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+
+            if (peek == "i" || peek == "t" || peek == "gift" || peek == "learn" ||
+                peek == "abilitydata" || peek == "triggerhpdata" || peek == "onhitdata" ||
+                peek == "orb" || peek == "sd")
+            {
+                break;
+            }
+
+            if (HeroDomainRules.MetadataKeys.Contains(peek))
+            {
+                if (peek == "col" && endIndex + 1 < tokens.Count)
+                {
+                    string nextToken = tokens[endIndex + 1].ToLower();
+                    if (SDColors.GetOptionFromColorCode(nextToken) != HeroColorOption.White || nextToken == "w")
+                        break;
+                }
+                else if ((peek == "hp" || peek == "tier") && endIndex + 1 < tokens.Count)
+                {
+                    if (int.TryParse(tokens[endIndex + 1], out _)) break;
+                }
+                else if (peek == "n" || peek == "img" || peek == "doc" || peek == "speech" ||
+                         peek == "hsv" || peek == "hue" || peek == "thue" || peek == "p" ||
+                         peek == "b" || peek == "draw" || peek == "rect")
+                {
+                    break;
+                }
+            }
+            endIndex++;
+        }
+        return endIndex;
+    }
+
+    /*
+    public override void Parse(string data)
+    {
+        InitializeAsBlank(); // Ensure we start completely clean
+        if (string.IsNullOrWhiteSpace(data)) return;
+
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
+        string heroCore = StaticBranchTracing.StripOuterParens(chunks[0]);
+
+        // FIX: Do NOT split by '#' at the top level. Process as a single chain.
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(heroCore, '.');
+
+        if (tokens.Count > 0)
+        {
+            string firstLower = tokens[0].ToLower();
+            if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
+            {
+                baseReplica = tokens[0];
+            }
+        }
+
+        ExtractKnowledge(tokens);
+    }
+    */
+    /*
+    public void ResolveModifiers()
+    {
+        var itemPayloads = customPayloads.Where(p => p.Type == PayloadType.Item).ToList();
+
+        // 1. Resolve Coupling (Hat + Facade)
+        for (int i = 0; i < itemPayloads.Count - 1; i++)
+        {
+            var currentItem = itemPayloads[i].Data as ItemData;
+            var nextItem = itemPayloads[i + 1].Data as ItemData;
+
+            if (IsHat(currentItem) && IsFacade(nextItem))
+            {
+                // Bind them together so they cannot be separated during sort/export
+                MergeItems(currentItem, nextItem);
+                customPayloads.Remove(itemPayloads[i + 1]);
+                itemPayloads.RemoveAt(i + 1);
+            }
+        }
+
+        // 2. Sort Mechanics
+        // Assign a priority integer to each ItemData based on its mechanics 
+        // (0 for Permissive, 50 for standard, 99 for Stasis, 100 for Facades).
+        var sortedPayloads = itemPayloads.OrderBy(p => DeterminePriority(p.Data as ItemData)).ToList();
+
+        // 3. Apply to Hero State
+        foreach (var payload in sortedPayloads)
+        {
+            ApplyItemMechanicsToHero(payload.Data as ItemData);
+        }
+    }
+    */
+    /*
+    private void ApplyItemMechanicsToHero(ItemData item)
+    {
+        foreach (var mech in item.Mechanics)
+        {
+            if (mech.Prefix == "t")
+                traits.Add(mech.PayloadString);
+            else if (mech.Prefix == "learn")
+                baseAbilityData.Add(mech.PayloadString);
+            else if (mech.Prefix == "k" || mech.Prefix == "facade")
+                ApplyMechanicToDiceSides(mech); // Your existing face iteration logic, but object-driven
+        }
+    }
+    */
+    /*
+    private void ApplyDiceModifiers(List<int> targetFaces, string modPayload)
+    {
+        string[] chunks = modPayload.Split('#');
+        foreach (int faceIdx in targetFaces)
+        {
+            if (faceIdx < 0 || faceIdx >= diceSides.Length) continue;
+            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+
+            foreach (string chunk in chunks)
+            {
+                if (string.IsNullOrWhiteSpace(chunk)) continue;
+
+                // FIX: Detect standalone future keyword IDs (like ritemx.dae9 or unpack.ritemx.644f)
+                string trimmedChunk = chunk.Trim();
+                string lowerChunk = trimmedChunk.ToLower();
+                if (lowerChunk == "ritemx.dae9" || lowerChunk == "unpack.ritemx.644f" || lowerChunk == "k.future")
+                {
+                    if (!diceSides[faceIdx].keywords.Contains("future"))
+                    {
+                        diceSides[faceIdx].keywords.Add("future");
+                    }
+                    continue;
+                }
+
+                string[] parts = chunk.Split(new char[] { '.' }, 2);
+                if (parts.Length < 2) continue;
+
+                string type = parts[0].ToLower();
+                string value = parts[1];
+
+                if (type == "k")
+                {
+                    string lowercaseKeyword = value.Trim().ToLower();
+
+                    // FIX: Normalization fallback in case of mixed formats
+                    if (lowercaseKeyword == "ritemx.dae9" || lowercaseKeyword == "unpack.ritemx.644f" || lowercaseKeyword == "future")
+                    {
+                        lowercaseKeyword = "future";
+                    }
+
+                    if (!diceSides[faceIdx].keywords.Contains(lowercaseKeyword))
+                    {
+                        diceSides[faceIdx].keywords.Add(lowercaseKeyword);
+                    }
+                }
+                else if (type == "facade")
+                {
+                    string[] facadeParts = value.Split(':');
+                    diceSides[faceIdx].facadeID = facadeParts[0];
+
+                    if (facadeParts.Length > 1)
+                    {
+                        var colorParts = facadeParts.Skip(1)
+                                                    .Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim())
+                                                    .ToList();
+
+                        if (colorParts.Count == 0 || colorParts.All(p => p == "0"))
+                        {
+                            diceSides[faceIdx].facadeColor = null;
+                        }
+                        else
+                        {
+                            while (colorParts.Count < 3) colorParts.Add("0");
+                            diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
+                        }
+                    }
+                    else
+                    {
+                        diceSides[faceIdx].facadeColor = null;
+                    }
+                }
+            }
+        }
+    }
+    */
+    /*
+    private void ResolveItemPipeline(List<ItemData> pipeline)
+    {
+        // 1. Resolve Coupling (Hat + Facade)
+        for (int i = 0; i < pipeline.Count - 1; i++)
+        {
+            var currentItem = pipeline[i];
+            var nextItem = pipeline[i + 1];
+
+            bool hasHat = currentItem.Mechanics.Any(m => m.Prefix == "hat");
+            bool hasFacade = nextItem.Mechanics.Any(m => m.Prefix == "facade");
+
+            if (hasHat && hasFacade)
+            {
+                // Merge nextItem's mechanics directly into currentItem so they sort and export together
+                currentItem.Mechanics.AddRange(nextItem.Mechanics);
+                pipeline.RemoveAt(i + 1);
+                i--; // Step back to evaluate if the next item is ALSO chained
+            }
+        }
+
+        // 2. Stable Sort by Priority
+        // Priority: Permissive (0) -> Standard (50) -> Stasis (99) -> Facades (100)
+        var sortedPipeline = pipeline.OrderBy(item => GetItemPriority(item)).ToList();
+
+        // 3. Hydrate Hero State
+        foreach (var item in sortedPipeline)
+        {
+            HydrateHeroFromItem(item);
+        }
+    }
+    private int GetItemPriority(ItemData item)
+    {
+        int priority = 50;
+        foreach (var mech in item.Mechanics)
+        {
+            string payloadLower = mech.PayloadString?.ToLower() ?? "";
+            if (mech.Prefix == "k" && payloadLower == "permissive") return 0; // Absolute First
+            if (mech.Prefix == "k" && payloadLower == "stasis") priority = 99;
+            else if (mech.Prefix == "facade") priority = 100;
+        }
+        return priority;
+    }
+    private void HydrateHeroFromItem(ItemData item)
+    {
+        // Check if this item contains ANY mechanics that HeroData cannot natively map
+        bool canMapNatively = true;
+        foreach (var mech in item.Mechanics)
+        {
+            string pfx = mech.Prefix?.ToLower() ?? "";
+            if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "")
+            {
+                canMapNatively = false;
+                break;
+            }
+        }
+
+        // If the item possesses complex mechanics (Hats, Modifiers, Enchants) we black-box it 
+        // to prevent double-exporting properties the UI can't track.
+        if (!canMapNatively)
+        {
+            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
+            return;
+        }
+
+        if (item.LearnedAbilities != null && item.LearnedAbilities.Count > 0)
+        {
+            baseAbilityData.AddRange(item.LearnedAbilities);
+        }
+
+        foreach (var mech in item.Mechanics)
+        {
+            if (mech.Prefix == "t")
+            {
+                if (mech.PayloadString != null && mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+                    curses.Add(mech.PayloadString.Substring(5));
+                else
+                    traits.Add(mech.PayloadString);
+            }
+            else if (mech.Prefix == "gift")
+            {
+                blessings.Add(mech.PayloadString);
+            }
+            else if (mech.Prefix == "learn" || mech.Prefix == "abilitydata")
+            {
+                baseAbilityData.Add(mech.PayloadString);
+            }
+            else if (mech.Prefix == "k" || mech.Prefix == "facade" || mech.Prefix == "sticker")
+            {
+                if (mech.Targets != null && mech.Targets.Count > 0)
+                {
+                    List<int> targetFaces = new List<int>();
+                    foreach (string target in mech.Targets)
+                    {
+                        targetFaces.AddRange(DiceTargetHelper.GetIndicesForTarget(target));
+                    }
+                    ApplyMechanicToDiceSides(targetFaces.Distinct().ToList(), mech);
+                }
+            }
+        }
+
+        if (item.Mechanics.Count == 0 && !string.IsNullOrEmpty(item.entityName))
+        {
+            items.Add(item.entityName);
+        }
+    }
+    private void ApplyMechanicToDiceSides(List<int> targetFaces, ItemMechanic mech)
+    {
+        foreach (int faceIdx in targetFaces)
+        {
+            if (faceIdx < 0 || faceIdx >= diceSides.Length) continue;
+            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+
+            string lowerPrefix = mech.Prefix?.ToLower() ?? "";
+
+            if (lowerPrefix == "k")
+            {
+                string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
+                if (keyword == "ritemx.dae9" || keyword == "unpack.ritemx.644f") keyword = "future";
+                if (!string.IsNullOrEmpty(keyword) && !diceSides[faceIdx].keywords.Contains(keyword))
+                {
+                    diceSides[faceIdx].keywords.Add(keyword);
+                }
+            }
+            else if (lowerPrefix == "facade")
+            {
+                string[] facadeParts = (mech.PayloadString ?? "").Split(':');
+                diceSides[faceIdx].facadeID = facadeParts[0];
+                if (facadeParts.Length > 1)
+                {
+                    var colorParts = facadeParts.Skip(1).Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim()).ToList();
+                    if (colorParts.Count == 0 || colorParts.All(p => p == "0")) diceSides[faceIdx].facadeColor = null;
+                    else
+                    {
+                        while (colorParts.Count < 3) colorParts.Add("0");
+                        diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
+                    }
+                }
+            }
+            else if (lowerPrefix == "sticker")
+            {
+                diceSides[faceIdx].sticker = mech.PayloadString;
+            }
+        }
+    }
+    public override void Parse(string data)
+    {
+        InitializeAsBlank();
+        if (string.IsNullOrWhiteSpace(data)) return;
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
+        string heroCore = StaticBranchTracing.StripOuterParens(chunks[0]);
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(heroCore, '.');
+
+        if (tokens.Count > 0)
+        {
+            string firstLower = tokens[0].ToLower();
+            if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
+            {
+                baseReplica = tokens[0];
+            }
+        }
+
+        // INTERMEDIATE PIPELINE: Holds parsed ItemData objects before context resolution
+        List<ItemData> itemPipeline = new List<ItemData>();
+
+        ExtractKnowledge(tokens, itemPipeline);
+        ResolveItemPipeline(itemPipeline);
+    }
+    */
+
+    // ApplyMechanicToDiceSides
+    /*
+    private void ApplyMechanicToDiceSides(List<int> targetFaces, ItemMechanic mech)
+    {
+        foreach (int faceIdx in targetFaces)
+        {
+            if (faceIdx < 0 || faceIdx >= 6) continue;
+            if (diceSides == null) InitializeDiceFaces();
+            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+
+            string lowerPrefix = mech.Prefix?.ToLower() ?? "";
+            string payload = mech.PayloadString?.Trim() ?? "";
+
+            // Handle direct keywords and implicit Tog items
+            if (lowerPrefix == "k" || lowerPrefix == "")
+            {
+                string keyword = payload.ToLower();
+                if (keyword == "ritemx.dae9" || keyword == "unpack.ritemx.644f") keyword = "future";
+
+                if (!string.IsNullOrEmpty(keyword) && !diceSides[faceIdx].keywords.Contains(keyword))
+                {
+                    diceSides[faceIdx].keywords.Add(keyword);
+                }
+
+                // Add any keywords chained inside the item syntax via '#'
+                foreach (string chainKw in mech.ChainedKeywords)
+                {
+                    string cleanKw = chainKw.Trim().ToLower();
+                    if (cleanKw.StartsWith("k.")) cleanKw = cleanKw.Substring(2);
+                    if (!diceSides[faceIdx].keywords.Contains(cleanKw))
+                        diceSides[faceIdx].keywords.Add(cleanKw);
+                }
+            }
+            else if (lowerPrefix == "facade")
+            {
+                string[] facadeParts = payload.Split(':');
+                diceSides[faceIdx].facadeID = facadeParts[0];
+                if (facadeParts.Length > 1)
+                {
+                    var colorParts = facadeParts.Skip(1).Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim()).ToList();
+                    if (colorParts.Count == 0 || colorParts.All(p => p == "0")) diceSides[faceIdx].facadeColor = null;
+                    else
+                    {
+                        while (colorParts.Count < 3) colorParts.Add("0");
+                        diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
+                    }
+                }
+            }
+            else if (lowerPrefix == "sticker")
+            {
+                diceSides[faceIdx].sticker = payload;
+            }
+        }
+    }
+    */
 }

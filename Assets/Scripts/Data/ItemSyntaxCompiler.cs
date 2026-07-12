@@ -84,8 +84,10 @@ public static class ItemSyntaxCompiler
         if (expr.StartsWith("(") && expr.EndsWith(")") && IsBalanced(expr))
             return expr;
 
-        // Wrap if the expression contains operators or complex internal chaining that would bleed out
-        char[] complexDelimiters = new char[] { '#', ':', '-' };
+        // FIX: Added '.' to complexDelimiters. 
+        // This ensures any chained suffixes/prefixes are wrapped in brackets, 
+        // but single words (no dots/operators) remain clean.
+        char[] complexDelimiters = new char[] { '#', ':', '-', '.' };
         if (expr.IndexOfAny(complexDelimiters) >= 0 || expr.Contains(".mrg.") || expr.Contains(".splice.") || expr.Contains(".i."))
         {
             return $"({expr})";
@@ -131,7 +133,7 @@ public static class ItemSyntaxCompiler
             case ItemNodeType.BaseItem:
                 return BuildBaseItem(card, childrenCompiled);
             case ItemNodeType.Bracket:
-                return BuildBracket(childrenCompiled);
+                return BuildBracket(card, childrenCompiled); // Add the 'card' parameter here
             case ItemNodeType.Operator:
             case ItemNodeType.RawString:
                 return card.MechanicData.PayloadString ?? "";
@@ -233,13 +235,20 @@ public static class ItemSyntaxCompiler
             else if (inner.StartsWith(".")) { op = "."; inner = inner.Substring(1); }
             else { op = "."; }
 
-            // Use WrapIfNeeded to keep atomic elements clean
             return $"{WrapIfNeeded(internalPayload)}{op}{WrapIfNeeded(inner)}";
         }
 
-        return internalPayload;
+        // FIX: Pass the payload through WrapIfNeeded before returning to guarantee
+        // that complex leaf items (like x2.unpack.Candle.part.1.m.2) are bracketed.
+        return WrapIfNeeded(internalPayload);
     }
 
+    /// <summary>
+    /// Compiles a Hat card. 
+    /// NOTE: Facades must be extracted and appended manually by querying the HeroData sides directly.
+    /// Do not use string subtraction/replacement (e.g., fullMods.Replace(innerMods, "")) because 
+    /// overlapping multi-face keywords or delimiters will mismatch, causing massive compilation corruption.
+    /// </summary>
     private static string BuildHat(EntityCard card, string childrenCompiled)
     {
         if (!(card.MechanicData.PayloadData is HeroData heroData)) return "";
@@ -250,13 +259,33 @@ public static class ItemSyntaxCompiler
         string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
         string hatDice = HatNodeDef.GetHatDiceString(heroData);
 
-        // Extract external facades so they can be appended after the hat
-        string fullMods = heroData.BuildFaceModifiers(includeInlineFacades: true);
-        string innerMods = heroData.BuildFaceModifiers(includeInlineFacades: false);
+        // FIX: Extract external facades directly from data to prevent string-subtraction explosions
         string facadeMods = "";
-        if (!string.IsNullOrEmpty(fullMods))
+        string[] faceNames = { "left", "right", "top", "bot", "mid", "rightmost" };
+        List<string> fMods = new List<string>();
+
+        bool allSame = true;
+        string firstFac = GetFacadeOutput(heroData.diceSides[0]);
+        for (int i = 1; i < 6; i++)
         {
-            facadeMods = string.IsNullOrEmpty(innerMods) ? fullMods : fullMods.Replace(innerMods, "");
+            if (GetFacadeOutput(heroData.diceSides[i]) != firstFac) { allSame = false; break; }
+        }
+
+        if (allSame && !string.IsNullOrEmpty(firstFac))
+        {
+            facadeMods = $".facade.{firstFac}";
+        }
+        else
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                string fac = GetFacadeOutput(heroData.diceSides[i]);
+                if (!string.IsNullOrEmpty(fac))
+                {
+                    fMods.Add($"{faceNames[i]}.facade.{fac}");
+                }
+            }
+            if (fMods.Count > 0) facadeMods = "." + string.Join(".", fMods);
         }
 
         string hatCore;
@@ -271,13 +300,36 @@ public static class ItemSyntaxCompiler
             hatCore = $"{prefix}hat.({hatDice})";
         }
 
-        // Append external facade modifiers outside after the hat parentheses
         return $"{hatCore}{facadeMods}";
     }
-    private static string BuildBracket(string childrenCompiled)
+
+    private static string GetFacadeOutput(DiceSideData side)
+    {
+        if (side == null || string.IsNullOrEmpty(side.facadeID)) return null;
+        if (!string.IsNullOrEmpty(side.facadeColor) && side.facadeColor != "0" && side.facadeColor != "0:0:0" && side.facadeColor != "0:0")
+            return $"{side.facadeID}:{side.facadeColor}";
+        return side.facadeID;
+    }
+    private static string BuildBracket(EntityCard card, string childrenCompiled)
     {
         if (string.IsNullOrWhiteSpace(childrenCompiled)) return string.Empty;
-        return $"({childrenCompiled})";
+
+        // Perfectly reconstruct the wrapper node matching Engine Export logic
+        List<string> parts = new List<string>();
+        if (card.MechanicData.Targets != null && card.MechanicData.Targets.Count > 0) parts.AddRange(card.MechanicData.Targets);
+        if (card.MechanicData.RepeatTimes != 1) parts.Add($"x{card.MechanicData.RepeatTimes}");
+        if (card.MechanicData.PerTier) parts.Add("pertier");
+        if (card.MechanicData.Unpack) parts.Add("unpack");
+        if (!string.IsNullOrEmpty(card.MechanicData.Prefix)) parts.Add(card.MechanicData.Prefix);
+
+        parts.Add($"({childrenCompiled})");
+
+        if (card.MechanicData.PartIndex.HasValue) parts.Add($"part.{card.MechanicData.PartIndex.Value}");
+        if (card.MechanicData.Multiplier != 1) parts.Add($"m{card.MechanicData.Multiplier}");
+        if (!string.IsNullOrEmpty(card.MechanicData.MergedItem)) parts.Add($"mrg.{card.MechanicData.MergedItem}");
+        if (!string.IsNullOrEmpty(card.MechanicData.SplicedItem)) parts.Add($"splice.{card.MechanicData.SplicedItem}");
+
+        return string.Join(".", parts);
     }
 
     // --- UTILITIES & SANITIZATION ---

@@ -26,6 +26,56 @@ public class MonsterData : EntityData
     [Header("Monster Modifiers")]
     public string bal;
 
+    [System.NonSerialized]
+    private List<ItemData> _itemPipeline = new List<ItemData>();
+
+    public override void Parse(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data)) return;
+        customTriggerHPs = new List<TriggerHPData>();
+        customOnHits = new List<OnHitData>();
+        customPayloads = new List<CustomPayload>();
+        _itemPipeline.Clear();
+
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
+        string core = StaticBranchTracing.StripOuterParens(chunks[0]);
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
+
+        bool isFirstToken = true;
+        ExtractKnowledge(tokens, isFirstToken);
+        ExecuteItemPipeline();
+
+    }
+
+    protected override int GetEndOfBlockIndex(List<string> tokens, int startIndex)
+    {
+        int endIndex = startIndex;
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+
+            if (peek == "i" || peek == "t" || peek == "triggerhpdata" || peek == "onhitdata" || peek == "orb" || peek == "sd")
+            {
+                break;
+            }
+
+            if (MonsterDomainRules.MonsterPropertyKeys.Contains(peek))
+            {
+                if (peek == "hp" && endIndex + 1 < tokens.Count)
+                {
+                    if (int.TryParse(tokens[endIndex + 1], out _)) break;
+                }
+                else if (peek == "n" || peek == "img" || peek == "doc" || peek == "bal" ||
+                         peek == "hsv" || peek == "hue" || peek == "thue" || peek == "p" ||
+                         peek == "b" || peek == "draw" || peek == "rect")
+                {
+                    break;
+                }
+            }
+            endIndex++;
+        }
+        return endIndex;
+    }
     public static string Export(MonsterData monster)
     {
         if (monster == null) return string.Empty;
@@ -76,24 +126,6 @@ public class MonsterData : EntityData
         if (!string.IsNullOrEmpty(monster.bal)) sb.Append($".bal.{FormatName(monster.bal)}");
 
         return sb.ToString();
-    }
-
-    public override void Parse(string data)
-    {
-        if (string.IsNullOrWhiteSpace(data)) return;
-
-        customTriggerHPs = new List<TriggerHPData>();
-        customOnHits = new List<OnHitData>();
-        customPayloads = new List<CustomPayload>();
-
-        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
-        string core = StaticBranchTracing.StripOuterParens(chunks[0]);
-
-        // FIX: Do NOT split by '#' at the top level. Process as a single chain.
-        List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
-
-        bool isFirstToken = true;
-        ExtractKnowledge(tokens, isFirstToken);
     }
     private void ExtractKnowledge(List<string> tokens, bool isFirstToken)
     {
@@ -201,37 +233,27 @@ public class MonsterData : EntityData
                 continue;
             }
 
-            // FIXED: Inline robust item parser that preserves '#' chains
             if (tokenLower == "i")
             {
                 int startIndex = i + 1;
                 if (startIndex >= tokens.Count) continue;
 
-                int endIndex = startIndex;
-                while (endIndex < tokens.Count)
-                {
-                    string peek = tokens[endIndex].ToLower();
-                    if (MonsterDomainRules.MonsterPropertyKeys.Contains(peek)) break;
-                    endIndex++;
-                }
-
+                int endIndex = GetEndOfBlockIndex(tokens, startIndex);
                 int count = endIndex - startIndex;
+
                 if (count > 0)
                 {
                     List<string> itemTokens = tokens.GetRange(startIndex, count);
                     string itemString = string.Join(".", itemTokens);
                     i = endIndex - 1;
 
-                    if (itemString.Contains("("))
-                    {
-                        ItemData customItem = new ItemData();
-                        customItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
-                        customPayloads.Add(new CustomPayload { Prefix = "i", Data = customItem });
-                    }
-                    else
-                    {
-                        items.Add(itemString);
-                    }
+                    ItemData parsedItem = new ItemData();
+                    parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
+
+                    if (string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0)
+                        parsedItem.entityName = itemString;
+
+                    _itemPipeline.Add(parsedItem);
                 }
                 continue;
             }
@@ -242,7 +264,6 @@ public class MonsterData : EntityData
             }
         }
     }
-
     public void DebugContentsToConsoleCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -305,4 +326,25 @@ public class MonsterData : EntityData
         UnityEngine.Debug.Log($"{indent}--- MONSTER DATA DEBUG (COMPACT) ---\n" + sb.ToString());
     }
 
+
+    /*
+         public override void Parse(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data)) return;
+
+        customTriggerHPs = new List<TriggerHPData>();
+        customOnHits = new List<OnHitData>();
+        customPayloads = new List<CustomPayload>();
+
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
+        string core = StaticBranchTracing.StripOuterParens(chunks[0]);
+
+        // FIX: Do NOT split by '#' at the top level. Process as a single chain.
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
+
+        bool isFirstToken = true;
+        ExtractKnowledge(tokens, isFirstToken);
+    }
+
+    */
 }
