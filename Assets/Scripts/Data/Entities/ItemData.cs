@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
 
 /// <summary>
 /// Central authority for custom item domain parsing rules, syntax token definitions, and structural grammar constraints.
@@ -38,6 +37,13 @@ using System.Threading;
 /// 
 /// ============================================================================================
 /// </summary>
+
+
+// DO NOT FORGET: CRITICAL
+// YOU CANNOT WORK IN THIS CLASS WITHOUT SEEING ItemSyntaxCompiler.CS
+// AND ITEMDATA.CS
+// AND STRATEGYPATTERNNODES.CS WHICH CONTAINS AuthoringNodeDef!!
+
 
 public static class ItemDomainRules
 {
@@ -721,9 +727,82 @@ public class ItemData : SDData
             optimizedMechanics.Add(clonedMech);
         }
 
-        foreach (var mech in optimizedMechanics)
+        // --- EXPORT & CHAINING LOGIC ---
+        if (optimizedMechanics.Count > 0)
         {
-            chainParts.Add(mech.Export());
+            StringBuilder mechsSb = new StringBuilder();
+            List<string> lastTargets = null;
+            bool lastPerTier = false;
+            bool lastUnpack = false;
+
+            for (int i = 0; i < optimizedMechanics.Count; i++)
+            {
+                var mech = optimizedMechanics[i];
+                bool targetsMatch = false;
+
+                if (lastTargets != null && mech.Targets.Count == lastTargets.Count)
+                {
+                    targetsMatch = true;
+                    foreach (var t in mech.Targets)
+                    {
+                        if (!lastTargets.Contains(t))
+                        {
+                            targetsMatch = false;
+                            break;
+                        }
+                    }
+                }
+
+                bool safeToChain = targetsMatch;
+                if (safeToChain)
+                {
+                    // Do not falsely propagate scaling rules down the chain 
+                    if (lastPerTier && !mech.PerTier) safeToChain = false;
+                    if (lastUnpack && !mech.Unpack) safeToChain = false;
+                }
+
+                List<string> currentTargets = new List<string>(mech.Targets);
+                bool currentPerTier = mech.PerTier;
+                bool currentUnpack = mech.Unpack;
+
+                string exportedMech = mech.Export();
+
+                if (i == 0)
+                {
+                    // FIRST MECHANIC RULE:
+                    // It is strictly illegal for a naked side declaration (e.g. 'right.sticker') 
+                    // to begin an item sequence. It MUST be preceded by the 'i.' modifier boundary.
+                    if (exportedMech.StartsWith("i."))
+                    {
+                        mechsSb.Append(exportedMech); // Already prefixed natively (e.g., untargeted modifier)
+                    }
+                    else
+                    {
+                        mechsSb.Append("i.").Append(exportedMech); // Enforce strict boundary
+                    }
+                }
+                else
+                {
+                    if (safeToChain)
+                    {
+                        // Inherit targets via '#', clear explicit targets from export to prevent redeclaring side words
+                        mech.Targets.Clear();
+                        mechsSb.Append("#").Append(mech.Export());
+                    }
+                    else
+                    {
+                        // Context shift requires a clean boundary delimiter
+                        mechsSb.Append(".i.").Append(exportedMech);
+                    }
+                }
+
+                lastTargets = currentTargets;
+                lastPerTier = currentPerTier;
+                lastUnpack = currentUnpack;
+            }
+
+            // Append the entire formatted mechanic block to the parent chain parts array
+            chainParts.Add(mechsSb.ToString());
         }
     }
 

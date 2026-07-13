@@ -4,6 +4,28 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
+// ============================================================================================
+// CRITICAL ARCHITECTURAL CONSTRAINT & AI DEVELOPER GUIDELINE - DO NOT REMOVE
+// ============================================================================================
+// DO NOT SILENTLY ASSUME OR ALTER THE DICE FACE INDEX LAYOUT! 
+// THE CODES, ALIASES, AND BITMASKS ARE RIGIDLY TIED TO THE GAME ENGINE AND MUST NEVER BE ASSUMED.
+//
+// THE INDICES OF THE 6 DICE SIDES ARE DEFINED STRICTLY AS:
+//   Index 0: Left
+//   Index 1: Middle (mid)
+//   Index 2: Top (top)
+//   Index 3: Bottom (bot)
+//   Index 4: Right (right)
+//   Index 5: Rightmost (rightmost)
+//
+// ANY TRANSLATION BETWEEN SIDE NAMES/ALIASES AND INDICES *MUST* USE 'DiceTargetHelper' METHODS:
+//   - DiceTargetHelper.GetIndicesForTarget(target)
+//   - DiceTargetHelper.GetBestAliasCombination(mask)
+//
+// DO NOT hardcode direct translations (e.g. assuming index 4 is 'mid' or index 1 is 'right').
+// Doing so violates engine rules and corrupts hero/item properties on export.
+// ============================================================================================
+
 public static class ItemSyntaxCompiler
 {
     /// <summary>
@@ -255,45 +277,125 @@ public static class ItemSyntaxCompiler
 
         var validTargets = card.MechanicData.Targets?.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
         string targets = (validTargets != null && validTargets.Count > 0) ? string.Join(".", validTargets) : "left";
-
         string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
         string hatDice = HatNodeDef.GetHatDiceString(heroData);
 
-        // FIX: Extract external facades directly from data to prevent string-subtraction explosions
-        string facadeMods = "";
-        string[] faceNames = { "left", "right", "top", "bot", "mid", "rightmost" };
-        List<string> fMods = new List<string>();
-
-        bool allSame = true;
-        string firstFac = GetFacadeOutput(heroData.diceSides[0]);
-        for (int i = 1; i < 6; i++)
+        // 1. Calculate the target mask of the Hat itself
+        int hatMask = 63; // Defaults to 'all'
+        if (validTargets != null && validTargets.Count > 0 && !validTargets.Contains("all", StringComparer.OrdinalIgnoreCase))
         {
-            if (GetFacadeOutput(heroData.diceSides[i]) != firstFac) { allSame = false; break; }
-        }
-
-        if (allSame && !string.IsNullOrEmpty(firstFac))
-        {
-            facadeMods = $".facade.{firstFac}";
-        }
-        else
-        {
-            for (int i = 0; i < 6; i++)
+            hatMask = 0;
+            foreach (var t in validTargets)
             {
-                string fac = GetFacadeOutput(heroData.diceSides[i]);
-                if (!string.IsNullOrEmpty(fac))
-                {
-                    fMods.Add($"{faceNames[i]}.facade.{fac}");
-                }
+                var alias = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.name != null && a.name.Equals(t, StringComparison.OrdinalIgnoreCase));
+                if (alias.name != null) hatMask |= alias.mask;
             }
-            if (fMods.Count > 0) facadeMods = "." + string.Join(".", fMods);
         }
 
-        string hatCore;
+        // 2. Identify which faces have Facades and build their combined mask
+        int facadeMask = 0;
+        string sharedFacade = null;
+        bool multipleDistinctFacades = false;
+
+        for (int i = 0; i < 6; i++)
+        {
+            string fac = GetFacadeOutput(heroData.diceSides[i]);
+            if (!string.IsNullOrEmpty(fac))
+            {
+                facadeMask |= (1 << i);
+                if (sharedFacade == null) sharedFacade = fac;
+                else if (sharedFacade != fac) multipleDistinctFacades = true;
+            }
+        }
+
+        // 3. Intelligently format the Facade string based on mask alignment
+        string facadeMods = "";
+        if (facadeMask != 0)
+        {
+            if (facadeMask == hatMask && !multipleDistinctFacades)
+            {
+                facadeMods = $"#facade.{sharedFacade}";
+            }
+            else if (facadeMask == 63 && !multipleDistinctFacades)
+            {
+                facadeMods = $".facade.{sharedFacade}";
+            }
+            else
+            {
+                List<string> fMods = new List<string>();
+                for (int i = 0; i < 6; i++)
+                {
+                    string fac = GetFacadeOutput(heroData.diceSides[i]);
+                    if (!string.IsNullOrEmpty(fac))
+                    {
+                        fMods.Add($"{DiceTargetHelper.FaceNames[i]}.facade.{fac}");
+                    }
+                }
+                facadeMods = "." + string.Join(".", fMods);
+            }
+        }
+
+        string hatCore = "";
         if (!string.IsNullOrWhiteSpace(childrenCompiled))
         {
             string inner = childrenCompiled.Trim();
             if (inner.StartsWith(".")) inner = inner.Substring(1);
-            hatCore = $"{prefix}hat.({hatDice}.i.{inner})";
+
+            // ====================================================================================
+            // CONTEXTUAL MERGE OPTIMIZATION:
+            // Prevents strings from bloating into verbose '.i.' boundaries if the inner
+            // items can seamlessly inherit the target side of the Hat's native sticker.
+            // ====================================================================================
+            string rawInner = inner;
+            if (rawInner.StartsWith("(") && rawInner.EndsWith(")"))
+            {
+                rawInner = rawInner.Substring(1, rawInner.Length - 2);
+            }
+
+            string firstTarget = null;
+            foreach (var face in DiceTargetHelper.FaceNames)
+            {
+                if (rawInner.StartsWith($"{face}.", StringComparison.OrdinalIgnoreCase))
+                {
+                    firstTarget = face;
+                    break;
+                }
+            }
+
+            bool mergedSuccessfully = false;
+
+            // If the inner string explicitly targets a face, check if we can chain it to the native sticker
+            if (!string.IsNullOrEmpty(firstTarget))
+            {
+                string expectedStickerPrefix = $".i.{firstTarget}.sticker.";
+                int stickerIdx = hatDice.LastIndexOf(expectedStickerPrefix, StringComparison.OrdinalIgnoreCase);
+
+                // Verify the sticker is the last block appended to hatDice so we can safely chain to it
+                if (stickerIdx >= 0 && !hatDice.Substring(stickerIdx + expectedStickerPrefix.Length).Contains(".i."))
+                {
+                    string[] innerChains = rawInner.Split('#');
+                    for (int c = 0; c < innerChains.Length; c++)
+                    {
+                        // Strip redundant targets from subsequent chained items so they inherit properly via '#'
+                        if (innerChains[c].StartsWith($"{firstTarget}.", StringComparison.OrdinalIgnoreCase))
+                        {
+                            innerChains[c] = innerChains[c].Substring(firstTarget.Length + 1);
+                        }
+                    }
+
+                    string optimizedInner = string.Join("#", innerChains);
+
+                    // Chain them with AND (#) instead of injecting the Boundary (.i.)
+                    hatCore = $"{prefix}hat.({hatDice}#{optimizedInner})";
+                    mergedSuccessfully = true;
+                }
+            }
+
+            if (!mergedSuccessfully)
+            {
+                // Fallback for distinct contexts that genuinely require a boundary reset
+                hatCore = $"{prefix}hat.({hatDice}.i.{inner})";
+            }
         }
         else
         {
@@ -306,10 +408,20 @@ public static class ItemSyntaxCompiler
     private static string GetFacadeOutput(DiceSideData side)
     {
         if (side == null || string.IsNullOrEmpty(side.facadeID)) return null;
-        if (!string.IsNullOrEmpty(side.facadeColor) && side.facadeColor != "0" && side.facadeColor != "0:0:0" && side.facadeColor != "0:0")
-            return $"{side.facadeID}:{side.facadeColor}";
-        return side.facadeID;
+
+        // If the color is null, empty, or a zero-variant, return with the required :0 suffix
+        if (string.IsNullOrEmpty(side.facadeColor) ||
+            side.facadeColor == "0" ||
+            side.facadeColor == "0:0" ||
+            side.facadeColor == "0:0:0")
+        {
+            return $"{side.facadeID}:0";
+        }
+
+        // Otherwise, append the custom HSV color values
+        return $"{side.facadeID}:{side.facadeColor}";
     }
+
     private static string BuildBracket(EntityCard card, string childrenCompiled)
     {
         if (string.IsNullOrWhiteSpace(childrenCompiled)) return string.Empty;

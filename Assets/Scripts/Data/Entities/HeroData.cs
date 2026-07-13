@@ -79,7 +79,7 @@ public class HeroData : EntityData
         customSpells = new List<SpellData>();
         customTactics = new List<TacticData>();
         customOnHits = new List<OnHitData>();
-        customTriggerHPs = new List<TriggerHPData>(); 
+        customTriggerHPs = new List<TriggerHPData>();
         customPayloads = new List<CustomPayload>();
         customOrbs = new List<OrbData>();
         thue = new Thue();
@@ -578,6 +578,7 @@ public class HeroData : EntityData
         return endIndex;
     }
 
+}
     /*
     public override void Parse(string data)
     {
@@ -949,4 +950,3 @@ public class HeroData : EntityData
         }
     }
     */
-}

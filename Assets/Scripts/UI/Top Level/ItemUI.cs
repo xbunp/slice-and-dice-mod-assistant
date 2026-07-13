@@ -734,8 +734,8 @@ public class ItemUI : RootUI
     private void ApplyFacadeToHeroData(HeroData heroData, string facadePayload)
     {
         string[] tokens = facadePayload.Split('.');
-        string targetFace = "all"; // Defaults to all faces
-        string facadeId = "";
+        string targetFace = "all";
+        string rawFacadeToken = "";
 
         for (int j = 0; j < tokens.Length; j++)
         {
@@ -746,18 +746,30 @@ public class ItemUI : RootUI
             }
             if (tokenLower == "facade" && j + 1 < tokens.Length)
             {
-                facadeId = tokens[j + 1];
+                rawFacadeToken = tokens[j + 1];
             }
         }
 
-        if (!string.IsNullOrEmpty(facadeId))
+        if (!string.IsNullOrEmpty(rawFacadeToken))
         {
+            // Split the facade ID and the color argument
+            string finalId = rawFacadeToken;
+            string finalColor = "0";
+
+            int colonIndex = rawFacadeToken.IndexOf(':');
+            if (colonIndex >= 0)
+            {
+                finalId = rawFacadeToken.Substring(0, colonIndex);
+                finalColor = rawFacadeToken.Substring(colonIndex + 1);
+            }
+
             if (targetFace == "all")
             {
                 for (int i = 0; i < 6; i++)
                 {
                     if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
-                    heroData.diceSides[i].facadeID = facadeId;
+                    heroData.diceSides[i].facadeID = finalId;
+                    heroData.diceSides[i].facadeColor = finalColor;
                 }
             }
             else
@@ -766,7 +778,8 @@ public class ItemUI : RootUI
                 if (faceIndex >= 0 && faceIndex < 6)
                 {
                     if (heroData.diceSides[faceIndex] == null) heroData.diceSides[faceIndex] = new DiceSideData();
-                    heroData.diceSides[faceIndex].facadeID = facadeId;
+                    heroData.diceSides[faceIndex].facadeID = finalId;
+                    heroData.diceSides[faceIndex].facadeColor = finalColor;
                 }
             }
         }

@@ -34,6 +34,29 @@ public abstract class EntityData : SDData, IPayloadContainer
     public List<string> blessings = new List<string>();
     public List<string> curses = new List<string>();
     public List<string> baseAbilityData = new List<string>();
+
+    // ============================================================================================
+    // CRITICAL ARCHITECTURAL CONSTRAINT & AI DEVELOPER GUIDELINE - DO NOT REMOVE
+    // ============================================================================================
+    // DO NOT SILENTLY ASSUME OR ALTER THE DICE FACE INDEX LAYOUT! 
+    // THE CODES, ALIASES, AND BITMASKS ARE RIGIDLY TIED TO THE GAME ENGINE AND MUST NEVER BE ASSUMED.
+    //
+    // THE INDICES OF THE 6 DICE SIDES ARE DEFINED STRICTLY AS:
+    //   Index 0: Left
+    //   Index 1: Middle (mid)
+    //   Index 2: Top (top)
+    //   Index 3: Bottom (bot)
+    //   Index 4: Right (right)
+    //   Index 5: Rightmost (rightmost)
+    //
+    // ANY TRANSLATION BETWEEN SIDE NAMES/ALIASES AND INDICES *MUST* USE 'DiceTargetHelper' METHODS:
+    //   - DiceTargetHelper.GetIndicesForTarget(target)
+    //   - DiceTargetHelper.GetBestAliasCombination(mask)
+    //
+    // DO NOT hardcode direct translations (e.g. assuming index 4 is 'mid' or index 1 is 'right').
+    // Doing so violates engine rules and corrupts hero/item properties on export.
+    // ============================================================================================
+
     public DiceSideData[] diceSides = new DiceSideData[6];
 
     // Change from [SerializeField] public List<SpellData> customSpells;

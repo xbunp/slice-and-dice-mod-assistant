@@ -71,93 +71,30 @@ public class HatNodeDef : AuthoringNodeDef
     private DiceSideData _diceClipboard = null;
     private DiceFacesPreviewUI _previewUI;
     private int _currentMask = 1; // Default (left)
-    /*
-    public override string Compile(EntityCard card)
-    {
-        if (!(card.MechanicData.PayloadData is HeroData heroData))
-        {
-            heroData = new HeroData();
-            heroData.InitializeDiceFaces();
-            card.MechanicData.PayloadData = heroData;
-        }
 
-        // 1. Determine Target Prefix
-        string defaultAliasName = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.mask == _currentMask).name ?? "left";
-        string targets = card.MechanicData.Targets.Count > 0 ? string.Join(".", card.MechanicData.Targets) : defaultAliasName;
-
-        bool isAll = targets.Equals("all", StringComparison.OrdinalIgnoreCase);
-        string prefix = isAll ? "" : $"{targets}.";
-
-        // 2. Generate Hat Core
-        string hatCore = $"hat.({GetHatDiceString(heroData)})";
-
-        // 3. Append Child Modifiers
-        string childModifiers = StringAuthoringUIManager.CompileZone(card.PayloadPort?.Entrants.Cast<EntityCard>() ?? new List<EntityCard>());
-
-        if (!string.IsNullOrWhiteSpace(childModifiers))
-        {
-            if (childModifiers.StartsWith(".")) childModifiers = childModifiers.Substring(1);
-            return $"{prefix}{hatCore}.i.({childModifiers})";
-        }
-
-        return $"{prefix}{hatCore}";
-    }
-    */
-    /*
-    public static string GetHatDiceString(HeroData heroData)
-    {
-        StringBuilder sb = new StringBuilder();
-
-        // Use your base name without "replica."
-        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Statue" : heroData.baseReplica;
-        sb.Append(baseName);
-
-        // 1. Append the .sd. block using your exact AppendDiceSides logic
-        int lastActiveIndex = -1;
-        for (int i = 0; i < 6; i++)
-        {
-            if (heroData.diceSides[i] != null && (heroData.diceSides[i].effectID != 0 || heroData.diceSides[i].pips != 0))
-            {
-                lastActiveIndex = i;
-            }
-        }
-
-        if (lastActiveIndex != -1)
-        {
-            sb.Append(".sd.");
-            for (int i = 0; i <= lastActiveIndex; i++)
-            {
-                var side = heroData.diceSides[i];
-                if (side == null || (side.effectID == 0 && side.pips == 0))
-                {
-                    sb.Append("0");
-                }
-                else
-                {
-                    if (side.pips == 0)
-                    {
-                        sb.Append(side.effectID);
-                    }
-                    else
-                    {
-                        sb.Append($"{side.effectID}-{side.pips}");
-                    }
-                }
-
-                if (i < lastActiveIndex) sb.Append(":");
-            }
-        }
-
-        // 2. Call your native method directly to append the Facades, HSV parameters, and Keywords perfectly
-        string faceModifiers = heroData.BuildFaceModifiers(allowFacade: true);
-        if (!string.IsNullOrEmpty(faceModifiers))
-        {
-            sb.Append(faceModifiers);
-        }
-
-        return sb.ToString();
-    }
-    */
+    // ============================================================================================
+    // CRITICAL AI DEVELOPER GUIDELINE - READ BEFORE WRITING ANY CODE
+    // ============================================================================================
+    // NEVER WRITE MANUAL SWITCH STATEMENTS OR HARDCODED ARRAYS TO TRANSLATE DICE FACE INDICES.
+    // THE ENGINE'S DICE LAYOUT IS NON-STANDARD AND HIGHLY SPECIFIC. 
+    // 
+    // IF YOU ASSUME INDEX 1 IS "RIGHT" AND INDEX 4 IS "MID", YOU WILL CORRUPT THE GAME DATA.
+    //
+    // STRICT LAYOUT:
+    //   [0] = left       (Mask: 1)
+    //   [1] = mid        (Mask: 2)
+    //   [2] = top        (Mask: 4)
+    //   [3] = bot        (Mask: 8)
+    //   [4] = right      (Mask: 16)
+    //   [5] = rightmost  (Mask: 32)
+    //
+    // RULES FOR AI:
+    // 1. To get an Index from a String: ALWAYS use DiceTargetHelper.GetIndicesForTarget(string)
+    // 2. To get a String from an Index: ALWAYS use DiceTargetHelper.FaceNames[i]
+    // 3. To get a String from a Bitmask: ALWAYS use DiceTargetHelper.GetBestAliasCombination(mask)
+    // 
+    // DO NOT ATTEMPT TO RECREATE THIS LOGIC IN OTHER FILES. ALWAYS CALL THE HELPER.
+    // ============================================================================================
 
     public static string GetHatDiceString(HeroData heroData)
     {
@@ -197,7 +134,6 @@ public class HatNodeDef : AuthoringNodeDef
         }
 
         // 2. Append standard Facades, HSV, and Keywords
-        // 
         string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
         if (!string.IsNullOrEmpty(faceModifiers))
         {
@@ -205,7 +141,6 @@ public class HatNodeDef : AuthoringNodeDef
         }
 
         // 3. NATIVE STICKER APPENDING: Automatically output sticker modifiers per side
-        string[] sideTargets = new string[] { "left", "right", "top", "bot", "mid", "rightmost" };
         for (int i = 0; i < 6; i++)
         {
             DiceSideData side = heroData.diceSides[i];
@@ -217,7 +152,11 @@ public class HatNodeDef : AuthoringNodeDef
                 {
                     cleanSticker = $"({cleanSticker})";
                 }
-                sb.Append($".{sideTargets[i]}.sticker.{cleanSticker}");
+
+                string targetName = DiceTargetHelper.FaceNames[i];
+
+                // FIX: Injected the required 'i.' boundary before the side target declaration
+                sb.Append($".i.{targetName}.sticker.{cleanSticker}");
             }
         }
 
