@@ -196,7 +196,21 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
 
-            // 3. Facade processing happens after standard keywords
+            // 3. Dynamic Payloads (Sticker, Cast, Enchant, Egg)
+            if (face.faceType != DiceSideData.DiceFaceType.Base && !string.IsNullOrWhiteSpace(face.payload))
+            {
+                string payloadStr = face.payload.Trim();
+                string prefix = face.faceType.ToString().ToLower();
+
+                // Wrap in brackets if it's a complex item syntax, otherwise keep clean
+                if (!payloadStr.StartsWith("(") && (payloadStr.Contains(".") || payloadStr.Contains("#") || payloadStr.Contains(":")))
+                {
+                    payloadStr = $"({payloadStr})";
+                }
+                chunks.Add($"{prefix}.{payloadStr}");
+            }
+
+            // 4. Facade processing happens after standard keywords and payloads
             if (includeInlineFacades && !string.IsNullOrWhiteSpace(face.facadeID))
             {
                 string facStr = $"facade.{face.facadeID.Trim()}";
@@ -229,7 +243,7 @@ public abstract class EntityData : SDData, IPayloadContainer
                 chunks.Add(facStr);
             }
 
-            // 4. MUST BE LAST: Check and add stasis after everything, including facades
+            // 5. MUST BE LAST: Check and add stasis after everything, including facades
             if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("stasis", StringComparison.OrdinalIgnoreCase)))
             {
                 chunks.Add("k.stasis");
@@ -651,7 +665,8 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
             else if (lowerPrefix == "sticker")
             {
-                diceSides[faceIdx].sticker = payload;
+                diceSides[faceIdx].faceType = DiceSideData.DiceFaceType.Sticker;
+                diceSides[faceIdx].payload = payload;
             }
         }
     }

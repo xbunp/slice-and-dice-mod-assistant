@@ -714,7 +714,8 @@ public class ItemUI : RootUI
             if ((mask & (1 << i)) != 0)
             {
                 if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
-                heroData.diceSides[i].sticker = mech.PayloadString;
+                heroData.diceSides[i].faceType = DiceSideData.DiceFaceType.Sticker;
+                heroData.diceSides[i].payload = mech.PayloadString;
             }
         }
     }

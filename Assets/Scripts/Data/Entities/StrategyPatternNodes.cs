@@ -68,9 +68,10 @@ public class HatNodeDef : AuthoringNodeDef
     private LayoutElement _mainContainerLayoutElement;
 
     private int _currentDiceTab = 0;
-    private DiceSideData _diceClipboard = null;
     private DiceFacesPreviewUI _previewUI;
     private int _currentMask = 1; // Default (left)
+
+    private DiceFaceBuilderWidget _diceWidget;
 
     // ============================================================================================
     // CRITICAL AI DEVELOPER GUIDELINE - READ BEFORE WRITING ANY CODE
@@ -144,9 +145,9 @@ public class HatNodeDef : AuthoringNodeDef
         for (int i = 0; i < 6; i++)
         {
             DiceSideData side = heroData.diceSides[i];
-            if (side != null && !string.IsNullOrWhiteSpace(side.sticker))
+            if (side != null && side.faceType == DiceSideData.DiceFaceType.Sticker && !string.IsNullOrWhiteSpace(side.payload))
             {
-                string cleanSticker = side.sticker.Trim();
+                string cleanSticker = side.payload.Trim();
                 // Wrap in brackets if it's a complex item syntax, otherwise keep clean
                 if (!cleanSticker.StartsWith("(") && (cleanSticker.Contains(".") || cleanSticker.Contains("#") || cleanSticker.Contains(":")))
                 {
@@ -183,6 +184,18 @@ public class HatNodeDef : AuthoringNodeDef
             heroData.InitializeDiceFaces();
             card.MechanicData.PayloadData = heroData;
         }
+
+        // Initialize the generic dice widget
+        _diceWidget = new DiceFaceBuilderWidget(
+            getDiceSides: () => heroData.diceSides,
+            allowFacades: () => true,
+            openBaseModal: (idx) => OpenBaseModal(idx, heroData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); }),
+            openFacadeModal: (idx) => OpenFacadeModal(idx, heroData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); }),
+            getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
+            getFacadeSprite: (facId) => EntityUIHelpers.GetFacadeSprite(facId),
+            onStateChanged: () => { ui.AutoCompile(); UpdateHatDiceUIFromData(heroData); },
+            onRebuildRequested: () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); }
+        );
 
         // Initialize current mask from targets
         string defaultAliasName = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.mask == _currentMask).name ?? "left";
@@ -230,30 +243,6 @@ public class HatNodeDef : AuthoringNodeDef
             }
         }
 
-        /*
-        // CONSTRAIN BUTTON SIZE: Instantiate and restrict button height so it doesn't overlap
-        GameObject btnAllObj = UnityEngine.Object.Instantiate(fsg.buttonPrefab, containerObj.transform, false);
-
-        LayoutElement btnLayout = btnAllObj.GetComponent<LayoutElement>() ?? btnAllObj.AddComponent<LayoutElement>();
-        btnLayout.minHeight = 30f;
-        btnLayout.preferredHeight = 35f;
-        btnLayout.flexibleHeight = 0f;
-
-        Button btnAll = btnAllObj.GetComponent<Button>();
-        TMP_Text btnAllText = btnAllObj.GetComponentInChildren<TMP_Text>();
-        if (btnAllText != null)
-        {
-            btnAllText.text = "Edit All Active Faces";
-            btnAllText.fontSize = 14f; // Keep font size readable but compact
-        }
-
-        btnAll.onClick.AddListener(() =>
-        {
-            _currentDiceTab = 0;
-            RebuildHatDiceGrid(ui, card, heroData);
-        });
-        */
-
         // 4. Raw Grid Container Setup
         GameObject gridTargetObj = new GameObject("DiceGridTarget", typeof(RectTransform), typeof(LayoutElement));
         gridTargetObj.transform.SetParent(containerObj.transform, false);
@@ -267,21 +256,19 @@ public class HatNodeDef : AuthoringNodeDef
 
     private void RebuildHatDiceGrid(ItemUI ui, EntityCard card, HeroData heroData)
     {
-        if (_diceGridTarget == null) return;
+        if (_diceGridTarget == null || _diceWidget == null) return;
 
         List<GridRowSpec> diceLayout = GenerateHatDiceLayout(ui, card, heroData, _currentDiceTab);
 
         // Build directly into the raw transform, false disables margin padding
         _diceUI = FullScreenUIGenerator.Instance.RebuildGrid(_diceGridTarget, diceLayout, false);
+        _diceWidget.SetGridReferences(_diceUI);
 
         // Size the internal grid target
         _diceGridLayoutElement.minHeight = _diceUI.TotalHeight;
 
         // Size the master container (Tabs Height + Layout Spacing + Grid Height)
-        //_mainContainerLayoutElement.minHeight = 40f + 10f + _diceUI.TotalHeight;
-
         _mainContainerLayoutElement.minHeight = 35f + 150f + 35f + 10f + _diceUI.TotalHeight;
-
 
         Canvas.ForceUpdateCanvases();
         UpdateHatDiceUIFromData(heroData);
@@ -290,113 +277,20 @@ public class HatNodeDef : AuthoringNodeDef
     private List<GridRowSpec> GenerateHatDiceLayout(ItemUI ui, EntityCard card, HeroData heroData, int tabIndex)
     {
         var layout = new List<GridRowSpec>();
-        string[] keywordOptions = EntityUIHelpers.GetKeywordOptions();
 
         int startIndex = (tabIndex == 0) ? 0 : tabIndex - 1;
         int endIndex = (tabIndex == 0) ? 6 : tabIndex;
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            int index = i;
-            var face = heroData.diceSides[index];
-
             // Add this check to exclude inactive faces:
-            if (tabIndex == 0 && (_currentMask & (1 << index)) == 0) continue;
+            if (tabIndex == 0 && (_currentMask & (1 << i)) == 0) continue;
 
-            string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
+            layout.AddRange(_diceWidget.GenerateLayout(i));
 
-            int totalFaceRows = 8 + face.keywords.Count;
-
-            var diceBgRow = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f));
-            diceBgRow.isBackground = true;
-            diceBgRow.rowSpan = totalFaceRows;
-            layout.Add(diceBgRow);
-
-            layout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f)));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Base:", 0.15f),
-                GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.10f, () => OpenBaseModal(index, heroData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); })),
-                GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { face.effectID = id; ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); } }),
-                GridCellSpec.CreateLabel("Facade:", 0.15f),
-                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.10f, () => OpenFacadeModal(index, heroData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); })),
-                GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.30f, (val) => { face.facadeID = val; ui.AutoCompile(); UpdateHatDiceUIFromData(heroData); })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Pips:", 0.25f),
-                GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => {
-                    if (int.TryParse(val, out int p))
-                    {
-                        face.pips = p;
-                        ui.AutoCompile();
-                        UpdateHatDiceUIFromData(heroData); // <-- ADDED: Refresh the UI graphics
-                    }
-                }),
-                GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => {
-                    face.pips--;
-                    if (_diceUI.Inputs.TryGetValue($"Pips_{index}", out var inp)) inp.SetTextWithoutNotify(face.pips.ToString());
-                    ui.AutoCompile();
-                    UpdateHatDiceUIFromData(heroData); // <-- ADDED: Refresh the UI graphics
-                }),
-                GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => {
-                    face.pips++;
-                    if (_diceUI.Inputs.TryGetValue($"Pips_{index}", out var inp)) inp.SetTextWithoutNotify(face.pips.ToString());
-                    ui.AutoCompile();
-                    UpdateHatDiceUIFromData(heroData); // <-- ADDED: Refresh the UI graphics
-                })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Hue:", 0.30f),
-                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.50f, (val) => UpdateHatFaceHsv(ui, heroData, index, 0, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput($"FacH_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateHatFaceHsv(ui, heroData, index, 0, h); })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Sat:", 0.30f),
-                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.50f, (val) => UpdateHatFaceHsv(ui, heroData, index, 1, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput($"FacS_{index}", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateHatFaceHsv(ui, heroData, index, 1, s); })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Val:", 0.30f),
-                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => UpdateHatFaceHsv(ui, heroData, index, 2, Mathf.RoundToInt(val))),
-                GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateHatFaceHsv(ui, heroData, index, 2, v); })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Sticker Item:", 0.30f),
-                GridCellSpec.CreateInput($"Sticker_{index}", face.sticker ?? "", 0.70f, (val) => {
-                    face.sticker = val;
-                    ui.AutoCompile();
-                })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
-                GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddHatKeywordToFace(ui, card, heroData, index, val))
-            ));
-
-            foreach (var kw in face.keywords)
+            if (tabIndex == 0 && i < 5)
             {
-                string keywordString = kw;
-                string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
-
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
-                    GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => RemoveHatKeywordFromFace(ui, card, heroData, index, keywordString))
-                ));
-            }
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.50f, () => CopyHatDiceFace(heroData, index)),
-                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.50f, () => PasteHatDiceFace(ui, card, heroData, index))
-            ));
-
-            if (tabIndex == 0 && index < 5)
-            {
-                layout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{index}", "", 1.0f)));
+                layout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"Spacer_{i}", "", 1.0f)));
             }
         }
 
@@ -418,6 +312,8 @@ public class HatNodeDef : AuthoringNodeDef
             }
         }
 
+        if (_diceWidget == null) return;
+
         // 2. Loop adjustments for input fields
         int startIndex = (_currentDiceTab == 0) ? 0 : _currentDiceTab - 1;
         int endIndex = (_currentDiceTab == 0) ? 6 : _currentDiceTab;
@@ -427,73 +323,8 @@ public class HatNodeDef : AuthoringNodeDef
             // Skip updating fields for inactive faces if in "All" mode
             if (_currentDiceTab == 0 && (_currentMask & (1 << i)) == 0) continue;
 
-            var face = heroData.diceSides[i];
-            if (_diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
-            if (_diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
-            if (_diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.SetTextWithoutNotify(face.facadeID);
-
-            if (_diceUI.Inputs.TryGetValue($"Sticker_{i}", out var dStk)) dStk.SetTextWithoutNotify(face.sticker ?? "");
-
-            int h = 0, s = 0, v = 0;
-            string[] hsvParts = (face.facadeColor ?? "").Split(':');
-            if (hsvParts.Length > 0 && int.TryParse(hsvParts[0], out int pH)) h = pH;
-            if (hsvParts.Length > 1 && int.TryParse(hsvParts[1], out int pS)) s = pS;
-            if (hsvParts.Length > 2 && int.TryParse(hsvParts[2], out int pV)) v = pV;
-
-            if (_diceUI.Sliders.TryGetValue($"SliH_{i}", out var sliH)) sliH.SetValueWithoutNotify(h);
-            if (_diceUI.Sliders.TryGetValue($"SliS_{i}", out var sliS)) sliS.SetValueWithoutNotify(s);
-            if (_diceUI.Sliders.TryGetValue($"SliV_{i}", out var sliV)) sliV.SetValueWithoutNotify(v);
-
-            if (_diceUI.Inputs.TryGetValue($"FacH_{i}", out var dH)) dH.SetTextWithoutNotify(h != 0 ? h.ToString() : "");
-            if (_diceUI.Inputs.TryGetValue($"FacS_{i}", out var dS)) dS.SetTextWithoutNotify(s != 0 ? s.ToString() : "");
-            if (_diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.SetTextWithoutNotify(v != 0 ? v.ToString() : "");
-
-            if (_diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
-            {
-                SetButtonIcon(baseBtn, EntityUIHelpers.GetBaseSprite(face.effectID));
-            }
-            if (_diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
-            {
-                SetButtonIcon(facBtn, EntityUIHelpers.GetFacadeSprite(face.facadeID));
-            }
-        }
-    }
-
-    private void SetButtonIcon(Button btn, Sprite sprite)
-    {
-        if (btn == null) return;
-
-        ImageButton imgBtn = btn.GetComponent<ImageButton>();
-        if (imgBtn != null && imgBtn.image != null)
-        {
-            if (sprite != null)
-            {
-                imgBtn.image.sprite = sprite;
-                imgBtn.image.gameObject.SetActive(true);
-            }
-            else
-            {
-                imgBtn.image.sprite = null;
-                imgBtn.image.gameObject.SetActive(false);
-            }
-            return;
-        }
-
-        Transform iconTransform = btn.transform.Find("Icon");
-        Image targetImg = iconTransform != null ? iconTransform.GetComponent<Image>() : btn.image;
-
-        if (targetImg != null)
-        {
-            if (sprite != null)
-            {
-                targetImg.sprite = sprite;
-                targetImg.color = Color.white;
-            }
-            else
-            {
-                targetImg.sprite = null;
-                targetImg.color = new Color(1, 1, 1, 0.2f);
-            }
+            _diceWidget.UpdateUIFromData(i);
+            _diceWidget.UpdateVisuals(i);
         }
     }
 
@@ -604,77 +435,6 @@ public class HatNodeDef : AuthoringNodeDef
             }
         };
         iconPicker.OpenModal(config);
-    }
-
-    // --- DICE INTERACTION UTILITIES ---
-
-    private void CopyHatDiceFace(HeroData heroData, int index)
-    {
-        _diceClipboard = heroData.diceSides[index].Clone();
-    }
-
-    private void PasteHatDiceFace(ItemUI ui, EntityCard card, HeroData heroData, int index)
-    {
-        if (_diceClipboard == null) return;
-        heroData.diceSides[index] = _diceClipboard.Clone();
-        ui.AutoCompile(); // <-- Added
-        RebuildHatDiceGrid(ui, card, heroData);
-    }
-
-    private void AddHatKeywordToFace(ItemUI ui, EntityCard card, HeroData heroData, int faceIndex, int dropdownValue)
-    {
-        if (dropdownValue <= 0) return;
-        string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
-        string targetKeyword = rawOptions[dropdownValue - 1];
-
-        var face = heroData.diceSides[faceIndex];
-        if (!face.keywords.Contains(targetKeyword))
-        {
-            face.keywords.Add(targetKeyword);
-            ui.AutoCompile(); // <-- Added
-            RebuildHatDiceGrid(ui, card, heroData);
-        }
-    }
-
-    private void RemoveHatKeywordFromFace(ItemUI ui, EntityCard card, HeroData heroData, int faceIndex, string keyword)
-    {
-        var face = heroData.diceSides[faceIndex];
-        if (face.keywords.Remove(keyword))
-        {
-            ui.AutoCompile(); // <-- Added
-            RebuildHatDiceGrid(ui, card, heroData);
-        }
-    }
-
-    private void UpdateHatFaceHsv(ItemUI ui, HeroData heroData, int faceIndex, int componentIndex, int value)
-    {
-        var face = heroData.diceSides[faceIndex];
-        if (string.IsNullOrEmpty(face.facadeID))
-        {
-            Sprite baseSprite = EntityUIHelpers.GetBaseSprite(face.effectID);
-            if (baseSprite != null)
-            {
-                string[] parts = baseSprite.name.Split('_');
-                if (parts.Length >= 2)
-                {
-                    face.facadeID = $"{parts[0]}{parts[1]}";
-                }
-            }
-        }
-
-        string[] partsColor = (face.facadeColor ?? "").Split(':');
-        List<string> hsv = new List<string>(partsColor);
-        while (hsv.Count < 3) hsv.Add("0");
-
-        hsv[componentIndex] = value.ToString();
-        face.facadeColor = string.Join(":", hsv);
-
-        // Update the visible Input Field
-        string inputKey = componentIndex == 0 ? $"FacH_{faceIndex}" : (componentIndex == 1 ? $"FacS_{faceIndex}" : $"FacV_{faceIndex}");
-        if (_diceUI.Inputs.TryGetValue(inputKey, out var input)) input.SetTextWithoutNotify(value != 0 ? value.ToString() : "");
-
-        ui.AutoCompile();
-        UpdateHatDiceUIFromData(heroData);
     }
 
     private void CreateTargetDropdown(Transform parent, ItemUI ui, EntityCard card)

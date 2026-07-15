@@ -46,6 +46,23 @@ public static class StaticUI
 
 public class DiceFaceBuilderWidget
 {
+    public class PayloadType
+    {
+        public string Id { get; set; }
+        public string DisplayName { get; set; }
+        public bool HasBaseAndPips { get; set; }
+        public bool HasStringPayload { get; set; }
+    }
+
+    public static readonly List<PayloadType> RegisteredPayloads = new List<PayloadType>
+    {
+    new PayloadType { Id = "standard", DisplayName = "Standard Base", HasBaseAndPips = true, HasStringPayload = false },
+    new PayloadType { Id = "sticker", DisplayName = "Sticker (Give Item)", HasBaseAndPips = false, HasStringPayload = true },
+    new PayloadType { Id = "cast", DisplayName = "Cast (Ability)", HasBaseAndPips = false, HasStringPayload = true },
+    new PayloadType { Id = "enchant", DisplayName = "Enchant (Give Modifier)", HasBaseAndPips = false, HasStringPayload = true },
+    new PayloadType { Id = "egg", DisplayName = "Egg (Summon)", HasBaseAndPips = false, HasStringPayload = true }
+    };
+
     public static DiceSideData SharedClipboard = null;
     public static readonly List<string> TabNames = new List<string> { "Left", "Middle", "Top", "Bottom", "Right", "Rightmost" };
 
@@ -60,6 +77,7 @@ public class DiceFaceBuilderWidget
     private Action _onRebuildRequested;
 
     private GridReferences _diceUI;
+    //private Dictionary<int, string> _uiFaceTypeOverrides = new Dictionary<int, string>();
 
     public DiceFaceBuilderWidget(
         Func<DiceSideData[]> getDiceSides,
@@ -85,185 +103,6 @@ public class DiceFaceBuilderWidget
     {
         _diceUI = gridRefs;
     }
-    public List<GridRowSpec> GenerateLayout(int tabIndex)
-    {
-        var layout = new List<GridRowSpec>();
-        string[] keywordOptions = EntityUIHelpers.GetKeywordOptions();
-        var sides = _getDiceSides?.Invoke();
-        if (sides == null) return layout;
-
-        int startIndex = Mathf.Clamp(tabIndex, 0, sides.Length - 1);
-        int endIndex = startIndex + 1;
-
-        for (int i = startIndex; i < endIndex; i++)
-        {
-            int index = i;
-            var face = sides[index];
-            string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
-
-            bool allowFac = _allowFacades != null && _allowFacades();
-            int totalFaceRows = (allowFac ? 8 : 5) + face.keywords.Count;
-
-            var diceBgRow = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f));
-            diceBgRow.isBackground = true;
-            diceBgRow.rowSpan = totalFaceRows;
-            layout.Add(diceBgRow);
-
-            layout.Add(new GridRowSpec(GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f)));
-
-            if (allowFac)
-            {
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Base:", 0.15f),
-                    GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.10f, () => _openBaseModal?.Invoke(index)),
-                    GridCellSpec.CreateInput($"ID_{index}", "ID", 0.20f, (val) => {
-                        if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; _onStateChanged?.Invoke(); }
-                        else if (int.TryParse(val, out int id)) { face.effectID = id; _onStateChanged?.Invoke(); }
-                    }),
-                    GridCellSpec.CreateLabel("Facade:", 0.15f),
-                    GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.10f, () => _openFacadeModal?.Invoke(index)),
-                    GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.30f, (val) => { face.facadeID = val; _onStateChanged?.Invoke(); })
-                ));
-            }
-            else
-            {
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Base:", 0.25f),
-                    GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.20f, () => _openBaseModal?.Invoke(index)),
-                    GridCellSpec.CreateLabel("ID:", 0.15f),
-                    GridCellSpec.CreateInput($"ID_{index}", "ID", 0.40f, (val) => {
-                        if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; _onStateChanged?.Invoke(); }
-                        else if (int.TryParse(val, out int id)) { face.effectID = id; _onStateChanged?.Invoke(); }
-                    })
-                ));
-            }
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Pips:", 0.25f),
-                GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) => {
-                    if (string.IsNullOrWhiteSpace(val)) { face.pips = 0; _onStateChanged?.Invoke(); }
-                    else if (int.TryParse(val, out int p)) { face.pips = p; _onStateChanged?.Invoke(); }
-                }),
-                GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => {
-                    face.pips--;
-                    if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
-                        input.SetTextWithoutNotify(face.pips.ToString());
-                    _onStateChanged?.Invoke();
-                }),
-                GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => {
-                    face.pips++;
-                    if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
-                        input.SetTextWithoutNotify(face.pips.ToString());
-                    _onStateChanged?.Invoke();
-                })
-            ));
-
-            if (allowFac)
-            {
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Hue:", 0.30f),
-                    GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 0, Mathf.RoundToInt(val))),
-                    GridCellSpec.CreateInput($"FacH_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateFaceHsv(index, 0, h); })
-                ));
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Sat:", 0.30f),
-                    GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 1, Mathf.RoundToInt(val))),
-                    GridCellSpec.CreateInput($"FacS_{index}", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateFaceHsv(index, 1, s); })
-                ));
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Val:", 0.30f),
-                    GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 2, Mathf.RoundToInt(val))),
-                    GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateFaceHsv(index, 2, v); })
-                ));
-            }
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
-                GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddKeywordToFace(index, val))
-            ));
-
-            foreach (var kw in face.keywords)
-            {
-                string keywordString = kw;
-                string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
-                    GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => RemoveKeywordFromFace(index, keywordString))
-                ));
-            }
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.33f, () => CopyDiceFace(index)),
-                GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.33f, () => PasteDiceFace(index)),
-                GridCellSpec.CreateButton($"BtnClear_{index}", "Clear Dice", 0.33f, () => ClearDiceFace(index))
-            ));
-        }
-
-        return layout;
-    }
-
-    public void UpdateUIFromData(int tabIndex)
-    {
-        if (_diceUI == null) return;
-        var sides = _getDiceSides?.Invoke();
-        if (sides == null) return;
-
-        int startIndex = Mathf.Clamp(tabIndex, 0, sides.Length - 1);
-        int endIndex = startIndex + 1;
-
-        for (int i = startIndex; i < endIndex; i++)
-        {
-            var face = sides[i];
-            if (_diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
-            if (_diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
-
-            if (_allowFacades != null && _allowFacades())
-            {
-                if (_diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.SetTextWithoutNotify(face.facadeID);
-
-                int h = 0, s = 0, v = 0;
-                string[] hsv = (face.facadeColor ?? "").Split(':');
-                if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
-                if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
-                if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
-
-                if (_diceUI.Sliders.TryGetValue($"SliH_{i}", out var sliH)) sliH.SetValueWithoutNotify(h);
-                if (_diceUI.Sliders.TryGetValue($"SliS_{i}", out var sliS)) sliS.SetValueWithoutNotify(s);
-                if (_diceUI.Sliders.TryGetValue($"SliV_{i}", out var sliV)) sliV.SetValueWithoutNotify(v);
-
-                if (_diceUI.Inputs.TryGetValue($"FacH_{i}", out var dH)) dH.SetTextWithoutNotify(h != 0 ? h.ToString() : "");
-                if (_diceUI.Inputs.TryGetValue($"FacS_{i}", out var dS)) dS.SetTextWithoutNotify(s != 0 ? s.ToString() : "");
-                if (_diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.SetTextWithoutNotify(v != 0 ? v.ToString() : "");
-            }
-        }
-    }
-    public void UpdateVisuals(int tabIndex)
-    {
-        if (_diceUI == null || _diceUI.Buttons == null) return;
-        var sides = _getDiceSides?.Invoke();
-        if (sides == null) return;
-
-        int startIndex = Mathf.Clamp(tabIndex, 0, sides.Length - 1);
-        int endIndex = startIndex + 1;
-
-        for (int i = startIndex; i < endIndex; i++)
-        {
-            var face = sides[i];
-
-            if (_diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
-            {
-                Sprite s = _getBaseSprite?.Invoke(face.effectID);
-                StaticUI.SetButtonIcon(baseBtn, s);
-            }
-
-            if (_allowFacades != null && _allowFacades() && _diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
-            {
-                Sprite s = _getFacadeSprite?.Invoke(face.facadeID);
-                StaticUI.SetButtonIcon(facBtn, s);
-            }
-        }
-    }
-
     public void CopyDiceFace(int index)
     {
         var sides = _getDiceSides?.Invoke();
@@ -388,5 +227,446 @@ public class DiceFaceBuilderWidget
         _onStateChanged?.Invoke();
 
         if (facadeAutoAssigned) UpdateUIFromData(faceIndex);
+    }
+
+    private void IncrementPips(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index].pips++;
+            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                input.SetTextWithoutNotify(sides[index].pips.ToString());
+            _onStateChanged?.Invoke();
+        }
+    }
+    private void DecrementPips(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index].pips--;
+            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                input.SetTextWithoutNotify(sides[index].pips.ToString());
+            _onStateChanged?.Invoke();
+        }
+    }
+
+    // --- LAYOUT GENERATION ---
+    public List<GridRowSpec> GenerateLayout(int tabIndex)
+    {
+        var layout = new List<GridRowSpec>();
+        var sides = _getDiceSides?.Invoke();
+        if (sides == null) return layout;
+
+        int startIndex = Mathf.Clamp(tabIndex, 0, sides.Length - 1);
+        int endIndex = startIndex + 1;
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            int index = i;
+            var face = sides[index];
+            string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
+
+            var faceType = GetFaceType(index, face);
+            bool allowFac = _allowFacades != null && _allowFacades();
+
+            var faceRows = new List<GridRowSpec>();
+
+            faceRows.Add(BuildFaceHeader(index, faceName));
+            faceRows.Add(BuildFaceTypeSelector(index, face, faceType));
+
+            // 1. Base
+            if (faceType.HasBaseAndPips) faceRows.Add(BuildBaseRow(index, face));
+
+            // 2. Facade
+            if (allowFac) faceRows.AddRange(BuildFacades(index, face));
+
+            // 3. Pips
+            if (faceType.HasBaseAndPips) faceRows.Add(BuildPipsRow(index, face));
+
+            // 3.5 HSV
+            if (allowFac) faceRows.AddRange(BuildHSV(index, face));
+
+            // 4. Payloads
+            if (faceType.HasStringPayload)
+            {
+                if (faceType.Id == "sticker")
+                {
+                    faceRows.Add(BuildTargetSelector(index, face));
+                    faceRows.AddRange(BuildStickerPayload(index, face, faceType));
+                }
+                else
+                {
+                    faceRows.Add(BuildStringPayload(index, face, faceType));
+                }
+            }
+
+            // 5. Shared Footer Elements
+            faceRows.AddRange(BuildKeywords(index, face));
+            faceRows.Add(BuildClipboardButtons(index));
+
+            var diceBgRow = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgDice_{index}", 1.0f))
+            {
+                isBackground = true,
+                rowSpan = faceRows.Count
+            };
+
+            layout.Add(diceBgRow);
+            layout.AddRange(faceRows);
+        }
+
+        return layout;
+    }
+    public void UpdateUIFromData(int tabIndex)
+    {
+        if (_diceUI == null) return;
+        var sides = _getDiceSides?.Invoke();
+        if (sides == null) return;
+
+        int startIndex = Mathf.Clamp(tabIndex, 0, sides.Length - 1);
+        int endIndex = startIndex + 1;
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            var face = sides[i];
+            var faceType = GetFaceType(i, face);
+
+            // FIX: Force dropdowns to visually display the correct selections!
+            if (_diceUI.Dropdowns.TryGetValue($"FaceTypeDrop_{i}", out var typeDrop))
+            {
+                int typeIndex = RegisteredPayloads.IndexOf(faceType);
+                if (typeIndex >= 0) typeDrop.SetValueWithoutNotify(typeIndex);
+            }
+
+            // Keep the custom item selector defaulted to the placeholder message
+            if (_diceUI.Dropdowns.TryGetValue($"StickerItemDrop_{i}", out var stickerDrop))
+            {
+                stickerDrop.SetValueWithoutNotify(0);
+            }
+
+            if (faceType.HasBaseAndPips)
+            {
+                if (_diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
+                if (_diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
+            }
+
+            if (faceType.HasStringPayload)
+            {
+                if (_diceUI.Inputs.TryGetValue($"PayloadData_{i}", out var pData)) pData.SetTextWithoutNotify(GetFacePayload(face));
+            }
+
+            if (_allowFacades != null && _allowFacades())
+            {
+                if (_diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.SetTextWithoutNotify(face.facadeID);
+
+                int h = 0, s = 0, v = 0;
+                string[] hsv = (face.facadeColor ?? "").Split(':');
+                if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
+                if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
+                if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
+
+                if (_diceUI.Sliders.TryGetValue($"SliH_{i}", out var sliH)) sliH.SetValueWithoutNotify(h);
+                if (_diceUI.Sliders.TryGetValue($"SliS_{i}", out var sliS)) sliS.SetValueWithoutNotify(s);
+                if (_diceUI.Sliders.TryGetValue($"SliV_{i}", out var sliV)) sliV.SetValueWithoutNotify(v);
+
+                if (_diceUI.Inputs.TryGetValue($"FacH_{i}", out var dH)) dH.SetTextWithoutNotify(h != 0 ? h.ToString() : "");
+                if (_diceUI.Inputs.TryGetValue($"FacS_{i}", out var dS)) dS.SetTextWithoutNotify(s != 0 ? s.ToString() : "");
+                if (_diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.SetTextWithoutNotify(v != 0 ? v.ToString() : "");
+            }
+
+            if (_diceUI.Dropdowns.TryGetValue($"PayloadTargetDrop_{i}", out var targetDrop))
+            {
+                int displayVal = face.payloadTarget == null ? 0 : (int)face.payloadTarget.Value + 1;
+                targetDrop.SetValueWithoutNotify(displayVal);
+            }
+        }
+    }
+    public void UpdateVisuals(int tabIndex)
+    {
+        if (_diceUI == null || _diceUI.Buttons == null) return;
+        var sides = _getDiceSides?.Invoke();
+        if (sides == null) return;
+
+        int startIndex = Mathf.Clamp(tabIndex, 0, sides.Length - 1);
+        int endIndex = startIndex + 1;
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            var face = sides[i];
+            var faceType = GetFaceType(i, face);
+
+            if (faceType.HasBaseAndPips && _diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
+            {
+                Sprite s = _getBaseSprite?.Invoke(face.effectID);
+                StaticUI.SetButtonIcon(baseBtn, s);
+            }
+
+            if (_allowFacades != null && _allowFacades() && _diceUI.Buttons.TryGetValue($"FacBtn_{i}", out var facBtn))
+            {
+                Sprite s = _getFacadeSprite?.Invoke(face.facadeID);
+                StaticUI.SetButtonIcon(facBtn, s);
+            }
+        }
+    }
+
+    // --- MODULAR ROW BUILDERS ---
+    private GridRowSpec BuildBaseRow(int index, DiceSideData face)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Base:", 0.25f),
+            GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.20f, () => _openBaseModal?.Invoke(index)),
+            GridCellSpec.CreateLabel("ID:", 0.15f),
+            GridCellSpec.CreateInput($"ID_{index}", "ID", 0.40f, (val) =>
+            {
+                if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; _onStateChanged?.Invoke(); }
+                else if (int.TryParse(val, out int id)) { face.effectID = id; _onStateChanged?.Invoke(); }
+            })
+        );
+    }
+    private GridRowSpec BuildPipsRow(int index, DiceSideData face)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Pips:", 0.25f),
+            GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) =>
+            {
+                if (string.IsNullOrWhiteSpace(val)) { face.pips = 0; _onStateChanged?.Invoke(); }
+                else if (int.TryParse(val, out int p)) { face.pips = p; _onStateChanged?.Invoke(); }
+            }),
+            GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => DecrementPips(index)),
+            GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => IncrementPips(index))
+        );
+    }
+    private GridRowSpec BuildFaceHeader(int index, string faceName)
+    {
+        return new GridRowSpec(GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f));
+    }
+    private GridRowSpec BuildStringPayload(int index, DiceSideData face, PayloadType faceType)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Data:", 0.25f),
+            GridCellSpec.CreateInput($"PayloadData_{index}", "Enter payload...", 0.75f, (val) =>
+            {
+                SetFacePayload(face, faceType.Id, val);
+                _onStateChanged?.Invoke();
+            })
+        );
+    }
+    private List<GridRowSpec> BuildFacades(int index, DiceSideData face)
+    {
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("Facade:", 0.25f),
+                GridCellSpec.CreateDiceButton($"FacBtn_{index}", "F", 0.20f, () => _openFacadeModal?.Invoke(index)),
+                GridCellSpec.CreateLabel("ID:", 0.15f),
+                GridCellSpec.CreateInput($"Facade_{index}", "ID", 0.40f, (val) => { face.facadeID = val; _onStateChanged?.Invoke(); })
+            )
+        };
+    }
+    private List<GridRowSpec> BuildHSV(int index, DiceSideData face)
+    {
+        return new List<GridRowSpec>
+        {
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("Hue:", 0.30f),
+                GridCellSpec.CreateSlider($"SliH_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 0, Mathf.RoundToInt(val))),
+                GridCellSpec.CreateInput($"FacH_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateFaceHsv(index, 0, h); })
+            ),
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("Sat:", 0.30f),
+                GridCellSpec.CreateSlider($"SliS_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 1, Mathf.RoundToInt(val))),
+                GridCellSpec.CreateInput($"FacS_{index}", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateFaceHsv(index, 1, s); })
+            ),
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("Val:", 0.30f),
+                GridCellSpec.CreateSlider($"SliV_{index}", -99, 99, true, 0.50f, (val) => UpdateFaceHsv(index, 2, Mathf.RoundToInt(val))),
+                GridCellSpec.CreateInput($"FacV_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateFaceHsv(index, 2, v); })
+            )
+        };
+    }
+    private List<GridRowSpec> BuildKeywords(int index, DiceSideData face)
+    {
+        var keywordRows = new List<GridRowSpec>();
+        string[] keywordOptions = EntityUIHelpers.GetKeywordOptions();
+
+        keywordRows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
+            GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddKeywordToFace(index, val))
+        ));
+
+        foreach (var kw in face.keywords)
+        {
+            string keywordString = kw;
+            string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
+            keywordRows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
+                GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => RemoveKeywordFromFace(index, keywordString))
+            ));
+        }
+
+        return keywordRows;
+    }
+    private GridRowSpec BuildClipboardButtons(int index)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateButton($"BtnCopy_{index}", "Copy Dice", 0.33f, () => CopyDiceFace(index)),
+            GridCellSpec.CreateButton($"BtnPaste_{index}", "Paste Dice", 0.33f, () => PasteDiceFace(index)),
+            GridCellSpec.CreateButton($"BtnClear_{index}", "Clear Dice", 0.33f, () => ClearDiceFace(index))
+        );
+    }
+    private GridRowSpec BuildFaceTypeSelector(int index, DiceSideData face, PayloadType faceType)
+    {
+        var typeOptions = RegisteredPayloads.Select(t => t.DisplayName).ToArray();
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Face Type:", 0.30f),
+
+            // Cleaned ID. No more cache-busting hack needed now that UpdateUIFromData properly binds it
+            GridCellSpec.CreateFilteredDropdown($"FaceTypeDrop_{index}", faceType.DisplayName, 0.70f, typeOptions, (val) =>
+            {
+                if (val < 0 || val >= RegisteredPayloads.Count) return;
+                string newTypeId = RegisteredPayloads[val].Id;
+                if (newTypeId != GetFaceType(index, face).Id)
+                {
+                    //_uiFaceTypeOverrides[index] = newTypeId;
+                    SetFacePayload(face, newTypeId, GetFacePayload(face));
+
+                    _onStateChanged?.Invoke();
+                    _onRebuildRequested?.Invoke();
+                }
+            })
+        );
+    }
+    private GridRowSpec BuildTargetSelector(int index, DiceSideData face)
+    {
+        var enumNames = Enum.GetNames(typeof(DiceSideData.PayloadTarget));
+
+        // 1. Dynamically name the first option based on context
+        string defaultLabel = $"Default ({DiceSideData.GetInherentDefaultTargetName(face.faceType)})";
+        List<string> targetOptions = new List<string> { defaultLabel };
+
+        foreach (var name in enumNames)
+        {
+            targetOptions.Add(System.Text.RegularExpressions.Regex.Replace(name, "([a-z])([A-Z])", "$1 $2"));
+        }
+
+        int currentVisualIndex = face.payloadTarget == null ? 0 : (int)face.payloadTarget.Value + 1;
+
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Target Override:", 0.30f),
+            GridCellSpec.CreateFilteredDropdown($"PayloadTargetDrop_{index}", targetOptions[currentVisualIndex], 0.70f, targetOptions.ToArray(), (val) => {
+                if (val == 0)
+                {
+                    face.payloadTarget = null; // Revert to Inherent
+                }
+                else if (val > 0 && (val - 1) < enumNames.Length)
+                {
+                    var selectedTarget = (DiceSideData.PayloadTarget)(val - 1);
+
+                    // 2. Optimization: Collapse redundant explicit selections back to null
+                    if (DiceSideData.IsTargetInherentDefault(face.faceType, selectedTarget))
+                    {
+                        face.payloadTarget = null;
+                    }
+                    else
+                    {
+                        face.payloadTarget = selectedTarget;
+                    }
+                }
+                _onStateChanged?.Invoke();
+                _onRebuildRequested?.Invoke(); // Rebuild to instantly update the visual dropdown state if collapsed
+            })
+        );
+    }
+
+    // Payload Getters / Setters
+    private string GetFacePayload(DiceSideData face)
+    {
+        return face.payload ?? "";
+    }
+    private PayloadType GetFaceType(int faceIndex, DiceSideData face)
+    {
+        string targetId = "standard";
+        switch (face.faceType)
+        {
+            case DiceSideData.DiceFaceType.Base: targetId = "standard"; break;
+            case DiceSideData.DiceFaceType.Sticker: targetId = "sticker"; break;
+            case DiceSideData.DiceFaceType.Cast: targetId = "cast"; break;
+            case DiceSideData.DiceFaceType.Enchant: targetId = "enchant"; break;
+                //case DiceSideData.DiceFaceType.Egg: targetId = "egg"; break;
+        }
+        return RegisteredPayloads.First(p => p.Id == targetId);
+    }
+    private void SetFacePayload(DiceSideData face, string typeId, string payloadData)
+    {
+        face.payload = payloadData ?? "";
+        switch (typeId)
+        {
+            case "standard": face.faceType = DiceSideData.DiceFaceType.Base; break;
+            case "sticker": face.faceType = DiceSideData.DiceFaceType.Sticker; break;
+            case "cast": face.faceType = DiceSideData.DiceFaceType.Cast; break;
+            case "enchant": face.faceType = DiceSideData.DiceFaceType.Enchant; break;
+            //case "egg": face.faceType = DiceSideData.DiceFaceType.Egg; break;
+            default: face.faceType = DiceSideData.DiceFaceType.Base; break;
+        }
+    }
+
+    private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
+    {
+        var rows = new List<GridRowSpec>();
+
+        var customItems = ModPackage.Instance?.CustomItems;
+        var itemNames = new List<string> { "-- Select Custom Item --" };
+
+        if (customItems != null)
+        {
+            itemNames.AddRange(customItems
+                .Select(i => !string.IsNullOrEmpty(i.unityName) ? i.unityName : (!string.IsNullOrEmpty(i.entityName) ? i.entityName : "Unnamed Item"))
+                .Distinct());
+        }
+
+        string currentPayload = GetFacePayload(face);
+        bool hasPayload = !string.IsNullOrWhiteSpace(currentPayload);
+
+        // 2. Dropdown (Mirrors Collection Selector behavior)
+        rows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Set Item:", 0.30f),
+            GridCellSpec.CreateFilteredDropdown($"StickerItemDrop_{index}", "-- Select Custom Item --", 0.70f, itemNames.ToArray(), (val) => {
+                if (val <= 0 || val >= itemNames.Count) return;
+
+                string selectedName = itemNames[val];
+                var targetItem = ModPackage.Instance?.CustomItems?.FirstOrDefault(i => i.unityName == selectedName || i.entityName == selectedName);
+
+                if (targetItem != null)
+                {
+                    string itemSyntax = targetItem.Export();
+                    if (itemSyntax.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+                    {
+                        itemSyntax = itemSyntax.Substring(2);
+                    }
+
+                    SetFacePayload(face, faceType.Id, itemSyntax);
+                    _onStateChanged?.Invoke();
+                    _onRebuildRequested?.Invoke();
+                }
+            })
+        ));
+
+        // 3. Active entry with [X] button
+        if (hasPayload)
+        {
+            string displayLabel = currentPayload.Length > 25 ? currentPayload.Substring(0, 22) + "..." : currentPayload;
+
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"ActiveSticker_{index}", displayLabel, 0.80f),
+                GridCellSpec.CreateButton($"DelSticker_{index}", "[X]", 0.20f, () => {
+                    SetFacePayload(face, faceType.Id, "");
+                    _onStateChanged?.Invoke();
+                    _onRebuildRequested?.Invoke();
+                })
+            ));
+        }
+
+        return rows;
     }
 }

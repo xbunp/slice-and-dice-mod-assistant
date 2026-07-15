@@ -31,7 +31,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     //protected DiceSideData diceClipboard = null;
     protected DiceFaceBuilderWidget diceBuilderWidget;
 
-
     protected bool showCustomImagePanel = false;
     protected string _customImageString;
     protected Texture2D _customImageTexture;

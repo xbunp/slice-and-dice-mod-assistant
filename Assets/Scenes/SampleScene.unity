@@ -188,6 +188,7 @@ MonoBehaviour:
       colorRange: 0
       colorOffset: 0
     customPayloads: []
+    unityName: New Item
     GlobalTags: []
     Containers: []
     Mechanics: []
