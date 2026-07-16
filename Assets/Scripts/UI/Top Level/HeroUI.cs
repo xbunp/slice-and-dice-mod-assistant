@@ -488,6 +488,11 @@ public class HeroUI : EntityUI<HeroData>
             GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val.SanitizeRichInput(); NotifyStateChanged(); })
         ));
 
+        layout.Add(new GridRowSpec(
+        GridCellSpec.CreateLabel("Appended Doc:", 0.20f),
+        GridCellSpec.CreateInput("Appended Doc", "", 0.80f, (val) => { CurrentEntity.appendedDoc = val.SanitizeRichInput(); NotifyStateChanged(); })
+        ));
+
         AppendCollectionSelector<BaseAbility>(
                     layout: layout, label: "Add Ability:", uniqueKey: "BaseAbility",
                     availableChoices: BaseAbilityDatabase.Abilities,

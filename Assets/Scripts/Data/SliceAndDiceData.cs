@@ -2291,9 +2291,13 @@ public static class DiceTargetHelper
     }
 }
 
-public static class MonsterHelper
+public static class EntityHelper
 {
     public static readonly List<string> FormattedMonsterNames = InitializeMonsterNames();
+
+    public static readonly HashSet<string> HeroNames = new HashSet<string>(
+    Enum.GetNames(typeof(HeroType)),
+    StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Evaluates the entity payload to determine if it is structurally a Monster or a Hero.
@@ -2327,6 +2331,7 @@ public enum TargetType
     col,        // Color wide
     self        // Passive/Hero wide
 }
+
 public enum HeroType
 {
     None = 0,

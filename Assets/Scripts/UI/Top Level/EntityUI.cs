@@ -55,7 +55,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
     // Virtualized to allow HeroUI to call .InitializeAsDefault()
     protected virtual T CreateDefaultEntity() => new T();
-
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
         uiGenerator = uiGeneratorRef;
@@ -97,7 +96,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             ModPackage.Instance.OnModDataChanged -= OnStateChanged;
         }
     }
-
     protected virtual void Update()
     {
         if (_needsRebuild && IsTabVisible())
@@ -107,7 +105,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             RebuildDiceScrollView();
         }
     }
-
     protected virtual void OnEnable()
     {
         if (_needsRebuild)
@@ -117,7 +114,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             RebuildDiceScrollView();
         }
     }
-
     protected virtual bool IsTabVisible()
     {
         RectTransform rootWrapper = GetRootWrapper();
@@ -156,7 +152,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             face.pips
         );
     }
-
     protected void OnPasteEntityString(string pastedString)
     {
         if (string.IsNullOrWhiteSpace(pastedString)) return;
@@ -192,7 +187,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
-
     protected virtual void UpdateUIFromData()
     {
         if (statsUI == null || diceUI == null) return;
@@ -259,7 +253,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         isDrawingUI = false;
         UpdateVisualsOnly();
     }
-
     protected virtual void UpdateVisualsOnly()
     {
         if (portraitPreview != null)
@@ -312,7 +305,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         }
     }
-
     protected void OpenColorPicker(Color initialColor, Action<Color> onColorChanged)
     {
         if (uiGenerator.colorPicker == null) return;
@@ -325,7 +317,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         uiGenerator.colorPicker.onColorChange.AddListener(new UnityEngine.Events.UnityAction<Color>(onColorChanged));
     }
-
     protected void CloseColorPicker()
     {
         if (uiGenerator.colorPicker != null)
@@ -333,7 +324,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             uiGenerator.colorPicker.gameObject.SetActive(false);
         }
     }
-
     protected void SetButtonColorPreview(Button btn, Color color)
     {
         if (btn == null) return;
@@ -362,7 +352,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         color.a = 1f;
         previewImg.color = color;
     }
-
     protected void SetButtonIcon(Button btn, Sprite sprite) => StaticUI.SetButtonIcon(btn, sprite);
 
     /*
@@ -412,7 +401,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (isDrawingUI) return;
         ModPackage.Instance.NotifyActiveEntityChanged<T>(this);
     }
-
     protected void ResetToDefault()
     {
         ModPackage.Instance.UpdateActiveEntityClone<T>(CreateDefaultEntity());
@@ -445,7 +433,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             RebuildDiceScrollView();
         }
     }
-
     protected void RemoveKeywordFromFace(int faceIndex, string keyword)
     {
         if (CurrentEntity.diceSides[faceIndex].keywords.Remove(keyword))
@@ -454,7 +441,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             RebuildDiceScrollView();
         }
     }
-
     protected void UpdateEntityHsvData(int componentIndex, int value)
     {
         if (isDrawingUI) return;
@@ -473,7 +459,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         NotifyStateChanged();
     }
-
     protected void UpdateFaceHsv(int faceIndex, int componentIndex, int value)
     {
         if (!AllowFacades()) return;
@@ -523,13 +508,11 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         if (facadeAutoAssigned) UpdateUIFromData();
     }
-
     protected void ToggleCustomImagePanel()
     {
         showCustomImagePanel = !showCustomImagePanel;
         RebuildStatsUI();
     }
-
     protected void OnPoolDropdownChanged(int index)
     {
         if (isDrawingUI) return;
@@ -547,7 +530,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
-
     protected void SaveToModPool()
     {
         ModPackage.Instance.SaveActiveEntity<T>();
@@ -739,7 +721,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         isDrawingUI = wasDrawing;
         UpdateUIFromData();
     }
-
     protected void RebuildDiceScrollView()
     {
         if (diceScrollRect == null) return;
@@ -768,7 +749,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         Canvas.ForceUpdateCanvases();
         UpdateUIFromData();
     }
-
     protected override void BuildUIAndBind()
     {
         float canvasHeight = 900f;
@@ -814,7 +794,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
-
     protected void BuildRightPanelContent(RectTransform parent)
     {
         GameObject previewContainer = new GameObject("PreviewContainer", typeof(RectTransform));
@@ -909,7 +888,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         pasteBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => OnPasteEntityString(GUIUtility.systemCopyBuffer));
         FullScreenUIGenerator.SetAnchors(pasteBtnObj.GetComponent<RectTransform>(), 0.52f, 0.0f, 1.0f, 0.06f);
     }
-
     protected void ApplyDynamicLayoutConstraints()
     {
         if (statsScrollRect != null)
@@ -936,7 +914,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             StretchToParent(scrollRt, 0f, 0f);
         }
     }
-
     protected void ConfigureFlexibleLayout(RectTransform target)
     {
         if (target == null) return;
@@ -946,7 +923,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         layoutElement.preferredHeight = -1;
         layoutElement.flexibleHeight = 1f;
     }
-
     protected void StretchToParent(RectTransform rt, float topOffset, float bottomOffset)
     {
         if (rt == null) return;

@@ -70,6 +70,7 @@ public class HeroData : EntityData
         entityName = null; imageOverride = null; baseReplica = null; colorClass = null;
         hp = 0; h = 0; s = 0; v = 0; tier = 0; hue = 0;
         p = null; b = null; rect = null; draw = null; thue = null; doc = null; speech = null; adj = null; phue = null;
+        appendedDoc = null;
 
         items = new List<string>();
         traits = new List<string>();
@@ -129,11 +130,12 @@ public class HeroData : EntityData
             if (TryProcessOrbData(tokens, ref i, tokenLower)) continue;
 
             // Unified Collection Extractor using the smart boundary detector
-            if (tokenLower == "i" || tokenLower == "t" || tokenLower == "gift" || tokenLower == "learn" || tokenLower == "abilitydata")
+            if (tokenLower == "i")
             {
                 int startIndex = i + 1;
                 if (startIndex >= tokens.Count) continue;
 
+                // FIX: Use the unified smart boundary detector instead of the raw loop
                 int endIndex = GetEndOfBlockIndex(tokens, startIndex);
                 int count = endIndex - startIndex;
 
@@ -141,26 +143,19 @@ public class HeroData : EntityData
                 {
                     List<string> subTokens = tokens.GetRange(startIndex, count);
                     i = endIndex - 1;
-                    string payload = string.Join(".", subTokens);
 
-                    if (tokenLower == "i")
+                    // DELEGATION: ItemData is the absolute authority on interpreting .i. strings
+                    string itemString = string.Join(".", subTokens);
+                    ItemData parsedItem = new ItemData();
+                    parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
+
+                    // Fallback for simple standalone names (e.g. i.Sword) that lack mechanics
+                    if (string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0)
                     {
-                        ItemData parsedItem = new ItemData();
-                        parsedItem.Parse(StaticBranchTracing.StripOuterParens(payload));
-
-                        // Fallback for simple standalone names (e.g. i.Sword) that lack mechanics
-                        if (string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0)
-                            parsedItem.entityName = payload;
-
-                        _itemPipeline.Add(parsedItem);
+                        parsedItem.entityName = itemString;
                     }
-                    else if (tokenLower == "t") ProcessTraitPayload(payload);
-                    else if (tokenLower == "gift") blessings.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                    else if (tokenLower == "learn" || tokenLower == "abilitydata")
-                    {
-                        if (payload.StartsWith("(")) AddCustomAbility(AbilityData.CreateAbility(payload));
-                        else baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                    }
+
+                    _itemPipeline.Add(parsedItem);
                 }
                 continue;
             }
@@ -383,10 +378,16 @@ public class HeroData : EntityData
                 fullContentString = $"({fullContentString}.{wrapper})"; // Failsafe
         }
 
-        // 6. Wrap the completed structure with the .doc modifier if it is defined
-        if (!string.IsNullOrEmpty(doc))
+        bool hasDoc = !string.IsNullOrEmpty(doc);
+        bool hasAppendedDoc = !string.IsNullOrEmpty(appendedDoc);
+        if (hasDoc || hasAppendedDoc)
         {
-            return $"({fullContentString}.doc.{doc})";
+            StringBuilder tailSb = new StringBuilder();
+
+            if (hasDoc) tailSb.Append($".doc.{doc}");
+            if (hasAppendedDoc) tailSb.Append($".i.self.Wolf.doc.{appendedDoc}.spirit");
+
+            return $"({fullContentString}{tailSb.ToString()})";
         }
 
         return fullContentString;
@@ -579,6 +580,8 @@ public class HeroData : EntityData
     }
 
 }
+
+
     /*
     public override void Parse(string data)
     {

@@ -38,12 +38,10 @@ using System.Text;
 /// ============================================================================================
 /// </summary>
 
-
 // DO NOT FORGET: CRITICAL
 // YOU CANNOT WORK IN THIS CLASS WITHOUT SEEING ItemSyntaxCompiler.CS
 // AND ITEMDATA.CS
 // AND STRATEGYPATTERNNODES.CS WHICH CONTAINS AuthoringNodeDef!!
-
 
 public static class ItemDomainRules
 {
@@ -125,6 +123,41 @@ public static class ItemDomainRules
         "facade", "sidesc"
     };
 
+    /// <summary>
+    /// Scans forward to find where an item natively ends, respecting inner modifier scopes
+    /// (like self...spirit) that contain properties that would otherwise trip up the outer Entity parser.
+    /// </summary>
+    public static int GetItemBlockLength(List<string> tokens, int startIndex, HashSet<string> breakingKeys)
+    {
+        int endIndex = startIndex;
+        bool inModifierScope = false;
+
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+
+            // Track entering a modifier scope
+            if (peek == "self" || peek == "jinx" || peek == "vase")
+            {
+                inModifierScope = true;
+            }
+            // Track exiting a modifier scope
+            else if (inModifierScope && (peek == "spirit" || peek == "cantrip"))
+            {
+                inModifierScope = false;
+                endIndex++;
+                continue; // The terminator belongs to the item, keep going
+            }
+
+            // If we are outside a modifier scope, respect the standard outer entity boundary rules
+            if (!inModifierScope && endIndex > startIndex)
+            {
+                if (breakingKeys.Contains(peek)) break;
+            }
+            endIndex++;
+        }
+        return endIndex;
+    }
     public static bool IsRepeatPrefix(string token, out int count)
     {
         count = 1;
@@ -624,7 +657,7 @@ public class ItemData : SDData
             else { HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero; }
         }
         else if (mech.Prefix == "onhitdata" || mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
-        else if (mech.Prefix == "enchant" || mech.Prefix == "self") { ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod; }
+        else if (mech.Prefix == "enchant") { ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod; }
         else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata") { mech.PayloadData = AbilityData.CreateSpellOrTactic(core); }
         else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         else if (mech.Prefix == "t")
@@ -645,7 +678,16 @@ public class ItemData : SDData
         }
         else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
         {
-            if (mech.PayloadString.StartsWith("(")) { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
+            if (mech.PayloadString.StartsWith("("))
+            {
+                ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item;
+            }
+            else if (mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase))
+            {
+                ModifierData mod = new ModifierData();
+                mod.Parse(core);
+                mech.PayloadData = mod;
+            }
         }
     }
 

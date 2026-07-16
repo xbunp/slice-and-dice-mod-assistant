@@ -36,6 +36,46 @@ public class ModifierData : SDData
                 continue;
             }
 
+            // =========================================================================
+            // NEW: Parse Inline Entities (e.g. Wolf.doc.<desc>) inside a modifier
+            // =========================================================================
+            if (StaticBranchTracing.IsMonsterEntity(originalToken) || StaticBranchTracing.IsHeroEntity(originalToken))
+            {
+                int startIndex = i;
+                int endIndex = i + 1;
+
+                while (endIndex < tokens.Count)
+                {
+                    string peek = tokens[endIndex].ToLower();
+                    if (EntityDomainRules.CommonMetadataKeys.Contains(peek))
+                    {
+                        endIndex += 2;
+                        continue;
+                    }
+                    break;
+                }
+
+                string entityPayload = string.Join(".", tokens.GetRange(startIndex, endIndex - startIndex));
+
+                if (StaticBranchTracing.IsMonsterEntity(originalToken))
+                {
+                    MonsterData monster = new MonsterData();
+                    // DELETED: monster.entityName = originalToken; (This caused the .n. rename mutation)
+                    monster.Parse(entityPayload);
+                    customPayloads.Add(new CustomPayload { Prefix = "", Data = monster, Type = PayloadType.Monster });
+                }
+                else
+                {
+                    HeroData hero = new HeroData();
+                    // DELETED: hero.entityName = originalToken;
+                    hero.Parse(entityPayload);
+                    customPayloads.Add(new CustomPayload { Prefix = "", Data = hero, Type = PayloadType.Hero });
+                }
+
+                i = endIndex - 1;
+                continue;
+            }
+
             if (tokenLower == "abilitydata" || tokenLower == "i" || tokenLower == "hat" || tokenLower == "egg" || tokenLower == "rmon" || tokenLower == "add" || tokenLower == "vase" || tokenLower == "jinx")
             {
                 int startIndex = i + 1;
@@ -115,12 +155,49 @@ public class ModifierData : SDData
 
     public override string Export()
     {
-        List<string> parts = new List<string>(coreCommands);
+        List<string> parts = new List<string>();
+
+        // 1. Export inline payloads FIRST (e.g. "Wolf.doc.<description>")
         foreach (var cp in customPayloads)
         {
-            string exp = cp.Export();
-            if (!string.IsNullOrEmpty(exp)) parts.Add(exp);
+            if (string.IsNullOrEmpty(cp.Prefix))
+            {
+                string exp = string.Empty;
+
+                // Structurally identify inline spirits instead of relying on a fake prefix string
+                if (cp.Type == PayloadType.Monster && cp.Data is MonsterData md && StaticBranchTracing.IsMonsterEntity(md.baseMonster))
+                {
+                    exp = MonsterData.ExportAsSpirit(md);
+                }
+                else if (cp.Type == PayloadType.Hero && cp.Data is HeroData hd && StaticBranchTracing.IsHeroEntity(hd.entityName)) //MIGHT BE A BUG, MIGHT BE WRONG?
+                {
+                    exp = hd.Export(); // Standard export for inline heroes unless they also have a Spirit version
+                }
+                else
+                {
+                    exp = cp.Export(); // Fallback for things like 'egg' which also share the empty prefix
+                }
+
+                if (!string.IsNullOrEmpty(exp)) parts.Add(exp);
+            }
         }
+
+        // 2. Export structural Core Commands (e.g. "spirit", "cantrip")
+        if (coreCommands.Count > 0)
+        {
+            parts.AddRange(coreCommands);
+        }
+
+        // 3. Export explicitly prefixed payloads LAST (e.g. "abilitydata.x", "hat.x")
+        foreach (var cp in customPayloads)
+        {
+            if (!string.IsNullOrEmpty(cp.Prefix))
+            {
+                string exp = cp.Export();
+                if (!string.IsNullOrEmpty(exp)) parts.Add(exp);
+            }
+        }
+
         return string.Join(".", parts);
     }
 

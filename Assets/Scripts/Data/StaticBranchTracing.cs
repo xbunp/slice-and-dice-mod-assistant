@@ -194,7 +194,7 @@ public static class StaticBranchTracing
         if (firstToken == "replica") return false;
         if (firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx" || firstToken == "rmon") return true;
 
-        foreach (string monsterName in MonsterHelper.FormattedMonsterNames)
+        foreach (string monsterName in EntityHelper.FormattedMonsterNames)
         {
             if (string.Equals(firstToken, monsterName, StringComparison.OrdinalIgnoreCase)) return true;
         }
@@ -202,5 +202,59 @@ public static class StaticBranchTracing
         if (firstToken.Contains("jinx") || firstToken.Contains("vase") || firstToken.Contains("orb") || firstToken.Contains("rmon")) return true;
 
         return false;
+    }
+
+    public static bool IsHeroEntity(string core)
+    {
+        if (string.IsNullOrEmpty(core)) return false;
+
+        List<string> tokens = TopLevelSplit(core, '.');
+        string firstToken = tokens[0].ToLower();
+
+        // 1. Strip outer parens to find the true root token, exactly like IsMonsterEntity
+        while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
+        {
+            firstToken = StripOuterParens(firstToken);
+            tokens = TopLevelSplit(firstToken, '.');
+            firstToken = tokens[0].ToLower();
+        }
+
+        // 2. Direct Hero Name Match
+        if (IsHeroName(firstToken)) return true;
+
+        // 3. Replica Match ("replica.<hero name>")
+        if (firstToken == "replica" && tokens.Count > 1)
+        {
+            string secondToken = tokens[1].ToLower();
+
+            // Handle cases like "replica.(ace)"
+            while (secondToken.StartsWith("(") && secondToken.EndsWith(")"))
+            {
+                secondToken = StripOuterParens(secondToken);
+                secondToken = TopLevelSplit(secondToken, '.')[0].ToLower();
+            }
+
+            if (IsHeroName(secondToken)) return true;
+        }
+
+        // 4. Fallback for the Hero-exclusive 'col.#' rule 
+        // (Included just in case a string somehow bypasses the prefix rule)
+        for (int j = 0; j < tokens.Count - 1; j++)
+        {
+            if (tokens[j].ToLower() == "col" && tokens[j + 1].Length == 1 && char.IsLetter(tokens[j + 1][0]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsHeroName(string token)
+    {
+        if (string.Equals(token, "none", StringComparison.OrdinalIgnoreCase)) return false;
+
+        // Use the highly efficient hashset lookup
+        return EntityHelper.HeroNames.Contains(token);
     }
 }

@@ -26,9 +26,6 @@ public class MonsterData : EntityData
     [Header("Monster Modifiers")]
     public string bal;
 
-    [System.NonSerialized]
-    private List<ItemData> _itemPipeline = new List<ItemData>();
-
     public override void Parse(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
@@ -81,11 +78,18 @@ public class MonsterData : EntityData
         if (monster == null) return string.Empty;
         StringBuilder sb = new StringBuilder();
 
-        bool hasImageOverride = !string.IsNullOrEmpty(monster.imageOverride) && monster.imageOverride != "None" && monster.imageOverride != monster.baseMonster;
+        bool hasImageOverride = !string.IsNullOrEmpty(monster.imageOverride)
+            && !string.Equals(monster.imageOverride, "None", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(monster.imageOverride, monster.baseMonster, StringComparison.OrdinalIgnoreCase);
 
         sb.Append($"{FormatName(monster.baseMonster)}");
         if (!hasImageOverride) monster.AppendColorModifier(sb);
-        if (!string.IsNullOrEmpty(monster.entityName)) sb.Append($".n.{FormatName(monster.entityName)}");
+
+        if (!string.IsNullOrEmpty(monster.entityName) && !string.Equals(monster.entityName, monster.baseMonster, StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append($".n.{FormatName(monster.entityName)}");
+        }
+
         if (monster.hp > 0) sb.Append($".hp.{monster.hp}");
 
         if (!string.IsNullOrEmpty(monster.p)) sb.Append($".p.{monster.p}");
@@ -111,8 +115,6 @@ public class MonsterData : EntityData
         if (monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) sb.Append($".{orb.ExportAsTrait(useITPrefix: false)}"); // Added
         if (monster.items != null) foreach (var i in monster.items) if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
 
-        if (monster.items != null) foreach (var i in monster.items) if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
-
         if (monster.customPayloads != null)
         {
             foreach (var payload in monster.customPayloads)
@@ -124,6 +126,19 @@ public class MonsterData : EntityData
 
         if (monster.curses != null) foreach (var c in monster.curses) if (!string.IsNullOrEmpty(c)) sb.Append($".t.jinx.{FormatName(c)}");
         if (!string.IsNullOrEmpty(monster.bal)) sb.Append($".bal.{FormatName(monster.bal)}");
+
+        return sb.ToString();
+    }
+    public static string ExportAsSpirit(MonsterData monster)
+    {
+        if (monster == null) return string.Empty;
+        StringBuilder sb = new StringBuilder();
+
+        sb.Append(FormatName(monster.baseMonster));
+        if (!string.IsNullOrEmpty(monster.doc))
+        {
+            sb.Append($".doc.{monster.doc}");
+        }
 
         return sb.ToString();
     }
