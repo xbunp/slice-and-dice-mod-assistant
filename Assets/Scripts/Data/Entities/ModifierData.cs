@@ -169,13 +169,9 @@ public class ModifierData : SDData
                 {
                     exp = MonsterData.ExportAsSpirit(md);
                 }
-                else if (cp.Type == PayloadType.Hero && cp.Data is HeroData hd && StaticBranchTracing.IsHeroEntity(hd.entityName)) //MIGHT BE A BUG, MIGHT BE WRONG?
+                else if (cp.Type == PayloadType.Hero && cp.Data is HeroData hd && StaticBranchTracing.IsHeroEntity(hd.baseReplica))
                 {
                     exp = hd.Export(); // Standard export for inline heroes unless they also have a Spirit version
-                }
-                else
-                {
-                    exp = cp.Export(); // Fallback for things like 'egg' which also share the empty prefix
                 }
 
                 if (!string.IsNullOrEmpty(exp)) parts.Add(exp);

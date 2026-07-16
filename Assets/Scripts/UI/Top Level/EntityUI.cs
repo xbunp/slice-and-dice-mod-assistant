@@ -195,7 +195,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentEntity.entityName);
         if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
             hpIn.SetTextWithoutNotify(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
+
         if (statsUI.Inputs.TryGetValue("Doc", out var docIn)) docIn.SetTextWithoutNotify(CurrentEntity.doc);
+        if (statsUI.Inputs.TryGetValue("AppendedDoc", out var AppendeddocIn)) AppendeddocIn.SetTextWithoutNotify(CurrentEntity.appendedDoc);
 
         if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
 
@@ -218,37 +220,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         UpdateSpecificUIFromData();
         diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
-
-        /*
-        int startIndex = (currentDiceTab == 0) ? 0 : currentDiceTab - 1;
-        int endIndex = (currentDiceTab == 0) ? 6 : currentDiceTab;
-
-        for (int i = startIndex; i < endIndex; i++)
-        {
-            var face = CurrentEntity.diceSides[i];
-            if (diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
-            if (diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
-
-            if (AllowFacades())
-            {
-                if (diceUI.Inputs.TryGetValue($"Facade_{i}", out var dFac)) dFac.SetTextWithoutNotify(face.facadeID);
-
-                int h = 0, s = 0, v = 0;
-                string[] hsv = (face.facadeColor ?? "").Split(':');
-                if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
-                if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
-                if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
-
-                if (diceUI.Sliders.TryGetValue($"SliH_{i}", out var sliH)) sliH.SetValueWithoutNotify(h);
-                if (diceUI.Sliders.TryGetValue($"SliS_{i}", out var sliS)) sliS.SetValueWithoutNotify(s);
-                if (diceUI.Sliders.TryGetValue($"SliV_{i}", out var sliV)) sliV.SetValueWithoutNotify(v);
-
-                if (diceUI.Inputs.TryGetValue($"FacH_{i}", out var dH)) dH.SetTextWithoutNotify(h != 0 ? h.ToString() : "");
-                if (diceUI.Inputs.TryGetValue($"FacS_{i}", out var dS)) dS.SetTextWithoutNotify(s != 0 ? s.ToString() : "");
-                if (diceUI.Inputs.TryGetValue($"FacV_{i}", out var dV)) dV.SetTextWithoutNotify(v != 0 ? v.ToString() : "");
-            }
-        }
-        */
 
         isDrawingUI = false;
         UpdateVisualsOnly();

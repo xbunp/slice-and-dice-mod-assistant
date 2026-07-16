@@ -324,6 +324,11 @@ public class MonsterUI : EntityUI<MonsterData>
             GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val.SanitizeRichInput(); NotifyStateChanged(); })
         ));
 
+        layout.Add(new GridRowSpec(
+        GridCellSpec.CreateLabel("Appended Doc:", 0.20f),
+        GridCellSpec.CreateInput("AppendedDoc", "", 0.80f, (val) => { CurrentEntity.appendedDoc = val.SanitizeRichInput(); NotifyStateChanged(); })
+        ));
+
         string[] rawNames = Enum.GetNames(typeof(BaseItems));
         string[] formattedItemNames = rawNames.Select(name => Regex.Replace(name, "([a-z])([A-Z])", "$1 $2")).ToArray();
 

@@ -214,6 +214,7 @@ public class MonsterData : EntityData
             if (TryProcessEntityMetadata(tokens, ref i, tokenLower)) continue;
             if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
             if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
+            if (TryProcessAppendedDoc(tokens, ref i, tokenLower)) continue;
 
             if (tokenLower == "triggerhpdata" || tokenLower == "onhitdata")
             {

@@ -110,6 +110,7 @@ public class HeroData : EntityData
         ExtractKnowledge(tokens);
         ExecuteItemPipeline();
     }
+
     private void ExtractKnowledge(List<string> tokens)
     {
         for (int i = 0; i < tokens.Count; i++)
@@ -128,6 +129,7 @@ public class HeroData : EntityData
             if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
             if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
             if (TryProcessOrbData(tokens, ref i, tokenLower)) continue;
+            if (TryProcessAppendedDoc(tokens, ref i, tokenLower)) continue;
 
             // Unified Collection Extractor using the smart boundary detector
             if (tokenLower == "i")
@@ -161,7 +163,6 @@ public class HeroData : EntityData
             }
         }
     }
-
     private void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline)
     {
         for (int i = 0; i < tokens.Count; i++)
@@ -180,6 +181,7 @@ public class HeroData : EntityData
             if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
             if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
             if (TryProcessOrbData(tokens, ref i, tokenLower)) continue;
+            if (TryProcessAppendedDoc(tokens, ref i, tokenLower)) continue;
 
             if (tokenLower == "t")
             {
@@ -222,6 +224,8 @@ public class HeroData : EntityData
             }
         }
     }
+
+
     private bool TryProcessHeroSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
     {
         if (i + 1 >= tokens.Count) return false;

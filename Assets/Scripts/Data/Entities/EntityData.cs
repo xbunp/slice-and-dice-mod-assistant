@@ -861,6 +861,21 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
     }
+
+    protected bool TryProcessAppendedDoc(List<string> tokens, ref int i, string tokenLower)
+    {
+        if (tokenLower == "i" && i + 5 < tokens.Count &&
+            tokens[i + 1].Equals("self", StringComparison.OrdinalIgnoreCase) &&
+            tokens[i + 2].Equals("Wolf", StringComparison.OrdinalIgnoreCase) &&
+            tokens[i + 3].Equals("doc", StringComparison.OrdinalIgnoreCase) &&
+            tokens[i + 5].Equals("spirit", StringComparison.OrdinalIgnoreCase))
+        {
+            appendedDoc = tokens[i + 4];
+            i += 5; // Move parser to the end of '.spirit'
+            return true;
+        }
+        return false;
+    }
 }
 
 /*
