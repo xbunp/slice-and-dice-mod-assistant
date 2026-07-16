@@ -1,5 +1,37 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
+
+public static class ModifierDomainRules
+{
+    public static readonly HashSet<string> ModifierStartTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    { "self", "jinx", "vase" };
+
+    public static readonly HashSet<string> ModifierEndTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    { "spirit" };
+
+    public static bool IsModifierStartToken(string token) => ModifierStartTokens.Contains(token);
+
+    public static int GetModifierBlockLength(List<string> tokens, int startIndex)
+    {
+        int endIndex = startIndex;
+        int depth = 0;
+
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+
+            if (ModifierStartTokens.Contains(peek)) depth++;
+            else if (ModifierEndTokens.Contains(peek)) depth--;
+
+            endIndex++;
+
+            if (depth == 0) break; // Outer-most modifier scope closed natively
+        }
+
+        return endIndex - startIndex;
+    }
+}
 
 [System.Serializable]
 public class ModifierData : SDData
@@ -171,7 +203,7 @@ public class ModifierData : SDData
                 }
                 else if (cp.Type == PayloadType.Hero && cp.Data is HeroData hd && StaticBranchTracing.IsHeroEntity(hd.baseReplica))
                 {
-                    exp = hd.Export(); // Standard export for inline heroes unless they also have a Spirit version
+                    exp = hd.Export();
                 }
 
                 if (!string.IsNullOrEmpty(exp)) parts.Add(exp);

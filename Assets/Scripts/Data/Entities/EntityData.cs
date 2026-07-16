@@ -19,6 +19,38 @@ public static class EntityDomainRules
     {
         "i", "t", "gift", "learn", "abilitydata", "triggerhpdata", "onhitdata", "orb" // Added "orb"
     };
+
+
+    public static int GetCollectionBlockLength(List<string> tokens, int startIndex)
+    {
+        int endIndex = startIndex;
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+
+            if (peek.StartsWith("(") && peek.EndsWith(")"))
+            {
+                endIndex++; continue;
+            }
+            if (ModifierDomainRules.IsModifierStartToken(peek))
+            {
+                endIndex += ModifierDomainRules.GetModifierBlockLength(tokens, endIndex); continue;
+            }
+            if (AbilityDomainRules.IsAbilityStartSequence(tokens, endIndex))
+            {
+                endIndex += AbilityDomainRules.GetAbilityBlockLength(tokens, endIndex); continue;
+            }
+
+            // Standard single-token payloads (like t.Beefy)
+            if (endIndex == startIndex)
+            {
+                endIndex++; continue;
+            }
+
+            break; // Stop parsing collection string natively
+        }
+        return endIndex - startIndex;
+    }
 }
 
 [System.Serializable]
@@ -207,25 +239,18 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
 
     // Unifies lookahead trait parsing (supports both strings and nested custom modifiers)
-    protected void ProcessTraitToken(List<string> tokens, ref int i, HashSet<string> domainPropertyKeys)
+    // Notice we dropped the Hashset parameter entirely!
+    protected void ProcessTraitToken(List<string> tokens, ref int i)
     {
         int startIndex = i + 1;
         if (startIndex >= tokens.Count) return;
 
-        int endIndex = startIndex;
-        while (endIndex < tokens.Count)
+        int length = EntityDomainRules.GetCollectionBlockLength(tokens, startIndex);
+        if (length > 0)
         {
-            string peek = tokens[endIndex].ToLower();
-            if (domainPropertyKeys.Contains(peek)) break;
-            endIndex++;
-        }
-
-        int count = endIndex - startIndex;
-        if (count > 0)
-        {
-            string tPayload = string.Join(".", tokens.GetRange(startIndex, count));
-            i = endIndex - 1;
-            ProcessTraitPayload(tPayload); // Routed
+            string tPayload = string.Join(".", tokens.GetRange(startIndex, length));
+            i += length - 1; // Evaluates last token, allows standard loop incrementing
+            ProcessTraitPayload(tPayload);
         }
     }
     protected bool TryProcessOrbData(List<string> tokens, ref int i, string tokenLower)
@@ -408,7 +433,7 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
 
     // Derived classes MUST define how they identify the end of a block
-    protected abstract int GetEndOfBlockIndex(List<string> tokens, int startIndex);
+    //protected abstract int GetEndOfBlockIndex(List<string> tokens, int startIndex);
     protected void ExecuteItemPipeline()
     {
         if (_itemPipeline.Count > 0)

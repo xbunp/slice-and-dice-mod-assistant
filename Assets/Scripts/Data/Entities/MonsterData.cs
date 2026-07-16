@@ -44,6 +44,7 @@ public class MonsterData : EntityData
 
     }
 
+    /*
     protected override int GetEndOfBlockIndex(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
@@ -73,6 +74,8 @@ public class MonsterData : EntityData
         }
         return endIndex;
     }
+    */
+
     public static string Export(MonsterData monster)
     {
         if (monster == null) return string.Empty;
@@ -245,7 +248,7 @@ public class MonsterData : EntityData
 
             if (tokenLower == "t")
             {
-                ProcessTraitToken(tokens, ref i, MonsterDomainRules.MonsterPropertyKeys);
+                ProcessTraitToken(tokens, ref i);
                 continue;
             }
 
@@ -254,18 +257,15 @@ public class MonsterData : EntityData
                 int startIndex = i + 1;
                 if (startIndex >= tokens.Count) continue;
 
-                int endIndex = GetEndOfBlockIndex(tokens, startIndex);
-                int count = endIndex - startIndex;
-
-                if (count > 0)
+                int length = ItemDomainRules.GetItemBlockLength(tokens, startIndex);
+                if (length > 0)
                 {
-                    List<string> itemTokens = tokens.GetRange(startIndex, count);
+                    List<string> itemTokens = tokens.GetRange(startIndex, length);
                     string itemString = string.Join(".", itemTokens);
-                    i = endIndex - 1;
+                    i += length;
 
                     ItemData parsedItem = new ItemData();
                     parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
-
                     if (string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0)
                         parsedItem.entityName = itemString;
 

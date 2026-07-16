@@ -164,6 +164,74 @@ public static class ItemDomainRules
         if (string.IsNullOrEmpty(token) || char.ToLower(token[0]) != 'x') return false;
         return int.TryParse(token.Substring(1), out count);
     }
+
+
+    // NEW SRP:
+    public static int GetItemBlockLength(List<string> tokens, int startIndex)
+    {
+        int endIndex = startIndex;
+
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+
+            if (peek.StartsWith("(") && peek.EndsWith(")"))
+            {
+                endIndex++;
+                continue;
+            }
+
+            // Route nested scopes to their correct domains
+            if (ModifierDomainRules.IsModifierStartToken(peek))
+            {
+                endIndex += ModifierDomainRules.GetModifierBlockLength(tokens, endIndex);
+                continue;
+            }
+
+            if (AbilityDomainRules.IsAbilityStartSequence(tokens, endIndex))
+            {
+                endIndex += AbilityDomainRules.GetAbilityBlockLength(tokens, endIndex);
+                continue;
+            }
+
+            // Stop immediately if it's not a valid item dictionary token
+            if (!IsTokenClaimedByItem(tokens, endIndex))
+            {
+                break;
+            }
+
+            endIndex++;
+        }
+        return endIndex - startIndex;
+    }
+
+    public static bool IsTokenClaimedByItem(List<string> tokens, int index)
+    {
+        string token = tokens[index].ToLower();
+
+        if (ValidItemProperties.Contains(token) || ValidTargets.Contains(token) ||
+            ContainerKeys.Contains(token) || MechanicPrefixes.Contains(token) ||
+            TogItems.Contains(token) || IsItemIdentifier(token) ||
+            IsRepeatPrefix(token, out _))
+        {
+            return true;
+        }
+
+        // Contextually allow values mapped to valid preceding keys
+        if (index > 0)
+        {
+            string prev = tokens[index - 1].ToLower();
+            HashSet<string> propertiesExpectingValue = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "tier", "n", "img", "doc", "sidesc", "m", "part", "mrg", "splice",
+                "hsv", "hue", "thue", "p", "b", "draw", "rect",
+                "k", "facade", "sticker", "enchant", "cast", "hat", "t", "gift", "learn", "i", "sd"
+            };
+            if (propertiesExpectingValue.Contains(prev)) return true;
+        }
+
+        return false;
+    }
 }
 
 [System.Serializable]

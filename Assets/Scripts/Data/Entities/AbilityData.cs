@@ -11,6 +11,72 @@ public static class AbilityDomainRules
         "sd", "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "n", "img", "hp", "col", "tier",
         "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "doc", "adj", "speech", "orb"
     };
+
+    public static readonly HashSet<string> AbilityStartTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    { "orb", "triggerhpdata", "onhitdata", "abilitydata", "cast" };
+
+    public static bool IsAbilityStartSequence(List<string> tokens, int index)
+    {
+        string token = tokens[index];
+        if (AbilityStartTokens.Contains(token)) return true;
+
+        // Check if the sequence matches [s|t]<HeroType>.[abilitydata|triggerhpdata|onhitdata]
+        if (index + 1 < tokens.Count)
+        {
+            string nextToken = tokens[index + 1].ToLower();
+            if (nextToken == "abilitydata" || nextToken == "triggerhpdata" || nextToken == "onhitdata")
+            {
+                if (token.Length > 1 && (token[0] == 's' || token[0] == 'S' || token[0] == 't' || token[0] == 'T'))
+                {
+                    string candidateHero = token.Substring(1);
+                    // Strictly verify against the actual game registry enum
+                    if (Enum.TryParse(candidateHero, true, out HeroType _))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    public static int GetAbilityBlockLength(List<string> tokens, int startIndex)
+    {
+        int endIndex = startIndex;
+
+        // Check if startIndex is a strictly validated carrier
+        if (endIndex + 1 < tokens.Count)
+        {
+            string token = tokens[endIndex];
+            string nextToken = tokens[endIndex + 1].ToLower();
+            if (nextToken == "abilitydata" || nextToken == "triggerhpdata" || nextToken == "onhitdata")
+            {
+                if (token.Length > 1 && (token[0] == 's' || token[0] == 'S' || token[0] == 't' || token[0] == 'T'))
+                {
+                    string candidateHero = token.Substring(1);
+                    if (Enum.TryParse(candidateHero, true, out HeroType _))
+                    {
+                        endIndex++; // Consume the carrier token safely
+                    }
+                }
+            }
+        }
+
+        while (endIndex < tokens.Count)
+        {
+            string peek = tokens[endIndex].ToLower();
+            endIndex++;
+
+            if (peek.StartsWith("(") && peek.EndsWith(")")) break;
+
+            if (endIndex - startIndex >= 2)
+            {
+                if (endIndex < tokens.Count && tokens[endIndex].ToLower() == "abilitydata") continue;
+                break;
+            }
+        }
+        return endIndex - startIndex;
+    }
 }
 
 [System.Serializable]
