@@ -669,6 +669,12 @@ public abstract class EntityData : SDData, IPayloadContainer
 
                 string innerPayloadStr = $"{prefix}.{payloadStr}";
 
+                // Handle Sticker duration modifier (togtime)
+                if (face.faceType == DiceSideData.DiceFaceType.Sticker && face.togtime)
+                {
+                    innerPayloadStr += "#togtime";
+                }
+
                 // Clean Enum-based Target Routing
                 if (face.payloadTarget.HasValue && face.faceType == DiceSideData.DiceFaceType.Sticker)
                 {
@@ -750,6 +756,11 @@ public abstract class EntityData : SDData, IPayloadContainer
                     facStr += ":0";
                 }
                 chunks.Add(facStr);
+            }
+
+            if (!string.IsNullOrEmpty(face.sidesc))
+            {
+                chunks.Add($"sidesc.{face.sidesc}");
             }
 
             // 5. MUST BE LAST: stasis

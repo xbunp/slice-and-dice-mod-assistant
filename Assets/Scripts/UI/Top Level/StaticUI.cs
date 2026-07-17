@@ -79,6 +79,9 @@ public class DiceFaceBuilderWidget
     private GridReferences _diceUI;
     //private Dictionary<int, string> _uiFaceTypeOverrides = new Dictionary<int, string>();
 
+    // ADDED: Track manual toggle state overrides per face index
+    private Dictionary<int, bool> _castIsCustomOverride = new Dictionary<int, bool>();
+
     public DiceFaceBuilderWidget(
         Func<DiceSideData[]> getDiceSides,
         Func<bool> allowFacades,
@@ -289,20 +292,29 @@ public class DiceFaceBuilderWidget
             if (allowFac) faceRows.AddRange(BuildHSV(index, face));
 
             // 4. Payloads
+            // 4. Payloads
             if (faceType.HasStringPayload)
             {
                 if (faceType.Id == "sticker")
                 {
                     faceRows.Add(BuildTargetSelector(index, face));
+                    faceRows.Add(BuildTogtimeRow(index, face));
                     faceRows.AddRange(BuildStickerPayload(index, face, faceType));
+                }
+                else if (faceType.Id == "cast")
+                {
+                    //faceRows.Add(BuildTargetSelector(index, face)); // no targets, spell handles that.
+                    faceRows.AddRange(BuildCastPayload(index, face, faceType));
                 }
                 else
                 {
+                    // Only other payload types (e.g. enchant, egg) get the generic text input field
                     faceRows.Add(BuildStringPayload(index, face, faceType));
                 }
             }
 
             // 5. Shared Footer Elements
+            faceRows.Add(BuildSideDescRow(index, face));
             faceRows.AddRange(BuildKeywords(index, face));
             faceRows.Add(BuildClipboardButtons(index));
 
@@ -345,6 +357,11 @@ public class DiceFaceBuilderWidget
                 stickerDrop.SetValueWithoutNotify(0);
             }
 
+            if (_diceUI.Dropdowns.TryGetValue($"CastAbilityDrop_{i}", out var castDrop))
+            {
+                castDrop.SetValueWithoutNotify(0);
+            }
+
             if (faceType.HasBaseAndPips)
             {
                 if (_diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
@@ -354,6 +371,10 @@ public class DiceFaceBuilderWidget
             if (faceType.HasStringPayload)
             {
                 if (_diceUI.Inputs.TryGetValue($"PayloadData_{i}", out var pData)) pData.SetTextWithoutNotify(GetFacePayload(face));
+            }
+            if (_diceUI.Inputs.TryGetValue($"SideDesc_{i}", out var dDesc))
+            {
+                dDesc.SetTextWithoutNotify(face.sidesc ?? "");
             }
 
             if (_allowFacades != null && _allowFacades())
@@ -578,6 +599,30 @@ public class DiceFaceBuilderWidget
             })
         );
     }
+    private GridRowSpec BuildSideDescRow(int index, DiceSideData face)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Desc:", 0.25f),
+            GridCellSpec.CreateInput($"SideDesc_{index}", "Enter side description...", 0.75f, (val) =>
+            {
+                // ADDED: Sanitize rich input syntax
+                face.sidesc = (val ?? "").SanitizeRichInput();
+                _onStateChanged?.Invoke();
+            })
+        );
+    }
+    private GridRowSpec BuildTogtimeRow(int index, DiceSideData face)
+    {
+        string labelText = face.togtime ? "For entire fight" : "for 1 turn";
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Duration:", 0.30f),
+            GridCellSpec.CreateButton($"BtnTogtime_{index}", labelText, 0.70f, () => {
+                face.togtime = !face.togtime;
+                _onStateChanged?.Invoke();
+                _onRebuildRequested?.Invoke();
+            })
+        );
+    }
 
     // Payload Getters / Setters
     private string GetFacePayload(DiceSideData face)
@@ -610,7 +655,6 @@ public class DiceFaceBuilderWidget
             default: face.faceType = DiceSideData.DiceFaceType.Base; break;
         }
     }
-
     private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
@@ -668,5 +712,151 @@ public class DiceFaceBuilderWidget
         }
 
         return rows;
+    }
+    private List<GridRowSpec> BuildCastPayload(int index, DiceSideData face, PayloadType faceType)
+    {
+        var rows = new List<GridRowSpec>();
+        bool isCustom = IsCastCustom(index, face);
+
+        // 1. Toggle switch row
+        rows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Cast Source:", 0.30f),
+            GridCellSpec.CreateButton($"BtnToggleCastType_{index}", isCustom ? "► CUSTOM (Click for Base)" : "► BASE (Click for Custom)", 0.70f, () => ToggleCastType(index, face))
+        ));
+
+        string currentPayload = GetFacePayload(face);
+        bool hasPayload = !string.IsNullOrWhiteSpace(currentPayload);
+
+        // 2. Render Base Ability Selector
+        if (!isCustom)
+        {
+            var baseAbilities = BaseAbilityDatabase.Abilities;
+            var dropdownChoices = new List<string> { "-- Select Base Ability --" };
+
+            if (baseAbilities != null)
+            {
+                dropdownChoices.AddRange(baseAbilities
+                    .Select(a => $"{a.name} ({a.cost}): {(a.effect ?? "").Replace("\n", " | ")}")
+                    .ToList());
+            }
+
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Set Ability:", 0.30f),
+                GridCellSpec.CreateFilteredDropdown($"CastBaseAbilityDrop_{index}", "-- Select Base Ability --", 0.70f, dropdownChoices.ToArray(), (val) => {
+                    if (val <= 0 || val >= dropdownChoices.Count || baseAbilities == null) return;
+
+                    var targetAbility = baseAbilities[val - 1]; // Offset by 1 for placeholder
+                    if (targetAbility != null)
+                    {
+                        SetFacePayload(face, faceType.Id, targetAbility.name);
+                        _onStateChanged?.Invoke();
+                        _onRebuildRequested?.Invoke();
+                    }
+                })
+            ));
+
+            if (hasPayload)
+            {
+                var matchingAbility = baseAbilities?.FirstOrDefault(a => a.name == currentPayload);
+                string displayLabel = matchingAbility != null ? matchingAbility.name : currentPayload;
+                if (displayLabel.Length > 25) displayLabel = displayLabel.Substring(0, 22) + "...";
+
+                rows.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel($"ActiveCast_{index}", displayLabel, 0.80f),
+                    GridCellSpec.CreateButton($"DelCast_{index}", "[X]", 0.20f, () => {
+                        SetFacePayload(face, faceType.Id, "");
+                        _onStateChanged?.Invoke();
+                        _onRebuildRequested?.Invoke();
+                    })
+                ));
+            }
+        }
+        // 3. Render Custom Ability Selector
+        else
+        {
+            var customAbilities = ModPackage.Instance?.CustomAbilities;
+            var abilityNames = new List<string> { "-- Select Custom Ability --" };
+
+            if (customAbilities != null)
+            {
+                abilityNames.AddRange(customAbilities
+                    .Select(a => !string.IsNullOrEmpty(a.entityName) ? a.entityName : "Unnamed Ability")
+                    .Distinct());
+            }
+
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Set Ability:", 0.30f),
+                GridCellSpec.CreateFilteredDropdown($"CastAbilityDrop_{index}", "-- Select Custom Ability --", 0.70f, abilityNames.ToArray(), (val) => {
+                    if (val <= 0 || val >= abilityNames.Count) return;
+
+                    string selectedName = abilityNames[val];
+                    var targetAbility = ModPackage.Instance?.CustomAbilities?.FirstOrDefault(a => a.entityName == selectedName);
+
+                    if (targetAbility != null)
+                    {
+                        string abilitySyntax = targetAbility.Export();
+
+                        if (abilitySyntax.StartsWith("a.", StringComparison.OrdinalIgnoreCase) ||
+                            abilitySyntax.StartsWith("c.", StringComparison.OrdinalIgnoreCase))
+                        {
+                            abilitySyntax = abilitySyntax.Substring(2);
+                        }
+
+                        SetFacePayload(face, faceType.Id, abilitySyntax);
+                        _onStateChanged?.Invoke();
+                        _onRebuildRequested?.Invoke();
+                    }
+                })
+            ));
+
+            if (hasPayload)
+            {
+                string displayLabel = currentPayload.Length > 25 ? currentPayload.Substring(0, 22) + "..." : currentPayload;
+
+                rows.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel($"ActiveCast_{index}", displayLabel, 0.80f),
+                    GridCellSpec.CreateButton($"DelCast_{index}", "[X]", 0.20f, () => {
+                        SetFacePayload(face, faceType.Id, "");
+                        _onStateChanged?.Invoke();
+                        _onRebuildRequested?.Invoke();
+                    })
+                ));
+            }
+        }
+
+        return rows;
+    }
+    private bool IsCastCustom(int index, DiceSideData face)
+    {
+        if (_castIsCustomOverride.TryGetValue(index, out bool val))
+        {
+            return val;
+        }
+
+        // Auto-detect based on active payload
+        if (string.IsNullOrEmpty(face.payload))
+        {
+            return false; // Default to Base
+        }
+
+        // If the current payload matches an entity name in custom abilities, treat it as custom
+        var customAbilities = ModPackage.Instance?.CustomAbilities;
+        if (customAbilities != null && customAbilities.Any(a => a.entityName == face.payload || a.Export().Contains(face.payload)))
+        {
+            return true;
+        }
+
+        return false;
+    }
+    private void ToggleCastType(int index, DiceSideData face)
+    {
+        bool nextState = !IsCastCustom(index, face);
+        _castIsCustomOverride[index] = nextState;
+
+        // Clear active selection to avoid weird cross-over state
+        SetFacePayload(face, "cast", "");
+
+        _onStateChanged?.Invoke();
+        _onRebuildRequested?.Invoke();
     }
 }

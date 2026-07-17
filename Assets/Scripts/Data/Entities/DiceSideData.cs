@@ -46,13 +46,19 @@ public class DiceSideData
         return false;
     }
 
+    public DiceFaceType faceType = DiceFaceType.Base;
+
+    //Standard side values
     public int effectID = 0;
     public int pips = 0;
     public string facadeID = "";
     public string facadeColor = "";
     public List<string> keywords = new List<string>();
+    public string sidesc = "";
 
-    public DiceFaceType faceType = DiceFaceType.Base;
+    public bool togtime = false;
+
+    // Advanced side values
     public PayloadTarget? payloadTarget = null; // null represents "Default (Inherent)"
     public string payload = "";
 
@@ -67,7 +73,8 @@ public class DiceSideData
             keywords = new List<string>(this.keywords),
             faceType = this.faceType,
             payloadTarget = this.payloadTarget,
-            payload = this.payload
+            payload = this.payload,
+            sidesc = this.sidesc
         };
     }
 }
