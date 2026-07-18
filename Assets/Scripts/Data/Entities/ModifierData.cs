@@ -1,14 +1,35 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using UnityEditor;
 using UnityEngine;
 
 public static class ModifierDomainRules
 {
+    public static readonly HashSet<string> ModLevelTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "heropool", "itempool", "monsterpool", "fight", "ph", "phi", "phmp", "ch"
+    };
+
     public static readonly HashSet<string> ModifierStartTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    { "self", "jinx", "vase" };
+    {
+        "self", "jinx", "vase", "enchant"
+    };
 
     public static readonly HashSet<string> ModifierEndTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    { "spirit" };
+    {
+        "spirit"
+    };
+
+    public static bool IsModLevelToken(string token) => ModLevelTokens.Contains(token);
+
+    // Determines if a token is a valid face targeting alias 
+    public static bool IsTargetAlias(string token)
+    {
+        string lower = token.ToLower();
+        return lower == "all" || DiceTargetHelper.GetIndicesForTarget(lower).Count > 0;
+    }
 
     public static bool IsModifierStartToken(string token) => ModifierStartTokens.Contains(token);
 
@@ -33,45 +54,269 @@ public static class ModifierDomainRules
     }
 }
 
+// Enum representing the final "Payload" of the modifier string
+public enum ModifierActionType
+{
+    CoreModifier,     // Base effect, e.g. "cantrip", "Shield Response"
+    AddMonster,     // "add.wolf"
+    AddHero,        // "add.thief"
+    GiveItem,       // "i.item"
+    AllItem,        // "allitem.item"
+    AllItemE,       // "alliteme.item"
+    PerItem,        // "peritem.item"
+    Delivery,       // Uses StringPayload for the seed (e.g., "18bfc")
+    RMod,           // Uses StringPayload for the seed (e.g., "86b7")
+    EndTurnAbility, // "ea.ability"
+    TransformHero,  // "b.hero"
+    PartyHeroes,    // "party.hero+hero"
+    MonsterSpirit,  // "monster.spirit"
+    Jinx,           // "jinx.modifier"
+    Vase,           // "vase.modifier"
+    Self,           // "self.modifier"
+    InlineMonster,  // Bare monster token, e.g. "Wolf.doc.description"
+    InlineHero      // Bare hero token, e.g. "Thief.doc.description"
+}
+
 [System.Serializable]
 public class ModifierData : SDData
 {
-    [Header("Raw Modifier Commands")]
-    public List<string> coreCommands = new List<string>();
+    [Header("Combinators")]
+    public ModifierData SplicedModifier; // Handled by .splice.
+    public ModifierData ChainedModifier; // Handled by &
+
+    [Header("Timing / Cadence")]
+    public string FloorLevel;        // "1" or "1-5"
+    public string Turn;              // "t1"
+    public string EveryXFights;      // "e2"
+    public string EveryXFightsOffset;// ".3" -> e.g. e2.3
+    public string EveryXTurns;       // "et3"
+
+    [Header("Stacking / Scaling")]
+    public string RepeatTimes;       // "x3"
+    public bool PerFightStack;       // "pl"
+    public bool PerBossStack;        // "pb"
+    public bool PerTurnStack;        // "pt"
+
+    [Header("Game State Rules")]
+    public string ModTier;           // "modtier.3"
+    public string Difficulty;        // "diff.Hard"
+
+    [Header("Targeting Logic")]
+    public bool InvertTarget;        // "inv"
+    public string HeroPosition;      // "h.top"
+    public bool TargetAllHeroes;     // "hero"
+    public bool TargetAllMonsters;   // "monster"
+    public string DiceFaceTarget;    // "left2", "row", "all"
+    public bool Unpack;              // "unpack"
+
+    [Header("Action Payload")]
+    public ModifierActionType ActionType;
+    public string CoreEffectName;    // Only used if ActionType == CoreEffect
+
+    // Typed Payloads (Only one of these will generally be populated based on ActionType)
+    public MonsterData MonsterPayload;
+    public HeroData HeroPayload;
+    public ItemData ItemPayload;
+    public ModifierData NestedModifierPayload;
+    public AbilityData AbilityPayload;
+    public string StringPayload;     // Used for multi-groupings like party (hero+hero) or delivery (item+item)
+
+    [Header("Suffixes")]
+    public int? PartIndex;           // "part.0"
+    public string ModName;           // "mn.Named Modifier"
+    public string DocDescription;    // "doc.description text"
 
     public override void Parse(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
-        string core = StaticBranchTracing.StripOuterParens(data.Trim());
+        data = StaticBranchTracing.StripOuterParens(data.Trim());
 
-        List<string> chains = StaticBranchTracing.TopLevelSplit(core, '#');
-        foreach (var chain in chains)
+        // 1. Check for Top-Level Chaining (&)
+        var chainParts = StaticBranchTracing.TopLevelSplit(data, '&');
+        if (chainParts.Count > 1)
         {
-            if (string.IsNullOrWhiteSpace(chain)) continue;
-            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-            ExtractKnowledge(tokens);
+            ParseCore(chainParts[0]);
+            ChainedModifier = new ModifierData();
+            ChainedModifier.Parse(string.Join("&", chainParts.Skip(1)));
+            return;
         }
+
+        // 2. Check for Top-Level Splicing (.splice.)
+        var spliceParts = StaticBranchTracing.TopLevelSplit(data, '.');
+        int spliceIdx = spliceParts.FindIndex(p => p.Equals("splice", StringComparison.OrdinalIgnoreCase));
+        if (spliceIdx != -1)
+        {
+            ParseCore(string.Join(".", spliceParts.Take(spliceIdx)));
+            SplicedModifier = new ModifierData();
+            SplicedModifier.Parse(string.Join(".", spliceParts.Skip(spliceIdx + 1)));
+            return;
+        }
+
+        // 3. Parse Standard Structure
+        ParseCore(data);
     }
 
-    private void ExtractKnowledge(List<string> tokens)
+    private void ParseCore(string data)
     {
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(data, '.');
+        if (tokens.Count == 0) return;
+
+        // POP SUFFIXES FIRST (from end to front) to avoid them getting eaten by payloads
+        while (tokens.Count > 0)
+        {
+            string prev = tokens.Count > 1 ? tokens[tokens.Count - 2].ToLower() : "";
+
+            if (prev == "doc")
+            {
+                DocDescription = tokens.Last();
+                tokens.RemoveRange(tokens.Count - 2, 2);
+            }
+            else if (prev == "mn")
+            {
+                ModName = tokens.Last();
+                tokens.RemoveRange(tokens.Count - 2, 2);
+            }
+            else if (prev == "part")
+            {
+                if (int.TryParse(tokens.Last(), out int partVal))
+                {
+                    PartIndex = partVal;
+                    tokens.RemoveRange(tokens.Count - 2, 2);
+                }
+                else break;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // FORWARD PASS
         for (int i = 0; i < tokens.Count; i++)
         {
-            string originalToken = tokens[i];
-            string tokenLower = originalToken.ToLower();
+            string token = tokens[i];
+            string lower = token.ToLower();
 
-            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
+            if (ModifierDomainRules.IsModLevelToken(lower))
             {
-                string inner = originalToken.Substring(1, originalToken.Length - 2);
-                List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
-                ExtractKnowledge(innerTokens);
+                throw new NotImplementedException($"Mod-level structural token '{token}' is not supported in gameplay ModifierData.");
+            }
+
+            // Timing / Cadence
+            if (Regex.IsMatch(lower, @"^\d+(-\d+)?$")) { FloorLevel = token; continue; }
+            if (lower.StartsWith("t") && int.TryParse(lower.Substring(1), out _)) { Turn = token; continue; }
+            if (lower.StartsWith("et") && int.TryParse(lower.Substring(2), out _)) { EveryXTurns = token; continue; }
+            if (lower.StartsWith("e") && int.TryParse(lower.Substring(1), out _))
+            {
+                EveryXFights = token;
+                // Peek ahead for offset
+                if (i + 1 < tokens.Count && int.TryParse(tokens[i + 1], out _))
+                {
+                    EveryXFightsOffset = tokens[++i];
+                }
                 continue;
             }
 
-            // =========================================================================
-            // NEW: Parse Inline Entities (e.g. Wolf.doc.<desc>) inside a modifier
-            // =========================================================================
-            if (StaticBranchTracing.IsMonsterEntity(originalToken) || StaticBranchTracing.IsHeroEntity(originalToken))
+            // Stacking / Scaling
+            if (lower.StartsWith("x") && int.TryParse(lower.Substring(1), out _)) { RepeatTimes = token; continue; }
+            if (lower == "pl") { PerFightStack = true; continue; }
+            if (lower == "pb") { PerBossStack = true; continue; }
+            if (lower == "pt") { PerTurnStack = true; continue; }
+
+            // Configurations
+            if (lower == "modtier" && i + 1 < tokens.Count) { ModTier = tokens[++i]; continue; }
+            if (lower == "diff" && i + 1 < tokens.Count) { Difficulty = tokens[++i]; continue; }
+            if (lower == "unpack") { Unpack = true; continue; }
+
+            // Targets
+            if (lower == "hero") { TargetAllHeroes = true; continue; }
+            if (lower == "monster") { TargetAllMonsters = true; continue; }
+            if (lower == "inv") { InvertTarget = true; continue; }
+            if (lower == "h" && i + 1 < tokens.Count) { HeroPosition = tokens[++i]; continue; }
+            if (ModifierDomainRules.IsTargetAlias(lower)) { DiceFaceTarget = token; continue; }
+
+            // ==== ACTION PAYLOAD ROUTING ==== //
+            string remainingPayload = string.Join(".", tokens.Skip(i + 1));
+
+            if (lower == "add")
+            {
+                if (StaticBranchTracing.IsMonsterEntity(tokens[i + 1]))
+                {
+                    ActionType = ModifierActionType.AddMonster;
+                    MonsterPayload = new MonsterData();
+                    MonsterPayload.Parse(remainingPayload);
+                }
+                else
+                {
+                    ActionType = ModifierActionType.AddHero;
+                    HeroPayload = new HeroData();
+                    HeroPayload.Parse(remainingPayload);
+                }
+                break;
+            }
+            if (lower == "i" || lower == "allitem" || lower == "alliteme" || lower == "peritem")
+            {
+                ActionType = lower switch
+                {
+                    "i" => ModifierActionType.GiveItem,
+                    "allitem" => ModifierActionType.AllItem,
+                    "alliteme" => ModifierActionType.AllItemE,
+                    "peritem" => ModifierActionType.PerItem,
+                    _ => ModifierActionType.GiveItem
+                };
+                ItemPayload = new ItemData();
+                ItemPayload.Parse(remainingPayload);
+                break;
+            }
+            if (lower == "ea")
+            {
+                ActionType = ModifierActionType.EndTurnAbility;
+                AbilityPayload = AbilityData.CreateAbility(remainingPayload);
+                break;
+            }
+            if (lower == "b")
+            {
+                ActionType = ModifierActionType.TransformHero;
+                HeroPayload = new HeroData();
+                HeroPayload.Parse(remainingPayload);
+                break;
+            }
+            if (lower == "party" || lower == "delivery" || lower == "rmod")
+            {
+                ActionType = lower switch
+                {
+                    "party" => ModifierActionType.PartyHeroes,
+                    "delivery" => ModifierActionType.Delivery,
+                    "rmod" => ModifierActionType.RMod,
+                    _ => ModifierActionType.RMod
+                };
+                StringPayload = remainingPayload;
+                break;
+            }
+            if (lower == "jinx" || lower == "vase" || lower == "self")
+            {
+                ActionType = lower switch
+                {
+                    "jinx" => ModifierActionType.Jinx,
+                    "vase" => ModifierActionType.Vase,
+                    "self" => ModifierActionType.Self,
+                    _ => ModifierActionType.Self
+                };
+                NestedModifierPayload = new ModifierData();
+                NestedModifierPayload.Parse(remainingPayload);
+                break;
+            }
+            if (lower == "spirit")
+            {
+                ActionType = ModifierActionType.MonsterSpirit;
+                // 'spirit' acts as the core action flag here
+                break;
+            }
+
+            // Bare / Inline Entity Parsing (e.g. "Wolf.doc.description" inside a modifier)
+            // Crucial: This does NOT break the loop, because trailing tokens like 'spirit' 
+            // dictate the final ActionType for this modifier.
+            if (StaticBranchTracing.IsMonsterEntity(token) || StaticBranchTracing.IsHeroEntity(token))
             {
                 int startIndex = i;
                 int endIndex = i + 1;
@@ -89,166 +334,219 @@ public class ModifierData : SDData
 
                 string entityPayload = string.Join(".", tokens.GetRange(startIndex, endIndex - startIndex));
 
-                if (StaticBranchTracing.IsMonsterEntity(originalToken))
+                if (StaticBranchTracing.IsMonsterEntity(token))
                 {
-                    MonsterData monster = new MonsterData();
-                    // DELETED: monster.entityName = originalToken; (This caused the .n. rename mutation)
-                    monster.Parse(entityPayload);
-                    customPayloads.Add(new CustomPayload { Prefix = "", Data = monster, Type = PayloadType.Monster });
+                    MonsterPayload = new MonsterData();
+                    MonsterPayload.Parse(entityPayload);
+                    // Set a default action, but allow tokens like 'spirit' further down to overwrite it
+                    if (ActionType == 0) ActionType = ModifierActionType.InlineMonster;
                 }
                 else
                 {
-                    HeroData hero = new HeroData();
-                    // DELETED: hero.entityName = originalToken;
-                    hero.Parse(entityPayload);
-                    customPayloads.Add(new CustomPayload { Prefix = "", Data = hero, Type = PayloadType.Hero });
+                    HeroPayload = new HeroData();
+                    HeroPayload.Parse(entityPayload);
+                    if (ActionType == 0) ActionType = ModifierActionType.InlineHero;
                 }
 
                 i = endIndex - 1;
-                continue;
+                continue; // Continue scanning the rest of the modifier to catch suffix actions!
             }
 
-            if (tokenLower == "abilitydata" || tokenLower == "i" || tokenLower == "hat" || tokenLower == "egg" || tokenLower == "rmon" || tokenLower == "add" || tokenLower == "vase" || tokenLower == "jinx")
-            {
-                int startIndex = i + 1;
-                if (startIndex >= tokens.Count) break;
-
-                int endIndex = startIndex;
-                while (endIndex < tokens.Count)
-                {
-                    string peek = tokens[endIndex].ToLower();
-                    if (peek == "abilitydata" || peek == "i" || peek == "hat" || peek == "egg" || peek == "rmon" || peek == "add" || peek == "vase" || peek == "jinx") break;
-                    endIndex++;
-                }
-
-                int count = endIndex - startIndex;
-                if (count > 0)
-                {
-                    string payload = string.Join(".", tokens.GetRange(startIndex, count));
-                    i = endIndex - 1;
-
-                    if (tokenLower == "abilitydata")
-                        customPayloads.Add(new CustomPayload { Prefix = tokenLower, Data = AbilityData.CreateAbility(payload) });
-                    else if (tokenLower == "i")
-                    {
-                        ItemData item = new ItemData(); item.Parse(payload);
-                        customPayloads.Add(new CustomPayload { Prefix = tokenLower, Data = item, Type = PayloadType.Item });
-                    }
-                    else if (tokenLower == "egg" || tokenLower == "rmon")
-                    {
-                        MonsterData monster = new MonsterData(); monster.Parse(originalToken + "." + payload);
-                        customPayloads.Add(new CustomPayload { Prefix = "", Data = monster, Type = PayloadType.Monster });
-                    }
-                    else if (tokenLower == "hat")
-                    {
-                        if (StaticBranchTracing.IsMonsterEntity(payload))
-                        {
-                            MonsterData m = new MonsterData(); m.Parse(payload);
-                            customPayloads.Add(new CustomPayload { Prefix = "hat", Data = m, Type = PayloadType.Monster });
-                        }
-                        else
-                        {
-                            HeroData h = new HeroData(); h.Parse(payload);
-                            customPayloads.Add(new CustomPayload { Prefix = "hat", Data = h, Type = PayloadType.Hero });
-                        }
-                    }
-                    else if (tokenLower == "add")
-                    {
-                        if (StaticBranchTracing.IsMonsterEntity(payload))
-                        {
-                            MonsterData m = new MonsterData(); m.Parse(payload);
-                            customPayloads.Add(new CustomPayload { Prefix = "add", Data = m, Type = PayloadType.Monster });
-                        }
-                        else
-                        {
-                            HeroData h = new HeroData(); h.Parse(payload);
-                            customPayloads.Add(new CustomPayload { Prefix = "add", Data = h, Type = PayloadType.Hero });
-                        }
-                    }
-                    else if (tokenLower == "vase" || tokenLower == "jinx")
-                    {
-                        ModifierData mod = new ModifierData();
-
-                        // FIX: Parse ONLY the inner payload to prevent infinite recursion
-                        string corePayload = StaticBranchTracing.StripOuterParens(payload);
-                        mod.Parse(corePayload);
-
-                        // Set Prefix to tokenLower so we preserve "vase" or "jinx" during export
-                        customPayloads.Add(new CustomPayload { Prefix = tokenLower, Data = mod, Type = PayloadType.Modifier });
-                    }
-                }
-            }
-            else
-            {
-                coreCommands.Add(originalToken);
-            }
+            // If none of the known functional prefixes hit, this token IS the core effect.
+            ActionType = ModifierActionType.CoreModifier;
+            CoreEffectName = token;
+            break;
         }
     }
+
+    /// <summary>
+    /// COMPILER PASS: Validates the author's input against the strict rules of the game engine.
+    /// Throws an InvalidOperationException if the configuration would cause the engine parser to crash.
+    /// </summary>
+    public void Validate(bool isRoot = true)
+    {
+        if (ActionType == ModifierActionType.Jinx && NestedModifierPayload != null)
+        {
+            if (NestedModifierPayload.ActionType == ModifierActionType.Self)
+                throw new InvalidOperationException("COMPILER ERROR: 'jinx.self.<mod>' is invalid. Use 'jinx.i.self.<mod>' instead.");
+        }
+
+        if (ActionType == ModifierActionType.AddMonster || ActionType == ModifierActionType.AddHero)
+        {
+            if (InvertTarget || !string.IsNullOrEmpty(HeroPosition) || TargetAllHeroes || TargetAllMonsters || !string.IsNullOrEmpty(DiceFaceTarget))
+                throw new InvalidOperationException($"COMPILER ERROR: '{ActionType}' is targetless. Cannot combine with target scopes.");
+        }
+
+        if (!string.IsNullOrEmpty(Difficulty))
+            throw new InvalidOperationException("COMPILER ERROR: 'diff' is a Mod-Level setting, not a Modifier string setting.");
+
+        // Splice Rule: Engine evaluates left-to-right. Cannot splice a chained modifier.
+        if (SplicedModifier != null && SplicedModifier.ChainedModifier != null)
+            throw new InvalidOperationException("COMPILER ERROR: Cannot splice compound modifiers (e.g. mod.splice.(mod&mod) is invalid).");
+
+        // Global Suffix Rule: Names and Docs must be at the top level to avoid UI breaks.
+        if (!isRoot && (!string.IsNullOrEmpty(ModName) || !string.IsNullOrEmpty(DocDescription)))
+            throw new InvalidOperationException("COMPILER ERROR: ModName and DocDescription apply to the entire package. They must only be set on the root ModifierData, not inside chains or splices.");
+
+        if (ActionType == ModifierActionType.CoreModifier && !PartIndex.HasValue)
+        {
+            bool hasPrefixes = !string.IsNullOrEmpty(Turn) || !string.IsNullOrEmpty(FloorLevel) || InvertTarget || !string.IsNullOrEmpty(HeroPosition);
+            if (hasPrefixes)
+                UnityEngine.Debug.LogWarning($"COMPILER WARNING: If '{CoreEffectName}' has multiple parts (like Ghoststone), prefixes will cause the parser to crash. You must target parts explicitly.");
+        }
+    }
+
 
     public override string Export()
     {
+        return ExportInternal(isRoot: true);
+    }
+
+    private string ExportInternal(bool isRoot)
+    {
+        Validate(isRoot);
+
         List<string> parts = new List<string>();
 
-        // 1. Export inline payloads FIRST (e.g. "Wolf.doc.<description>")
-        foreach (var cp in customPayloads)
+        // 1. Setup (Unpack is local to the specific block)
+        if (Unpack) parts.Add("unpack");
+
+        // 2. Timing (Ordered based on engine UI preference)
+        if (!string.IsNullOrEmpty(FloorLevel)) parts.Add(FloorLevel);
+        if (!string.IsNullOrEmpty(EveryXFights))
         {
-            if (string.IsNullOrEmpty(cp.Prefix))
-            {
-                string exp = string.Empty;
+            parts.Add(EveryXFights);
+            if (!string.IsNullOrEmpty(EveryXFightsOffset)) parts.Add(EveryXFightsOffset);
+        }
+        if (!string.IsNullOrEmpty(EveryXTurns)) parts.Add(EveryXTurns);
+        if (!string.IsNullOrEmpty(Turn)) parts.Add(Turn);
 
-                // Structurally identify inline spirits instead of relying on a fake prefix string
-                if (cp.Type == PayloadType.Monster && cp.Data is MonsterData md && StaticBranchTracing.IsMonsterEntity(md.baseMonster))
-                {
-                    exp = MonsterData.ExportAsSpirit(md);
-                }
-                else if (cp.Type == PayloadType.Hero && cp.Data is HeroData hd && StaticBranchTracing.IsHeroEntity(hd.baseReplica))
-                {
-                    exp = hd.Export();
-                }
+        // 3. Stacking 
+        if (!string.IsNullOrEmpty(RepeatTimes)) parts.Add(RepeatTimes);
+        if (PerFightStack) parts.Add("pl");
+        if (PerBossStack) parts.Add("pb");
+        if (PerTurnStack) parts.Add("pt");
 
-                if (!string.IsNullOrEmpty(exp)) parts.Add(exp);
-            }
+        // 4. Entity Targeting (Strict Engine Order: h.pos MUST precede inv)
+        if (!string.IsNullOrEmpty(HeroPosition)) { parts.Add("h"); parts.Add(HeroPosition); }
+        if (InvertTarget) parts.Add("inv");
+
+        // 5. Dice Face Scopes
+        if (!string.IsNullOrEmpty(DiceFaceTarget)) parts.Add(DiceFaceTarget);
+
+        // 6. Traits
+        if (TargetAllHeroes) parts.Add("hero");
+        if (TargetAllMonsters) parts.Add("monster");
+
+        // 7. Action Payload
+        switch (ActionType)
+        {
+            case ModifierActionType.AddMonster:
+                parts.Add("add"); parts.Add(MonsterPayload?.Export() ?? ""); break;
+            case ModifierActionType.AddHero:
+                parts.Add("add"); parts.Add(HeroPayload?.Export() ?? ""); break;
+            case ModifierActionType.GiveItem:
+                parts.Add("i"); parts.Add(ItemPayload?.Export() ?? ""); break;
+            case ModifierActionType.AllItem:
+                parts.Add("allitem"); parts.Add(ItemPayload?.Export() ?? ""); break;
+            case ModifierActionType.AllItemE:
+                parts.Add("alliteme"); parts.Add(ItemPayload?.Export() ?? ""); break;
+            case ModifierActionType.PerItem:
+                parts.Add("peritem"); parts.Add(ItemPayload?.Export() ?? ""); break;
+            case ModifierActionType.Delivery:
+                parts.Add("delivery"); parts.Add(StringPayload); break; // StringPayload is the seed
+            case ModifierActionType.RMod:
+                parts.Add("rmod"); parts.Add(StringPayload); break; // StringPayload is the seed
+            case ModifierActionType.PartyHeroes:
+                parts.Add("party"); parts.Add(StringPayload); break;
+            case ModifierActionType.EndTurnAbility:
+                parts.Add("ea"); /* Requires AbilityPayload Export */ break;
+            case ModifierActionType.TransformHero:
+                parts.Add("b"); parts.Add(HeroPayload?.Export() ?? ""); break;
+            case ModifierActionType.Jinx:
+                parts.Add("jinx"); parts.Add(NestedModifierPayload?.ExportInternal(false) ?? ""); break;
+            case ModifierActionType.Vase:
+                parts.Add("vase"); parts.Add(NestedModifierPayload?.ExportInternal(false) ?? ""); break;
+            case ModifierActionType.Self:
+                parts.Add("self"); parts.Add(NestedModifierPayload?.ExportInternal(false) ?? ""); break;
+            case ModifierActionType.MonsterSpirit:
+                if (MonsterPayload != null) parts.Add(MonsterData.ExportAsSpirit(MonsterPayload));
+                parts.Add("spirit"); break;
+            case ModifierActionType.InlineMonster:
+                if (MonsterPayload != null) parts.Add(MonsterData.ExportAsSpirit(MonsterPayload));
+                break;
+            case ModifierActionType.InlineHero:
+                if (HeroPayload != null) parts.Add(HeroPayload.Export());
+                break;
+            case ModifierActionType.CoreModifier:
+                if (!string.IsNullOrEmpty(CoreEffectName)) parts.Add(CoreEffectName);
+                break;
         }
 
-        // 2. Export structural Core Commands (e.g. "spirit", "cantrip")
-        if (coreCommands.Count > 0)
+        // 8. Local Suffixes 
+        if (PartIndex.HasValue) { parts.Add("part"); parts.Add(PartIndex.Value.ToString()); }
+        if (!string.IsNullOrEmpty(ModTier)) { parts.Add("modtier"); parts.Add(ModTier); }
+
+        string blockString = string.Join(".", parts.Where(p => !string.IsNullOrEmpty(p)));
+
+        // 9. Process Combinators (Splices first, then Chains, with strict bracketing)
+        if (SplicedModifier != null)
         {
-            parts.AddRange(coreCommands);
+            blockString = $"{blockString}.splice.{SplicedModifier.ExportInternal(false)}";
         }
 
-        // 3. Export explicitly prefixed payloads LAST (e.g. "abilitydata.x", "hat.x")
-        foreach (var cp in customPayloads)
+        if (ChainedModifier != null)
         {
-            if (!string.IsNullOrEmpty(cp.Prefix))
-            {
-                string exp = cp.Export();
-                if (!string.IsNullOrEmpty(exp)) parts.Add(exp);
-            }
+            // By wrapping both sides of the ampersand in parenthesis, we protect prefixes from leaking
+            // and prevent the parser from dropping trailing elements.
+            blockString = $"({blockString})&({ChainedModifier.ExportInternal(false)})";
         }
 
-        return string.Join(".", parts);
+        // 10. Global Suffixes (Only applied to the very outermost edge of the package)
+        if (isRoot)
+        {
+            if (!string.IsNullOrEmpty(ModName)) blockString += $".mn.{ModName}";
+            if (!string.IsNullOrEmpty(DocDescription)) blockString += $".doc.{DocDescription}";
+        }
+
+        return blockString;
     }
+
 
     public void DebugContentsToConsole(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        sb.AppendLine($"{indent}--- MODIFIER DATA DEBUG ---");
-        if (coreCommands.Count > 0) sb.AppendLine($"{indent}Core Commands: {string.Join(".", coreCommands)}");
+        sb.AppendLine($"{indent}--- MODIFIER DATA ---");
 
-        if (customPayloads != null && customPayloads.Count > 0)
+        if (Unpack) sb.AppendLine($"{indent}Unpack: True");
+        if (!string.IsNullOrEmpty(FloorLevel)) sb.AppendLine($"{indent}Floors: {FloorLevel}");
+        if (!string.IsNullOrEmpty(Turn)) sb.AppendLine($"{indent}Turn: {Turn}");
+        if (!string.IsNullOrEmpty(EveryXFights)) sb.AppendLine($"{indent}Every {EveryXFights} fights (Offset {EveryXFightsOffset})");
+
+        sb.AppendLine($"{indent}Action Type: {ActionType}");
+        if (ActionType == ModifierActionType.CoreModifier) sb.AppendLine($"{indent}Core Effect: '{CoreEffectName}'");
+        if (PartIndex.HasValue) sb.AppendLine($"{indent}Targeted Part: {PartIndex.Value}");
+
+        if (InvertTarget) sb.AppendLine($"{indent}Invert Target: True");
+        if (!string.IsNullOrEmpty(HeroPosition)) sb.AppendLine($"{indent}Hero Pos: {HeroPosition}");
+        if (!string.IsNullOrEmpty(DiceFaceTarget)) sb.AppendLine($"{indent}Dice Face: {DiceFaceTarget}");
+
+        if (NestedModifierPayload != null)
         {
-            sb.AppendLine($"{indent}Custom Payloads ({customPayloads.Count}):");
-            for (int i = 0; i < customPayloads.Count; i++)
-            {
-                var cp = customPayloads[i];
-                sb.AppendLine($"{indent}  [{i}] Prefix: '{cp.Prefix}' | [✓ Unpacked {cp.Data?.GetType().Name}]");
+            sb.AppendLine($"{indent}Nested Modifier Payload:");
+            NestedModifierPayload.DebugContentsToConsole(indent + "  ");
+        }
 
-                if (cp.Data is ItemData id) id.DebugContentsToConsole(indent + "        ");
-                else if (cp.Data is HeroData hd) hd.DebugContentsToConsoleCompact(indent + "        ");
-                else if (cp.Data is AbilityData ad) ad.DebugAbilityCompact(indent + "        ");
-                else if (cp.Data is ModifierData md) md.DebugContentsToConsole(indent + "        ");
-                else if (cp.Data is MonsterData mnd) mnd.DebugContentsToConsoleCompact(indent + "        ");
-            }
+        if (ChainedModifier != null)
+        {
+            sb.AppendLine($"{indent}Chained With (&):");
+            ChainedModifier.DebugContentsToConsole(indent + "  ");
+        }
+
+        if (SplicedModifier != null)
+        {
+            sb.AppendLine($"{indent}Spliced With (.splice.):");
+            SplicedModifier.DebugContentsToConsole(indent + "  ");
         }
 
         UnityEngine.Debug.Log(sb.ToString());

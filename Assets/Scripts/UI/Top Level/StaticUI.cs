@@ -301,6 +301,12 @@ public class DiceFaceBuilderWidget
                     faceRows.Add(BuildTogtimeRow(index, face));
                     faceRows.AddRange(BuildStickerPayload(index, face, faceType));
                 }
+                else if (faceType.Id == "enchant") // ADDED: Directs Enchant type to the custom modifier payload builder
+                {
+                    faceRows.Add(BuildTargetSelector(index, face));
+                    faceRows.Add(BuildTogtimeRow(index, face));
+                    faceRows.AddRange(BuildEnchantPayload(index, face, faceType));
+                }
                 else if (faceType.Id == "cast")
                 {
                     //faceRows.Add(BuildTargetSelector(index, face)); // no targets, spell handles that.
@@ -355,6 +361,11 @@ public class DiceFaceBuilderWidget
             if (_diceUI.Dropdowns.TryGetValue($"StickerItemDrop_{i}", out var stickerDrop))
             {
                 stickerDrop.SetValueWithoutNotify(0);
+            }
+
+            if (_diceUI.Dropdowns.TryGetValue($"EnchantModifierDrop_{i}", out var enchantDrop))
+            {
+                enchantDrop.SetValueWithoutNotify(0);
             }
 
             if (_diceUI.Dropdowns.TryGetValue($"CastAbilityDrop_{i}", out var castDrop))
@@ -624,37 +635,7 @@ public class DiceFaceBuilderWidget
         );
     }
 
-    // Payload Getters / Setters
-    private string GetFacePayload(DiceSideData face)
-    {
-        return face.payload ?? "";
-    }
-    private PayloadType GetFaceType(int faceIndex, DiceSideData face)
-    {
-        string targetId = "standard";
-        switch (face.faceType)
-        {
-            case DiceSideData.DiceFaceType.Base: targetId = "standard"; break;
-            case DiceSideData.DiceFaceType.Sticker: targetId = "sticker"; break;
-            case DiceSideData.DiceFaceType.Cast: targetId = "cast"; break;
-            case DiceSideData.DiceFaceType.Enchant: targetId = "enchant"; break;
-                //case DiceSideData.DiceFaceType.Egg: targetId = "egg"; break;
-        }
-        return RegisteredPayloads.First(p => p.Id == targetId);
-    }
-    private void SetFacePayload(DiceSideData face, string typeId, string payloadData)
-    {
-        face.payload = payloadData ?? "";
-        switch (typeId)
-        {
-            case "standard": face.faceType = DiceSideData.DiceFaceType.Base; break;
-            case "sticker": face.faceType = DiceSideData.DiceFaceType.Sticker; break;
-            case "cast": face.faceType = DiceSideData.DiceFaceType.Cast; break;
-            case "enchant": face.faceType = DiceSideData.DiceFaceType.Enchant; break;
-            //case "egg": face.faceType = DiceSideData.DiceFaceType.Egg; break;
-            default: face.faceType = DiceSideData.DiceFaceType.Base; break;
-        }
-    }
+    // Full Face Builders
     private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
@@ -825,6 +806,96 @@ public class DiceFaceBuilderWidget
         }
 
         return rows;
+    }
+    private List<GridRowSpec> BuildEnchantPayload(int index, DiceSideData face, PayloadType faceType)
+    {
+        var rows = new List<GridRowSpec>();
+
+        var customModifiers = ModPackage.Instance?.CustomModifiers;
+        var modifierNames = new List<string> { "-- Select Custom Modifier --" };
+
+        if (customModifiers != null)
+        {
+            modifierNames.AddRange(customModifiers
+                .Select(m => !string.IsNullOrEmpty(m.entityName) ? m.entityName : "Unnamed Modifier")
+                .Distinct());
+        }
+
+        string currentPayload = GetFacePayload(face);
+        bool hasPayload = !string.IsNullOrWhiteSpace(currentPayload);
+
+        // Modifier Dropdown Selection
+        rows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Set Modifier:", 0.30f),
+            GridCellSpec.CreateFilteredDropdown($"EnchantModifierDrop_{index}", "-- Select Custom Modifier --", 0.70f, modifierNames.ToArray(), (val) => {
+                if (val <= 0 || val >= modifierNames.Count) return;
+
+                string selectedName = modifierNames[val];
+                var targetModifier = ModPackage.Instance?.CustomModifiers?.FirstOrDefault(m => m.entityName == selectedName);
+
+                if (targetModifier != null)
+                {
+                    string modifierSyntax = targetModifier.Export();
+                    if (modifierSyntax.StartsWith("m.", StringComparison.OrdinalIgnoreCase))
+                    {
+                        modifierSyntax = modifierSyntax.Substring(2);
+                    }
+
+                    SetFacePayload(face, faceType.Id, modifierSyntax);
+                    _onStateChanged?.Invoke();
+                    _onRebuildRequested?.Invoke();
+                }
+            })
+        ));
+
+        // Active selection with clear [X] button
+        if (hasPayload)
+        {
+            string displayLabel = currentPayload.Length > 25 ? currentPayload.Substring(0, 22) + "..." : currentPayload;
+
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"ActiveEnchant_{index}", displayLabel, 0.80f),
+                GridCellSpec.CreateButton($"DelEnchant_{index}", "[X]", 0.20f, () => {
+                    SetFacePayload(face, faceType.Id, "");
+                    _onStateChanged?.Invoke();
+                    _onRebuildRequested?.Invoke();
+                })
+            ));
+        }
+
+        return rows;
+    }
+
+    // Payload Getters / Setters
+    private string GetFacePayload(DiceSideData face)
+    {
+        return face.payload ?? "";
+    }
+    private PayloadType GetFaceType(int faceIndex, DiceSideData face)
+    {
+        string targetId = "standard";
+        switch (face.faceType)
+        {
+            case DiceSideData.DiceFaceType.Base: targetId = "standard"; break;
+            case DiceSideData.DiceFaceType.Sticker: targetId = "sticker"; break;
+            case DiceSideData.DiceFaceType.Cast: targetId = "cast"; break;
+            case DiceSideData.DiceFaceType.Enchant: targetId = "enchant"; break;
+                //case DiceSideData.DiceFaceType.Egg: targetId = "egg"; break;
+        }
+        return RegisteredPayloads.First(p => p.Id == targetId);
+    }
+    private void SetFacePayload(DiceSideData face, string typeId, string payloadData)
+    {
+        face.payload = payloadData ?? "";
+        switch (typeId)
+        {
+            case "standard": face.faceType = DiceSideData.DiceFaceType.Base; break;
+            case "sticker": face.faceType = DiceSideData.DiceFaceType.Sticker; break;
+            case "cast": face.faceType = DiceSideData.DiceFaceType.Cast; break;
+            case "enchant": face.faceType = DiceSideData.DiceFaceType.Enchant; break;
+            //case "egg": face.faceType = DiceSideData.DiceFaceType.Egg; break;
+            default: face.faceType = DiceSideData.DiceFaceType.Base; break;
+        }
     }
     private bool IsCastCustom(int index, DiceSideData face)
     {

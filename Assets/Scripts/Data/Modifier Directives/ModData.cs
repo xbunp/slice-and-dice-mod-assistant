@@ -14,6 +14,7 @@ public class ModData
     [SerializeField] private List<SpellData> _spells = new List<SpellData>();
     [SerializeField] private List<TacticData> _tactics = new List<TacticData>();
     [SerializeField] private List<ItemData> _customItems = new List<ItemData>();
+    [SerializeField] private List<ModifierData> _customModifiers = new List<ModifierData>();
 
     // --- AUTOMATION SETTINGS ---
     [SerializeField] public bool AutoExport_ReplaceBaseHeroes = false;
@@ -78,6 +79,7 @@ public class ModData
         if (typeof(HeroData).IsAssignableFrom(type)) return _heroes;
         if (typeof(MonsterData).IsAssignableFrom(type)) return _monsters;
         if (typeof(ItemData).IsAssignableFrom(type)) return _customItems;
+        if (typeof(ModifierData).IsAssignableFrom(type)) return _customModifiers;
 
         return null;
     }
@@ -250,6 +252,17 @@ public class ModData
             {
                 string abilitySyntax = ability.Export();
                 if (!string.IsNullOrWhiteSpace(abilitySyntax)) blocks.Add(abilitySyntax);
+            }
+        }
+
+        // 6. Automate Modifiers 
+        var modifiers = modData.GetAll<ModifierData>();
+        if (modifiers != null)
+        {
+            foreach (var modifier in modifiers)
+            {
+                string modifierSyntax = modifier.Export();
+                if (!string.IsNullOrWhiteSpace(modifierSyntax)) blocks.Add(modifierSyntax);
             }
         }
 

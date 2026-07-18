@@ -18,6 +18,7 @@ public class ModPackage : MonoBehaviour
     public IReadOnlyList<HeroData> Heroes => loadedMod.GetAll<HeroData>();
     public IReadOnlyList<MonsterData> Monsters => loadedMod.GetAll<MonsterData>();
     public IReadOnlyList<ItemData> CustomItems => loadedMod.GetAll<ItemData>();
+    public IReadOnlyList<ModifierData> CustomModifiers => loadedMod.GetAll<ModifierData>();
 
     // --- CONCURRENT SESSION TRACKING (ENTITIES) ---
     private class EditingSession

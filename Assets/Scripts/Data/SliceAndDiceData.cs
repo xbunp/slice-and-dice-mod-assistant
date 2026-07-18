@@ -41,6 +41,18 @@ public static class DiceTargets
 
     Distinction between pip and pipless versions can matter. 
     */
+
+    /*
+    splice item hero color restrictions:
+    Iron Crown = grey,
+    Natural = blue
+    First aid Kit = orange
+    Scalpel = red
+    Standard = yellow
+    Sprinkles = violet
+    rgreen = green
+
+     * */
 }
 
 public static class RandomSDData
