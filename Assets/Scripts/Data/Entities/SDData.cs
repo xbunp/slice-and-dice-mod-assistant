@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,12 +13,37 @@ public class Thue
     public int colorOffset;
 }
 
+[System.Serializable]
 public class Phue
 {
-    //phue syntax: .img.p.<hex>:<hex>:int.
+    //p syntax: .img.p.<hex>:<hex>:int.
     public Color colorStart = Color.white;
     public Color colorDestination = Color.white;
     public int colorRange;
+}
+
+public enum VisualType
+{
+    HSV,
+    Hue,
+    P,
+    THue,
+    B,
+    Draw,
+    Rect
+}
+
+[System.Serializable]
+public class VisualModifier
+{
+    public VisualType Type;
+    public string RawValue; // Used for b, draw, rect
+
+    // Structured payloads
+    public int h, s, v;
+    public int hue;
+    public Phue p;
+    public Thue thue;
 }
 
 [System.Serializable]
@@ -27,13 +51,123 @@ public abstract class SDData
 {
     public string entityName = "";
     public string imageOverride = "None";
-
     public string doc;
-    public int h, s, v;
-    public int hue;
-    public string p, b, draw, rect;
-    public Thue thue = new Thue();
-    public Phue phue = new Phue();
+
+    [Header("Visual Modifiers")]
+    public List<VisualModifier> visuals = new List<VisualModifier>();
+
+    #region Backwards Compatibility Properties
+    public int h
+    {
+        get => GetVisual(VisualType.HSV)?.h ?? 0;
+        set { var vis = GetOrAddVisual(VisualType.HSV); vis.h = value; }
+    }
+    public int s
+    {
+        get => GetVisual(VisualType.HSV)?.s ?? 0;
+        set { var vis = GetOrAddVisual(VisualType.HSV); vis.s = value; }
+    }
+    public int v
+    {
+        get => GetVisual(VisualType.HSV)?.v ?? 0;
+        set { var vis = GetOrAddVisual(VisualType.HSV); vis.v = value; }
+    }
+    public int hue
+    {
+        get => GetVisual(VisualType.Hue)?.hue ?? 0;
+        set { var vis = GetOrAddVisual(VisualType.Hue); vis.hue = value; }
+    }
+    public string b
+    {
+        get => GetVisual(VisualType.B)?.RawValue;
+        set { var vis = GetOrAddVisual(VisualType.B); vis.RawValue = value; }
+    }
+    public string draw
+    {
+        get => GetVisual(VisualType.Draw)?.RawValue;
+        set { var vis = GetOrAddVisual(VisualType.Draw); vis.RawValue = value; }
+    }
+    public string rect
+    {
+        get => GetVisual(VisualType.Rect)?.RawValue;
+        set { var vis = GetOrAddVisual(VisualType.Rect); vis.RawValue = value; }
+    }
+    public string p
+    {
+        get
+        {
+            var vis = GetVisual(VisualType.P);
+            if (vis == null) return null;
+
+            // If there's valid phue data, return it formatted without the "p." prefix
+            if (vis.p != null && vis.p.colorRange > 0)
+            {
+                string packed = PackP(vis.p);
+                if (packed.StartsWith("p.", StringComparison.OrdinalIgnoreCase))
+                    return packed.Substring(2);
+                return packed;
+            }
+
+            return vis.RawValue;
+        }
+        set
+        {
+            var vis = GetOrAddVisual(VisualType.P);
+            vis.p = UnpackP(value);
+            vis.RawValue = value;
+        }
+    }
+
+    public Phue phue
+    {
+        get
+        {
+            var vis = GetVisual(VisualType.P);
+            if (vis == null)
+            {
+                vis = GetOrAddVisual(VisualType.P);
+                vis.p = new Phue();
+            }
+            else if (vis.p == null)
+            {
+                vis.p = new Phue();
+            }
+            return vis.p;
+        }
+        set { var vis = GetOrAddVisual(VisualType.P); vis.p = value; }
+    }
+
+    public Thue thue
+    {
+        get
+        {
+            var vis = GetVisual(VisualType.THue);
+            if (vis == null)
+            {
+                vis = GetOrAddVisual(VisualType.THue);
+                vis.thue = new Thue();
+            }
+            else if (vis.thue == null)
+            {
+                vis.thue = new Thue();
+            }
+            return vis.thue;
+        }
+        set { var vis = GetOrAddVisual(VisualType.THue); vis.thue = value; }
+    }
+
+    private VisualModifier GetVisual(VisualType type) => visuals.FirstOrDefault(x => x.Type == type);
+    private VisualModifier GetOrAddVisual(VisualType type)
+    {
+        var vis = GetVisual(type);
+        if (vis == null)
+        {
+            vis = new VisualModifier { Type = type };
+            visuals.Add(vis);
+        }
+        return vis;
+    }
+    #endregion
 
     [Header("Deep Payloads")]
     public List<CustomPayload> customPayloads = new List<CustomPayload>();
@@ -91,51 +225,105 @@ public abstract class SDData
         {
             case "n": entityName = nextVal; break;
             case "img":
+                if (TryParseSpecialOrNormalImage(tokens, ref i, out string parsedImg))
                 {
-                    if (TryParseSpecialOrNormalImage(tokens, ref i, out string parsedImg))
-                    {
-                        imageOverride = parsedImg;
-                    }
-                    return true;
+                    imageOverride = parsedImg;
                 }
-                break;
+                return true;
             case "doc": doc = nextVal; break;
             case "hsv":
                 string[] hsvParts = nextVal.Split(':');
-                if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out h) && int.TryParse(hsvParts[1], out s) && int.TryParse(hsvParts[2], out v)) { }
+                if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out int hVal) && int.TryParse(hsvParts[1], out int sVal) && int.TryParse(hsvParts[2], out int vVal))
+                {
+                    visuals.Add(new VisualModifier { Type = VisualType.HSV, h = hVal, s = sVal, v = vVal });
+                }
                 break;
-            case "hue": if (int.TryParse(nextVal, out int hVal)) hue = hVal; break;
+            case "hue":
+                if (int.TryParse(nextVal, out int hueVal))
+                    visuals.Add(new VisualModifier { Type = VisualType.Hue, hue = hueVal });
+                break;
 
-            case "thue": thue = UnpackTHue(nextVal); break;
-            case "p": phue = UnpackPHue(nextVal); break;
+            case "thue":
+                visuals.Add(new VisualModifier { Type = VisualType.THue, thue = UnpackTHue(nextVal) });
+                break;
+            case "p":
+                visuals.Add(new VisualModifier { Type = VisualType.P, p = UnpackP(nextVal) });
+                break;
 
-            case "b": b = nextVal; break;
-            case "draw": draw = nextVal; break;
-            case "rect": rect = nextVal; break;
+            case "b":
+                visuals.Add(new VisualModifier { Type = VisualType.B, RawValue = nextVal });
+                break;
+            case "draw":
+                visuals.Add(new VisualModifier { Type = VisualType.Draw, RawValue = nextVal });
+                break;
+            case "rect":
+                visuals.Add(new VisualModifier { Type = VisualType.Rect, RawValue = nextVal });
+                break;
             default: return false;
         }
         i++; // Consume the value token
         return true;
     }
 
-    //protected static string FormatName(string name) => name?.Replace(" ", "") ?? "";
-    protected static string FormatName(string name) => name?.Trim() ?? ""; //spaces are allowed.
-
-    protected static string PackPHue(Phue phue)
+    protected void AppendColorModifier(StringBuilder sb)
     {
-        if (phue == null) return string.Empty;
+        foreach (var vis in visuals)
+        {
+            switch (vis.Type)
+            {
+                case VisualType.P:
+                    if (vis.p != null && vis.p.colorRange != 0)
+                        sb.Append($".{PackP(vis.p)}");
+                    break;
+                case VisualType.THue:
+                    if (vis.thue != null && (vis.thue.colorRange != 0 || vis.thue.colorOffset != 0))
+                    {
+                        string packed = PackTHue(vis.thue);
+                        Debug.Log($"[THue Debug] AppendColorModifier called. PackTHue returned: '{packed}'");
+                        sb.Append($".{packed}");
+                    }
+                    break;
+                case VisualType.HSV:
+                    if (vis.h != 0 || vis.s != 0 || vis.v != 0)
+                        sb.Append($".hsv.{vis.h}:{vis.s}:{vis.v}");
+                    break;
+                case VisualType.Hue:
+                    if (vis.hue != 0)
+                        sb.Append($".hue.{vis.hue}");
+                    break;
+                case VisualType.B:
+                    if (!string.IsNullOrWhiteSpace(vis.RawValue))
+                        sb.Append($".b.{vis.RawValue}");
+                    break;
+                case VisualType.Draw:
+                    if (!string.IsNullOrWhiteSpace(vis.RawValue))
+                        sb.Append($".draw.{vis.RawValue}");
+                    break;
+                case VisualType.Rect:
+                    if (!string.IsNullOrWhiteSpace(vis.RawValue))
+                        sb.Append($".rect.{vis.RawValue}");
+                    break;
+            }
+        }
+    }
 
-        string hexStart = ColorToHex(phue.colorStart);
-        string hexDest = ColorToHex(phue.colorDestination);
-        string rangeStr = phue.colorRange.ToString("D2");
+    protected static string FormatName(string name) => name?.Trim() ?? "";
+
+    protected static string PackP(Phue p)
+    {
+        if (p == null) return string.Empty;
+
+        string hexStart = ColorToHex(p.colorStart);
+        string hexDest = ColorToHex(p.colorDestination);
+        string rangeStr = p.colorRange.ToString("D2");
         return $"p.{hexStart}:{hexDest}:{rangeStr}";
     }
 
-    protected static Phue UnpackPHue(string phue)
+    protected static Phue UnpackP(string p)
     {
-        if (string.IsNullOrWhiteSpace(phue)) return null;
+        if (string.IsNullOrWhiteSpace(p)) return null;
 
-        string payload = phue.Trim();
+        string payload = p.Trim();
         if (payload.StartsWith("p.", System.StringComparison.OrdinalIgnoreCase))
             payload = payload.Substring(2);
 
@@ -149,37 +337,6 @@ public abstract class SDData
 
         return result;
     }
-
-    /*
-    protected static string PackTHue(Thue thue)
-    {
-        if (thue == null) return string.Empty;
-
-        string hex = ColorToHex(thue.colorHex);
-        string rangeStr = thue.colorRange.ToString("D2");
-
-        return $"thue.{hex}:{rangeStr}:{thue.colorOffset}";
-    }
-
-    protected static Thue UnpackTHue(string thue)
-    {
-        if (string.IsNullOrWhiteSpace(thue)) return null;
-
-        string payload = thue.Trim();
-        if (payload.StartsWith("thue.", System.StringComparison.OrdinalIgnoreCase))
-            payload = payload.Substring(5);
-
-        string[] parts = payload.Split(':');
-        if (parts.Length < 3) return null;
-
-        Thue result = new Thue();
-        result.colorHex = ParseColor(parts[0]);
-        if (int.TryParse(parts[1].Trim(), out int range)) result.colorRange = range;
-        if (int.TryParse(parts[2].Trim(), out int offset)) result.colorOffset = offset;
-
-        return result;
-    }
-    */
 
     protected static Color ParseColor(string hexStr)
     {
@@ -203,9 +360,6 @@ public abstract class SDData
             return UnityEngine.ColorUtility.ToHtmlStringRGB(colorHex).ToLower();
     }
 
-    /// <summary>
-    /// Converts short/special names (e.g. "b1", "jinx") to their full name override ("b1.75", "jinx.uhh").
-    /// </summary>
     public static string FormatSpecialImageName(string rawName)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return rawName;
@@ -217,14 +371,6 @@ public abstract class SDData
         return trimmed;
     }
 
-    /// NAME FIXES
-
-    /// <summary>
-    /// Parses image/replica tokens, safely consuming 2 tokens if they form a dotted override name like "b1.75".
-    /// </summary>
-    /// <summary>
-    /// Parses image/replica tokens, reverse-looking up exported override names ("n1.75") back to UI lookup keys ("n1").
-    /// </summary>
     protected bool TryParseSpecialOrNormalImage(List<string> tokens, ref int index, out string resultImageName)
     {
         resultImageName = null;
@@ -232,7 +378,6 @@ public abstract class SDData
 
         string firstToken = tokens[index + 1];
 
-        // 1. Check if firstToken + "." + secondToken matches an exported override value (e.g. "n1" + "." + "75" == "n1.75")
         if (index + 2 < tokens.Count)
         {
             string combinedDot = $"{firstToken}.{tokens[index + 2]}";
@@ -240,45 +385,28 @@ public abstract class SDData
             {
                 if (string.Equals(kvp.Value, combinedDot, StringComparison.OrdinalIgnoreCase))
                 {
-                    resultImageName = kvp.Key; // Return UI shorthand key ("n1")
-                    index += 2; // Consume both tokens ("n1" and "75")
+                    resultImageName = kvp.Key;
+                    index += 2;
                     return true;
                 }
             }
         }
 
-        // 2. Check if firstToken matches a single-token exported override value (e.g. "deathSigil" -> returns "totemdeath")
         foreach (var kvp in NameFixes.SpecialNameOverrides)
         {
             if (string.Equals(kvp.Value, firstToken, StringComparison.OrdinalIgnoreCase))
             {
-                resultImageName = kvp.Key; // Return UI shorthand key
+                resultImageName = kvp.Key;
                 index += 1;
                 return true;
             }
         }
 
-        // 3. Standard single-token image name (or already a shorthand key like "n1")
         resultImageName = firstToken;
         index += 1;
         return true;
     }
 
-
-    protected void AppendColorModifier(StringBuilder sb)
-    {
-        if (phue != null && phue.colorRange != 0) sb.Append($".{PackPHue(phue)}");
-
-        if (thue != null && (thue.colorRange != 0 || thue.colorOffset != 0))
-        {
-            string packed = PackTHue(thue);
-            Debug.Log($"[THue Debug] AppendColorModifier called. PackTHue returned: '{packed}'");
-            sb.Append($".{packed}");
-        }
-
-        if (h != 0 || s != 0 || v != 0) sb.Append($".hsv.{h}:{s}:{v}");
-        else if (hue != 0) sb.Append($".hue.{hue}");
-    }
     protected static string PackTHue(Thue thue)
     {
         if (thue == null) return string.Empty;
@@ -293,6 +421,7 @@ public abstract class SDData
 
         return result;
     }
+
     protected static Thue UnpackTHue(string thue)
     {
         if (string.IsNullOrWhiteSpace(thue)) return null;
@@ -317,5 +446,4 @@ public abstract class SDData
 
         return result;
     }
-
 }

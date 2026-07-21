@@ -6,6 +6,37 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using static SDColors;
 
+public static class HpHelper
+{
+    // HP Preset Names mapping directly to values 1-21
+    public static readonly string[] HpDropdownOptions = new string[]
+    {
+        "Custom (Manual Input)",
+        "All HP (1)",
+        "Every 2nd HP (2)",
+        "Every 3rd HP (3)",
+        "Every 4th HP (4)",
+        "Every 5th HP (5)",
+        "Every 10th HP (6)",
+        "Every 10th HP, start 5th (7)",
+        "Every 2nd HP, start 1st (8)",
+        "Every 3rd HP, start 1st (9)",
+        "Inner 1 HP (10)",
+        "Inner 2 HP (11)",
+        "Inner 3 HP (12)",
+        "Inner 5 HP (13)",
+        "Outer 1 HP (14)",
+        "Outer 2 HP (15)",
+        "Outer 3 HP (16)",
+        "Outer 5 HP (17)",
+        "Middle HP (18)",
+        "2 Evenly Spaced HP (19)",
+        "3 Evenly Spaced HP (20)",
+        "4 Evenly Spaced HP (21)",
+        "Higher Custom Values+ (22+)"
+    };
+}
+
 public static class DiceTargets
 {
     // USEFUL HAT CONCEPT DATA:

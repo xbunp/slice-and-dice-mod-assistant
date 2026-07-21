@@ -33,8 +33,11 @@ public class AbilityUI : RootUI
     private ImageReceiver _persistentCustomImageReceiver;
 
     private Sprite _customImageCachedSprite;
-
     private bool _needsRebuild = false;
+
+    // Dice Face Builder Widgets for Primary and Secondary faces
+    private DiceFaceBuilderWidget _primaryFaceBuilder;
+    private DiceFaceBuilderWidget _secondaryFaceBuilder;
 
     // Tactic Cost Definition Array
     private readonly string[] TacticCostOptions = new string[]
@@ -65,6 +68,7 @@ public class AbilityUI : RootUI
         if (iconPicker == null) iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
 
         EntityUIHelpers.Initialize();
+        InitializeDiceWidgets();
         BuildUIAndBind();
 
         if (ModPackage.Instance != null)
@@ -72,6 +76,33 @@ public class AbilityUI : RootUI
             ModPackage.Instance.OnModDataChanged += OnStateChanged;
             OnStateChanged(null);
         }
+    }
+
+    private void InitializeDiceWidgets()
+    {
+        // Initialize widget delegates for Primary Face (Index 0)
+        _primaryFaceBuilder = new DiceFaceBuilderWidget(
+            getDiceSides: () => CurrentAbility?.diceSides,
+            allowFacades: () => false, // Abilities do not use standard facade ID overrides/HSV panels on their faces
+            openBaseModal: (idx) => OpenEffectBaseModal(idx, true),
+            openFacadeModal: (idx) => { },
+            getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
+            getFacadeSprite: (id) => null,
+            onStateChanged: () => NotifyStateChanged(),
+            onRebuildRequested: () => RebuildAbilityScrollView()
+        );
+
+        // Initialize widget delegates for Secondary Face (Index 1)
+        _secondaryFaceBuilder = new DiceFaceBuilderWidget(
+            getDiceSides: () => CurrentAbility?.diceSides,
+            allowFacades: () => false,
+            openBaseModal: (idx) => OpenEffectBaseModal(idx, false),
+            openFacadeModal: (idx) => { },
+            getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
+            getFacadeSprite: (id) => null,
+            onStateChanged: () => NotifyStateChanged(),
+            onRebuildRequested: () => RebuildAbilityScrollView()
+        );
     }
 
     private void OnDestroy()
@@ -88,7 +119,7 @@ public class AbilityUI : RootUI
     {
         SpellData newSpell = new SpellData();
         newSpell.entityName = "New Ability";
-        newSpell.imageOverride = "None"; // Force blank starting state
+        newSpell.imageOverride = "None";
         newSpell.baseReplica = "Fey";
 
         // Default Primary Effect
@@ -96,29 +127,6 @@ public class AbilityUI : RootUI
         newSpell.diceSides[0].pips = 1;
 
         return newSpell;
-    }
-
-    private void ToggleAbilityMode()
-    {
-        bool isCurrentlySpell = CurrentAbility is SpellData;
-        AbilityData newAbility = isCurrentlySpell ? (AbilityData)new TacticData() : new SpellData();
-
-        // Copy shared fields across
-        newAbility.entityName = CurrentAbility.entityName;
-        newAbility.imageOverride = CurrentAbility.imageOverride;
-        newAbility.baseReplica = CurrentAbility.baseReplica;
-        newAbility.items = new List<string>(CurrentAbility.items);
-        newAbility.h = CurrentAbility.h;
-        newAbility.s = CurrentAbility.s;
-        newAbility.v = CurrentAbility.v;
-
-        // Copy Primary and Secondary faces explicitly
-        newAbility.diceSides[0] = CurrentAbility.diceSides[0].Clone();
-        newAbility.diceSides[1] = CurrentAbility.diceSides[1].Clone();
-
-        ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(newAbility);
-        NotifyStateChanged();
-        RebuildAbilityScrollView();
     }
 
     // =====================================================================
@@ -142,7 +150,6 @@ public class AbilityUI : RootUI
                     string filename = sprite.name;
                     string[] parts = filename.Split('_');
 
-                    // FIX: Capitalization matters. Retain original casing instead of forcing .ToLower()
                     if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
                     {
                         CurrentAbility.imageOverride = $"{parts[0]}{parts[1]}";
@@ -176,8 +183,6 @@ public class AbilityUI : RootUI
                     if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
                     {
                         if (parsedId > 187) return false;
-
-                        // HOOK: Add specific filtering logic here
                         if (isPrimary) return IsPrimaryEffectValid(parsedId);
                         else return IsSecondaryEffectValid(parsedId);
                     }
@@ -204,17 +209,8 @@ public class AbilityUI : RootUI
         iconPicker.OpenModal(config);
     }
 
-    // HOOK: Filter logic for Side 1 (Primary Effect)
-    private bool IsPrimaryEffectValid(int baseId)
-    {
-        return true;
-    }
-
-    // HOOK: Filter logic for Side 2 (Secondary Effect) - Untargeted only
-    private bool IsSecondaryEffectValid(int baseId)
-    {
-        return true;
-    }
+    private bool IsPrimaryEffectValid(int baseId) => true;
+    private bool IsSecondaryEffectValid(int baseId) => true;
 
     // =====================================================================
     // STATE TO VIEW (PRESENTATION UPDATES)
@@ -222,17 +218,14 @@ public class AbilityUI : RootUI
 
     private void OnStateChanged(object sender)
     {
-        // 1. We are the ones typing -> Visuals only
         if (object.ReferenceEquals(sender, this))
         {
             UpdateVisualsOnly();
             return;
         }
 
-        // 2. The other tab is typing -> Ignore completely
         if (sender != null) return;
 
-        // 3. A true save occurred. If we are hidden, defer the rebuild until we are opened!
         if (!gameObject.activeInHierarchy)
         {
             _needsRebuild = true;
@@ -242,7 +235,6 @@ public class AbilityUI : RootUI
         RebuildStatsUI();
     }
 
-    // Hook into Unity's OnEnable to rebuild safely when the tab is clicked
     private void OnEnable()
     {
         if (_needsRebuild)
@@ -268,9 +260,15 @@ public class AbilityUI : RootUI
         if (statsUI.Inputs.TryGetValue("HeroFacS", out var hS)) hS.SetTextWithoutNotify(CurrentAbility.s.ToString());
         if (statsUI.Inputs.TryGetValue("HeroFacV", out var hV)) hV.SetTextWithoutNotify(CurrentAbility.v.ToString());
 
-        // Update Dice Side fields dynamically 
-        UpdateFaceUIElements(0); // Primary
-                                 //UpdateFaceUIElements(1); // Secondary
+        // Update Dice Face Widgets UI state
+        _primaryFaceBuilder?.SetGridReferences(abilityDataUI);
+        _primaryFaceBuilder?.UpdateUIFromData(0);
+
+        if (CurrentAbility is SpellData or TacticData)
+        {
+            _secondaryFaceBuilder?.SetGridReferences(abilityDataUI);
+            _secondaryFaceBuilder?.UpdateUIFromData(1);
+        }
 
         if (abilityDataUI.Dropdowns.TryGetValue("ModeDrop", out var modeDrop))
         {
@@ -300,17 +298,14 @@ public class AbilityUI : RootUI
 
         if (CurrentAbility is SpellData spell)
         {
-            UpdateFaceUIElements(1);
             if (abilityDataUI.Inputs.TryGetValue("ManaPips", out var manaPipIn)) manaPipIn.SetTextWithoutNotify(spell.manaCost.ToString());
         }
         else if (CurrentAbility is TacticData tactic)
         {
-            UpdateFaceUIElements(1);
             if (abilityDataUI.Inputs.TryGetValue("TacPip_2", out var tPip2)) tPip2.SetTextWithoutNotify(tactic.TacticCostTop.pips.ToString());
             if (abilityDataUI.Inputs.TryGetValue("TacPip_3", out var tPip3)) tPip3.SetTextWithoutNotify(tactic.TacticCostBottom.pips.ToString());
             if (abilityDataUI.Inputs.TryGetValue("TacPip_5", out var tPip5)) tPip5.SetTextWithoutNotify(tactic.TacticCostRightmost.pips.ToString());
 
-            // Dropdowns
             if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_2", out var tDrop2)) tDrop2.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostTop));
             if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_3", out var tDrop3)) tDrop3.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostBottom));
             if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_5", out var tDrop5)) tDrop5.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostRightmost));
@@ -320,7 +315,6 @@ public class AbilityUI : RootUI
             if (abilityDataUI.Inputs.TryGetValue("TriggerHPInput", out var hpIn))
                 hpIn.SetTextWithoutNotify(triggerHP.hp.ToString());
 
-            // Force interaction off so it behaves strictly as a readable text string label
             if (abilityDataUI.Inputs.TryGetValue("TriggerHPDesc", out var hpDesc))
             {
                 hpDesc.interactable = false;
@@ -333,7 +327,6 @@ public class AbilityUI : RootUI
                 colorDrop.SetValueWithoutNotify((int)currentOption);
             }
 
-            // Sync the dropdown index with the current raw HP value
             if (abilityDataUI.Dropdowns.TryGetValue("TriggerHPDrop", out var hpDrop))
             {
                 int dpIdx = (triggerHP.hp >= 1 && triggerHP.hp <= 21) ? triggerHP.hp : 0;
@@ -343,13 +336,6 @@ public class AbilityUI : RootUI
 
         isDrawingUI = false;
         UpdateVisualsOnly();
-    }
-
-    private void UpdateFaceUIElements(int index)
-    {
-        var face = CurrentAbility.diceSides[index];
-        if (abilityDataUI.Inputs.TryGetValue($"ID_{index}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
-        if (abilityDataUI.Inputs.TryGetValue($"Pips_{index}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
     }
 
     private void UpdateVisualsOnly()
@@ -369,7 +355,6 @@ public class AbilityUI : RootUI
                 previewIcon.sprite = targetSprite != null ? targetSprite : EntityUIHelpers.GetFacadeSprite("SpellPlaceholder");
             }
 
-            // Reset flat color and apply HSV parameters directly to the material
             previewIcon.color = Color.white;
             if (previewIcon.material != null)
             {
@@ -382,13 +367,17 @@ public class AbilityUI : RootUI
         if (statsUI != null && statsUI.Buttons != null)
         {
             if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
-                SetButtonIcon(overrideBtn, EntityUIHelpers.GetFacadeSprite(CurrentAbility.imageOverride));
+                StaticUI.SetButtonIcon(overrideBtn, EntityUIHelpers.GetFacadeSprite(CurrentAbility.imageOverride));
         }
 
-        for (int i = 0; i <= 1; i++) // Update Primary & Secondary Base Icons
+        // Update Face Builder Icon Visuals
+        _primaryFaceBuilder?.SetGridReferences(abilityDataUI);
+        _primaryFaceBuilder?.UpdateVisuals(0);
+
+        if (CurrentAbility is SpellData or TacticData)
         {
-            if (abilityDataUI != null && abilityDataUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
-                SetButtonIcon(baseBtn, EntityUIHelpers.GetBaseSprite(CurrentAbility.diceSides[i].effectID));
+            _secondaryFaceBuilder?.SetGridReferences(abilityDataUI);
+            _secondaryFaceBuilder?.UpdateVisuals(1);
         }
 
         if (rawTextOutput != null)
@@ -401,26 +390,6 @@ public class AbilityUI : RootUI
 
             if (syntaxHighlighterText != null)
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
-        }
-    }
-
-    private void SetButtonIcon(Button btn, Sprite sprite)
-    {
-        if (btn == null) return;
-        ImageButton imgBtn = btn.GetComponent<ImageButton>();
-        if (imgBtn != null && imgBtn.image != null)
-        {
-            if (sprite != null) { imgBtn.image.sprite = sprite; imgBtn.image.gameObject.SetActive(true); }
-            else { imgBtn.image.sprite = null; imgBtn.image.gameObject.SetActive(false); }
-            return;
-        }
-
-        Transform iconTransform = btn.transform.Find("Icon");
-        Image targetImg = iconTransform != null ? iconTransform.GetComponent<Image>() : btn.image;
-        if (targetImg != null)
-        {
-            if (sprite != null) { targetImg.sprite = sprite; targetImg.color = Color.white; }
-            else { targetImg.sprite = null; targetImg.color = new Color(1, 1, 1, 0.2f); }
         }
     }
 
@@ -443,31 +412,6 @@ public class AbilityUI : RootUI
         ModPackage.Instance.NotifyActiveEntityChanged<AbilityData>(this);
         RebuildStatsUI();
         RebuildAbilityScrollView();
-    }
-
-    private void AddKeywordToFace(int faceIndex, int dropdownValue)
-    {
-        if (dropdownValue <= 0) return;
-
-        // Retrieve the filtered list
-        var faceKeywords = GetFilteredFaceKeywords();
-        string targetKeyword = faceKeywords[dropdownValue]; // Index matches directly as "" is index 0
-
-        if (!CurrentAbility.diceSides[faceIndex].keywords.Contains(targetKeyword))
-        {
-            CurrentAbility.diceSides[faceIndex].keywords.Add(targetKeyword);
-            NotifyStateChanged();
-            RebuildAbilityScrollView();
-        }
-    }
-
-    private void RemoveKeywordFromFace(int faceIndex, string keyword)
-    {
-        if (CurrentAbility.diceSides[faceIndex].keywords.Remove(keyword))
-        {
-            NotifyStateChanged();
-            RebuildAbilityScrollView();
-        }
     }
 
     private void UpdateAbilityHsvData(int componentIndex, int value)
@@ -493,20 +437,20 @@ public class AbilityUI : RootUI
 
         switch (dropdownIndex)
         {
-            case 0: face.effectID = 0; face.pips = 0; break; // None
-            case 1: face.effectID = 15; face.pips = pips; break; // Damage
-            case 2: face.effectID = 56; face.pips = pips; break; // Shield
-            case 3: face.effectID = 103; face.pips = pips; break; // Heal
-            case 4: face.effectID = 76; face.pips = pips; break; // Mana
-            case 5: face.effectID = 136; face.pips = pips; break; // Any
-            case 6: face.effectID = 8; face.pips = 0; break; // Blank
-            case 7: face.effectID = 177; face.pips = 1; break; // 1 Pip
-            case 8: face.effectID = 177; face.pips = 2; break; // 2 Pip
-            case 9: face.effectID = 177; face.pips = 3; break; // 3 Pip
-            case 10: face.effectID = 177; face.pips = 4; break; // 4 Pip
-            case 11: face.effectID = 13; face.pips = pips; break; // 1 Keyword Hook (I Die Cantrip defaults to 1 kw)
-            case 12: face.effectID = 0; face.pips = pips; break; // HOOK: 2 Keyword
-            case 13: face.effectID = 0; face.pips = pips; break; // HOOK: 4 Keyword
+            case 0: face.effectID = 0; face.pips = 0; break;
+            case 1: face.effectID = 15; face.pips = pips; break;
+            case 2: face.effectID = 56; face.pips = pips; break;
+            case 3: face.effectID = 103; face.pips = pips; break;
+            case 4: face.effectID = 76; face.pips = pips; break;
+            case 5: face.effectID = 136; face.pips = pips; break;
+            case 6: face.effectID = 8; face.pips = 0; break;
+            case 7: face.effectID = 177; face.pips = 1; break;
+            case 8: face.effectID = 177; face.pips = 2; break;
+            case 9: face.effectID = 177; face.pips = 3; break;
+            case 10: face.effectID = 177; face.pips = 4; break;
+            case 11: face.effectID = 13; face.pips = pips; break;
+            case 12: face.effectID = 0; face.pips = pips; break;
+            case 13: face.effectID = 0; face.pips = pips; break;
         }
 
         NotifyStateChanged();
@@ -530,7 +474,7 @@ public class AbilityUI : RootUI
         }
         if (face.effectID == 13) return 11;
 
-        return 0; // Default None/Custom fallback
+        return 0;
     }
 
     // =====================================================================
@@ -584,7 +528,6 @@ public class AbilityUI : RootUI
             GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateAbilityHsvData(2, v); })
         ));
 
-        // Labeled "Ability-Only Keywords" mapping UI names to raw string constant values
         var abilityOnlyKeywords = new Dictionary<string, string> {
             { "Channel", SpecialAbilityKeywords.Channel },
             { "Cooldown", SpecialAbilityKeywords.Cooldown },
@@ -594,7 +537,6 @@ public class AbilityUI : RootUI
             { "Single Cast", SpecialAbilityKeywords.SingleCast }
         };
 
-        // Map the raw Ritemx IDs stored in the data back to their clean UI Keys for the selector
         var activeKeywordKeys = CurrentAbility.items
             ?.Where(i => abilityOnlyKeywords.Values.Any(v => string.Equals(v, i, StringComparison.OrdinalIgnoreCase)))
             .Select(i => abilityOnlyKeywords.FirstOrDefault(x => string.Equals(x.Value, i, StringComparison.OrdinalIgnoreCase)).Key)
@@ -636,17 +578,15 @@ public class AbilityUI : RootUI
     private List<GridRowSpec> GenerateAbilityLayout()
     {
         var layout = new List<GridRowSpec>();
-        var validKeywords = GetFilteredFaceKeywords();
 
         int currentModeIndex = 0;
         if (CurrentAbility is TacticData) currentModeIndex = 1;
         else if (CurrentAbility is OnHitData) currentModeIndex = 2;
         else if (CurrentAbility is TriggerHPData) currentModeIndex = 3;
-        else if (CurrentAbility is OrbData) currentModeIndex = 4; // ADDED
+        else if (CurrentAbility is OrbData) currentModeIndex = 4;
 
-        string[] modeOptions = new string[] { "Spell", "Tactic", "On Hit", "Trigger HP", "Orb" }; // ADDED "Orb"
+        string[] modeOptions = new string[] { "Spell", "Tactic", "On Hit", "Trigger HP", "Orb" };
 
-        // 1. Ability Mode Selection Dropdown
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Ability Type:", 0.35f),
             GridCellSpec.CreateDropdown("ModeDrop", modeOptions[currentModeIndex], 0.65f, modeOptions, (val) => {
@@ -655,23 +595,23 @@ public class AbilityUI : RootUI
         ));
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer", "", 1.0f)));
 
-        // 2. Build Primary Left Dice Face
-        BuildPrimaryFaceLayout(layout, currentModeIndex, validKeywords);
+        // 2. Build Primary Face using DiceFaceBuilderWidget Layout Extension
+        BuildPrimaryFaceLayout(layout, currentModeIndex);
 
         // 3. Delegate to specialized layout builder
         switch (currentModeIndex)
         {
-            case 0: BuildSpellLayout(layout, validKeywords); break;
-            case 1: BuildTacticLayout(layout, validKeywords); break;
+            case 0: BuildSpellLayout(layout); break;
+            case 1: BuildTacticLayout(layout); break;
             case 2: BuildOnHitLayout(layout); break;
             case 3: BuildTriggerHPLayout(layout); break;
-            case 4: BuildOrbLayout(layout, validKeywords); break; // ADDED
+            case 4: BuildOrbLayout(layout); break;
         }
 
         return layout;
     }
 
-    private void BuildOrbLayout(List<GridRowSpec> layout, List<string> validKeywords)
+    private void BuildOrbLayout(List<GridRowSpec> layout)
     {
         var orbData = CurrentAbility as OrbData;
 
@@ -723,71 +663,26 @@ public class AbilityUI : RootUI
         }
     }
 
-    private void BuildPrimaryFaceLayout(List<GridRowSpec> layout, int modeIndex, List<string> validKeywords)
+    private void BuildPrimaryFaceLayout(List<GridRowSpec> layout, int modeIndex)
     {
-        var pFace = CurrentAbility.diceSides[0];
-
         string targetHint = "Target ally or enemy.";
         if (modeIndex == 2) targetHint = "(Can be targeted)";
         else if (modeIndex == 3) targetHint = "(MUST be untargeted)";
 
-        var primBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgPrim", 1.0f)) { isBackground = true, rowSpan = 3 + pFace.keywords.Count };
-        layout.Add(primBg);
+        // Generate Primary Face Layout using DiceFaceBuilderWidget
+        var primaryLayout = _primaryFaceBuilder.GenerateLayout(0);
 
+        // Wrap/Inject Header hint override if needed or append layout
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblPrim", $"PRIMARY EFFECT {targetHint}", 1.0f)));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDiceButton($"BaseBtn_0", "B", 0.10f, () => OpenEffectBaseModal(0, true)),
-            GridCellSpec.CreateInput($"ID_0", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { pFace.effectID = id; NotifyStateChanged(); } }),
-            GridCellSpec.CreateLabel("Pips:", 0.20f),
-            GridCellSpec.CreateInput($"Pips_0", "Pips", 0.20f, (val) => { if (int.TryParse(val, out int p)) { pFace.pips = p; NotifyStateChanged(); } }),
-            GridCellSpec.CreateButton($"BtnPUp_0", "▲", 0.15f, () => { pFace.pips++; NotifyStateChanged(); UpdateUIFromData(); }),
-            GridCellSpec.CreateButton($"BtnPDn_0", "▼", 0.15f, () => { pFace.pips = Mathf.Max(0, pFace.pips - 1); NotifyStateChanged(); UpdateUIFromData(); })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 0.35f),
-            GridCellSpec.CreateFilteredDropdown($"KwDrop_0", "", 0.65f, validKeywords.ToArray(), (val) => AddKeywordToFace(0, val))
-        ));
-
-        foreach (var kw in pFace.keywords)
-        {
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"KwTag_0_{kw}", EntityUIHelpers.GetColoredKeywordLabel(kw), 0.80f),
-                GridCellSpec.CreateButton($"KwDel_0_{kw}", "[X]", 0.20f, () => RemoveKeywordFromFace(0, kw))
-            ));
-        }
+        layout.AddRange(primaryLayout);
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer2", "", 1.0f)));
     }
 
-    private void BuildSpellLayout(List<GridRowSpec> layout, List<string> validKeywords)
+    private void BuildSpellLayout(List<GridRowSpec> layout)
     {
-        // Secondary Face Layout
-        var sFace = CurrentAbility.diceSides[1];
-        var secBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgSec", 1.0f)) { isBackground = true, rowSpan = 3 + sFace.keywords.Count };
-        layout.Add(secBg);
-
+        // Secondary Face Layout via DiceFaceBuilderWidget (Index 1)
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblSec", "SECONDARY EFFECT (Untargeted)", 1.0f)));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDiceButton($"BaseBtn_1", "B", 0.10f, () => OpenEffectBaseModal(1, false)),
-            GridCellSpec.CreateInput($"ID_1", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { sFace.effectID = id; NotifyStateChanged(); } }),
-            GridCellSpec.CreateLabel("Pips:", 0.20f),
-            GridCellSpec.CreateInput($"Pips_1", "Pips", 0.20f, (val) => { if (int.TryParse(val, out int p)) { sFace.pips = p; NotifyStateChanged(); } }),
-            GridCellSpec.CreateButton($"BtnPUp_1", "▲", 0.15f, () => { sFace.pips++; NotifyStateChanged(); UpdateUIFromData(); }),
-            GridCellSpec.CreateButton($"BtnPDn_1", "▼", 0.15f, () => { sFace.pips = Mathf.Max(0, sFace.pips - 1); NotifyStateChanged(); UpdateUIFromData(); })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 0.35f),
-            GridCellSpec.CreateFilteredDropdown($"KwDrop_1", "", 0.65f, validKeywords.ToArray(), (val) => AddKeywordToFace(1, val))
-        ));
-
-        foreach (var kw in sFace.keywords)
-        {
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"KwTag_1_{kw}", EntityUIHelpers.GetColoredKeywordLabel(kw), 0.80f),
-                GridCellSpec.CreateButton($"KwDel_1_{kw}", "[X]", 0.20f, () => RemoveKeywordFromFace(1, kw))
-            ));
-        }
+        layout.AddRange(_secondaryFaceBuilder.GenerateLayout(1));
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer3", "", 1.0f)));
 
         // Mana Cost Layout
@@ -804,35 +699,11 @@ public class AbilityUI : RootUI
         ));
     }
 
-    private void BuildTacticLayout(List<GridRowSpec> layout, List<string> validKeywords)
+    private void BuildTacticLayout(List<GridRowSpec> layout)
     {
-        // Secondary Face Layout
-        var sFace = CurrentAbility.diceSides[1];
-        var secBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgSec", 1.0f)) { isBackground = true, rowSpan = 3 + sFace.keywords.Count };
-        layout.Add(secBg);
-
+        // Secondary Face Layout via DiceFaceBuilderWidget (Index 1)
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblSec", "SECONDARY EFFECT (Untargeted)", 1.0f)));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDiceButton($"BaseBtn_1", "B", 0.10f, () => OpenEffectBaseModal(1, false)),
-            GridCellSpec.CreateInput($"ID_1", "ID", 0.20f, (val) => { if (int.TryParse(val, out int id)) { sFace.effectID = id; NotifyStateChanged(); } }),
-            GridCellSpec.CreateLabel("Pips:", 0.20f),
-            GridCellSpec.CreateInput($"Pips_1", "Pips", 0.20f, (val) => { if (int.TryParse(val, out int p)) { sFace.pips = p; NotifyStateChanged(); } }),
-            GridCellSpec.CreateButton($"BtnPUp_1", "▲", 0.15f, () => { sFace.pips++; NotifyStateChanged(); UpdateUIFromData(); }),
-            GridCellSpec.CreateButton($"BtnPDn_1", "▼", 0.15f, () => { sFace.pips = Mathf.Max(0, sFace.pips - 1); NotifyStateChanged(); UpdateUIFromData(); })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 0.35f),
-            GridCellSpec.CreateFilteredDropdown($"KwDrop_1", "", 0.65f, validKeywords.ToArray(), (val) => AddKeywordToFace(1, val))
-        ));
-
-        foreach (var kw in sFace.keywords)
-        {
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"KwTag_1_{kw}", EntityUIHelpers.GetColoredKeywordLabel(kw), 0.80f),
-                GridCellSpec.CreateButton($"KwDel_1_{kw}", "[X]", 0.20f, () => RemoveKeywordFromFace(1, kw))
-            ));
-        }
+        layout.AddRange(_secondaryFaceBuilder.GenerateLayout(1));
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer3", "", 1.0f)));
 
         // Tactic Cost Layout
@@ -863,43 +734,13 @@ public class AbilityUI : RootUI
 
     private void BuildOnHitLayout(List<GridRowSpec> layout)
     {
-        // On Hit uses only the Primary Face, which is already configured. 
-        // No additional configuration rows are needed.
+        // On Hit uses only the Primary Face, handled dynamically.
     }
-
-    // HP Preset Names mapping directly to values 1-21
-    public readonly string[] HpDropdownOptions = new string[]
-    {
-        "Custom (Manual Input)",
-        "All HP (1)",
-        "Every 2nd HP (2)",
-        "Every 3rd HP (3)",
-        "Every 4th HP (4)",
-        "Every 5th HP (5)",
-        "Every 10th HP (6)",
-        "Every 10th HP, start 5th (7)",
-        "Every 2nd HP, start 1st (8)",
-        "Every 3rd HP, start 1st (9)",
-        "Inner 1 HP (10)",
-        "Inner 2 HP (11)",
-        "Inner 3 HP (12)",
-        "Inner 5 HP (13)",
-        "Outer 1 HP (14)",
-        "Outer 2 HP (15)",
-        "Outer 3 HP (16)",
-        "Outer 5 HP (17)",
-        "Middle HP (18)",
-        "2 Evenly Spaced HP (19)",
-        "3 Evenly Spaced HP (20)",
-        "4 Evenly Spaced HP (21)",
-        "Higher Custom Values+ (22+)"
-    };
 
     private void BuildTriggerHPLayout(List<GridRowSpec> layout)
     {
         var triggerData = CurrentAbility as TriggerHPData;
-        
-        // Increase row span to 5 to cover the header, color, input, preset, and label rows
+
         var thpBg = new GridRowSpec(GridCellSpec.CreateImagePanel($"BgCost", 1.0f)) { isBackground = true, rowSpan = 5 };
         layout.Add(thpBg);
 
@@ -917,34 +758,32 @@ public class AbilityUI : RootUI
             })
         ));
 
-        // 2. Fancy HP Preset Dropdown
         int currentDropdownIndex = (triggerData.hp >= 1 && triggerData.hp <= 21) ? triggerData.hp : 0;
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP Preset:", 0.35f),
-            GridCellSpec.CreateDropdown("TriggerHPDrop", HpDropdownOptions[currentDropdownIndex], 0.65f, HpDropdownOptions, (val) => {
-                if (val > 0) // Skip manual index 0 selection
+            GridCellSpec.CreateDropdown("TriggerHPDrop", HpHelper.HpDropdownOptions[currentDropdownIndex], 0.65f, HpHelper.HpDropdownOptions, (val) => {
+                if (val > 0)
                 {
                     triggerData.hp = val;
                     NotifyStateChanged();
-                    UpdateUIFromData(); // Syncs the raw input text box and read-only text string
+                    UpdateUIFromData();
                 }
             })
         ));
 
-        // 3. Read-only text string output
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HPModeLabel", "HP Mode:", 0.35f),
             GridCellSpec.CreateInput("TriggerHPDesc", AbilityData.GetPipsAffectedDescription(triggerData.hp), 0.65f, (val) => { })
         ));
 
-        // 1. Direct raw HP input field
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP Value (Raw):", 0.35f),
             GridCellSpec.CreateInput("TriggerHPInput", triggerData.hp.ToString(), 0.65f, (val) => {
-                if (int.TryParse(val, out int parsed)) {
+                if (int.TryParse(val, out int parsed))
+                {
                     triggerData.hp = parsed;
                     NotifyStateChanged();
-                    UpdateUIFromData(); // Syncs the preset dropdown and read-only text string
+                    UpdateUIFromData();
                 }
             })
         ));
@@ -977,12 +816,10 @@ public class AbilityUI : RootUI
                 _persistentCustomImageReceiver = dummyReceiver;
                 _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
                 {
-                    // Assign data
-                    CurrentAbility.imageOverride = encodedStr; // Use CurrentHero for HeroUI
+                    CurrentAbility.imageOverride = encodedStr;
                     _customImageString = encodedStr;
                     _customImageTexture = tex;
 
-                    // CACHE the sprite allocation exactly once here!
                     if (_customImageCachedSprite != null) Destroy(_customImageCachedSprite);
                     _customImageCachedSprite = Sprite.Create(_customImageTexture, new Rect(0, 0, _customImageTexture.width, _customImageTexture.height), new Vector2(0.5f, 0.5f));
 
@@ -1037,7 +874,6 @@ public class AbilityUI : RootUI
             }),
             new ColumnSpec("MiddleAbility", 0.365f, 0.685f, new List<GridRowSpec>
             {
-                // Notice there are no navigation tabs here anymore
                 new GridRowSpec(900f, GridCellSpec.CreateScrollView("AbilityScrollView", 1.0f))
             }),
             new ColumnSpec("RightOutput", 0.70f, 0.99f)
@@ -1059,12 +895,10 @@ public class AbilityUI : RootUI
 
     private void BuildRightPanelContent(RectTransform parent)
     {
-        // Preview Header
         GameObject previewContainer = new GameObject("PreviewContainer", typeof(RectTransform));
         previewContainer.transform.SetParent(parent, false);
         FullScreenUIGenerator.SetAnchors(previewContainer.GetComponent<RectTransform>(), 0.1f, 0.65f, 0.9f, 0.95f);
 
-        // Simple Ability Icon Preview
         GameObject imgObj = new GameObject("PreviewIcon", typeof(RectTransform), typeof(Image));
         imgObj.transform.SetParent(previewContainer.transform, false);
         FullScreenUIGenerator.SetAnchors(imgObj.GetComponent<RectTransform>(), 0.25f, 0.3f, 0.75f, 0.9f);
@@ -1076,7 +910,6 @@ public class AbilityUI : RootUI
             previewIcon.material = Instantiate(hsvMat);
         }
 
-        // Simple Ability Name Preview
         GameObject nameObj = Instantiate(uiGenerator.labelPrefab, previewContainer.transform);
         FullScreenUIGenerator.SetAnchors(nameObj.GetComponent<RectTransform>(), 0f, 0f, 1f, 0.25f);
         previewName = nameObj.GetComponentInChildren<TextMeshProUGUI>();
@@ -1084,7 +917,6 @@ public class AbilityUI : RootUI
         previewName.fontSize = 24;
         previewName.fontStyle = FontStyles.Bold;
 
-        // Raw Text Readout
         GameObject inputObj = Instantiate(uiGenerator.inputFieldPrefab, parent);
         var innerLabel = inputObj.GetComponentInChildren<TextMeshProUGUI>();
         if (innerLabel != null) Destroy(innerLabel.gameObject);
@@ -1133,13 +965,11 @@ public class AbilityUI : RootUI
         {
             if (string.IsNullOrWhiteSpace(val)) return;
 
-            // UI SAFETY LOCK: Stop Unity from triggering a destructive re-parse on focus loss
             string currentExport = $"abilitydata.{CurrentAbility.ExportWrapped()}";
             if (val == currentExport) return;
 
             try
             {
-                // STRIP WRAPPER: Remove the "abilitydata." prefix so it doesn't swallow itself
                 string cleanVal = val.Trim();
                 if (cleanVal.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1172,7 +1002,6 @@ public class AbilityUI : RootUI
             string cb = GUIUtility.systemCopyBuffer;
             if (string.IsNullOrWhiteSpace(cb)) return;
 
-            // STRIP WRAPPER: Remove the "abilitydata." prefix so it doesn't swallow itself
             string cleanVal = cb.Trim();
             if (cleanVal.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
             {
@@ -1213,7 +1042,7 @@ public class AbilityUI : RootUI
             RectTransform rowRt = scrollRt.parent as RectTransform;
             ConfigureFlexibleLayout(rowRt);
             ConfigureFlexibleLayout(scrollRt);
-            StretchToParent(rowRt, 10f, 10f); // Top offset removed since nav tabs are gone
+            StretchToParent(rowRt, 10f, 10f);
             StretchToParent(scrollRt, 0f, 0f);
         }
     }
@@ -1272,7 +1101,6 @@ public class AbilityUI : RootUI
                 if (isDrawingUI) return;
                 _currentPoolIndex = index;
 
-                // FORCE the session key to be registered as AbilityData
                 if (index > 0 && (index - 1) < abilities.Count)
                     ModPackage.Instance.LoadEntityForEditing<AbilityData>(abilities[index - 1]);
                 else
@@ -1300,7 +1128,7 @@ public class AbilityUI : RootUI
                 ((TriggerHPData)newAbility).hp = 1;
                 ((TriggerHPData)newAbility).colorClass = SDColors.GetColorCode(HeroColorOption.Grey);
                 break;
-            case 4: 
+            case 4:
                 newAbility = new OrbData();
                 ((OrbData)newAbility).isHardcoded = false;
                 ((OrbData)newAbility).carrierPrefix = "sthief.abilitydata";
@@ -1309,7 +1137,6 @@ public class AbilityUI : RootUI
             default: newAbility = new SpellData(); break;
         }
 
-        // Copy shared fields across
         newAbility.entityName = CurrentAbility.entityName;
         newAbility.imageOverride = CurrentAbility.imageOverride;
         newAbility.baseReplica = CurrentAbility.baseReplica;
@@ -1318,7 +1145,6 @@ public class AbilityUI : RootUI
         newAbility.s = CurrentAbility.s;
         newAbility.v = CurrentAbility.v;
 
-        // Copy Primary and Secondary faces explicitly
         newAbility.diceSides[0] = CurrentAbility.diceSides[0].Clone();
         newAbility.diceSides[1] = CurrentAbility.diceSides[1].Clone();
 
@@ -1338,17 +1164,5 @@ public class AbilityUI : RootUI
 
         ModPackage.Instance.NotifyActiveEntityChanged<AbilityData>(this);
         RebuildStatsUI();
-    }
-
-    private List<string> GetFilteredFaceKeywords()
-    {
-        var allKws = Enum.GetNames(typeof(SpecialAbilityKeywords.AbilityEffectKeyword)).ToList();
-
-        // Exclude the 6 specialized keywords that apply at the entity/item level
-        var specialKws = new HashSet<string> { "Future" };
-        var filtered = allKws.Where(k => !specialKws.Contains(k)).ToList();
-
-        filtered.Insert(0, ""); // Add empty option at index 0
-        return filtered;
     }
 }

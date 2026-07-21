@@ -155,8 +155,16 @@ public abstract class AbilityData : HeroData
                 case "hsv":
                     if (i + 1 < tokens.Count)
                     {
-                        string[] hsv = tokens[++i].Split(':');
-                        if (hsv.Length == 3 && int.TryParse(hsv[0], out h) && int.TryParse(hsv[1], out s) && int.TryParse(hsv[2], out v)) { }
+                        string[] hsvParts = tokens[++i].Split(':');
+                        if (hsvParts.Length == 3 &&
+                            int.TryParse(hsvParts[0], out int tempH) &&
+                            int.TryParse(hsvParts[1], out int tempS) &&
+                            int.TryParse(hsvParts[2], out int tempV))
+                        {
+                            h = tempH;
+                            s = tempS;
+                            v = tempV;
+                        }
                     }
                     break;
                 case "hue": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hueVal)) hue = hueVal; break;
