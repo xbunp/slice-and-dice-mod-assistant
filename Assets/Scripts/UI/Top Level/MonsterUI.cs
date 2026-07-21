@@ -775,10 +775,10 @@ public class MonsterUI : EntityUI<MonsterData>
         {
             Sprites = EntityUIHelpers.AllActionSprites,
 
-            // STRICT FILTER: Must start with prefix AND be within the official ID boundaries
             IsValid = (index, sprite) =>
             {
                 if (sprite == null || !sprite.name.StartsWith($"{expectedPrefix}_", StringComparison.OrdinalIgnoreCase)) return false;
+                if (sprite.name.StartsWith("alp", StringComparison.OrdinalIgnoreCase)) return false;
                 int id = ExtractIdFromSpriteName(sprite.name);
                 return id >= 0 && id <= maxAllowedId;
             },
@@ -786,11 +786,23 @@ public class MonsterUI : EntityUI<MonsterData>
             GetSearchName = (index, sprite) =>
             {
                 int id = ExtractIdFromSpriteName(sprite.name);
+                // Fix: Check if HeroSized to fetch the correct name from Hero tooltips
+                if (currentSize == MonsterSize.HeroSized)
+                {
+                    return EntityUIHelpers.GetBaseTooltip(sprite);
+                }
                 return MonsterDatabase.GetFaceName(currentSize, id);
             },
+
             GetTooltip = (index, sprite) =>
             {
                 int id = ExtractIdFromSpriteName(sprite.name);
+                // Fix: Check if HeroSized to fetch the correct name from Hero tooltips
+                if (currentSize == MonsterSize.HeroSized)
+                {
+                    string faceName = EntityUIHelpers.GetBaseTooltip(sprite);
+                    return $"ID {id}: {faceName}";
+                }
                 return $"ID {id}: {MonsterDatabase.GetFaceName(currentSize, id)}";
             },
 
@@ -854,6 +866,11 @@ public class MonsterUI : EntityUI<MonsterData>
 
                     if (id > maxAllowedId) return IconPickerModal.GetCleanLeafName(sprite.name);
 
+                    // Fix: Check if HeroSized to fetch the correct name from Hero tooltips
+                    if (currentSize == MonsterSize.HeroSized)
+                    {
+                        return EntityUIHelpers.GetBaseTooltip(sprite);
+                    }
                     return MonsterDatabase.GetFaceName(currentSize, id);
                 }
                 return IconPickerModal.GetCleanLeafName(sprite.name);
@@ -870,6 +887,12 @@ public class MonsterUI : EntityUI<MonsterData>
 
                     if (id > maxAllowedId) return $"Community Facade [{IconPickerModal.GetCleanLeafName(sprite.name)}]";
 
+                    // Fix: Check if HeroSized to fetch the correct name from Hero tooltips
+                    if (currentSize == MonsterSize.HeroSized)
+                    {
+                        string faceName = EntityUIHelpers.GetBaseTooltip(sprite);
+                        return $"Base ID {id}: {faceName}";
+                    }
                     return $"Base ID {id}: {MonsterDatabase.GetFaceName(currentSize, id)}";
                 }
                 return $"Community Facade [{IconPickerModal.GetCleanLeafName(sprite.name)}]";
@@ -887,7 +910,6 @@ public class MonsterUI : EntityUI<MonsterData>
                         string prefix = parts[0].ToLower();
                         string facadeStr;
 
-                        // TRANSLATION LAYER: Sequential bas offsets for base game monster faces
                         if (prefix == "big" && parsedId >= 0 && parsedId <= 31)
                         {
                             facadeStr = $"bas{188 + parsedId}";
@@ -902,7 +924,6 @@ public class MonsterUI : EntityUI<MonsterData>
                         }
                         else
                         {
-                            // Community sprites (and standard 'bas' sprites) format normally as prefix + ID
                             facadeStr = $"{parts[0]}{parts[1]}";
                         }
 
@@ -910,7 +931,6 @@ public class MonsterUI : EntityUI<MonsterData>
                     }
                     else
                     {
-                        // Fallback case for non-standard community structures
                         CurrentEntity.diceSides[faceIndex].facadeID = filename;
                     }
 
@@ -937,8 +957,6 @@ public class MonsterUI : EntityUI<MonsterData>
         }
         return null;
     }
-
-
 
     private void OpenModPoolModal()
     {
@@ -989,7 +1007,6 @@ public class MonsterUI : EntityUI<MonsterData>
 
         iconPicker.OpenModal(config);
     }
-
     private void OnPoolMonsterSelected(int index)
     {
         if (isDrawingUI) return;

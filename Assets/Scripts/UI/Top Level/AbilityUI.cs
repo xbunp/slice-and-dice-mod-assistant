@@ -61,7 +61,6 @@ public class AbilityUI : RootUI
             return ability;
         }
     }
-
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
         uiGenerator = uiGeneratorRef;
@@ -77,7 +76,6 @@ public class AbilityUI : RootUI
             OnStateChanged(null);
         }
     }
-
     private void InitializeDiceWidgets()
     {
         // Initialize widget delegates for Primary Face (Index 0)
@@ -166,7 +164,6 @@ public class AbilityUI : RootUI
 
         iconPicker.OpenModal(config);
     }
-
     private void OpenEffectBaseModal(int faceIndex, bool isPrimary)
     {
         if (iconPicker == null) return;
@@ -208,7 +205,6 @@ public class AbilityUI : RootUI
 
         iconPicker.OpenModal(config);
     }
-
     private bool IsPrimaryEffectValid(int baseId) => true;
     private bool IsSecondaryEffectValid(int baseId) => true;
 
@@ -234,7 +230,6 @@ public class AbilityUI : RootUI
 
         RebuildStatsUI();
     }
-
     private void OnEnable()
     {
         if (_needsRebuild)
@@ -243,7 +238,6 @@ public class AbilityUI : RootUI
             RebuildStatsUI();
         }
     }
-
     private void UpdateUIFromData()
     {
         if (statsUI == null || abilityDataUI == null) return;
@@ -337,7 +331,6 @@ public class AbilityUI : RootUI
         isDrawingUI = false;
         UpdateVisualsOnly();
     }
-
     private void UpdateVisualsOnly()
     {
         if (previewName != null) previewName.text = CurrentAbility.entityName;
@@ -382,10 +375,8 @@ public class AbilityUI : RootUI
 
         if (rawTextOutput != null)
         {
-            string exportedString = CurrentAbility is OrbData orb
-                ? orb.ExportAsTrait(useITPrefix: true)
-                : $"abilitydata.{CurrentAbility.ExportWrapped()}";
-
+            // CHANGED: Outputs dynamic syntax prefix depending on custom type
+            string exportedString = AbilityData.GetFormattedExportString(CurrentAbility);
             rawTextOutput.SetTextWithoutNotify(exportedString);
 
             if (syntaxHighlighterText != null)
@@ -402,7 +393,6 @@ public class AbilityUI : RootUI
         if (isDrawingUI) return;
         ModPackage.Instance.NotifyActiveEntityChanged<AbilityData>(this);
     }
-
     private void ResetToDefault()
     {
         ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(CreateNewSpell());
@@ -413,7 +403,6 @@ public class AbilityUI : RootUI
         RebuildStatsUI();
         RebuildAbilityScrollView();
     }
-
     private void UpdateAbilityHsvData(int componentIndex, int value)
     {
         if (componentIndex == 0) CurrentAbility.h = value;
@@ -430,7 +419,6 @@ public class AbilityUI : RootUI
 
         NotifyStateChanged();
     }
-
     private void ApplyTacticCost(int faceIndex, int dropdownIndex, int pips)
     {
         var face = CurrentAbility.diceSides[faceIndex];
@@ -455,7 +443,6 @@ public class AbilityUI : RootUI
 
         NotifyStateChanged();
     }
-
     private int GetTacticCostDropdownIndex(DiceSideData face)
     {
         if (face.effectID == 0) return 0;
@@ -574,7 +561,6 @@ public class AbilityUI : RootUI
 
         return layout;
     }
-
     private List<GridRowSpec> GenerateAbilityLayout()
     {
         var layout = new List<GridRowSpec>();
@@ -610,7 +596,6 @@ public class AbilityUI : RootUI
 
         return layout;
     }
-
     private void BuildOrbLayout(List<GridRowSpec> layout)
     {
         var orbData = CurrentAbility as OrbData;
@@ -662,7 +647,6 @@ public class AbilityUI : RootUI
             ));
         }
     }
-
     private void BuildPrimaryFaceLayout(List<GridRowSpec> layout, int modeIndex)
     {
         string targetHint = "Target ally or enemy.";
@@ -677,7 +661,6 @@ public class AbilityUI : RootUI
         layout.AddRange(primaryLayout);
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer2", "", 1.0f)));
     }
-
     private void BuildSpellLayout(List<GridRowSpec> layout)
     {
         // Secondary Face Layout via DiceFaceBuilderWidget (Index 1)
@@ -698,7 +681,6 @@ public class AbilityUI : RootUI
             GridCellSpec.CreateButton($"BtnCostDn", "▼", 0.20f, () => { spell.manaCost = Mathf.Max(0, spell.manaCost - 1); NotifyStateChanged(); UpdateUIFromData(); })
         ));
     }
-
     private void BuildTacticLayout(List<GridRowSpec> layout)
     {
         // Secondary Face Layout via DiceFaceBuilderWidget (Index 1)
@@ -731,12 +713,10 @@ public class AbilityUI : RootUI
             GridCellSpec.CreateInput("TacPip_5", tactic.TacticCostRightmost.pips.ToString(), 0.20f, (val) => { if (int.TryParse(val, out int p)) { ApplyTacticCost(5, GetTacticCostDropdownIndex(tactic.TacticCostRightmost), p); } })
         ));
     }
-
     private void BuildOnHitLayout(List<GridRowSpec> layout)
     {
         // On Hit uses only the Primary Face, handled dynamically.
     }
-
     private void BuildTriggerHPLayout(List<GridRowSpec> layout)
     {
         var triggerData = CurrentAbility as TriggerHPData;
@@ -754,7 +734,7 @@ public class AbilityUI : RootUI
             GridCellSpec.CreateFilteredDropdown("ColorDrop", currentFormattedName, 0.65f, SDColors.GetFormattedColorNames(), (val) => {
                 HeroColorOption selectedColor = (HeroColorOption)val;
                 triggerData.colorClass = SDColors.GetColorCode(selectedColor);
-                NotifyStateChanged();
+                NotifyStateChanged();   
             })
         ));
 
@@ -788,7 +768,6 @@ public class AbilityUI : RootUI
             })
         ));
     }
-
     private void RebuildStatsUI()
     {
         if (statsScrollRect == null) return;
@@ -844,7 +823,6 @@ public class AbilityUI : RootUI
         isDrawingUI = wasDrawing;
         UpdateUIFromData();
     }
-
     private void RebuildAbilityScrollView()
     {
         if (abilityScrollRect == null) return;
@@ -863,7 +841,6 @@ public class AbilityUI : RootUI
         Canvas.ForceUpdateCanvases();
         UpdateUIFromData();
     }
-
     protected override void BuildUIAndBind()
     {
         var columns = new List<ColumnSpec>
@@ -892,39 +869,55 @@ public class AbilityUI : RootUI
         RebuildStatsUI();
         RebuildAbilityScrollView();
     }
-
     private void BuildRightPanelContent(RectTransform parent)
     {
+        BuildPreviewSection(parent);
+        BuildSyntaxHighlighterInput(parent);
+        BuildClipboardActionButtons(parent);
+    }
+    private void BuildPreviewSection(RectTransform parent)
+    {
+        // 1. Container
         GameObject previewContainer = new GameObject("PreviewContainer", typeof(RectTransform));
         previewContainer.transform.SetParent(parent, false);
         FullScreenUIGenerator.SetAnchors(previewContainer.GetComponent<RectTransform>(), 0.1f, 0.65f, 0.9f, 0.95f);
 
+        // 2. Icon Image
         GameObject imgObj = new GameObject("PreviewIcon", typeof(RectTransform), typeof(Image));
         imgObj.transform.SetParent(previewContainer.transform, false);
         FullScreenUIGenerator.SetAnchors(imgObj.GetComponent<RectTransform>(), 0.25f, 0.3f, 0.75f, 0.9f);
+
         previewIcon = imgObj.GetComponent<Image>();
         previewIcon.preserveAspect = true;
+
         Material hsvMat = Resources.Load<Material>("UI_Custom_HSV_Adjustment");
         if (hsvMat != null)
         {
             previewIcon.material = Instantiate(hsvMat);
         }
 
+        // 3. Name Label
         GameObject nameObj = Instantiate(uiGenerator.labelPrefab, previewContainer.transform);
         FullScreenUIGenerator.SetAnchors(nameObj.GetComponent<RectTransform>(), 0f, 0f, 1f, 0.25f);
+
         previewName = nameObj.GetComponentInChildren<TextMeshProUGUI>();
         previewName.alignment = TextAlignmentOptions.Center;
         previewName.fontSize = 24;
         previewName.fontStyle = FontStyles.Bold;
-
+    }
+    private void BuildSyntaxHighlighterInput(RectTransform parent)
+    {
         GameObject inputObj = Instantiate(uiGenerator.inputFieldPrefab, parent);
+        FullScreenUIGenerator.SetAnchors(inputObj.GetComponent<RectTransform>(), 0.0f, 0.08f, 1.0f, 0.58f);
+
         var innerLabel = inputObj.GetComponentInChildren<TextMeshProUGUI>();
         if (innerLabel != null) Destroy(innerLabel.gameObject);
 
+        // 1. Configure the hidden structural TMP_InputField
         rawTextOutput = inputObj.GetComponentInChildren<TMP_InputField>();
         rawTextOutput.lineType = TMP_InputField.LineType.MultiLineNewline;
         rawTextOutput.interactable = true;
-        rawTextOutput.textComponent.color = Color.clear;
+        rawTextOutput.textComponent.color = Color.clear; // Hide real text to show syntax highlighter underneath
         rawTextOutput.customCaretColor = true;
         rawTextOutput.caretColor = Color.white;
         rawTextOutput.richText = false;
@@ -932,6 +925,7 @@ public class AbilityUI : RootUI
         rawTextOutput.pointSize = 16;
         rawTextOutput.textComponent.autoSizeTextContainer = false;
 
+        // 2. Build the visual syntax highlighting overlay
         GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
         syntaxHighlighterText = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
 
@@ -943,6 +937,7 @@ public class AbilityUI : RootUI
         foreach (var script in highlighterObj.GetComponents<MonoBehaviour>())
             if (script != null && !(script is TextMeshProUGUI)) DestroyImmediate(script);
 
+        // Align highlighter perfectly with the hidden text field
         RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
         RectTransform textCompRt = rawTextOutput.textComponent.GetComponent<RectTransform>();
         highlightRt.anchorMin = textCompRt.anchorMin;
@@ -959,24 +954,22 @@ public class AbilityUI : RootUI
         syntaxHighlighterText.autoSizeTextContainer = false;
         syntaxHighlighterText.richText = true;
 
-        rawTextOutput.onValueChanged.AddListener((val) => { if (syntaxHighlighterText != null) syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(val); });
+        // 3. Bind Events
+        rawTextOutput.onValueChanged.AddListener((val) => {
+            if (syntaxHighlighterText != null) syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(val);
+        });
 
         rawTextOutput.onEndEdit.AddListener((val) =>
         {
             if (string.IsNullOrWhiteSpace(val)) return;
 
-            string currentExport = $"abilitydata.{CurrentAbility.ExportWrapped()}";
+            string currentExport = AbilityData.GetFormattedExportString(CurrentAbility);
             if (val == currentExport) return;
 
             try
             {
-                string cleanVal = val.Trim();
-                if (cleanVal.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
-                {
-                    cleanVal = cleanVal.Substring(12).Trim();
-                }
-
-                AbilityData imported = AbilityData.WhatAmI(cleanVal);
+                // UI is a dumb terminal: Pass dirty string directly to AbilityData natively
+                AbilityData imported = AbilityData.CreateAbility(val);
                 if (imported != null)
                 {
                     ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(imported);
@@ -987,30 +980,31 @@ public class AbilityUI : RootUI
             }
             catch (Exception ex) { Debug.LogWarning($"Could not parse pasted ability string: {ex.Message}"); }
         });
-
-        FullScreenUIGenerator.SetAnchors(inputObj.GetComponent<RectTransform>(), 0.0f, 0.08f, 1.0f, 0.58f);
-
+    }
+    private void BuildClipboardActionButtons(RectTransform parent)
+    {
+        // Copy Button
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         copyBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Copy Ability String";
-        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = $"abilitydata.{CurrentAbility.ExportWrapped()}");
+
+        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() =>
+            GUIUtility.systemCopyBuffer = AbilityData.GetFormattedExportString(CurrentAbility));
+
         FullScreenUIGenerator.SetAnchors(copyBtnObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 0.48f, 0.06f);
 
+        // Paste Button
         GameObject pasteBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         pasteBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Paste Ability String";
+
         pasteBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() =>
         {
             string cb = GUIUtility.systemCopyBuffer;
             if (string.IsNullOrWhiteSpace(cb)) return;
 
-            string cleanVal = cb.Trim();
-            if (cleanVal.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
-            {
-                cleanVal = cleanVal.Substring(12).Trim();
-            }
-
             try
             {
-                AbilityData imported = AbilityData.WhatAmI(cleanVal);
+                // UI is a dumb terminal: Pass dirty string directly to AbilityData natively
+                AbilityData imported = AbilityData.CreateAbility(cb);
                 if (imported != null)
                 {
                     ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(imported);
@@ -1021,32 +1015,9 @@ public class AbilityUI : RootUI
             }
             catch (Exception ex) { Debug.LogWarning($"Could not paste: {ex.Message}"); }
         });
+
         FullScreenUIGenerator.SetAnchors(pasteBtnObj.GetComponent<RectTransform>(), 0.52f, 0.0f, 1.0f, 0.06f);
     }
-
-    private void ApplyDynamicLayoutConstraints()
-    {
-        if (statsScrollRect != null)
-        {
-            RectTransform scrollRt = statsScrollRect.GetComponent<RectTransform>();
-            RectTransform rowRt = scrollRt.parent as RectTransform;
-            ConfigureFlexibleLayout(rowRt);
-            ConfigureFlexibleLayout(scrollRt);
-            StretchToParent(rowRt, 10f, 10f);
-            StretchToParent(scrollRt, 0f, 0f);
-        }
-
-        if (abilityScrollRect != null)
-        {
-            RectTransform scrollRt = abilityScrollRect.GetComponent<RectTransform>();
-            RectTransform rowRt = scrollRt.parent as RectTransform;
-            ConfigureFlexibleLayout(rowRt);
-            ConfigureFlexibleLayout(scrollRt);
-            StretchToParent(rowRt, 10f, 10f);
-            StretchToParent(scrollRt, 0f, 0f);
-        }
-    }
-
     private void ConfigureFlexibleLayout(RectTransform target)
     {
         if (target == null) return;
@@ -1055,7 +1026,6 @@ public class AbilityUI : RootUI
         layoutElement.preferredHeight = -1;
         layoutElement.flexibleHeight = 1f;
     }
-
     private void StretchToParent(RectTransform rt, float topOffset, float bottomOffset)
     {
         if (rt == null) return;
@@ -1064,7 +1034,6 @@ public class AbilityUI : RootUI
         rt.offsetMin = new Vector2(0f, bottomOffset);
         rt.offsetMax = new Vector2(0f, -topOffset);
     }
-
     private void OpenModPoolModal()
     {
         if (iconPicker == null) return;
@@ -1114,7 +1083,6 @@ public class AbilityUI : RootUI
 
         iconPicker.OpenModal(config);
     }
-
     private void ChangeAbilityMode(int newModeIndex)
     {
         AbilityData newAbility;
@@ -1152,7 +1120,6 @@ public class AbilityUI : RootUI
         NotifyStateChanged();
         RebuildAbilityScrollView();
     }
-
     private void SaveToModPool()
     {
         ModPackage.Instance.SaveActiveEntity<AbilityData>();
@@ -1165,4 +1132,27 @@ public class AbilityUI : RootUI
         ModPackage.Instance.NotifyActiveEntityChanged<AbilityData>(this);
         RebuildStatsUI();
     }
+    private void ApplyDynamicLayoutConstraints()
+    {
+        if (statsScrollRect != null)
+        {
+            RectTransform scrollRt = statsScrollRect.GetComponent<RectTransform>();
+            RectTransform rowRt = scrollRt.parent as RectTransform;
+            ConfigureFlexibleLayout(rowRt);
+            ConfigureFlexibleLayout(scrollRt);
+            StretchToParent(rowRt, 10f, 10f);
+            StretchToParent(scrollRt, 0f, 0f);
+        }
+
+        if (abilityScrollRect != null)
+        {
+            RectTransform scrollRt = abilityScrollRect.GetComponent<RectTransform>();
+            RectTransform rowRt = scrollRt.parent as RectTransform;
+            ConfigureFlexibleLayout(rowRt);
+            ConfigureFlexibleLayout(scrollRt);
+            StretchToParent(rowRt, 10f, 10f);
+            StretchToParent(scrollRt, 0f, 0f);
+        }
+    }
+
 }

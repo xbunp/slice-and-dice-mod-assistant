@@ -167,151 +167,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     // ====================================================================
     // UNIFIED EXPORT PIPELINE (DRY Implementation)
     // ====================================================================
-    /*
-    public override string Export()
-    {
-        StringBuilder sb = new StringBuilder();
-        bool isHero = this is HeroData;
-        HeroData hero = this as HeroData;
-        MonsterData monster = this as MonsterData;
-
-        string baseId = isHero ? hero.baseReplica : monster.baseMonster;
-        bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) &&
-                                !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) &&
-                                !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
-
-        // --- 1. CORE WRAPPER & BASE ID ---
-        if (isHero) sb.Append("(");
-
-        if (!string.IsNullOrEmpty(baseId))
-        {
-            if (isHero)
-            {
-                string formattedReplica = FormatSpecialImageName(baseId);
-                sb.Append($"replica.{FormatName(formattedReplica)}");
-            }
-            else
-            {
-                sb.Append(FormatName(baseId));
-            }
-            if (!hasImageOverride) AppendColorModifier(sb);
-        }
-
-        // --- 2. ENTITY NAME ---
-        if (!string.IsNullOrEmpty(entityName) && (isHero || !string.Equals(entityName, baseId, StringComparison.OrdinalIgnoreCase)))
-        {
-            sb.Append($".n.{FormatName(entityName)}");
-        }
-
-        // --- 3. METADATA (Hero Color Class) ---
-        if (isHero)
-        {
-            bool skipColor = false;
-            string activeVisual = hasImageOverride ? imageOverride : baseId;
-            if (!string.IsNullOrEmpty(activeVisual) && Enum.TryParse(activeVisual, true, out HeroType parsedHero))
-            {
-                if (SDColors.HeroColorMap.TryGetValue(parsedHero, out HeroColorOption defaultColor))
-                {
-                    if (EntityUIHelpers.ReverseLookupColor(hero.colorClass) == defaultColor) skipColor = true;
-                }
-            }
-            if (!skipColor && !string.IsNullOrEmpty(hero.colorClass)) sb.Append($".col.{hero.colorClass}");
-        }
-
-        // --- 4. SHARED METADATA ---
-        if (hp > 0) sb.Append($".hp.{hp}");
-        if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
-        if (!string.IsNullOrEmpty(p)) sb.Append($".p.{p}");
-        if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
-        if (!string.IsNullOrEmpty(b)) sb.Append($".b.{b}");
-        if (!string.IsNullOrEmpty(rect)) sb.Append($".rect.{rect}");
-        if (!string.IsNullOrEmpty(draw)) sb.Append($".draw.{draw}");
-
-        // --- 5. DICE SIDES & FACADES ---
-        AppendDiceSides(sb);
-
-        if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
-
-        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
-        if (!string.IsNullOrEmpty(faceModifiers))
-        {
-            if (!isHero) faceModifiers = Regex.Replace(faceModifiers, @"(\.facade\.[^.:\s]+)(?=\.|$)", "$1:0");
-            sb.Append(faceModifiers);
-        }
-
-        // --- 7. INNER PAYLOADS ---
-        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
-
-        StringBuilder innerSb = new StringBuilder();
-
-        string traitPrefix = isHero ? ".i.t." : ".t.";
-        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) innerSb.Append($"{traitPrefix}{FormatName(t)}");
-        if (!isHero && monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) innerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
-        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
-        if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) innerSb.Append($".gift.{FormatName(bl)}");
-
-        string jinxPrefix = isHero ? ".i.t.jinx." : ".t.jinx.";
-        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) innerSb.Append($"{jinxPrefix}{FormatName(c)}");
-
-        foreach (var inner in innerPayloads) innerSb.Append($".{inner}");
-
-        sb.Append(innerSb.ToString());
-
-        // --- 6. IMAGE OVERRIDE (Strictly placed here to match exact sequence) ---
-        if (hasImageOverride)
-        {
-            string formattedImg = FormatSpecialImageName(imageOverride);
-            sb.Append($".img.{FormatName(formattedImg)}");
-            AppendColorModifier(sb);
-        }
-
-        if (isHero) sb.Append(")");
-
-        string fullContentString = sb.ToString();
-
-        // --- 8. OUTER PAYLOADS ---
-        StringBuilder outerSb = new StringBuilder();
-        if (isHero && hero.baseAbilityData != null)
-            foreach (var ab in hero.baseAbilityData)
-                if (!string.IsNullOrEmpty(ab))
-                    outerSb.Append($".i.learn.{FormatName(ab)}");
-
-        if (isHero && hero.customAbilityData != null && hero.customAbilityData.Count > 0)
-        {
-            foreach (var cab in hero.customAbilityData)
-            {
-                if (cab == null) continue;
-                if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.({cab.Export()})");
-                else if (cab is OnHitData) outerSb.Append($".onhitdata.({cab.Export()})");
-                else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-                else outerSb.Append($".abilitydata.({cab.Export()})");
-            }
-        }
-
-        foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
-
-        if (outerSb.Length > 0)
-        {
-            fullContentString = isHero ? $"({fullContentString}{outerSb.ToString()})" : fullContentString + outerSb.ToString();
-        }
-
-        // --- 9. WRAPPERS ---
-        foreach (var wrapper in wrapperPayloads)
-        {
-            if (wrapper.Contains("{0}")) fullContentString = string.Format(wrapper, fullContentString);
-            else fullContentString = $"({fullContentString}.{wrapper})";
-        }
-
-        // --- 10. TAIL MODIFIERS ---
-        StringBuilder tailSb = new StringBuilder();
-        if (!string.IsNullOrEmpty(doc)) tailSb.Append($".doc.{doc}");
-        if (isHero && !string.IsNullOrEmpty(hero.appendedDoc)) tailSb.Append($".i.self.Wolf.doc.{hero.appendedDoc}.spirit");
-        if (!isHero && !string.IsNullOrEmpty(monster.bal)) tailSb.Append($".bal.{FormatName(monster.bal)}");
-
-        if (tailSb.Length > 0) return isHero ? $"({fullContentString}{tailSb.ToString()})" : fullContentString + tailSb.ToString();
-        return fullContentString;
-    }
-    */
 
     public override string Export()
     {
@@ -486,6 +341,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 ModifierData nestedMod = new ModifierData();
                 nestedMod.Parse(trimmed);
+                if (customPayloads == null) customPayloads = new List<CustomPayload>();
                 customPayloads.Add(new CustomPayload { Prefix = "t", Data = nestedMod });
             }
             else
@@ -614,7 +470,7 @@ public abstract class EntityData : SDData, IPayloadContainer
                 string payload = tokens[++i];
                 TriggerHPData thp = new TriggerHPData();
                 thp.Parse(StaticBranchTracing.StripOuterParens(payload));
-                customPayloads.Add(new CustomPayload { Prefix = "triggerhpdata", Data = thp });
+                AddCustomAbility(thp);
             }
             return true;
         }
@@ -625,34 +481,12 @@ public abstract class EntityData : SDData, IPayloadContainer
                 string payload = tokens[++i];
                 OnHitData ohd = new OnHitData();
                 ohd.Parse(StaticBranchTracing.StripOuterParens(payload));
-                customPayloads.Add(new CustomPayload { Prefix = "onhitdata", Data = ohd });
+                AddCustomAbility(ohd);
             }
             return true;
         }
         return false;
     }
-    /*
-    protected void AppendColorModifier(StringBuilder sb)
-    {
-        if (phue != null && phue.colorRange != 0) // Prevents adding empty payloads if unassigned
-        {
-            sb.Append($".{PackPHue(phue)}");
-        }
-        if (thue != null && (thue.colorRange != 0 || thue.colorOffset != 0))
-        {
-            sb.Append($".{PackTHue(thue)}");
-        }
-
-        if (h != 0 || s != 0 || v != 0)
-        {
-            sb.Append($".hsv.{h}:{s}:{v}");
-        }
-        else if (hue != 0)
-        {
-            sb.Append($".hue.{hue}");
-        }
-    }
-    */
     public void InitializeDiceFaces()
     {
         // Ensure the array itself exists
@@ -795,7 +629,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return priority;
     }
-
     private void HydrateEntityFromItem(ItemData item)
     {
         bool canMapNatively = true;
@@ -812,18 +645,25 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
 
-            // NEW RULE: If the item's payload is a Modifier, it is an entity-wrapper item. 
-            // It cannot map natively to dice faces, so force it into CustomPayloads!
             if (mech.PayloadData is ModifierData)
             {
                 canMapNatively = false;
                 break;
             }
 
-            // Check if this 'hat' is secretly a structured Sticker Target rule
-            if (pfx == "hat" && mech.PayloadData is HeroData hatHero)
+            // Check if this 'hat' is secretly a structured Sticker Target rule OR an Egg rule
+            if (pfx == "hat")
             {
-                if (IsStickerTargetOverrideHat(hatHero, out _, out _))
+                if (mech.PayloadData is HeroData hatHero && IsStickerTargetOverrideHat(hatHero, out _, out _))
+                {
+                    if (mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
+                        mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
+                    {
+                        isLeftMidException = true;
+                    }
+                    continue; // Is natively mappable!
+                }
+                else if (mech.PayloadString != null && mech.PayloadString.StartsWith("egg.(", StringComparison.OrdinalIgnoreCase))
                 {
                     if (mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
                         mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
@@ -840,18 +680,9 @@ public abstract class EntityData : SDData, IPayloadContainer
                 break;
             }
 
-            // FIX: If a mechanic is technically structured to map to a face (or is an untargeted base item pack),
-            // but has NO explicit targets, it cannot map natively to diceSides. 
-            // It MUST be treated as an intact CustomPayload (e.g., an equippable item pack),
-            // otherwise it will be silently deleted!
             if ((pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "") && mech.Targets.Count == 0)
             {
-                // TogItems are the exception as they intrinsically modify all sides natively
-                if (pfx == "" && ItemDomainRules.TogItems.Contains(mech.PayloadString))
-                {
-                    continue;
-                }
-
+                if (pfx == "" && ItemDomainRules.TogItems.Contains(mech.PayloadString)) continue;
                 canMapNatively = false;
                 break;
             }
@@ -859,14 +690,11 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         if (!canMapNatively)
         {
-            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
-            return;
+            string exportedItem = item.Export();
+            if (!string.IsNullOrEmpty(exportedItem)) items.Add(exportedItem);
         }
 
-        if (item.LearnedAbilities != null && item.LearnedAbilities.Count > 0)
-        {
-            baseAbilityData.AddRange(item.LearnedAbilities);
-        }
+        if (item.LearnedAbilities != null && item.LearnedAbilities.Count > 0) baseAbilityData.AddRange(item.LearnedAbilities);
 
         foreach (var mech in item.Mechanics)
         {
@@ -874,28 +702,19 @@ public abstract class EntityData : SDData, IPayloadContainer
 
             if (pfx == "t")
             {
-                if (mech.PayloadString != null && mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
-                    curses.Add(mech.PayloadString.Substring(5));
-                else
-                    traits.Add(mech.PayloadString);
+                if (mech.PayloadString != null && mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase)) curses.Add(mech.PayloadString.Substring(5));
+                else traits.Add(mech.PayloadString);
             }
-            else if (pfx == "gift")
+            else if (pfx == "gift") blessings.Add(mech.PayloadString);
+            else if (pfx == "learn" || pfx == "abilitydata") baseAbilityData.Add(mech.PayloadString);
+            else if (pfx == "hat")
             {
-                blessings.Add(mech.PayloadString);
-            }
-            else if (pfx == "learn" || pfx == "abilitydata")
-            {
-                baseAbilityData.Add(mech.PayloadString);
-            }
-            else if (pfx == "hat" && mech.PayloadData is HeroData hatHero)
-            {
-                if (IsStickerTargetOverrideHat(hatHero, out DiceSideData.PayloadTarget? parsedTarget, out ItemMechanic innerSticker))
+                if (mech.PayloadData is HeroData hatHero && IsStickerTargetOverrideHat(hatHero, out DiceSideData.PayloadTarget? parsedTarget, out ItemMechanic innerSticker))
                 {
                     if (mech.Targets != null && mech.Targets.Count > 0)
                     {
                         List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
 
-                        // Reverse the Left Face Exception: Isolate target to 0 (Left)
                         if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) &&
                             mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
                             mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
@@ -906,6 +725,34 @@ public abstract class EntityData : SDData, IPayloadContainer
                         ApplyMechanicToDiceSides(targetFaces, innerSticker, parsedTarget);
                     }
                 }
+                else if (mech.PayloadString != null && mech.PayloadString.StartsWith("egg.(", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (mech.Targets != null && mech.Targets.Count > 0)
+                    {
+                        List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
+
+                        if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) &&
+                            mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
+                            mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
+                        {
+                            targetFaces.Remove(1);
+                        }
+
+                        // Extract inner payload and strip outer parens
+                        string innerPayload = mech.PayloadString.Substring(4).Trim();
+                        innerPayload = StaticBranchTracing.StripOuterParens(innerPayload);
+
+                        foreach (int faceIdx in targetFaces)
+                        {
+                            if (faceIdx < 0 || faceIdx >= 6) continue;
+                            if (diceSides == null) InitializeDiceFaces();
+                            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+
+                            diceSides[faceIdx].faceType = DiceSideData.DiceFaceType.Egg;
+                            diceSides[faceIdx].payload = innerPayload;
+                        }
+                    }
+                }
             }
             else if (pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "")
             {
@@ -913,12 +760,31 @@ public abstract class EntityData : SDData, IPayloadContainer
                 {
                     List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
 
-                    // Ensure chained Facades in a Left Face Exception don't pollute the Mid face
                     if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) &&
                         mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
                         mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
                     {
                         targetFaces.Remove(1);
+                    }
+
+                    // Intercept blindfold when directed at an egg face to append it to the payload (stops .i.left2.k.blindfold)
+                    string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
+                    if (keyword == "blindfold")
+                    {
+                        bool appliedToEgg = false;
+                        foreach (int faceIdx in targetFaces)
+                        {
+                            if (diceSides != null && diceSides[faceIdx] != null && diceSides[faceIdx].faceType == DiceSideData.DiceFaceType.Egg)
+                            {
+                                if (string.IsNullOrEmpty(diceSides[faceIdx].payload)) diceSides[faceIdx].payload = "";
+                                if (!diceSides[faceIdx].payload.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    diceSides[faceIdx].payload += "#blindfold";
+                                }
+                                appliedToEgg = true;
+                            }
+                        }
+                        if (appliedToEgg) continue;
                     }
 
                     ApplyMechanicToDiceSides(targetFaces, mech);
@@ -1291,7 +1157,7 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
     private bool ProcessEggPayload(string payloadStr, List<string> chunks)
     {
-        bool hasBlindfold = payloadStr.EndsWith("#blindfold");
+        bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
         string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
 
         string fullSummonExport = cleanSummon; // Fallback to raw string if entity lookup fails
@@ -1306,14 +1172,20 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
 
+        // Avoid double parenthesis wrappers since EntityData.Export() now applies them intrinsically 
+        if (!fullSummonExport.StartsWith("("))
+        {
+            fullSummonExport = $"({fullSummonExport})";
+        }
+
         // 1. Hat MUST come first to establish the dice face override
-        chunks.Add($"hat.(egg.({fullSummonExport}))");
+        chunks.Add($"hat.(egg.{fullSummonExport})");
 
         // 2. Blindfold item MUST come immediately after the Hat
+        // Outputting standalone "blindfold" triggers standard chaining resulting in #blindfold
         if (hasBlindfold)
         {
-            // Removed "i." to prevent mixing item declarations with the # operator
-            chunks.Add("{0}.blindfold");
+            chunks.Add("blindfold");
         }
 
         return true; // Indicates a hat wrapper is active for this face
@@ -1450,213 +1322,4 @@ public abstract class EntityData : SDData, IPayloadContainer
             chunks.Add("k.stasis");
         }
     }
-
-    /*
-    public string BuildFaceModifiers(bool includeInlineFacades)
-    {
-        StringBuilder modSb = new StringBuilder();
-        var groupedModifiers = new Dictionary<string, int>();
-
-        for (int i = 0; i < 6; i++)
-        {
-            var face = diceSides[i];
-            List<string> chunks = new List<string>();
-
-            // 1. MUST BE FIRST: Dynamic Payloads & Targets (Overwrites the base face)
-            string hatWrapperFmt = null;
-            if (face.faceType != DiceSideData.DiceFaceType.Base && !string.IsNullOrWhiteSpace(face.payload))
-            {
-                string payloadStr = face.payload.Trim();
-                string prefix = face.faceType.ToString().ToLower();
-
-                // --------------------------------------------------------
-                // NEW: Evaluate Egg payload string & construct full entity 
-                // --------------------------------------------------------
-                if (face.faceType == DiceSideData.DiceFaceType.Egg)
-                {
-                    bool hasBlindfold = payloadStr.EndsWith("#blindfold");
-                    string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
-
-                    string fullSummonExport = cleanSummon; // Fallback to raw string if entity lookup fails
-                    if (ModPackage.Instance != null)
-                    {
-                        var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(h => string.Equals(h.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
-                        if (summonHero != null) fullSummonExport = summonHero.Export();
-                        else
-                        {
-                            var summonMonster = ModPackage.Instance.Monsters?.FirstOrDefault(m => string.Equals(m.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
-                            if (summonMonster != null) fullSummonExport = summonMonster.Export();
-                        }
-                    }
-
-                    // Wrap the evaluated string properly into the hat syntax
-                    hatWrapperFmt = $"egg.({fullSummonExport})";
-
-                    if (hasBlindfold)
-                    {
-                        // Explicitly formatted as i.<side>.blindfold to match desired output
-                        chunks.Add("i.{0}.blindfold");
-                    }
-                }
-                else
-                {
-                    // Existing logic for Stickers, Casts, Enchants
-                    if (!payloadStr.StartsWith("(") && (payloadStr.Contains(".") || payloadStr.Contains("#") || payloadStr.Contains(":")))
-                        payloadStr = $"({payloadStr})";
-
-                    bool applyStickerRules = face.faceType == DiceSideData.DiceFaceType.Sticker;
-
-                    if (face.faceType == DiceSideData.DiceFaceType.Enchant && face.payloadTarget.HasValue)
-                    {
-                        prefix = "sticker";
-                        payloadStr = $"(self.{payloadStr})";
-                        applyStickerRules = true;
-                    }
-
-                    string innerPayloadStr = $"{prefix}.{payloadStr}";
-
-                    if (applyStickerRules)
-                    {
-                        if (face.togtime)
-                        {
-                            innerPayloadStr += "#togtime";
-                        }
-
-                        if (face.payloadTarget.HasValue)
-                        {
-                            switch (face.payloadTarget.Value)
-                            {
-                                case DiceSideData.PayloadTarget.Enemy:
-                                    innerPayloadStr += "#togfri";
-                                    chunks.Add(innerPayloadStr);
-                                    break;
-                                case DiceSideData.PayloadTarget.AllAllies:
-                                    hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg";
-                                    break;
-                                case DiceSideData.PayloadTarget.AllEnemies:
-                                    hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg#togfri";
-                                    break;
-                                case DiceSideData.PayloadTarget.Everyone:
-                                    hatWrapperFmt = "Fey.sd.185.i.{0}." + innerPayloadStr + "#togtarg";
-                                    break;
-                                case DiceSideData.PayloadTarget.Self:
-                                    hatWrapperFmt = "Fey.sd.186.i.{0}." + innerPayloadStr + "#togtarg";
-                                    break;
-                                case DiceSideData.PayloadTarget.Ally:
-                                case DiceSideData.PayloadTarget.None:
-                                default:
-                                    chunks.Add(innerPayloadStr);
-                                    break;
-                            }
-                        }
-                        else
-                        {
-                            chunks.Add(innerPayloadStr);
-                        }
-                    }
-                    else
-                    {
-                        if (face.togtime && face.faceType == DiceSideData.DiceFaceType.Enchant)
-                        {
-                            innerPayloadStr += "#togtime";
-                        }
-                        chunks.Add(innerPayloadStr);
-                    }
-                }
-            }
-
-            // If wrapping in a hat, it becomes the core payload for this face
-            if (hatWrapperFmt != null)
-            {
-                chunks.Add($"hat.({hatWrapperFmt})");
-            }
-
-            // 2. Permissive (Must be first among keywords)
-            if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
-            {
-                chunks.Add("k.permissive");
-            }
-
-            // 3. Add all regular keywords
-            foreach (var kw in face.keywords)
-            {
-                if (string.IsNullOrWhiteSpace(kw)) continue;
-                string cleanKw = kw.Trim().ToLower();
-                if (cleanKw != "permissive" && cleanKw != "stasis")
-                {
-                    if (cleanKw == "future") chunks.Add("ritemx.dae9");
-                    else chunks.Add($"k.{cleanKw}");
-                }
-            }
-
-            // 4. Facades (Must go after keywords so extra UI doesn't break)
-            if (includeInlineFacades && !string.IsNullOrWhiteSpace(face.facadeID))
-            {
-                string facStr = $"facade.{face.facadeID.Trim()}";
-
-                if (!string.IsNullOrWhiteSpace(face.facadeColor))
-                {
-                    string[] hsv = face.facadeColor.Split(':');
-                    List<string> parts = new List<string>();
-
-                    for (int pIdx = 0; pIdx < hsv.Length; pIdx++)
-                        parts.Add(string.IsNullOrWhiteSpace(hsv[pIdx]) ? "0" : hsv[pIdx].Trim());
-
-                    while (parts.Count < 3) parts.Add("0");
-
-                    if (parts[0] == "0" && parts[1] == "0" && parts[2] == "0") facStr += ":0";
-                    else facStr += $":{parts[0]}:{parts[1]}:{parts[2]}";
-                }
-                else
-                {
-                    facStr += ":0";
-                }
-                chunks.Add(facStr);
-            }
-
-            if (!string.IsNullOrEmpty(face.sidesc))
-            {
-                chunks.Add($"sidesc.{face.sidesc}");
-            }
-
-            // 5. MUST BE LAST: stasis
-            if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("stasis", StringComparison.OrdinalIgnoreCase)))
-            {
-                chunks.Add("k.stasis");
-            }
-
-            // Final string generation mapping
-            if (chunks.Count > 0)
-            {
-                string templateString = string.Join("#", chunks);
-
-                // LEFT FACE EXCEPTION: Must route internal side to `mid` when wrapped in hat
-                if (i == 0 && hatWrapperFmt != null)
-                {
-                    string resolvedMod = string.Format(templateString, "mid");
-                    modSb.Append($".i.left.mid.{resolvedMod}");
-                }
-                else
-                {
-                    int faceMask = 1 << i;
-                    if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
-                    else groupedModifiers[templateString] = faceMask;
-                }
-            }
-        }
-
-        foreach (var kvp in groupedModifiers)
-        {
-            string templateString = kvp.Key;
-            List<string> optimalAliases = DiceTargetHelper.GetBestAliasCombination(kvp.Value);
-            foreach (string alias in optimalAliases)
-            {
-                string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, alias) : templateString;
-                modSb.Append($".i.{alias}.{resolvedMod}");
-            }
-        }
-
-        return modSb.ToString();
-    }
-    */
 }

@@ -11,8 +11,14 @@ public class ModData
     [SerializeField] private List<SliceDiceTextMod.TextModBlock> _directives = new List<SliceDiceTextMod.TextModBlock>();
     [SerializeField] private List<HeroData> _heroes = new List<HeroData>();
     [SerializeField] private List<MonsterData> _monsters = new List<MonsterData>();
+
     [SerializeField] private List<SpellData> _spells = new List<SpellData>();
     [SerializeField] private List<TacticData> _tactics = new List<TacticData>();
+    // NEW: Add missing AbilityData subclasses so Unity serializes them properly
+    [SerializeField] private List<OnHitData> _onHits = new List<OnHitData>();
+    [SerializeField] private List<TriggerHPData> _triggerHPs = new List<TriggerHPData>();
+    [SerializeField] private List<OrbData> _orbs = new List<OrbData>();
+
     [SerializeField] private List<ItemData> _customItems = new List<ItemData>();
     [SerializeField] private List<ModifierData> _customModifiers = new List<ModifierData>();
 
@@ -22,6 +28,10 @@ public class ModData
 
     private bool _suppressNotifications = false;
     private bool _notificationWasSuppressed = false;
+
+    // NEW: Cache the combined list to genuinely prevent memory allocation every call
+    private List<AbilityData> _cachedAbilities;
+    private bool _abilitiesDirty = true;
 
     public bool SuppressNotifications
     {
@@ -44,7 +54,16 @@ public class ModData
         _monsters.Clear();
         _spells.Clear();
         _tactics.Clear();
+
+        // NEW: Clear the new ability lists
+        _onHits.Clear();
+        _triggerHPs.Clear();
+        _orbs.Clear();
+
         _customItems.Clear();
+
+        // NEW: Clear custom modifiers (this was also completely missing before!)
+        _customModifiers.Clear();
 
         AutoExport_ReplaceBaseHeroes = false;
         AutoExport_HideHeroPool = true;
@@ -66,16 +85,23 @@ public class ModData
             _notificationWasSuppressed = true;
             return;
         }
+
+        _abilitiesDirty = true; // Mark cache as dirty when data changes
         OnDataChanged?.Invoke();
     }
 
-    // Modernized with pattern matching for cleaner reading
     private System.Collections.IList GetRawList(Type type)
     {
         if (type == null) return null;
 
+        // FIXED: Explicitly check ALL abilities BEFORE HeroData so they don't get 
+        // sucked into the Hero pool via inheritance rules!
         if (typeof(SpellData).IsAssignableFrom(type)) return _spells;
         if (typeof(TacticData).IsAssignableFrom(type)) return _tactics;
+        if (typeof(OnHitData).IsAssignableFrom(type)) return _onHits;
+        if (typeof(TriggerHPData).IsAssignableFrom(type)) return _triggerHPs;
+        if (typeof(OrbData).IsAssignableFrom(type)) return _orbs;
+
         if (typeof(HeroData).IsAssignableFrom(type)) return _heroes;
         if (typeof(MonsterData).IsAssignableFrom(type)) return _monsters;
         if (typeof(ItemData).IsAssignableFrom(type)) return _customItems;
@@ -88,10 +114,22 @@ public class ModData
 
     public IReadOnlyList<T> GetAll<T>() where T : SDData
     {
-        // Fixed Memory allocation: Uses LINQ Concat to stream data instead of building a new List in memory every call.
         if (typeof(T) == typeof(AbilityData))
         {
-            return _spells.Cast<T>().Concat(_tactics.Cast<T>()).ToList();
+            // FIXED: We now legitimately cache the list and only rebuild it on demand 
+            // when `_abilitiesDirty` flags that changes have occurred.
+            if (_abilitiesDirty || _cachedAbilities == null)
+            {
+                _cachedAbilities = _spells.Cast<AbilityData>()
+                    .Concat(_tactics.Cast<AbilityData>())
+                    .Concat(_onHits.Cast<AbilityData>())
+                    .Concat(_triggerHPs.Cast<AbilityData>())
+                    .Concat(_orbs.Cast<AbilityData>())
+                    .ToList();
+
+                _abilitiesDirty = false;
+            }
+            return (IReadOnlyList<T>)_cachedAbilities;
         }
 
         return GetList<T>();
@@ -226,8 +264,6 @@ public class ModData
         {
             foreach (var item in items)
             {
-                // Assuming ItemData has an Export() or ToModString() method like HeroData does.
-                // If they use an ItemPoolData class similar to Heroes, you can wrap them here just like above.
                 string itemSyntax = item.Export();
                 if (!string.IsNullOrWhiteSpace(itemSyntax)) blocks.Add(itemSyntax);
             }
@@ -266,7 +302,6 @@ public class ModData
             }
         }
 
-        // Finally, join absolutely everything together with the ampersand delimiter.
         return string.Join("&", blocks);
     }
 }

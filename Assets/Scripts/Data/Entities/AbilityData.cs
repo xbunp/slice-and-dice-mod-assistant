@@ -15,6 +15,19 @@ public static class AbilityDomainRules
     public static readonly HashSet<string> AbilityStartTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     { "orb", "triggerhpdata", "onhitdata", "abilitydata", "cast" };
 
+    public static readonly string[] AbilityPrefixes = new string[]
+    {
+        "i.triggerhpdata.",
+        "triggerhpdata.",
+        "i.onhitdata.",
+        "abilitydata.",
+        "onhitdata.",
+        "i.t.orb.",
+        "t.orb.",
+        "cast.",
+        "orb."
+}   ;
+
     public static bool IsAbilityStartSequence(List<string> tokens, int index)
     {
         string token = tokens[index];
@@ -39,7 +52,6 @@ public static class AbilityDomainRules
         }
         return false;
     }
-
     public static int GetAbilityBlockLength(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
@@ -86,146 +98,83 @@ public abstract class AbilityData : HeroData
     public DiceSideData PrimaryEffect { get => diceSides[0]; set => diceSides[0] = value; }
     public DiceSideData SecondaryEffect { get => diceSides[1]; set => diceSides[1] = value; }
 
+    private class ProbeAbilityData : AbilityData
+    {
+        public ProbeAbilityData()
+        {
+            if (diceSides == null)
+            {
+                diceSides = new DiceSideData[6];
+                for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData();
+            }
+        }
+        public override string ExportWrapped() => string.Empty;
+    }
+
+    private void CleanData()
+    {
+        items = new List<string>();
+        traits = new List<string>();
+        blessings = new List<string>();
+        curses = new List<string>();
+        baseAbilityData = new List<string>();
+        customPayloads = new List<CustomPayload>();
+        _itemPipeline = new List<ItemData>();
+    }
+
     public override void Parse(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
+        CleanData(); // not sure if this is really needed.
 
-        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
-        string core = StaticBranchTracing.StripOuterParens(chunks[0]);
+        string core = StripPrefix(data);
+        core = StaticBranchTracing.StripOuterParens(core);
 
-        List<string> chains = StaticBranchTracing.TopLevelSplit(core, '#');
-        bool isFirstChain = true;
-        foreach (var chain in chains)
+        // 2. Extract standard string chunks (isolate global tags if present)
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(core, '&');
+        string mainPayload = StaticBranchTracing.StripOuterParens(chunks[0]);
+
+        // 3. Tokenize by dot notation (without pre-splitting by '#' so items parse correctly)
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(mainPayload, '.');
+
+        if (tokens.Count > 0)
         {
-            if (string.IsNullOrWhiteSpace(chain)) continue;
-            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-
-            bool isFirstToken = isFirstChain;
-            isFirstChain = false;
-
-            ExtractKnowledge(tokens, ref isFirstToken);
+            string firstTokenLower = tokens[0].ToLower();
+            // 4. Safely extract base template (e.g. Fey, sthief, etc)
+            if (!AbilityDomainRules.AbilityKeys.Contains(firstTokenLower) && !ItemDomainRules.MechanicPrefixes.Contains(firstTokenLower))
+            {
+                baseReplica = ExtractBaseIdentifier(tokens[0]);
+                tokens.RemoveAt(0);
+            }
+            else if (string.IsNullOrEmpty(baseReplica))
+            {
+                baseReplica = "Fey";
+            }
         }
 
+        // 5. Route through unified parsing pipeline (defined in EntityData)
+        ExtractKnowledge(tokens, _itemPipeline, processTraitsAndCollections: true);
+        ExecuteItemPipeline();
+
+        // 6. Post-process structural constraints
         if (this is SpellData spell)
         {
-            if (spell.diceSides != null && spell.diceSides.Length > 4) spell.manaCost = spell.diceSides[4].pips;
+            if (spell.diceSides != null && spell.diceSides.Length > 4 && spell.diceSides[4] != null)
+                spell.manaCost = spell.diceSides[4].pips;
         }
     }
-
-    private void ExtractKnowledge(List<string> tokens, ref bool isFirstToken)
+    protected override bool TryProcessSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
     {
-        for (int i = 0; i < tokens.Count; i++)
-        {
-            string originalToken = tokens[i];
-            string tokenLower = originalToken.ToLower();
+        if (tokenLower == "col" && i + 1 < tokens.Count) { colorClass = tokens[++i]; return true; }
+        if (tokenLower == "tier" && i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) { tier = t; return true; }
+        if (tokenLower == "adj" && i + 1 < tokens.Count && int.TryParse(tokens[++i], out int a)) { adj = a; return true; }
+        if (tokenLower == "speech" && i + 1 < tokens.Count) { speech = tokens[++i]; return true; }
 
-            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
-            {
-                string inner = originalToken.Substring(1, originalToken.Length - 2);
-                List<string> innerChains = StaticBranchTracing.TopLevelSplit(inner, '#');
-                foreach (var chain in innerChains)
-                {
-                    if (string.IsNullOrWhiteSpace(chain)) continue;
-                    List<string> innerTokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-                    ExtractKnowledge(innerTokens, ref isFirstToken);
-                }
-                continue;
-            }
-
-            if (isFirstToken)
-            {
-                isFirstToken = false;
-                if (!AbilityDomainRules.AbilityKeys.Contains(tokenLower))
-                {
-                    baseReplica = originalToken;
-                    continue;
-                }
-            }
-
-            switch (tokenLower)
-            {
-                case "n": if (i + 1 < tokens.Count) entityName = tokens[++i]; break;
-                case "img": if (i + 1 < tokens.Count) imageOverride = tokens[++i]; break;
-                case "doc": if (i + 1 < tokens.Count) doc = tokens[++i]; break;
-                case "col": if (i + 1 < tokens.Count) colorClass = tokens[++i]; break;
-                case "hp": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hVal)) hp = hVal; break;
-                case "tier": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int tVal)) tier = tVal; break;
-                case "adj": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int aVal)) adj = aVal; break;
-                case "speech": if (i + 1 < tokens.Count) speech = tokens[++i]; break;
-                case "hsv":
-                    if (i + 1 < tokens.Count)
-                    {
-                        string[] hsvParts = tokens[++i].Split(':');
-                        if (hsvParts.Length == 3 &&
-                            int.TryParse(hsvParts[0], out int tempH) &&
-                            int.TryParse(hsvParts[1], out int tempS) &&
-                            int.TryParse(hsvParts[2], out int tempV))
-                        {
-                            h = tempH;
-                            s = tempS;
-                            v = tempV;
-                        }
-                    }
-                    break;
-                case "hue": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hueVal)) hue = hueVal; break;
-                case "p": if (i + 1 < tokens.Count) p = tokens[++i]; break;
-                case "b": if (i + 1 < tokens.Count) b = tokens[++i]; break;
-                case "rect": if (i + 1 < tokens.Count) rect = tokens[++i]; break;
-                case "draw": if (i + 1 < tokens.Count) draw = tokens[++i]; break;
-
-                case "thue": if (i + 1 < tokens.Count) thue = UnpackTHue(tokens[++i]); break;
-
-                case "sd":
-                    InitializeDiceFaces();
-                    if (i + 1 < tokens.Count)
-                    {
-                        string[] faces = tokens[++i].Split(':');
-                        for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
-                        {
-                            if (faces[f] == "0" || faces[f] == "0-0") continue;
-                            string[] faceParts = faces[f].Split('-');
-                            int.TryParse(faceParts[0], out diceSides[f].effectID);
-                            if (faceParts.Length > 1) int.TryParse(faceParts[1], out diceSides[f].pips);
-                        }
-                    }
-                    break;
-
-                case "i":
-                    StaticBranchTracing.ProcessAndRouteProperty(tokens, ref i, AbilityDomainRules.AbilityKeys, this);
-                    break;
-
-                case "t":
-                case "gift":
-                case "abilitydata":
-                    int startIndex = i + 1;
-                    if (startIndex >= tokens.Count) break;
-
-                    int endIndex = startIndex;
-                    while (endIndex < tokens.Count)
-                    {
-                        string peek = tokens[endIndex].ToLower();
-                        if (AbilityDomainRules.AbilityKeys.Contains(peek)) break;
-                        endIndex++;
-                    }
-
-                    int count = endIndex - startIndex;
-                    if (count == 0) break;
-
-                    List<string> payloadTokens = tokens.GetRange(startIndex, count);
-                    string joinedPayload = string.Join(".", payloadTokens);
-                    i = endIndex - 1;
-
-                    if (tokenLower == "t") traits.Add(joinedPayload);
-                    else if (tokenLower == "gift") blessings.Add(joinedPayload);
-                    else if (tokenLower == "abilitydata") baseAbilityData.Add(joinedPayload);
-                    break;
-            }
-        }
+        return base.TryProcessSpecificMetadata(tokens, ref i, tokenLower);
     }
 
     public override string Export() { return ExportWrapped(); }
     public abstract string ExportWrapped();
-
     protected string ExportInner()
     {
         StringBuilder sb = new StringBuilder();
@@ -234,9 +183,15 @@ public abstract class AbilityData : HeroData
         if (!string.IsNullOrEmpty(baseReplica)) sb.Append(FormatName(baseReplica));
         if (!hasImageOverride) AppendColorModifier(sb);
 
+        // FIX: Removed `if (hp > 0)` to prevent duplicating the `.hp.5` threshold 
+        if (!string.IsNullOrEmpty(colorClass)) sb.Append($".col.{colorClass}");
+
         AppendDiceSides(sb);
 
+        // Standard items and the newly string-preserved unmappable items export here natively
         if (items != null) foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
+
+        // Export legacy custom payloads if any survived
         if (customPayloads != null)
         {
             foreach (var cp in customPayloads)
@@ -267,50 +222,96 @@ public abstract class AbilityData : HeroData
 
         return sb.ToString();
     }
-
-    public static AbilityData FigureItOut(string data) => CreateAbility(data);
-    public static AbilityData WhatAmI(string data) => CreateAbility(data);
-
-    public static AbilityData CreateSpellOrTactic(string data)
+    public static string StripPrefix(string data)
     {
-        if (string.IsNullOrWhiteSpace(data)) return null;
+        if (string.IsNullOrWhiteSpace(data)) return string.Empty;
+        string clean = data.Trim();
 
-        ProbeAbilityData probe = new ProbeAbilityData();
-        probe.Parse(data);
-
-        bool isSpell = false;
-        if (probe.diceSides != null && probe.diceSides.Length > 4)
+        foreach (string prefix in AbilityDomainRules.AbilityPrefixes)
         {
-            var face5 = probe.diceSides[4];
-            if (face5 != null && face5.effectID == 76 && face5.pips > 0) isSpell = true;
+            if (clean.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return clean.Substring(prefix.Length).Trim();
+            }
         }
-
-        AbilityData result = isSpell ? (AbilityData)new SpellData() : new TacticData();
-        result.Parse(data);
-        return result;
+        return clean;
     }
 
+    public static string GetPipsAffectedDescription(int hp)
+    {
+        if (hp <= 0) return "None";
+
+        switch (hp)
+        {
+            case 1: return "All HP";
+            case 2: return "Every 2nd HP";
+            case 3: return "Every 3rd HP";
+            case 4: return "Every 4th HP";
+            case 5: return "Every 5th HP";
+            case 6: return "Every 10th HP";
+            case 7: return "Every 10th HP, starting with the 5th";
+            case 8: return "Every 2nd HP, starting with the 1st";
+            case 9: return "Every 3rd HP, starting with the 1st";
+            case 10: return "Inner 1 HP";
+            case 11: return "Inner 2 HP";
+            case 12: return "Inner 3 HP";
+            case 13: return "Inner 5 HP";
+            case 14: return "Outer 1 HP";
+            case 15: return "Outer 2 HP";
+            case 16: return "Outer 3 HP";
+            case 17: return "Outer 5 HP";
+            case 18: return "Middle HP";
+            case 19: return "2 Evenly Spaced HP";
+            case 20: return "3 Evenly Spaced HP";
+            case 21: return "4 Evenly Spaced HP";
+            default:
+                int offset = hp - 20;
+                return $"The {offset}{GetOrdinalSuffix(offset)} HP";
+        }
+    }
+    protected static string GetOrdinalSuffix(int num)
+    {
+        if (num % 100 >= 11 && num % 100 <= 13) return "th";
+        switch (num % 10)
+        {
+            case 1: return "st";
+            case 2: return "nd";
+            case 3: return "rd";
+            default: return "th";
+        }
+    }
+    public static string GetFormattedExportString(AbilityData ability)
+    {
+        if (ability == null) return string.Empty;
+        if (ability is OrbData orb) return orb.ExportAsTrait(useITPrefix: true);
+        if (ability is TriggerHPData) return $"i.triggerhpdata.{ability.ExportWrapped()}";
+        if (ability is OnHitData) return $"i.onhitdata.{ability.ExportWrapped()}";
+
+        return $"abilitydata.{ability.ExportWrapped()}";
+    }
     public static AbilityData CreateAbility(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
 
-        ProbeAbilityData probe = new ProbeAbilityData();
-        probe.Parse(data);
+        string clean = StripPrefix(data);
 
-        string trimmed = data.Trim();
+        ProbeAbilityData probe = new ProbeAbilityData();
+        probe.Parse(clean);
+
+        string trimmed = clean.Trim();
         if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.t.orb.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("t.orb.", StringComparison.OrdinalIgnoreCase))
         {
             OrbData orb = new OrbData();
-            orb.Parse(data);
+            orb.Parse(clean);
             return orb;
         }
 
         if (probe.hp != 0)
         {
             TriggerHPData triggerHP = new TriggerHPData();
-            triggerHP.Parse(data);
+            triggerHP.Parse(clean);
             return triggerHP;
         }
 
@@ -324,7 +325,7 @@ public abstract class AbilityData : HeroData
         if (isSpell)
         {
             SpellData spell = new SpellData();
-            spell.Parse(data);
+            spell.Parse(clean);
             return spell;
         }
 
@@ -359,26 +360,31 @@ public abstract class AbilityData : HeroData
         if (onlyLeftFace)
         {
             OnHitData onHit = new OnHitData();
-            onHit.Parse(data);
+            onHit.Parse(clean);
             return onHit;
         }
 
         TacticData tactic = new TacticData();
-        tactic.Parse(data);
+        tactic.Parse(clean);
         return tactic;
     }
-
-    private class ProbeAbilityData : AbilityData
+    public static AbilityData CreateSpellOrTactic(string data)
     {
-        public ProbeAbilityData()
+        if (string.IsNullOrWhiteSpace(data)) return null;
+
+        ProbeAbilityData probe = new ProbeAbilityData();
+        probe.Parse(data);
+
+        bool isSpell = false;
+        if (probe.diceSides != null && probe.diceSides.Length > 4)
         {
-            if (diceSides == null)
-            {
-                diceSides = new DiceSideData[6];
-                for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData();
-            }
+            var face5 = probe.diceSides[4];
+            if (face5 != null && face5.effectID == 76 && face5.pips > 0) isSpell = true;
         }
-        public override string ExportWrapped() => string.Empty;
+
+        AbilityData result = isSpell ? (AbilityData)new SpellData() : new TacticData();
+        result.Parse(data);
+        return result;
     }
 
     public void DebugAbilityCompact(string indent = "")
@@ -436,56 +442,5 @@ public abstract class AbilityData : HeroData
         }
 
         UnityEngine.Debug.Log(sb.ToString());
-    }
-
-    // FOR ON HIT DATA / TARGETTED DATA.
-
-    /// <summary>
-    /// Translates the parsed 'hp' value into a human-readable description of 
-    /// which health pips on the target entity are affected according to the Textmod API rules.
-    /// </summary>
-    public static string GetPipsAffectedDescription(int hp)
-    {
-        if (hp <= 0) return "None";
-
-        switch (hp)
-        {
-            case 1: return "All HP";
-            case 2: return "Every 2nd HP";
-            case 3: return "Every 3rd HP";
-            case 4: return "Every 4th HP";
-            case 5: return "Every 5th HP";
-            case 6: return "Every 10th HP";
-            case 7: return "Every 10th HP, starting with the 5th";
-            case 8: return "Every 2nd HP, starting with the 1st";
-            case 9: return "Every 3rd HP, starting with the 1st";
-            case 10: return "Inner 1 HP";
-            case 11: return "Inner 2 HP";
-            case 12: return "Inner 3 HP";
-            case 13: return "Inner 5 HP";
-            case 14: return "Outer 1 HP";
-            case 15: return "Outer 2 HP";
-            case 16: return "Outer 3 HP";
-            case 17: return "Outer 5 HP";
-            case 18: return "Middle HP";
-            case 19: return "2 Evenly Spaced HP";
-            case 20: return "3 Evenly Spaced HP";
-            case 21: return "4 Evenly Spaced HP";
-            default:
-                int offset = hp - 20;
-                return $"The {offset}{GetOrdinalSuffix(offset)} HP";
-        }
-    }
-
-    protected static string GetOrdinalSuffix(int num)
-    {
-        if (num % 100 >= 11 && num % 100 <= 13) return "th";
-        switch (num % 10)
-        {
-            case 1: return "st";
-            case 2: return "nd";
-            case 3: return "rd";
-            default: return "th";
-        }
     }
 }
