@@ -318,7 +318,8 @@ public static class ItemSyntaxCompiler
             }
             else if (facadeMask == 63 && !multipleDistinctFacades)
             {
-                facadeMods = $".facade.{sharedFacade}";
+                // CHANGED: Use '#' to chain full-mask facades to maintain context
+                facadeMods = $"#facade.{sharedFacade}";
             }
             else
             {
@@ -331,7 +332,8 @@ public static class ItemSyntaxCompiler
                         fMods.Add($"{DiceTargetHelper.FaceNames[i]}.facade.{fac}");
                     }
                 }
-                facadeMods = "." + string.Join(".", fMods);
+                // CHANGED: Joined with '#' instead of '.' to chain multi-facade expressions
+                facadeMods = "#" + string.Join("#", fMods);
             }
         }
 

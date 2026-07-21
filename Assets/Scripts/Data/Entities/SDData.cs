@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 
 [System.Serializable]
@@ -149,6 +150,7 @@ public abstract class SDData
         return result;
     }
 
+    /*
     protected static string PackTHue(Thue thue)
     {
         if (thue == null) return string.Empty;
@@ -177,6 +179,7 @@ public abstract class SDData
 
         return result;
     }
+    */
 
     protected static Color ParseColor(string hexStr)
     {
@@ -260,4 +263,59 @@ public abstract class SDData
         index += 1;
         return true;
     }
+
+
+    protected void AppendColorModifier(StringBuilder sb)
+    {
+        if (phue != null && phue.colorRange != 0) sb.Append($".{PackPHue(phue)}");
+
+        if (thue != null && (thue.colorRange != 0 || thue.colorOffset != 0))
+        {
+            string packed = PackTHue(thue);
+            Debug.Log($"[THue Debug] AppendColorModifier called. PackTHue returned: '{packed}'");
+            sb.Append($".{packed}");
+        }
+
+        if (h != 0 || s != 0 || v != 0) sb.Append($".hsv.{h}:{s}:{v}");
+        else if (hue != 0) sb.Append($".hue.{hue}");
+    }
+    protected static string PackTHue(Thue thue)
+    {
+        if (thue == null) return string.Empty;
+
+        string hex = ColorToHex(thue.colorHex);
+        string rangeStr = thue.colorRange.ToString("D2");
+
+        string result = $"thue.{hex}:{rangeStr}:{thue.colorOffset}";
+
+        if (!result.Contains(":"))
+            Debug.LogError($"[THue FATAL] PackTHue generated a string WITHOUT colons! Hex: {hex}, Range: {rangeStr}, Offset: {thue.colorOffset}");
+
+        return result;
+    }
+    protected static Thue UnpackTHue(string thue)
+    {
+        if (string.IsNullOrWhiteSpace(thue)) return null;
+
+        string payload = thue.Trim();
+        Debug.Log($"[THue Debug] UnpackTHue received raw payload: '{payload}'");
+
+        if (payload.StartsWith("thue.", System.StringComparison.OrdinalIgnoreCase))
+            payload = payload.Substring(5);
+
+        string[] parts = payload.Split(':');
+        if (parts.Length < 3)
+        {
+            Debug.LogError($"[THue FATAL] UnpackTHue failed to split 3 parts! It only found {parts.Length} parts. Payload was: '{payload}'");
+            return null;
+        }
+
+        Thue result = new Thue();
+        result.colorHex = ParseColor(parts[0]);
+        if (int.TryParse(parts[1].Trim(), out int range)) result.colorRange = range;
+        if (int.TryParse(parts[2].Trim(), out int offset)) result.colorOffset = offset;
+
+        return result;
+    }
+
 }

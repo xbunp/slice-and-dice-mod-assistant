@@ -312,6 +312,10 @@ public class DiceFaceBuilderWidget
                     //faceRows.Add(BuildTargetSelector(index, face)); // no targets, spell handles that.
                     faceRows.AddRange(BuildCastPayload(index, face, faceType));
                 }
+                else if (faceType.Id == "egg")
+                {
+                    faceRows.AddRange(BuildEggPayload(index, face, faceType));
+                }
                 else
                 {
                     // Only other payload types (e.g. enchant, egg) get the generic text input field
@@ -371,6 +375,11 @@ public class DiceFaceBuilderWidget
             if (_diceUI.Dropdowns.TryGetValue($"CastAbilityDrop_{i}", out var castDrop))
             {
                 castDrop.SetValueWithoutNotify(0);
+            }
+
+            if (_diceUI.Dropdowns.TryGetValue($"EggSummonDrop_{i}", out var eggDrop))
+            {
+                eggDrop.SetValueWithoutNotify(0);
             }
 
             if (faceType.HasBaseAndPips)
@@ -553,15 +562,17 @@ public class DiceFaceBuilderWidget
         return new GridRowSpec(
             GridCellSpec.CreateLabel("Face Type:", 0.30f),
 
-            // Cleaned ID. No more cache-busting hack needed now that UpdateUIFromData properly binds it
             GridCellSpec.CreateFilteredDropdown($"FaceTypeDrop_{index}", faceType.DisplayName, 0.70f, typeOptions, (val) =>
             {
                 if (val < 0 || val >= RegisteredPayloads.Count) return;
                 string newTypeId = RegisteredPayloads[val].Id;
                 if (newTypeId != GetFaceType(index, face).Id)
                 {
-                    //_uiFaceTypeOverrides[index] = newTypeId;
                     SetFacePayload(face, newTypeId, GetFacePayload(face));
+                    if (newTypeId == "egg" && !GetFacePayload(face).Contains("#blindfold"))
+                    {
+                        SetFacePayload(face, newTypeId, GetFacePayload(face) + "#blindfold");
+                    }
 
                     _onStateChanged?.Invoke();
                     _onRebuildRequested?.Invoke();
@@ -865,6 +876,73 @@ public class DiceFaceBuilderWidget
 
         return rows;
     }
+    private List<GridRowSpec> BuildEggPayload(int index, DiceSideData face, PayloadType faceType)
+    {
+        var rows = new List<GridRowSpec>();
+
+        string rawPayload = GetFacePayload(face);
+        bool isSafe = rawPayload.EndsWith("#blindfold");
+        bool killsUser = !isSafe;
+        string cleanSummon = isSafe ? rawPayload.Substring(0, rawPayload.Length - 10) : rawPayload;
+
+        // 1. Kill User Toggle
+        rows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Kill User?", 0.30f),
+            GridCellSpec.CreateButton($"BtnEggKill_{index}", killsUser ? "Yes (Hero dies)" : "No (Adds blindfold)", 0.70f, () => {
+                if (killsUser) SetFacePayload(face, faceType.Id, cleanSummon + "#blindfold");
+                else SetFacePayload(face, faceType.Id, cleanSummon);
+
+                _onStateChanged?.Invoke();
+                _onRebuildRequested?.Invoke();
+            })
+        ));
+
+        // 2. Summon Entity Dropdown
+        var entityNames = new List<string> { "-- Select Entity to Summon --" };
+        if (ModPackage.Instance != null)
+        {
+            if (ModPackage.Instance.Heroes != null)
+                entityNames.AddRange(ModPackage.Instance.Heroes.Select(h => !string.IsNullOrEmpty(h.entityName) ? h.entityName : "Unnamed Hero"));
+
+            if (ModPackage.Instance.Monsters != null)
+                entityNames.AddRange(ModPackage.Instance.Monsters.Select(m => !string.IsNullOrEmpty(m.entityName) ? m.entityName : "Unnamed Monster"));
+
+            entityNames = entityNames.Distinct().ToList();
+        }
+
+        bool hasCleanPayload = !string.IsNullOrWhiteSpace(cleanSummon);
+
+        rows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Set Summon:", 0.30f),
+            GridCellSpec.CreateFilteredDropdown($"EggSummonDrop_{index}", "-- Select Entity to Summon --", 0.70f, entityNames.ToArray(), (val) => {
+                if (val <= 0 || val >= entityNames.Count) return;
+
+                string selectedName = entityNames[val];
+                SetFacePayload(face, faceType.Id, selectedName + (isSafe ? "#blindfold" : ""));
+
+                _onStateChanged?.Invoke();
+                _onRebuildRequested?.Invoke();
+            })
+        ));
+
+        // 3. Active selection with clear [X] button
+        if (hasCleanPayload)
+        {
+            string displayLabel = cleanSummon.Length > 25 ? cleanSummon.Substring(0, 22) + "..." : cleanSummon;
+
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"ActiveEgg_{index}", displayLabel, 0.80f),
+                GridCellSpec.CreateButton($"DelEgg_{index}", "[X]", 0.20f, () => {
+                    SetFacePayload(face, faceType.Id, isSafe ? "#blindfold" : "");
+
+                    _onStateChanged?.Invoke();
+                    _onRebuildRequested?.Invoke();
+                })
+            ));
+        }
+
+        return rows;
+    }
 
     // Payload Getters / Setters
     private string GetFacePayload(DiceSideData face)
@@ -880,7 +958,7 @@ public class DiceFaceBuilderWidget
             case DiceSideData.DiceFaceType.Sticker: targetId = "sticker"; break;
             case DiceSideData.DiceFaceType.Cast: targetId = "cast"; break;
             case DiceSideData.DiceFaceType.Enchant: targetId = "enchant"; break;
-                //case DiceSideData.DiceFaceType.Egg: targetId = "egg"; break;
+            case DiceSideData.DiceFaceType.Egg: targetId = "egg"; break;
         }
         return RegisteredPayloads.First(p => p.Id == targetId);
     }
@@ -893,7 +971,7 @@ public class DiceFaceBuilderWidget
             case "sticker": face.faceType = DiceSideData.DiceFaceType.Sticker; break;
             case "cast": face.faceType = DiceSideData.DiceFaceType.Cast; break;
             case "enchant": face.faceType = DiceSideData.DiceFaceType.Enchant; break;
-            //case "egg": face.faceType = DiceSideData.DiceFaceType.Egg; break;
+            case "egg": face.faceType = DiceSideData.DiceFaceType.Egg; break;
             default: face.faceType = DiceSideData.DiceFaceType.Base; break;
         }
     }

@@ -9,7 +9,7 @@ public static class MonsterDomainRules
 {
     public static readonly HashSet<string> MonsterPropertyKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "i", "rmon", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata", "onhitdata"
+        "i", "n", "hp", "egg", "sd", "doc", "jinx", "vase", "orb", "t", "bal", "img", "hue", "hsl", "b", "draw", "hsv", "rect", "thue", "p", "triggerhpdata", "onhitdata"
     };
 }
 
@@ -25,14 +25,12 @@ public class MonsterData : EntityData
 
     [Header("Monster Modifiers")]
     public string bal;
-
+    /*
     public override void Parse(string data)
     {
+        InitializeAsBlank();
+
         if (string.IsNullOrWhiteSpace(data)) return;
-        customTriggerHPs = new List<TriggerHPData>();
-        customOnHits = new List<OnHitData>();
-        customPayloads = new List<CustomPayload>();
-        _itemPipeline.Clear();
 
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string core = StaticBranchTracing.StripOuterParens(chunks[0]);
@@ -41,41 +39,99 @@ public class MonsterData : EntityData
         bool isFirstToken = true;
         ExtractKnowledge(tokens, isFirstToken);
         ExecuteItemPipeline();
-
-    }
-
-    /*
-    protected override int GetEndOfBlockIndex(List<string> tokens, int startIndex)
-    {
-        int endIndex = startIndex;
-        while (endIndex < tokens.Count)
-        {
-            string peek = tokens[endIndex].ToLower();
-
-            if (peek == "i" || peek == "t" || peek == "triggerhpdata" || peek == "onhitdata" || peek == "orb" || peek == "sd")
-            {
-                break;
-            }
-
-            if (MonsterDomainRules.MonsterPropertyKeys.Contains(peek))
-            {
-                if (peek == "hp" && endIndex + 1 < tokens.Count)
-                {
-                    if (int.TryParse(tokens[endIndex + 1], out _)) break;
-                }
-                else if (peek == "n" || peek == "img" || peek == "doc" || peek == "bal" ||
-                         peek == "hsv" || peek == "hue" || peek == "thue" || peek == "p" ||
-                         peek == "b" || peek == "draw" || peek == "rect")
-                {
-                    break;
-                }
-            }
-            endIndex++;
-        }
-        return endIndex;
     }
     */
 
+    public override void Parse(string data)
+    {
+        InitializeAsBlank();
+
+        if (string.IsNullOrWhiteSpace(data)) return;
+
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
+        string core = StaticBranchTracing.StripOuterParens(chunks[0]);
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
+
+        // Unpack parenthesized groups wrapping the core entity details at the start.
+        // This flattens nested metadata so individual properties aren't swallowed
+        // as a single token when determining the base monster name.
+        while (tokens.Count > 0 && tokens[0].StartsWith("(") && tokens[0].EndsWith(")"))
+        {
+            string inner = StaticBranchTracing.StripOuterParens(tokens[0]);
+            List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
+            tokens.RemoveAt(0);
+            tokens.InsertRange(0, innerTokens);
+        }
+
+        if (tokens.Count > 0)
+        {
+            // Reuses the base class's built-in parser to cleanly map "rmon.0" -> "rm_n"
+            int baseIdx = -1;
+            if (TryParseSpecialOrNormalImage(tokens, ref baseIdx, out string baseName))
+            {
+                baseMonster = baseName;
+                tokens.RemoveRange(0, baseIdx + 1); // Consume the parsed base name tokens
+            }
+
+            string firstTokenLower = baseMonster.ToLower();
+
+            // Clean, simplified check for actual payload containers (excluding "rmon")
+            if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx")
+            {
+                if (tokens.Count > 0)
+                {
+                    string rawPayload;
+                    if (tokens[0].StartsWith("("))
+                    {
+                        rawPayload = tokens[0];
+                        tokens.RemoveAt(0);
+                    }
+                    else
+                    {
+                        rawPayload = string.Join(".", tokens);
+                        tokens.Clear();
+                    }
+
+                    baseMonster += "." + rawPayload;
+                    string corePayload = StaticBranchTracing.StripOuterParens(rawPayload);
+
+                    if (firstTokenLower == "jinx" || firstTokenLower == "vase")
+                    {
+                        ModifierData mod = new ModifierData(); mod.Parse(corePayload); payloadData = mod;
+                    }
+                    else if (firstTokenLower == "orb")
+                    {
+                        payloadData = AbilityData.CreateSpellOrTactic(corePayload);
+                    }
+                    else if (firstTokenLower == "egg")
+                    {
+                        if (StaticBranchTracing.IsMonsterEntity(corePayload))
+                        {
+                            MonsterData nestedMonster = new MonsterData(); nestedMonster.Parse(corePayload); payloadData = nestedMonster;
+                        }
+                        else
+                        {
+                            HeroData nestedHero = new HeroData(); nestedHero.Parse(corePayload); payloadData = nestedHero;
+                        }
+                    }
+                }
+            }
+        }
+
+        ExtractKnowledge(tokens, _itemPipeline, true);
+        ExecuteItemPipeline();
+        SyncMonsterSize();
+    }
+    protected override bool TryProcessSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
+    {
+        if (tokenLower == "bal")
+        {
+            if (i + 1 < tokens.Count) { bal = tokens[++i]; return true; }
+        }
+        return false;
+    }
+
+    /*
     public static string Export(MonsterData monster)
     {
         if (monster == null) return string.Empty;
@@ -132,6 +188,7 @@ public class MonsterData : EntityData
 
         return sb.ToString();
     }
+    */
     public static string ExportAsSpirit(MonsterData monster)
     {
         if (monster == null) return string.Empty;
@@ -341,26 +398,63 @@ public class MonsterData : EntityData
         }
         UnityEngine.Debug.Log($"{indent}--- MONSTER DATA DEBUG (COMPACT) ---\n" + sb.ToString());
     }
-
-
-    /*
-         public override void Parse(string data)
+    public void InitializeAsBlank()
     {
-        if (string.IsNullOrWhiteSpace(data)) return;
+        entityName = null;
+        imageOverride = null;
+        baseMonster = "Wolf";
+        bal = null;
+        hp = 0; h = 0; s = 0; v = 0; hue = 0;
+        p = null; b = null; rect = null; draw = null; thue = null; doc = null; phue = null;
+        appendedDoc = null;
+        payloadData = null;
 
-        customTriggerHPs = new List<TriggerHPData>();
+        items = new List<string>();
+        traits = new List<string>();
+        blessings = new List<string>();
+        curses = new List<string>();
+        baseAbilityData = new List<string>();
         customOnHits = new List<OnHitData>();
+        customTriggerHPs = new List<TriggerHPData>();
         customPayloads = new List<CustomPayload>();
+        customOrbs = new List<OrbData>();
+        thue = new Thue();
+        phue = new Phue();
+        _itemPipeline.Clear();
 
-        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
-        string core = StaticBranchTracing.StripOuterParens(chunks[0]);
+        // Safely instantiate the array structure
+        InitializeDiceFaces();
 
-        // FIX: Do NOT split by '#' at the top level. Process as a single chain.
-        List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
-
-        bool isFirstToken = true;
-        ExtractKnowledge(tokens, isFirstToken);
+        // Force clear all existing face data in case we are parsing over an existing object
+        for (int i = 0; i < 6; i++)
+        {
+            diceSides[i] = new DiceSideData { effectID = 0, pips = 0, facadeID = null, keywords = new List<string>() };
+        }
     }
+    private void SyncMonsterSize()
+    {
+        if (string.IsNullOrEmpty(baseMonster)) return;
 
-    */
+        string cleanName = baseMonster;
+        int dotIndex = cleanName.IndexOf('.');
+        if (dotIndex != -1)
+        {
+            cleanName = cleanName.Substring(dotIndex + 1);
+            cleanName = StaticBranchTracing.StripOuterParens(cleanName);
+
+            int nextDot = cleanName.IndexOf('.');
+            if (nextDot != -1) cleanName = cleanName.Substring(0, nextDot);
+        }
+
+        // Map to MonsterType enum to look up size constraints
+        if (Enum.TryParse<MonsterType>(cleanName, true, out MonsterType parsedType))
+        {
+            if (MonsterDatabase.SizeMapping.TryGetValue(parsedType, out MonsterSize mappedSize))
+            {
+                size = mappedSize;
+                return;
+            }
+        }
+        size = MonsterSize.HeroSized; // Default fallback
+    }
 }

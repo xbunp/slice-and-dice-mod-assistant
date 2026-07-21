@@ -8,8 +8,8 @@ public class DiceSideData
         Base,
         Sticker,
         Cast,
-        Enchant//,
-        //Egg
+        Enchant,
+        Egg
     }
 
     // NEW: Your exact target definitions

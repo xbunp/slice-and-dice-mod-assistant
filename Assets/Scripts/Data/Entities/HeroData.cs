@@ -25,11 +25,6 @@ public static class HeroDomainRules
         "replica", "n", "img", "col", "hp", "tier", "hsv", "hsl", "hue",
         "p", "b", "rect", "draw", "thue", "adj", "speech", "doc"
     };
-
-    public static readonly HashSet<string> HeroItemBoundaryKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "sd", "hp", "tier", "col", "orb"
-    };
 }
 
 [System.Serializable]
@@ -89,7 +84,6 @@ public class HeroData : EntityData
         diceSides = new DiceSideData[6];
         for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData { effectID = 0, pips = 0, facadeID = null, keywords = new List<string>() };
     }
-
     public override void Parse(string data)
     {
         InitializeAsBlank();
@@ -100,93 +94,35 @@ public class HeroData : EntityData
 
         if (tokens.Count > 0)
         {
-            string firstLower = tokens[0].ToLower();
+            string baseTokenClean = ExtractBaseIdentifier(tokens[0]);
+            string firstLower = baseTokenClean.ToLower();
             if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
             {
-                baseReplica = tokens[0];
+                baseReplica = baseTokenClean;
             }
         }
 
-        ExtractKnowledge(tokens);
+        ExtractKnowledge(tokens, _itemPipeline, false);
         ExecuteItemPipeline();
     }
 
-    private void ExtractKnowledge(List<string> tokens)
+    protected override bool TryProcessSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
     {
-        // Delegates to the master method using the instance field
-        ExtractKnowledge(tokens, _itemPipeline, processTraitsAndCollections: false);
-    }
+        if (i + 1 >= tokens.Count) return false;
+        string nextVal = tokens[i + 1];
 
-    private void ExtractKnowledge(
-        List<string> tokens,
-        List<ItemData> itemPipeline,
-        bool processTraitsAndCollections = true)
-    {
-        for (int i = 0; i < tokens.Count; i++)
+        switch (tokenLower)
         {
-            string tokenLower = tokens[i].ToLower();
-            string originalToken = tokens[i];
-
-            // 1. Handle recursive parenthesis
-            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
-            {
-                ProcessRecursiveParentheses(originalToken, (innerTokens) =>
-                    ExtractKnowledge(innerTokens, itemPipeline, processTraitsAndCollections));
-                continue;
-            }
-
-            // 2. Metadata Processors
-            if (TryProcessCommonMetadata(tokens, ref i, tokenLower)) continue;
-            if (TryProcessEntityMetadata(tokens, ref i, tokenLower)) continue;
-            if (TryProcessHeroSpecificMetadata(tokens, ref i, tokenLower)) continue;
-            if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
-            if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
-            if (TryProcessOrbData(tokens, ref i, tokenLower)) continue;
-            if (TryProcessAppendedDoc(tokens, ref i, tokenLower)) continue;
-
-            // 3. Optional Trait & Collection Processing
-            if (processTraitsAndCollections)
-            {
-                if (tokenLower == "t")
-                {
-                    ProcessTraitToken(tokens, ref i);
-                    continue;
-                }
-                if (TryProcessCollections(tokens, ref i, tokenLower)) continue;
-            }
-
-            // 4. Unified Item Processing
-            if (tokenLower == "i")
-            {
-                int startIndex = i + 1;
-                if (startIndex >= tokens.Count) continue;
-
-                // Resolve which boundary detector is appropriate for your domain rules.
-                // Using GetItemBlockLength here as an example:
-                int length = ItemDomainRules.GetItemBlockLength(tokens, startIndex);
-
-                if (length > 0)
-                {
-                    List<string> subTokens = tokens.GetRange(startIndex, length);
-                    i += length; // Safely advance past the block
-
-                    string itemString = string.Join(".", subTokens);
-                    ItemData parsedItem = new ItemData();
-                    parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
-
-                    // Fallback for simple standalone names
-                    if (string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0)
-                    {
-                        parsedItem.entityName = itemString;
-                    }
-
-                    itemPipeline.Add(parsedItem);
-                }
-                continue;
-            }
+            case "replica": baseReplica = nextVal; break;
+            case "col": colorClass = nextVal; break;
+            case "tier": if (int.TryParse(nextVal, out int t)) tier = t; break;
+            case "x": if (int.TryParse(nextVal, out int a)) adj = a; break;
+            case "speech": speech = nextVal; break;
+            default: return false;
         }
+        i++;
+        return true;
     }
-
 
     private bool TryProcessHeroSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
     {
@@ -206,63 +142,7 @@ public class HeroData : EntityData
         return true;
     }
 
-    private bool TryProcessCollections(List<string> tokens, ref int i, string tokenLower)
-    {
-        if (i + 1 >= tokens.Count) return false;
-
-        if (tokenLower == "t" || tokenLower == "gift" || tokenLower == "learn")
-        {
-            int length = EntityDomainRules.GetCollectionBlockLength(tokens, i + 1);
-            if (length > 0)
-            {
-                string payload = string.Join(".", tokens.GetRange(i + 1, length));
-                if (tokenLower == "t") traits.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                else if (tokenLower == "gift") blessings.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                else baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                i += length;
-            }
-            return true;
-        }
-
-        if (tokenLower == "abilitydata" || tokenLower == "triggerhpdata" || tokenLower == "onhitdata")
-        {
-            int length = AbilityDomainRules.GetAbilityBlockLength(tokens, i);
-            if (length > 1)
-            {
-                string payload = string.Join(".", tokens.GetRange(i + 1, length - 1));
-                if (payload.StartsWith("(")) AddCustomAbility(AbilityData.CreateAbility(payload));
-                else baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                i += length - 1;
-            }
-            return true;
-        }
-        return false;
-    }
-
     /*
-    private bool TryProcessCollections(List<string> tokens, ref int i, string tokenLower)
-    {
-        if (i + 1 >= tokens.Count) return false;
-        if (tokenLower == "t") { traits.AddRange(StaticBranchTracing.TopLevelSplit(tokens[++i], '#')); return true; }
-        if (tokenLower == "gift") { blessings.AddRange(StaticBranchTracing.TopLevelSplit(tokens[++i], '#')); return true; }
-        if (tokenLower == "abilitydata" || tokenLower == "triggerhpdata" || tokenLower == "onhitdata")
-        {
-            string payload = tokens[++i];
-            if (payload.StartsWith("("))
-            {
-                AddCustomAbility(AbilityData.CreateAbility(payload));
-            }
-            else
-            {
-                baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-            }
-            return true;
-        }
-        return false;
-    }
-    */
-
-
     public override string Export()
     {
         StringBuilder heroSb = new StringBuilder();
@@ -396,6 +276,7 @@ public class HeroData : EntityData
 
         return fullContentString;
     }
+    */
 
     public string ExportAsHat()
     {
@@ -465,6 +346,18 @@ public class HeroData : EntityData
         else if (ability is OrbData orb) { if (!customOrbs.Any(o => o.entityName == orb.entityName && o.hardcodedAbilityName == orb.hardcodedAbilityName)) customOrbs.Add(orb); }
         else base.AddCustomAbility(ability);
     }
+    public override void RemoveCustomAbility(string abilityName)
+    {
+        base.RemoveCustomAbility(abilityName);
+        if (string.IsNullOrEmpty(abilityName)) return;
+
+        if (customSpells != null)
+            customSpells.RemoveAll(a => a != null && string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+
+        if (customTactics != null)
+            customTactics.RemoveAll(a => a != null && string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+    }
+
     public void DebugContentsToConsoleCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -545,6 +438,7 @@ public class HeroData : EntityData
 
         return 1;
     }
+
 }
 
 

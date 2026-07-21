@@ -218,7 +218,8 @@ public class HatNodeDef : AuthoringNodeDef
         containerLayout.childForceExpandHeight = false;
 
         // 2. Target Dropdown Filter
-        CreateTargetDropdown(containerObj.transform, ui, card);
+        //CreateTargetDropdown(containerObj.transform, ui, card);
+        CreateTargetDropdowns(containerObj.transform, ui, card);
 
         // 3. Dice Face Preview UI Instantiation
         if (fsg.dicePreviewAlonePrefab != null)
@@ -251,7 +252,6 @@ public class HatNodeDef : AuthoringNodeDef
 
         RebuildHatDiceGrid(ui, card, heroData);
     }
-
     // --- GRID GENERATOR & DATA SYNCHRONIZATION ---
 
     private void RebuildHatDiceGrid(ItemUI ui, EntityCard card, HeroData heroData)
@@ -268,12 +268,12 @@ public class HatNodeDef : AuthoringNodeDef
         _diceGridLayoutElement.minHeight = _diceUI.TotalHeight;
 
         // Size the master container (Tabs Height + Layout Spacing + Grid Height)
-        _mainContainerLayoutElement.minHeight = 35f + 150f + 35f + 10f + _diceUI.TotalHeight;
+        //_mainContainerLayoutElement.minHeight = 35f + 150f + 35f + 10f + _diceUI.TotalHeight;
+        _mainContainerLayoutElement.minHeight = 70f + 150f + 35f + 10f + _diceUI.TotalHeight;
 
         Canvas.ForceUpdateCanvases();
         UpdateHatDiceUIFromData(heroData);
     }
-
     private List<GridRowSpec> GenerateHatDiceLayout(ItemUI ui, EntityCard card, HeroData heroData, int tabIndex)
     {
         var layout = new List<GridRowSpec>();
@@ -296,7 +296,6 @@ public class HatNodeDef : AuthoringNodeDef
 
         return layout;
     }
-
     private void UpdateHatDiceUIFromData(HeroData heroData)
     {
         // 1. Update Preview UI state and data
@@ -328,13 +327,178 @@ public class HatNodeDef : AuthoringNodeDef
         }
     }
 
+    private GameObject CreateDropdownRow(Transform parent, string labelText, List<string> options, int initialIndex, System.Action<int> onValueChanged)
+    {
+        var fsg = FullScreenUIGenerator.Instance;
+        if (fsg == null || fsg.dropdownPrefab == null) return null;
+
+        GameObject rowObj = new GameObject("DropdownRow", typeof(RectTransform));
+        rowObj.transform.SetParent(parent, false);
+
+        var rowLE = rowObj.AddComponent<LayoutElement>();
+        rowLE.minHeight = 35f;
+        rowLE.preferredHeight = 35f;
+        rowLE.flexibleHeight = 0f;
+
+        var rowLayout = rowObj.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.spacing = 10f;
+        rowLayout.childControlHeight = true;
+        rowLayout.childControlWidth = true;
+        rowLayout.childForceExpandHeight = true;
+        rowLayout.childForceExpandWidth = false;
+
+        GameObject labelObj = new GameObject("RowLabel", typeof(RectTransform));
+        labelObj.transform.SetParent(rowObj.transform, false);
+
+        var labelLE = labelObj.AddComponent<LayoutElement>();
+        labelLE.minWidth = 120f; // Sized to fit "Hat Source Side:"
+        labelLE.preferredWidth = 120f;
+        labelLE.flexibleWidth = 0f;
+
+        var textComp = labelObj.AddComponent<TextMeshProUGUI>();
+        textComp.text = labelText;
+        textComp.fontSize = 14f;
+        textComp.alignment = TextAlignmentOptions.Left;
+        textComp.color = Color.white;
+
+        GameObject dropdownObj = UnityEngine.Object.Instantiate(fsg.dropdownPrefab, rowObj.transform, false);
+        var dropdownLE = dropdownObj.GetComponent<LayoutElement>() ?? dropdownObj.AddComponent<LayoutElement>();
+        dropdownLE.flexibleWidth = 1f;
+
+        TMP_Dropdown dropdown = dropdownObj.GetComponentInChildren<TMP_Dropdown>(true) ?? dropdownObj.GetComponent<TMP_Dropdown>();
+        if (dropdown != null)
+        {
+            dropdown.ClearOptions();
+            dropdown.AddOptions(options);
+            dropdown.value = initialIndex;
+            dropdown.onValueChanged.AddListener((val) => onValueChanged?.Invoke(val));
+        }
+
+        return rowObj;
+    }
+    private void CreateTargetDropdowns(Transform parent, ItemUI ui, EntityCard card)
+    {
+        var fsg = FullScreenUIGenerator.Instance;
+        if (fsg == null || fsg.dropdownPrefab == null) return;
+
+        // 1. Setup collections for both dropdowns
+        var reversedAliases = DiceTargetHelper.TargetAliases.Reverse().ToList();
+        List<string> mySideOptions = reversedAliases.Select(a => DiceTargetHelper.FormatAliasName(a.name)).ToList();
+
+        // Second dropdown options must only be single-face targets
+        var singleFaceAliases = DiceTargetHelper.TargetAliases
+            .Where(a => a.name == "left" || a.name == "mid" || a.name == "top" || a.name == "bot" || a.name == "right" || a.name == "rightmost")
+            .OrderBy(a => {
+                if (a.name == "left") return 0;
+                if (a.name == "mid") return 1;
+                if (a.name == "top") return 2;
+                if (a.name == "bot") return 3;
+                if (a.name == "right") return 4;
+                return 5;
+            })
+            .ToList();
+
+        List<string> hatSideOptions = new List<string> { "(Same Face)" };
+        hatSideOptions.AddRange(singleFaceAliases.Select(a => DiceTargetHelper.FormatAliasName(a.name)));
+
+        // Determine current selected values
+        string defaultAliasName = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.mask == _currentMask).name ?? "left";
+        string currentMySide = card.MechanicData.Targets.Count > 0 ? card.MechanicData.Targets[0] : defaultAliasName;
+        string currentHatSide = card.MechanicData.Targets.Count > 1 ? card.MechanicData.Targets[1] : null;
+
+        int initialMyIndex = reversedAliases.FindIndex(a => a.name == currentMySide);
+        initialMyIndex = Mathf.Max(0, initialMyIndex);
+
+        int initialHatIndex = 0; // Default index matches "(Same Face)"
+        if (!string.IsNullOrEmpty(currentHatSide))
+        {
+            int foundIdx = singleFaceAliases.FindIndex(a => a.name == currentHatSide);
+            if (foundIdx != -1)
+            {
+                initialHatIndex = foundIdx + 1; // Offset due to "(Same Face)" placement
+            }
+        }
+
+        System.Action updateState = () =>
+        {
+            ui.AutoCompile();
+            ui.RefreshSidebar();
+
+            if (card.MechanicData.PayloadData is HeroData hero)
+            {
+                RebuildHatDiceGrid(ui, card, hero);
+            }
+        };
+
+        // 2. Dropdown 1: Target Side(s) (Overwrites card.MechanicData.Targets[0])
+        CreateDropdownRow(parent, "Target Side(s):", mySideOptions, initialMyIndex, (val) =>
+        {
+            var selectedAlias = reversedAliases[val];
+            _currentMask = selectedAlias.mask;
+
+            if (card.MechanicData.Targets.Count == 0)
+            {
+                card.MechanicData.Targets.Add(selectedAlias.name);
+            }
+            else
+            {
+                card.MechanicData.Targets[0] = selectedAlias.name;
+            }
+
+            int faceIndex = _currentDiceTab - 1;
+            if ((_currentMask & (1 << faceIndex)) == 0)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    if ((_currentMask & (1 << i)) != 0)
+                    {
+                        _currentDiceTab = i + 1;
+                        break;
+                    }
+                }
+            }
+
+            updateState();
+        });
+
+        // 3. Dropdown 2: Hat Source Side (Controls card.MechanicData.Targets[1])
+        CreateDropdownRow(parent, "Hat Source Side:", hatSideOptions, initialHatIndex, (val) =>
+        {
+            if (val == 0)
+            {
+                // Remove the second target if "(Same Face)" is selected
+                if (card.MechanicData.Targets.Count > 1)
+                {
+                    card.MechanicData.Targets.RemoveAt(1);
+                }
+            }
+            else
+            {
+                var selectedSingleAlias = singleFaceAliases[val - 1];
+                if (card.MechanicData.Targets.Count == 0)
+                {
+                    card.MechanicData.Targets.Add(defaultAliasName);
+                }
+
+                if (card.MechanicData.Targets.Count > 1)
+                {
+                    card.MechanicData.Targets[1] = selectedSingleAlias.name;
+                }
+                else
+                {
+                    card.MechanicData.Targets.Add(selectedSingleAlias.name);
+                }
+            }
+
+            updateState();
+        });
+    }
     // --- SELF-CONTAINED MODAL TRIGGER LOGIC ---
 
     private IconPickerModal GetIconPicker()
     {
         return IconPickerModal.Instance;
     }
-
     private void OpenBaseModal(int faceIndex, HeroData heroData, System.Action onComplete)
     {
         var iconPicker = GetIconPicker();
@@ -373,7 +537,6 @@ public class HatNodeDef : AuthoringNodeDef
         };
         iconPicker.OpenModal(config);
     }
-
     private void OpenFacadeModal(int faceIndex, HeroData heroData, System.Action onComplete)
     {
         var iconPicker = GetIconPicker();
@@ -436,7 +599,6 @@ public class HatNodeDef : AuthoringNodeDef
         };
         iconPicker.OpenModal(config);
     }
-
     private void CreateTargetDropdown(Transform parent, ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;

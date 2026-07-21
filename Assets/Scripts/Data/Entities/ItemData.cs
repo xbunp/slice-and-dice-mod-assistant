@@ -123,48 +123,12 @@ public static class ItemDomainRules
         "facade", "sidesc"
     };
 
-    /// <summary>
-    /// Scans forward to find where an item natively ends, respecting inner modifier scopes
-    /// (like self...spirit) that contain properties that would otherwise trip up the outer Entity parser.
-    /// </summary>
-    public static int GetItemBlockLength(List<string> tokens, int startIndex, HashSet<string> breakingKeys)
-    {
-        int endIndex = startIndex;
-        bool inModifierScope = false;
-
-        while (endIndex < tokens.Count)
-        {
-            string peek = tokens[endIndex].ToLower();
-
-            // Track entering a modifier scope
-            if (peek == "self" || peek == "jinx" || peek == "vase")
-            {
-                inModifierScope = true;
-            }
-            // Track exiting a modifier scope
-            else if (inModifierScope && (peek == "spirit" || peek == "cantrip"))
-            {
-                inModifierScope = false;
-                endIndex++;
-                continue; // The terminator belongs to the item, keep going
-            }
-
-            // If we are outside a modifier scope, respect the standard outer entity boundary rules
-            if (!inModifierScope && endIndex > startIndex)
-            {
-                if (breakingKeys.Contains(peek)) break;
-            }
-            endIndex++;
-        }
-        return endIndex;
-    }
     public static bool IsRepeatPrefix(string token, out int count)
     {
         count = 1;
         if (string.IsNullOrEmpty(token) || char.ToLower(token[0]) != 'x') return false;
         return int.TryParse(token.Substring(1), out count);
     }
-
 
     // NEW SRP:
     public static int GetItemBlockLength(List<string> tokens, int startIndex)
@@ -194,6 +158,13 @@ public static class ItemDomainRules
                 continue;
             }
 
+            // FIX: Prevent naked 'i' from swallowing subsequent distinct item blocks in flat chains.
+            // When parsing an entity, 'i' signifies a new distinct item boundary. Stop accumulating.
+            if (peek == "i" && endIndex > startIndex)
+            {
+                break;
+            }
+
             // Stop immediately if it's not a valid item dictionary token
             if (!IsTokenClaimedByItem(tokens, endIndex))
             {
@@ -209,25 +180,35 @@ public static class ItemDomainRules
     {
         string token = tokens[index].ToLower();
 
-        if (ValidItemProperties.Contains(token) || ValidTargets.Contains(token) ||
-            ContainerKeys.Contains(token) || MechanicPrefixes.Contains(token) ||
-            TogItems.Contains(token) || IsItemIdentifier(token) ||
-            IsRepeatPrefix(token, out _))
+        // 1. Evaluate chained tokens safely by inspecting inner '#' chunks
+        string[] hashChunks = token.Split('#');
+        foreach (var chunk in hashChunks)
         {
-            return true;
+            if (ValidItemProperties.Contains(chunk) || ValidTargets.Contains(chunk) ||
+                ContainerKeys.Contains(chunk) || MechanicPrefixes.Contains(chunk) ||
+                TogItems.Contains(chunk) || IsItemIdentifier(chunk) ||
+                IsRepeatPrefix(chunk, out _))
+            {
+                return true;
+            }
         }
 
-        // Contextually allow values mapped to valid preceding keys
+        // 2. Contextually allow values mapped to valid preceding keys
         if (index > 0)
         {
             string prev = tokens[index - 1].ToLower();
+
+            // Extract the actual property suffix from the previous token if it was chained (e.g. "overdog#facade" -> "facade")
+            string[] prevChunks = prev.Split('#');
+            string truePrev = prevChunks[prevChunks.Length - 1];
+
             HashSet<string> propertiesExpectingValue = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "tier", "n", "img", "doc", "sidesc", "m", "part", "mrg", "splice",
                 "hsv", "hue", "thue", "p", "b", "draw", "rect",
                 "k", "facade", "sticker", "enchant", "cast", "hat", "t", "gift", "learn", "i", "sd"
             };
-            if (propertiesExpectingValue.Contains(prev)) return true;
+            if (propertiesExpectingValue.Contains(truePrev)) return true;
         }
 
         return false;
@@ -327,6 +308,7 @@ public class ItemMechanic
         string corePayload = PayloadString;
 
         // DYNAMIC EXPORT: Pulls fresh data from the nested object if mutated.
+        // DYNAMIC EXPORT: Pulls fresh data from the nested object if mutated.
         if (PayloadData != null)
         {
             string exportedData = "";
@@ -335,25 +317,29 @@ public class ItemMechanic
             if (Prefix == "hat" && PayloadData is HeroData hd)
             {
                 exportedData = hd.ExportAsHat();
+
+                // --- NEW PRESERVATION LOGIC ---
+                // If the original payload string had trailing nested custom items (like .i.togunt)
+                // that the native HeroData export doesn't capture, preserve them.
+                if (!string.IsNullOrEmpty(PayloadString) && !string.IsNullOrEmpty(exportedData))
+                {
+                    string origCore = StaticBranchTracing.StripOuterParens(PayloadString).Trim();
+                    string cleanExported = exportedData.Trim();
+
+                    if (origCore.StartsWith(cleanExported, StringComparison.OrdinalIgnoreCase) && origCore.Length > cleanExported.Length)
+                    {
+                        string trailing = origCore.Substring(cleanExported.Length);
+                        // Ensure we only append if the trailing part contains a valid dot or operator sequence
+                        if (trailing.StartsWith(".") || trailing.StartsWith("#"))
+                        {
+                            exportedData = cleanExported + trailing;
+                        }
+                    }
+                }
             }
             else if (PayloadData is SDData sdData)
             {
                 exportedData = sdData.Export();
-            }
-
-            if (!string.IsNullOrEmpty(exportedData))
-            {
-                // Certain nested mechanics require parenthetical wrapping in textmod syntax
-                if (Prefix == "hat" || Prefix == "enchant" || Prefix == "self" ||
-                    Prefix == "triggerhpdata" || Prefix == "onhitdata" || Prefix == "sticker")
-                {
-                    if (!exportedData.StartsWith("(")) corePayload = $"({exportedData})";
-                    else corePayload = exportedData;
-                }
-                else
-                {
-                    corePayload = exportedData;
-                }
             }
         }
 
@@ -790,6 +776,8 @@ public class ItemData : SDData
         return sb.ToString();
     }
 
+    // Old Item Export
+    /*
     private void OptimizeAndExportMechanics(List<string> chainParts)
     {
         List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();
@@ -890,6 +878,128 @@ public class ItemData : SDData
                     {
                         mechsSb.Append("i.").Append(exportedMech); // Enforce strict boundary
                     }
+                }
+                else
+                {
+                    if (safeToChain)
+                    {
+                        // Inherit targets via '#', clear explicit targets from export to prevent redeclaring side words
+                        mech.Targets.Clear();
+                        mechsSb.Append("#").Append(mech.Export());
+                    }
+                    else
+                    {
+                        // Context shift requires a clean boundary delimiter
+                        mechsSb.Append(".i.").Append(exportedMech);
+                    }
+                }
+
+                lastTargets = currentTargets;
+                lastPerTier = currentPerTier;
+                lastUnpack = currentUnpack;
+            }
+
+            // Append the entire formatted mechanic block to the parent chain parts array
+            chainParts.Add(mechsSb.ToString());
+        }
+    }
+    */
+
+    // Current item export
+    private void OptimizeAndExportMechanics(List<string> chainParts)
+    {
+        List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();
+        foreach (var mech in Mechanics)
+        {
+            // Clone to prevent mutating original memory references during export operations
+            ItemMechanic clonedMech = CloneMechanic(mech);
+
+            // Case 1: Direct loose Tog Items
+            if (string.IsNullOrEmpty(clonedMech.Prefix) && ItemDomainRules.TogItems.Contains(clonedMech.PayloadString))
+            {
+                var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == clonedMech.Targets.Count && m.Targets.All(t => clonedMech.Targets.Contains(t)));
+                if (prev != null)
+                {
+                    prev.ChainedKeywords.Add(clonedMech.PayloadString);
+                    continue;
+                }
+            }
+
+            // Case 2: Tog Items wrapped inside of an inherent (i) Item Pack tuple
+            if (clonedMech.Prefix == "i" && clonedMech.PayloadData is ItemData nestedItem)
+            {
+                bool onlyTog = nestedItem.Mechanics.Count > 0 && nestedItem.Mechanics.All(m => string.IsNullOrEmpty(m.Prefix) && ItemDomainRules.TogItems.Contains(m.PayloadString));
+                if (onlyTog)
+                {
+                    bool allMerged = true;
+                    foreach (var innerMech in nestedItem.Mechanics)
+                    {
+                        var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
+                        if (prev != null)
+                        {
+                            prev.ChainedKeywords.Add(innerMech.PayloadString);
+                        }
+                        else
+                        {
+                            allMerged = false;
+                        }
+                    }
+
+                    // Skip appending this '.i' node if we successfully merged all its contents natively
+                    if (allMerged) continue;
+                }
+            }
+
+            optimizedMechanics.Add(clonedMech);
+        }
+
+        // --- EXPORT & CHAINING LOGIC ---
+        if (optimizedMechanics.Count > 0)
+        {
+            StringBuilder mechsSb = new StringBuilder();
+            List<string> lastTargets = null;
+            bool lastPerTier = false;
+            bool lastUnpack = false;
+
+            for (int i = 0; i < optimizedMechanics.Count; i++)
+            {
+                var mech = optimizedMechanics[i];
+                bool targetsMatch = false;
+
+                if (lastTargets != null && mech.Targets.Count == lastTargets.Count)
+                {
+                    targetsMatch = true;
+                    foreach (var t in mech.Targets)
+                    {
+                        if (!lastTargets.Contains(t))
+                        {
+                            targetsMatch = false;
+                            break;
+                        }
+                    }
+                }
+
+                bool safeToChain = targetsMatch;
+                if (safeToChain)
+                {
+                    // Do not falsely propagate scaling rules down the chain 
+                    if (lastPerTier && !mech.PerTier) safeToChain = false;
+                    if (lastUnpack && !mech.Unpack) safeToChain = false;
+                }
+
+                List<string> currentTargets = new List<string>(mech.Targets);
+                bool currentPerTier = mech.PerTier;
+                bool currentUnpack = mech.Unpack;
+
+                string exportedMech = mech.Export();
+
+                if (i == 0)
+                {
+                    // FIX: Removed the redundant FIRST MECHANIC RULE enforcing `i.`. 
+                    // Contextual evaluation wrappers (CustomItemContextHelper & ItemSyntaxCompiler) 
+                    // handle this boundary injection natively. Redundantly applying it here 
+                    // causes `i.(i.x)` mutations in parent containers like MonsterData.
+                    mechsSb.Append(exportedMech);
                 }
                 else
                 {
@@ -1053,15 +1163,15 @@ public static class CustomItemContextHelper
         string contentToEvaluate = rawItem.Trim();
 
         // ====================================================================
-        // RULE 1: EXTERNAL PROPERTIES (OuterEntity Zone)
+        // RULE 1: EXTERNAL PROPERTIES & ABILITIES (OuterEntity Zone)
         // ====================================================================
         if (contentToEvaluate.StartsWith("abilitydata.") ||
             contentToEvaluate.StartsWith("triggerhpdata.") ||
             contentToEvaluate.StartsWith("onhitdata.") ||
             contentToEvaluate.StartsWith("i.abilitydata.") ||
             contentToEvaluate.StartsWith("i.triggerhpdata.") ||
-            contentToEvaluate.StartsWith("learn.") ||         // ADDED THIS
-            contentToEvaluate.StartsWith("i.learn."))         // ADDED THIS
+            contentToEvaluate.StartsWith("learn.") ||
+            contentToEvaluate.StartsWith("i.learn."))
         {
             return new ItemInjectionResult
             {
@@ -1071,39 +1181,34 @@ public static class CustomItemContextHelper
         }
 
         // ====================================================================
-        // RULE 2: ENCAPSULATION (EntityWrapper Zone)
+        // RULE 2: MODIFIERS & EQUIPMENT (Inner vs Outer Selection)
         // ====================================================================
-        if (contentToEvaluate.StartsWith("custom.wrap.") ||
-           (item.Mechanics != null && item.Mechanics.Any(m => m.Prefix == "wrap")))
+        // STRICT RULE: Traits (t. / i.t.), Blessings (gift.), and Self-Modifiers belong INTERNALLY.
+        // ALL OTHER generic equippables (items that don't target dice faces) MUST go EXTERIOR.
+        bool isInnerProperty = contentToEvaluate.StartsWith("t.") ||
+                               contentToEvaluate.StartsWith("i.t.") ||
+                               contentToEvaluate.StartsWith("self.") ||
+                               contentToEvaluate.StartsWith("i.self.") ||
+                               contentToEvaluate.StartsWith("gift.") ||
+                               contentToEvaluate.StartsWith("i.gift.");
+
+        string formattedPayload = contentToEvaluate.StartsWith("i.") ? contentToEvaluate : $"i.{contentToEvaluate}";
+
+        if (isInnerProperty)
         {
             return new ItemInjectionResult
             {
-                FormattedString = contentToEvaluate,
-                Zone = PayloadInjectionZone.EntityWrapper
+                FormattedString = formattedPayload,
+                Zone = PayloadInjectionZone.InnerEntity
             };
-        }
-
-        // ====================================================================
-        // RULE 3: MODIFIERS & EQUIPMENT (InnerEntity Zone)
-        // ====================================================================
-        string formattedInner;
-        if (contentToEvaluate.StartsWith("i.") || contentToEvaluate.StartsWith("i.t."))
-        {
-            formattedInner = contentToEvaluate;
-        }
-        else if (contentToEvaluate.StartsWith("t."))
-        {
-            formattedInner = $"i.{contentToEvaluate}";
         }
         else
         {
-            formattedInner = $"i.{contentToEvaluate}";
+            return new ItemInjectionResult
+            {
+                FormattedString = formattedPayload,
+                Zone = PayloadInjectionZone.OuterEntity
+            };
         }
-
-        return new ItemInjectionResult
-        {
-            FormattedString = formattedInner,
-            Zone = PayloadInjectionZone.InnerEntity
-        };
     }
 }

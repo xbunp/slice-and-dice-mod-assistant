@@ -30,6 +30,7 @@ public static class HeroSpriteDatabaseGenerator
     }
 
     [MenuItem("Tools/Generate Sprite Database")]
+    [MenuItem("Tools/Generate Sprite Database")]
     public static void GenerateDatabase()
     {
         // 1. Load the sliced sprites from the Unity project
@@ -88,6 +89,8 @@ public static class HeroSpriteDatabaseGenerator
         }
         string[] lines = linesList.ToArray();
 
+        HashSet<string> usedUnitySprites = new HashSet<string>(); // Tracks assigned sprites to prevent collision stealing
+
         foreach (string line in lines)
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -110,8 +113,6 @@ public static class HeroSpriteDatabaseGenerator
                     spritePath = "o1R1U1";
                 }
             }
-
-            if (spritePath.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0) continue;
 
             if (spritePath.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0) continue;
 
@@ -138,26 +139,40 @@ public static class HeroSpriteDatabaseGenerator
                     string targetSearchName = $"prt_{fileName}".ToLowerInvariant();
                     string matchedSpriteName = null;
 
+                    // =======================================================
+                    // NEW MATCHING LOGIC (Prevents duplicate stealing)
+                    // =======================================================
                     if (unitySpriteMap.TryGetValue(targetSearchName, out string exactName))
                     {
-                        matchedSpriteName = exactName;
+                        if (!usedUnitySprites.Contains(exactName))
+                        {
+                            matchedSpriteName = exactName;
+                            usedUnitySprites.Add(exactName); // Mark as used
+                        }
                     }
-                    else
+
+                    // Fallback partial matching (if exact match failed OR was already used)
+                    if (string.IsNullOrEmpty(matchedSpriteName))
                     {
-                        // Fallback partial matching
-                        var fallbackKey = unitySpriteMap.Keys.FirstOrDefault(k => k.Contains(fileName.ToLowerInvariant()));
+                        var fallbackKey = unitySpriteMap.Keys.FirstOrDefault(k =>
+                            !usedUnitySprites.Contains(unitySpriteMap[k]) && // Ensure it hasn't been used yet
+                            k.Contains(fileName.ToLowerInvariant()));
+
                         if (fallbackKey != null)
                         {
                             matchedSpriteName = unitySpriteMap[fallbackKey];
+                            usedUnitySprites.Add(matchedSpriteName); // Mark as used
                         }
                     }
+                    // =======================================================
 
                     if (!string.IsNullOrEmpty(matchedSpriteName))
                     {
                         string enumIdentifier = ToPascalCase(niceName);
 
                         // Explicitly map "rm" to its correct subtype enum based on sprite dimensions
-                        if (niceName.Equals("rm", StringComparison.OrdinalIgnoreCase))
+                        if (niceName.Equals("rm", StringComparison.OrdinalIgnoreCase) ||
+                            niceName.StartsWith("rmr", StringComparison.OrdinalIgnoreCase))
                         {
                             if (matchedSpriteName.EndsWith("38x61")) enumIdentifier = "Rm_h";
                             else if (matchedSpriteName.EndsWith("26x28")) enumIdentifier = "Rm_b";

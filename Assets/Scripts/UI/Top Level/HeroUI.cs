@@ -539,7 +539,11 @@ public class HeroUI : EntityUI<HeroData>
                     }
                 }
             },
-            onRemove: (abilityName) => { }
+            onRemove: (abilityName) => {
+                CurrentEntity.RemoveCustomAbility(abilityName);
+                NotifyStateChanged();
+                RebuildStatsUI();
+            }
         );
 
         string[] rawNames = Enum.GetNames(typeof(BaseItems));

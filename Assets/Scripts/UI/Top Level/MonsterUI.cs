@@ -25,12 +25,12 @@ public class MonsterUI : EntityUI<MonsterData>
     }
 
     // Helper to extract the ID from the normalized sprite name (e.g. "big_10_bats_22x22" -> 10)
-
     // Dynamically fetch the correct sprite based on the monster's size
 
     protected override Sprite GetFacadeDiceSprite(string facadeID) => EntityUIHelpers.GetFacadeSprite(facadeID);
     protected override bool AllowFacades() => true;
-    protected override string ExportEntity(MonsterData entity) => MonsterData.Export(entity);
+    protected override string ExportEntity(MonsterData entity) => entity.Export();
+
     protected override MonsterData ParseEntity(string data)
     {
         MonsterData monster = new MonsterData();
@@ -69,8 +69,9 @@ public class MonsterUI : EntityUI<MonsterData>
         newMonster.traits = new List<string>();
         newMonster.blessings = new List<string>();
         newMonster.curses = new List<string>();
-        //newMonster.customItems = new List<ItemData>();
         newMonster.customOrbs = new List<OrbData>();
+        newMonster.customPayloads = new List<CustomPayload>();
+
         return newMonster;
     }
 
@@ -111,7 +112,16 @@ public class MonsterUI : EntityUI<MonsterData>
     protected override void UpdateSpecificUIFromData()
     {
         if (statsUI.Inputs.TryGetValue("BaseMonster", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseMonster);
-        if (statsUI.Inputs.TryGetValue("Bal", out var balIn)) balIn.SetTextWithoutNotify(CurrentEntity.bal);
+
+        // CHANGED: Bal is now bound as a Dropdown
+        if (statsUI.Dropdowns.TryGetValue("Bal", out var balDrop))
+        {
+            // Note: Replace 'MonsterDatabase' with whatever class holds your GetMonsterNames() method
+            var options = SDColors.GetMonsterNames().ToList();
+            int idx = options.IndexOf(CurrentEntity.bal);
+            balDrop.SetValueWithoutNotify(idx >= 0 ? idx : 0);
+        }
+
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overIn)) overIn.SetTextWithoutNotify(CurrentEntity.imageOverride);
     }
     protected override void UpdateSpecificVisuals()
@@ -230,13 +240,22 @@ public class MonsterUI : EntityUI<MonsterData>
 
         if (showCustomImagePanel) layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
 
+        var balOptions = SDColors.GetMonsterNames().ToList();
+
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP:", 0.2f),
             GridCellSpec.CreateInput("HP", "", 0.3f, (val) => {
                 CurrentEntity.hp = (string.IsNullOrWhiteSpace(val) || !int.TryParse(val, out int parsedHp)) ? 0 : parsedHp;
                 NotifyStateChanged();
-            }), GridCellSpec.CreateLabel("Bal:", 0.2f),
-            GridCellSpec.CreateInput("Bal", "", 0.3f, (val) => { CurrentEntity.bal = val; NotifyStateChanged(); })
+            }),
+            GridCellSpec.CreateLabel("Bal:", 0.2f),
+            GridCellSpec.CreateFilteredDropdown("Bal", string.IsNullOrEmpty(CurrentEntity.bal) ? "Wolf" : CurrentEntity.bal, 0.3f, balOptions.ToArray(), (val) => {
+                if (val >= 0 && val < balOptions.Count)
+                {
+                    CurrentEntity.bal = balOptions[val];
+                    NotifyStateChanged();
+                }
+            })
         ));
 
         layout.Add(new GridRowSpec(
@@ -363,46 +382,108 @@ public class MonsterUI : EntityUI<MonsterData>
             }
         );
 
-        // todo: fix this later/soon
-        /*
-        // 4. Custom Items (Instantiated directly from selected name string)
-        // Available choices hook: pass your list of raw custom item name strings here
+        // ==========================================
+        // ADDED/FIXED: CUSTOM ITEM SELECTOR (Replaces section 4)
+        // ==========================================
         AppendCollectionSelector<string>(
             layout: layout,
             label: "Add Custom Item:",
             uniqueKey: "CustomItem",
-            availableChoices: new List<string>(), // Hook: Put your string choices here
-            currentActiveItems: CurrentEntity.customItems?.Select(i => i.entityName).ToList() ?? new List<string>(), // Note: change to 'name' if ItemData uses 'name'
+            availableChoices: ModPackage.Instance?.CustomItems?
+                .Select(i => !string.IsNullOrEmpty(i.unityName) ? i.unityName : (!string.IsNullOrEmpty(i.entityName) ? i.entityName : "Unnamed Item"))
+                .Distinct()
+                .ToList() ?? new List<string>(),
+
+            currentActiveItems: CurrentEntity.customPayloads?
+                .Where(p => p.Type == PayloadType.Item)
+                .Select(p => p.Data as ItemData)
+                .Where(item => item != null)
+                .Select(item => !string.IsNullOrEmpty(item.unityName) ? item.unityName : item.entityName)
+                .ToList() ?? new List<string>(),
+
             getKey: (name) => name,
             getDisplay: (name) => name,
-            
-
+            onAdd: (itemName) =>
             {
-                if (CurrentEntity.customItems == null)
+                if (CurrentEntity.customPayloads == null)
                 {
-                    Debug.LogError($"CUSTOM ITEMS NULL, CATATSROPHIC ERROR.", this);
+                    CurrentEntity.customPayloads = new List<CustomPayload>();
                 }
-                if (!CurrentEntity.customItems.Any(i => i.entityName == itemName)) // Note: change to 'name' if needed
+
+                var templateItem = ModPackage.Instance?.CustomItems?.FirstOrDefault(i =>
+                    i.unityName == itemName || i.entityName == itemName);
+
+                if (templateItem != null)
                 {
-                    CurrentEntity.customItems.Add(new ItemData { entityName = itemName }); // Note: change to 'name' if needed
-                    NotifyStateChanged();
-                    RebuildStatsUI();
+                    bool alreadyExists = CurrentEntity.customPayloads.Any(p =>
+                        p.Type == PayloadType.Item &&
+                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
+
+                    if (!alreadyExists)
+                    {
+                        string json = JsonUtility.ToJson(templateItem);
+                        ItemData clonedItem = JsonUtility.FromJson<ItemData>(json);
+
+                        clonedItem.entityName = templateItem.entityName;
+                        clonedItem.unityName = templateItem.unityName;
+
+                        CurrentEntity.customPayloads.Add(new CustomPayload { Type = PayloadType.Item, Data = clonedItem });
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
                 }
             },
             onRemove: (itemName) =>
             {
-                if (CurrentEntity.customItems != null)
+                if (CurrentEntity.customPayloads != null)
                 {
-                    var target = CurrentEntity.customItems.FirstOrDefault(i => i.entityName == itemName); // Note: change to 'name' if needed
-                    if (target != null && CurrentEntity.customItems.Remove(target))
+                    var targetPayload = CurrentEntity.customPayloads.FirstOrDefault(p =>
+                        p.Type == PayloadType.Item &&
+                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
+
+                    if (targetPayload != null)
                     {
+                        CurrentEntity.customPayloads.Remove(targetPayload);
                         NotifyStateChanged();
                         RebuildStatsUI();
                     }
                 }
             }
         );
-        */
+
+        // ==========================================
+        // ADDED: CUSTOM ABILITY SELECTOR
+        // ==========================================
+        var customAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
+        AppendCollectionSelector<string>(
+            layout: layout, label: "Add Custom Ability:", uniqueKey: "CustomAbility",
+            availableChoices: customAbilityNames,
+            currentActiveItems: CurrentEntity.customAbilityData?.Select(a => a.entityName).ToList() ?? new List<string>(),
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (abilityName) => {
+                bool alreadyExists = CurrentEntity.customAbilityData?.Any(a => a.entityName == abilityName) ?? false;
+                if (!alreadyExists)
+                {
+                    var template = ModPackage.Instance.CustomAbilities.FirstOrDefault(a => a.entityName == abilityName);
+                    if (template != null)
+                    {
+                        // Clone the correct derived ability type (Spell, Tactic, etc.)
+                        string json = JsonUtility.ToJson(template);
+                        AbilityData clonedAbility = JsonUtility.FromJson(json, template.GetType()) as AbilityData;
+
+                        CurrentEntity.AddCustomAbility(clonedAbility); // Let EntityData route it to the correct underlying list
+                        NotifyStateChanged();
+                        RebuildStatsUI();
+                    }
+                }
+            },
+            onRemove: (abilityName) => {
+                CurrentEntity.RemoveCustomAbility(abilityName);
+                NotifyStateChanged();
+                RebuildStatsUI();
+            }
+        );
 
         // 5. Traits (Strings)
         AppendCollectionSelector<string>(
@@ -555,7 +636,7 @@ public class MonsterUI : EntityUI<MonsterData>
             }
         );
 
-        var customAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
+        //var customAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
         AppendCollectionSelector<string>(
             layout: layout, label: "Add Custom Orb:", uniqueKey: "CustomOrb",
             availableChoices: customAbilityNames,
@@ -746,8 +827,18 @@ public class MonsterUI : EntityUI<MonsterData>
                 if (sprite == null) return false;
                 string name = sprite.name;
 
-                if (name.StartsWith("prt_") || name.StartsWith("trg_") || name.StartsWith("ui_"))
+                if (name.StartsWith("prt_", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("trg_", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("ui_", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("alp", StringComparison.OrdinalIgnoreCase))
+                {
                     return false;
+                }
+
+                if (currentSize == MonsterSize.HeroSized)
+                {
+                    return EntityUIHelpers.IsSpriteValid(sprite);
+                }
 
                 return name.Contains(sizeSuffix);
             },
@@ -784,9 +875,6 @@ public class MonsterUI : EntityUI<MonsterData>
                 return $"Community Facade [{IconPickerModal.GetCleanLeafName(sprite.name)}]";
             },
 
-            // =====================================================================
-            // UPDATE THIS CALLBACK BELOW
-            // =====================================================================
             OnSelectionMade = (index, sprite) =>
             {
                 if (sprite != null)
