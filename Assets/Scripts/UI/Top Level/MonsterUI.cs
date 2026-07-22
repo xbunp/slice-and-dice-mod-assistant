@@ -74,41 +74,6 @@ public class MonsterUI : EntityUI<MonsterData>
 
         return newMonster;
     }
-
-    private void OpenAllPortraitsModal(Action<bool, object, Sprite> onPortraitSelected)
-    {
-        if (iconPicker == null) return;
-
-        IconPickerConfig config = new IconPickerConfig
-        {
-            Sprites = EntityUIHelpers.AllActionSprites,
-            IsValid = (index, sprite) => sprite != null && (HeroSpriteDatabase.SpriteToMonsterMap.ContainsKey(sprite.name) || HeroSpriteDatabase.SpriteToHeroMap.ContainsKey(sprite.name)),
-            GetSearchName = (index, sprite) =>
-            {
-                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero)) return hero.ToString();
-                if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster)) return monster.ToString();
-                return sprite.name;
-            },
-            GetTooltip = (index, sprite) =>
-            {
-                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero)) return hero.ToString();
-                if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster)) return monster.ToString();
-                return sprite.name;
-            },
-            OnSelectionMade = (index, sprite) =>
-            {
-                if (HeroSpriteDatabase.SpriteToHeroMap.TryGetValue(sprite.name, out HeroType hero))
-                {
-                    onPortraitSelected?.Invoke(true, hero, sprite);
-                }
-                else if (HeroSpriteDatabase.SpriteToMonsterMap.TryGetValue(sprite.name, out MonsterType monster))
-                {
-                    onPortraitSelected?.Invoke(false, monster, sprite);
-                }
-            }
-        };
-        iconPicker.OpenModal(config);
-    }
     protected override void UpdateSpecificUIFromData()
     {
         if (statsUI.Inputs.TryGetValue("BaseMonster", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseMonster);
@@ -180,26 +145,16 @@ public class MonsterUI : EntityUI<MonsterData>
     {
         var layout = new List<GridRowSpec>();
 
-        layout.Add(new GridRowSpec(GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)));
+        // 1. Reset and Pool Buttons
+        AppendHeaderButtons(layout, "Monster", OpenModPoolModal);
 
-        var monsters = ModPackage.Instance.loadedMod.GetAll<MonsterData>();
-        if (monsters != null)
-        {
-            string poolBtnText = _currentPoolIndex == 0 ? "Mod Pool: New Monster" : $"Mod Pool: {CurrentEntity.entityName}";
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateButton("BtnOpenPool", poolBtnText, 0.70f, OpenModPoolModal),
-                GridCellSpec.CreateButton("BtnSavePool", "Save to Mod", 0.30f, SaveToModPool)
-            ));
-        }
-
-
-
+        // 2. Name
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Monster Name:", 0.35f),
             GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentEntity.entityName = val.SanitizePlainInput(); NotifyStateChanged(); })
         ));
 
-        // The Monster selection triggers now dynamically track the Monster Size.
+        // 3. Base Monster Selection
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Base:", 0.15f),
             GridCellSpec.CreateDiceButton("MonsterBtn", "P", 0.15f, () =>
@@ -207,11 +162,10 @@ public class MonsterUI : EntityUI<MonsterData>
                 OpenMonsterPortraitsModal((selectedMonster, selectedSprite) =>
                 {
                     CurrentEntity.baseMonster = selectedMonster.ToString();
-                    CurrentEntity.size = MonsterDatabase.GetMonsterSize(selectedMonster); // Set Size Based on Database
-
+                    CurrentEntity.size = MonsterDatabase.GetMonsterSize(selectedMonster);
                     NotifyStateChanged();
                     UpdateUIFromData();
-                    RebuildDiceScrollView(); // Force rebuild dice so faces update to match the new size category
+                    RebuildDiceScrollView();
                 });
             }),
             GridCellSpec.CreateInput("BaseMonster", "Wolf", 0.70f, (val) =>
@@ -222,26 +176,15 @@ public class MonsterUI : EntityUI<MonsterData>
                     CurrentEntity.size = MonsterDatabase.GetMonsterSize(parsedType);
                 }
                 NotifyStateChanged();
-                RebuildDiceScrollView(); // Force rebuild dice so faces update to match the new size category
+                RebuildDiceScrollView();
             })
         ));
 
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Icon Override:", 0.30f),
-            GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, () => OpenAllPortraitsModal((isHero, enumValue, selectedSprite) =>
-            {
-                CurrentEntity.imageOverride = isHero ? ((HeroType)enumValue).ToString() : ((MonsterType)enumValue).ToString();
-                NotifyStateChanged();
-                UpdateUIFromData();
-            })),
-            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => { CurrentEntity.imageOverride = val; NotifyStateChanged(); }),
-            GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
-        ));
+        // 4. Icon Override & Custom Image Panel
+        AppendIconOverrideLayout(layout);
 
-        if (showCustomImagePanel) layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
-
+        // 5. HP & Balance
         var balOptions = SDColors.GetMonsterNames().ToList();
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP:", 0.2f),
             GridCellSpec.CreateInput("HP", "", 0.3f, (val) => {
@@ -258,419 +201,20 @@ public class MonsterUI : EntityUI<MonsterData>
             })
         ));
 
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Hue:", 0.30f),
-            GridCellSpec.CreateSlider("EntitySliH", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(0, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput("EntityFacH", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateEntityHsvData(0, h); })
-        ));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Sat:", 0.30f),
-            GridCellSpec.CreateSlider("EntitySliS", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(1, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput("EntityFacS", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateEntityHsvData(1, s); })
-        ));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Val:", 0.30f),
-            GridCellSpec.CreateSlider("EntitySliV", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(2, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput("EntityFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateEntityHsvData(2, v); })
-        ));
+        // 6. Color Modifiers (Order: P -> THue -> HSV)
+        AppendColorModifiersLayout(layout);
 
-        // ==========================================
-        // ADDED: P-HUE & T-HUE LAYOUTS
-        // ==========================================
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("P-Hue Swap:", 0.30f),
-            GridCellSpec.CreateButton("PhueStartBtn", "Target", 0.35f, () => {
-                if (uiGenerator.colorPicker == null) return;
-                Color initialColor = CurrentEntity.phue != null ? CurrentEntity.phue.colorStart : Color.white;
-                OpenColorPicker(initialColor, (color) => {
-                    if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
-                    CurrentEntity.phue.colorStart = color;
-                    NotifyStateChanged();
-                });
-            }),
-            GridCellSpec.CreateButton("PhueDestBtn", "Replace", 0.35f, () => {
-                if (uiGenerator.colorPicker == null) return;
-                Color initialColor = CurrentEntity.phue != null ? CurrentEntity.phue.colorDestination : Color.white;
-                OpenColorPicker(initialColor, (color) => {
-                    if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
-                    CurrentEntity.phue.colorDestination = color;
-                    NotifyStateChanged();
-                });
-            })
-        ));
+        // 7. Docs
+        AppendDocLayout(layout);
 
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("P-Hue Range:", 0.30f),
-            GridCellSpec.CreateSlider("PhueRangeSlider", 0, 99, true, 0.70f, (val) => {
-                if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
-                CurrentEntity.phue.colorRange = Mathf.RoundToInt(val);
-                NotifyStateChanged();
-            })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("T-Hue Color:", 0.35f),
-            GridCellSpec.CreateButton("ThueColorBtn", "Pick Color", 0.65f, () => {
-                if (uiGenerator.colorPicker == null) return;
-                Color initialColor = CurrentEntity.thue != null ? CurrentEntity.thue.colorHex : Color.white;
-                OpenColorPicker(initialColor, (color) => {
-                    if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue { colorRange = 0, colorOffset = 0 };
-                    CurrentEntity.thue.colorHex = color;
-                    NotifyStateChanged();
-                });
-            })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("T-Hue Range:", 0.20f),
-            GridCellSpec.CreateSlider("ThueRangeSlider", 0, 99, true, 0.30f, (val) => {
-                if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue();
-                CurrentEntity.thue.colorRange = Mathf.RoundToInt(val);
-                NotifyStateChanged();
-            }),
-            GridCellSpec.CreateLabel("T-Hue Shift:", 0.20f),
-            GridCellSpec.CreateSlider("ThueOffsetSlider", -99, 99, true, 0.30f, (val) => {
-                if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue();
-                CurrentEntity.thue.colorOffset = Mathf.RoundToInt(val);
-                NotifyStateChanged();
-            })
-        ));
-        // ==========================================
-
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Doc:", 0.20f),
-            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val.SanitizeRichInput(); NotifyStateChanged(); })
-        ));
-
-        layout.Add(new GridRowSpec(
-        GridCellSpec.CreateLabel("Appended Doc:", 0.20f),
-        GridCellSpec.CreateInput("AppendedDoc", "", 0.80f, (val) => { CurrentEntity.appendedDoc = val.SanitizeRichInput(); NotifyStateChanged(); })
-        ));
-
-        string[] rawNames = Enum.GetNames(typeof(BaseItems));
-        string[] formattedItemNames = rawNames.Select(name => Regex.Replace(name, "([a-z])([A-Z])", "$1 $2")).ToArray();
-
-        // 3. Items (Strings)
-        AppendCollectionSelector<string>(
-            layout: layout,
-            label: "Add Item:",
-            uniqueKey: "Item",
-            availableChoices: formattedItemNames,
-            currentActiveItems: CurrentEntity.items ?? new List<string>(),
-            getKey: (itemName) => itemName,
-            getDisplay: (itemName) => itemName,
-            onAdd: (itemName) =>
-            {
-                if (CurrentEntity.items == null)
-                    CurrentEntity.items = new List<string>();
-
-                if (!CurrentEntity.items.Contains(itemName))
-                {
-                    CurrentEntity.items.Add(itemName);
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            },
-            onRemove: (itemName) =>
-            {
-                if (CurrentEntity.items != null && CurrentEntity.items.Remove(itemName))
-                {
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            }
-        );
-
-        // ==========================================
-        // ADDED/FIXED: CUSTOM ITEM SELECTOR (Replaces section 4)
-        // ==========================================
-        AppendCollectionSelector<string>(
-            layout: layout,
-            label: "Add Custom Item:",
-            uniqueKey: "CustomItem",
-            availableChoices: ModPackage.Instance?.CustomItems?
-                .Select(i => !string.IsNullOrEmpty(i.unityName) ? i.unityName : (!string.IsNullOrEmpty(i.entityName) ? i.entityName : "Unnamed Item"))
-                .Distinct()
-                .ToList() ?? new List<string>(),
-
-            currentActiveItems: CurrentEntity.customPayloads?
-                .Where(p => p.Type == PayloadType.Item)
-                .Select(p => p.Data as ItemData)
-                .Where(item => item != null)
-                .Select(item => !string.IsNullOrEmpty(item.unityName) ? item.unityName : item.entityName)
-                .ToList() ?? new List<string>(),
-
-            getKey: (name) => name,
-            getDisplay: (name) => name,
-            onAdd: (itemName) =>
-            {
-                if (CurrentEntity.customPayloads == null)
-                {
-                    CurrentEntity.customPayloads = new List<CustomPayload>();
-                }
-
-                var templateItem = ModPackage.Instance?.CustomItems?.FirstOrDefault(i =>
-                    i.unityName == itemName || i.entityName == itemName);
-
-                if (templateItem != null)
-                {
-                    bool alreadyExists = CurrentEntity.customPayloads.Any(p =>
-                        p.Type == PayloadType.Item &&
-                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
-
-                    if (!alreadyExists)
-                    {
-                        string json = JsonUtility.ToJson(templateItem);
-                        ItemData clonedItem = JsonUtility.FromJson<ItemData>(json);
-
-                        clonedItem.entityName = templateItem.entityName;
-                        clonedItem.unityName = templateItem.unityName;
-
-                        CurrentEntity.customPayloads.Add(new CustomPayload { Type = PayloadType.Item, Data = clonedItem });
-                        NotifyStateChanged();
-                        RebuildStatsUI();
-                    }
-                }
-            },
-            onRemove: (itemName) =>
-            {
-                if (CurrentEntity.customPayloads != null)
-                {
-                    var targetPayload = CurrentEntity.customPayloads.FirstOrDefault(p =>
-                        p.Type == PayloadType.Item &&
-                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
-
-                    if (targetPayload != null)
-                    {
-                        CurrentEntity.customPayloads.Remove(targetPayload);
-                        NotifyStateChanged();
-                        RebuildStatsUI();
-                    }
-                }
-            }
-        );
-
-        // ==========================================
-        // ADDED: CUSTOM ABILITY SELECTOR
-        // ==========================================
+        // 8. Items, Abilities & Collections
         var customAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
-        AppendCollectionSelector<string>(
-            layout: layout, label: "Add Custom Ability:", uniqueKey: "CustomAbility",
-            availableChoices: customAbilityNames,
-            currentActiveItems: CurrentEntity.customAbilityData?.Select(a => a.entityName).ToList() ?? new List<string>(),
-            getKey: (name) => name,
-            getDisplay: (name) => name,
-            onAdd: (abilityName) => {
-                bool alreadyExists = CurrentEntity.customAbilityData?.Any(a => a.entityName == abilityName) ?? false;
-                if (!alreadyExists)
-                {
-                    var template = ModPackage.Instance.CustomAbilities.FirstOrDefault(a => a.entityName == abilityName);
-                    if (template != null)
-                    {
-                        // Clone the correct derived ability type (Spell, Tactic, etc.)
-                        string json = JsonUtility.ToJson(template);
-                        AbilityData clonedAbility = JsonUtility.FromJson(json, template.GetType()) as AbilityData;
 
-                        CurrentEntity.AddCustomAbility(clonedAbility); // Let EntityData route it to the correct underlying list
-                        NotifyStateChanged();
-                        RebuildStatsUI();
-                    }
-                }
-            },
-            onRemove: (abilityName) => {
-                CurrentEntity.RemoveCustomAbility(abilityName);
-                NotifyStateChanged();
-                RebuildStatsUI();
-            }
-        );
-
-        // 5. Traits (Strings)
-        AppendCollectionSelector<string>(
-            layout: layout,
-            label: "Add Traits:",
-            uniqueKey: "Trait",
-            // Use the keys of the TraitNiceNames dictionary
-            availableChoices: SDColors.TraitNiceNames.Keys.ToList(),
-            currentActiveItems: CurrentEntity.traits ?? new List<string>(),
-            getKey: (traitName) => traitName,
-            // Display both the key (name) and its dictionary value (description)
-            getDisplay: (traitName) =>
-            {
-                if (SDColors.TraitNiceNames.TryGetValue(traitName, out string desc))
-                {
-                    return $"{traitName}: {desc}";
-                }
-                return traitName;
-            },
-            onAdd: (traitName) =>
-            {
-                if (CurrentEntity.traits == null)
-                    CurrentEntity.traits = new List<string>();
-
-                if (!CurrentEntity.traits.Contains(traitName))
-                {
-                    CurrentEntity.traits.Add(traitName);
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            },
-            onRemove: (traitName) =>
-            {
-                if (CurrentEntity.traits != null && CurrentEntity.traits.Remove(traitName))
-                {
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            }
-        );
-
-        // 6. Blessings (Strings)
-        AppendCollectionSelector<string>(
-            layout: layout,
-            label: "Add Blessing:",
-            uniqueKey: "Blessing",
-            // Use the keys from BlessingDataset.Blessings
-            availableChoices: BlessingDataset.Blessings.Keys.ToList(),
-            currentActiveItems: CurrentEntity.blessings ?? new List<string>(),
-            getKey: (blessingName) => blessingName,
-            // Display both the key (name) and its description
-            getDisplay: (blessingName) =>
-            {
-                if (BlessingDataset.Blessings.TryGetValue(blessingName, out string desc))
-                {
-                    return $"{blessingName}: {desc}";
-                }
-                return blessingName;
-            },
-            onAdd: (blessingName) =>
-            {
-                if (CurrentEntity.blessings == null)
-                    CurrentEntity.blessings = new List<string>();
-
-                if (!CurrentEntity.blessings.Contains(blessingName))
-                {
-                    CurrentEntity.blessings.Add(blessingName);
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            },
-            onRemove: (blessingName) =>
-            {
-                if (CurrentEntity.blessings != null && CurrentEntity.blessings.Remove(blessingName))
-                {
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            }
-        );
-
-        // 7. Curses (Strings)
-        AppendCollectionSelector<string>(
-            layout: layout,
-            label: "Add Curse:",
-            uniqueKey: "Curse",
-            // Use the keys from CurseDataset.Curses
-            availableChoices: CurseDataset.Curses.Keys.ToList(),
-            currentActiveItems: CurrentEntity.curses ?? new List<string>(),
-            getKey: (curseName) => curseName,
-            // Display both the key (name) and its description
-            getDisplay: (curseName) =>
-            {
-                if (CurseDataset.Curses.TryGetValue(curseName, out string desc))
-                {
-                    return $"{curseName}: {desc}";
-                }
-                return curseName;
-            },
-            onAdd: (curseName) =>
-            {
-                if (CurrentEntity.curses == null)
-                    CurrentEntity.curses = new List<string>();
-
-                if (!CurrentEntity.curses.Contains(curseName))
-                {
-                    CurrentEntity.curses.Add(curseName);
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            },
-            onRemove: (curseName) =>
-            {
-                if (CurrentEntity.curses != null && CurrentEntity.curses.Remove(curseName))
-                {
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            }
-        );
-
-        // ==========================================
-        // ADDED: ORB SELECTORS FOR MONSTER UI
-        // ==========================================
-        AppendCollectionSelector<string>(
-            layout: layout, label: "Add Base Orb:", uniqueKey: "BaseOrb",
-            availableChoices: OrbData.ValidBaseOrbs.ToList(),
-            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && o.isHardcoded).Select(o => o.hardcodedAbilityName).ToList() ?? new List<string>(),
-            getKey: (name) => name,
-            getDisplay: (name) => name,
-            onAdd: (orbName) => {
-                if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
-                bool alreadyExists = CurrentEntity.customOrbs?.Any(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase)) ?? false;
-                if (!alreadyExists)
-                {
-                    OrbData newOrb = new OrbData();
-                    newOrb.Parse($"orb.{orbName}");
-                    CurrentEntity.AddCustomAbility(newOrb);
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            },
-            onRemove: (orbName) => {
-                var target = CurrentEntity.customOrbs?.FirstOrDefault(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase));
-                if (target != null && CurrentEntity.customOrbs.Remove(target))
-                {
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            }
-        );
-
-        //var customAbilityNames = ModPackage.Instance.CustomAbilities?.Select(a => a.entityName).ToList() ?? new List<string>();
-        AppendCollectionSelector<string>(
-            layout: layout, label: "Add Custom Orb:", uniqueKey: "CustomOrb",
-            availableChoices: customAbilityNames,
-            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && !o.isHardcoded).Select(o => o.entityName).ToList() ?? new List<string>(),
-            getKey: (name) => name,
-            getDisplay: (name) => name,
-            onAdd: (abilityName) => {
-                if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
-                bool alreadyExists = CurrentEntity.customOrbs?.Any(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase)) ?? false;
-                if (!alreadyExists)
-                {
-                    var template = ModPackage.Instance.CustomAbilities?.FirstOrDefault(a => string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
-                    if (template != null)
-                    {
-                        string json = JsonUtility.ToJson(template);
-                        OrbData clonedOrb = JsonUtility.FromJson<OrbData>(json);
-                        clonedOrb.isHardcoded = false;
-                        clonedOrb.carrierPrefix = "sthief.abilitydata";
-                        CurrentEntity.AddCustomAbility(clonedOrb);
-                        NotifyStateChanged();
-                        RebuildStatsUI();
-                    }
-                }
-            },
-            onRemove: (abilityName) => {
-                var target = CurrentEntity.customOrbs?.FirstOrDefault(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
-                if (target != null && CurrentEntity.customOrbs.Remove(target))
-                {
-                    NotifyStateChanged();
-                    RebuildStatsUI();
-                }
-            }
-        );
-        // ==========================================
+        AppendStandardItemsSelector(layout);
+        AppendCustomItemsSelector(layout);
+        AppendCustomAbilitiesSelector(layout, customAbilityNames);
+        AppendTraitsBlessingsCursesSelectors(layout);
+        AppendOrbSelectors(layout, customAbilityNames);
 
         return layout;
     }
@@ -902,38 +446,7 @@ public class MonsterUI : EntityUI<MonsterData>
             {
                 if (sprite != null)
                 {
-                    string filename = sprite.name;
-                    string[] parts = filename.Split('_');
-
-                    if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
-                    {
-                        string prefix = parts[0].ToLower();
-                        string facadeStr;
-
-                        if (prefix == "big" && parsedId >= 0 && parsedId <= 31)
-                        {
-                            facadeStr = $"bas{188 + parsedId}";
-                        }
-                        else if (prefix == "hug" && parsedId >= 0 && parsedId <= 27)
-                        {
-                            facadeStr = $"bas{220 + parsedId}";
-                        }
-                        else if (prefix == "tin" && parsedId >= 0 && parsedId <= 17)
-                        {
-                            facadeStr = $"bas{248 + parsedId}";
-                        }
-                        else
-                        {
-                            facadeStr = $"{parts[0]}{parts[1]}";
-                        }
-
-                        CurrentEntity.diceSides[faceIndex].facadeID = facadeStr;
-                    }
-                    else
-                    {
-                        CurrentEntity.diceSides[faceIndex].facadeID = filename;
-                    }
-
+                    CurrentEntity.diceSides[faceIndex].facadeID = EntityUIHelpers.FormatFacadeID(sprite.name);
                     NotifyStateChanged();
                     RebuildDiceScrollView();
                 }

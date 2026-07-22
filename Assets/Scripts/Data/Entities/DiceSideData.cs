@@ -54,6 +54,7 @@ public class DiceSideData
     public string facadeID = "";
     public string facadeColor = "";
     public List<string> keywords = new List<string>();
+    public List<ItemData> sideItems = new List<ItemData>();
     public string sidesc = "";
 
     public bool togtime = false;

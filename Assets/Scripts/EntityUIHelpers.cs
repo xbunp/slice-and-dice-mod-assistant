@@ -491,4 +491,26 @@ public static class EntityUIHelpers
         }
         return HeroColorOption.Yellow;
     }
+
+    public static string FormatFacadeID(string spriteName)
+    {
+        if (string.IsNullOrEmpty(spriteName)) return spriteName;
+
+        string[] parts = spriteName.Split('_');
+        if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
+        {
+            string prefix = parts[0].ToLower();
+
+            if (prefix == "big" && parsedId >= 0 && parsedId <= 31)
+                return $"bas{188 + parsedId}";
+            if (prefix == "hug" && parsedId >= 0 && parsedId <= 27)
+                return $"bas{220 + parsedId}";
+            if (prefix == "tin" && parsedId >= 0 && parsedId <= 17)
+                return $"bas{248 + parsedId}";
+
+            return $"{parts[0]}{parts[1]}";
+        }
+
+        return spriteName;
+    }
 }

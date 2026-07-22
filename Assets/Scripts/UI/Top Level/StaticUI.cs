@@ -183,7 +183,6 @@ public class DiceFaceBuilderWidget
         var sides = _getDiceSides?.Invoke();
         if (sides == null || faceIndex < 0 || faceIndex >= sides.Length) return;
 
-        // Cap the value between -99 and 99
         value = Mathf.Clamp(value, -99, 99);
 
         var face = sides[faceIndex];
@@ -194,13 +193,8 @@ public class DiceFaceBuilderWidget
             Sprite baseSprite = _getBaseSprite?.Invoke(face.effectID);
             if (baseSprite != null)
             {
-                string[] parts = baseSprite.name.Split('_');
-                if (parts.Length >= 2)
-                {
-                    // Concatenate the prefix and the number directly without an underscore
-                    face.facadeID = $"{parts[0]}{parts[1]}";
-                    facadeAutoAssigned = true;
-                }
+                face.facadeID = EntityUIHelpers.FormatFacadeID(baseSprite.name);
+                facadeAutoAssigned = true;
             }
         }
 

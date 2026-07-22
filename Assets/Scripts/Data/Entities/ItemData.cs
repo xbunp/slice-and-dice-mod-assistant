@@ -1156,26 +1156,24 @@ public static class CustomItemContextHelper
     public static ItemInjectionResult EvaluateItem(ItemData item)
     {
         if (item == null) return new ItemInjectionResult { FormattedString = "" };
-
         string rawItem = item.Export();
         if (string.IsNullOrWhiteSpace(rawItem)) return new ItemInjectionResult { FormattedString = "" };
-
         string contentToEvaluate = rawItem.Trim();
 
         // ====================================================================
         // RULE 1: EXTERNAL PROPERTIES & ABILITIES (OuterEntity Zone)
         // ====================================================================
-        if (contentToEvaluate.StartsWith("abilitydata.") ||
-            contentToEvaluate.StartsWith("triggerhpdata.") ||
-            contentToEvaluate.StartsWith("onhitdata.") ||
-            contentToEvaluate.StartsWith("i.abilitydata.") ||
-            contentToEvaluate.StartsWith("i.triggerhpdata.") ||
-            contentToEvaluate.StartsWith("learn.") ||
-            contentToEvaluate.StartsWith("i.learn."))
+        if (contentToEvaluate.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase) ||
+            contentToEvaluate.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
+            contentToEvaluate.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
+            contentToEvaluate.StartsWith("i.abilitydata.", StringComparison.OrdinalIgnoreCase) ||
+            contentToEvaluate.StartsWith("i.triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
+            contentToEvaluate.StartsWith("learn.", StringComparison.OrdinalIgnoreCase) ||
+            contentToEvaluate.StartsWith("i.learn.", StringComparison.OrdinalIgnoreCase))
         {
             return new ItemInjectionResult
             {
-                FormattedString = contentToEvaluate.StartsWith("i.") ? contentToEvaluate : $"i.{contentToEvaluate}",
+                FormattedString = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase) ? contentToEvaluate : $"i.{contentToEvaluate}",
                 Zone = PayloadInjectionZone.OuterEntity
             };
         }
@@ -1183,16 +1181,57 @@ public static class CustomItemContextHelper
         // ====================================================================
         // RULE 2: MODIFIERS & EQUIPMENT (Inner vs Outer Selection)
         // ====================================================================
-        // STRICT RULE: Traits (t. / i.t.), Blessings (gift.), and Self-Modifiers belong INTERNALLY.
-        // ALL OTHER generic equippables (items that don't target dice faces) MUST go EXTERIOR.
-        bool isInnerProperty = contentToEvaluate.StartsWith("t.") ||
-                               contentToEvaluate.StartsWith("i.t.") ||
-                               contentToEvaluate.StartsWith("self.") ||
-                               contentToEvaluate.StartsWith("i.self.") ||
-                               contentToEvaluate.StartsWith("gift.") ||
-                               contentToEvaluate.StartsWith("i.gift.");
+        string cleanCore = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase) ? contentToEvaluate.Substring(2) : contentToEvaluate;
+        string unparenthesized = cleanCore;
+        if (unparenthesized.StartsWith("(") && unparenthesized.EndsWith(")"))
+        {
+            unparenthesized = StaticBranchTracing.StripOuterParens(unparenthesized);
+        }
 
-        string formattedPayload = contentToEvaluate.StartsWith("i.") ? contentToEvaluate : $"i.{contentToEvaluate}";
+        // Check first token or targets across '#' splits to see if it modifies entity/dice
+        List<string> chains = StaticBranchTracing.TopLevelSplit(unparenthesized, '#');
+        bool isInnerProperty = false;
+
+        foreach (var chain in chains)
+        {
+            if (string.IsNullOrWhiteSpace(chain)) continue;
+            string chainTrim = chain.Trim();
+            string firstToken = chainTrim.Split(new[] { '.', ':', '(' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLower() ?? "";
+
+            if (chainTrim.StartsWith("t.", StringComparison.OrdinalIgnoreCase) ||
+                chainTrim.StartsWith("i.t.", StringComparison.OrdinalIgnoreCase) ||
+                chainTrim.StartsWith("self.", StringComparison.OrdinalIgnoreCase) ||
+                chainTrim.StartsWith("i.self.", StringComparison.OrdinalIgnoreCase) ||
+                chainTrim.StartsWith("gift.", StringComparison.OrdinalIgnoreCase) ||
+                chainTrim.StartsWith("i.gift.", StringComparison.OrdinalIgnoreCase) ||
+                ItemDomainRules.ValidTargets.Contains(firstToken) ||
+                firstToken == "hat" || firstToken == "sticker" || firstToken == "enchant" ||
+                firstToken == "cast" || firstToken == "k" || firstToken == "facade" ||
+                firstToken == "sd" || firstToken == "sidesc")
+            {
+                isInnerProperty = true;
+                break;
+            }
+        }
+
+        // Format payload string cleanly with proper parens grouping for compound items
+        string formattedPayload;
+        bool hasHash = contentToEvaluate.Contains("#") || contentToEvaluate.Contains(".i.");
+        bool isWrapped = contentToEvaluate.StartsWith("(") && contentToEvaluate.EndsWith(")");
+        bool alreadyHasIPrefix = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase);
+
+        if (alreadyHasIPrefix)
+        {
+            formattedPayload = contentToEvaluate;
+        }
+        else if (hasHash && !isWrapped)
+        {
+            formattedPayload = $"i.({contentToEvaluate})";
+        }
+        else
+        {
+            formattedPayload = $"i.{contentToEvaluate}";
+        }
 
         if (isInnerProperty)
         {

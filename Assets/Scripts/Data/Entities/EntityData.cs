@@ -224,11 +224,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         // --- 4. SHARED METADATA ---
         if (hp > 0) sb.Append($".hp.{hp}");
         if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
-        if (!string.IsNullOrEmpty(p)) sb.Append($".p.{p}");
         if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
-        if (!string.IsNullOrEmpty(b)) sb.Append($".b.{b}");
-        if (!string.IsNullOrEmpty(rect)) sb.Append($".rect.{rect}");
-        if (!string.IsNullOrEmpty(draw)) sb.Append($".draw.{draw}");
 
         // --- 5. DICE SIDES & FACADES ---
         AppendDiceSides(sb);
@@ -283,9 +279,10 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             foreach (var cab in customAbilityData)
             {
+                //TODO: might not want to bracket them here if they already bracket themselves? or just make sure its bracket-safe. 
                 if (cab == null) continue;
                 if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.({cab.Export()})");
-                else if (cab is OnHitData) outerSb.Append($".onhitdata.({cab.Export()})");
+                else if (cab is OnHitData) outerSb.Append($".i.onhitdata.({cab.Export()})");
                 else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
                 else outerSb.Append($".abilitydata.({cab.Export()})");
             }

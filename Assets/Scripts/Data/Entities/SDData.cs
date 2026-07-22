@@ -216,6 +216,7 @@ public abstract class SDData
         }
     }
 
+    /*
     protected bool TryProcessCommonMetadata(List<string> tokens, ref int i, string tokenLower)
     {
         if (i + 1 >= tokens.Count) return false;
@@ -235,36 +236,168 @@ public abstract class SDData
                 string[] hsvParts = nextVal.Split(':');
                 if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out int hVal) && int.TryParse(hsvParts[1], out int sVal) && int.TryParse(hsvParts[2], out int vVal))
                 {
-                    visuals.Add(new VisualModifier { Type = VisualType.HSV, h = hVal, s = sVal, v = vVal });
+                    var vis = GetOrAddVisual(VisualType.HSV);
+                    vis.h = hVal; vis.s = sVal; vis.v = vVal;
                 }
                 break;
             case "hue":
                 if (int.TryParse(nextVal, out int hueVal))
-                    visuals.Add(new VisualModifier { Type = VisualType.Hue, hue = hueVal });
+                {
+                    var vis = GetOrAddVisual(VisualType.Hue);
+                    vis.hue = hueVal;
+                }
                 break;
-
             case "thue":
-                visuals.Add(new VisualModifier { Type = VisualType.THue, thue = UnpackTHue(nextVal) });
+                {
+                    var vis = GetOrAddVisual(VisualType.THue);
+                    vis.thue = UnpackTHue(nextVal);
+                }
                 break;
             case "p":
-                visuals.Add(new VisualModifier { Type = VisualType.P, p = UnpackP(nextVal) });
+                {
+                    var vis = GetOrAddVisual(VisualType.P);
+                    vis.p = UnpackP(nextVal);
+                    vis.RawValue = nextVal;
+                }
                 break;
-
             case "b":
-                visuals.Add(new VisualModifier { Type = VisualType.B, RawValue = nextVal });
+                {
+                    var vis = GetOrAddVisual(VisualType.B);
+                    vis.RawValue = nextVal;
+                }
                 break;
             case "draw":
-                visuals.Add(new VisualModifier { Type = VisualType.Draw, RawValue = nextVal });
+                {
+                    var vis = GetOrAddVisual(VisualType.Draw);
+                    vis.RawValue = nextVal;
+                }
                 break;
             case "rect":
-                visuals.Add(new VisualModifier { Type = VisualType.Rect, RawValue = nextVal });
+                {
+                    var vis = GetOrAddVisual(VisualType.Rect);
+                    vis.RawValue = nextVal;
+                }
                 break;
             default: return false;
         }
         i++; // Consume the value token
         return true;
     }
+    */
 
+    private VisualModifier ExtractFirstEmptyOrAdd(VisualType type)
+    {
+        // Find the first visual of this type
+        var existing = visuals.FirstOrDefault(v => v.Type == type);
+
+        // If the UI injected an empty placeholder, remove it from its old position 
+        // so we can append it sequentially to the end of the parsed chain.
+        if (existing != null && IsEmptyVisual(existing))
+        {
+            visuals.Remove(existing);
+            return existing;
+        }
+
+        // If no empty placeholder exists (e.g., this is the second 'draw' or 'p' being parsed), 
+        // safely create a new one to support infinite arrays.
+        return new VisualModifier { Type = type };
+    }
+
+    private bool IsEmptyVisual(VisualModifier v)
+    {
+        if (v == null) return true;
+        switch (v.Type)
+        {
+            case VisualType.HSV:
+                return v.h == 0 && v.s == 0 && v.v == 0;
+            case VisualType.Hue:
+                return v.hue == 0;
+            case VisualType.P:
+                return v.p == null || (v.p.colorRange == 0 && v.p.colorStart == Color.white && v.p.colorDestination == Color.white);
+            case VisualType.THue:
+                return v.thue == null || (v.thue.colorRange == 0 && v.thue.colorOffset == 0 && v.thue.colorHex == Color.white);
+            case VisualType.B:
+            case VisualType.Draw:
+            case VisualType.Rect:
+                return string.IsNullOrWhiteSpace(v.RawValue);
+            default:
+                return false;
+        }
+    }
+
+    protected bool TryProcessCommonMetadata(List<string> tokens, ref int i, string tokenLower)
+    {
+        if (i + 1 >= tokens.Count) return false;
+        string nextVal = tokens[i + 1];
+
+        switch (tokenLower)
+        {
+            case "n": entityName = nextVal; break;
+            case "img":
+                if (TryParseSpecialOrNormalImage(tokens, ref i, out string parsedImg))
+                {
+                    imageOverride = parsedImg;
+                }
+                return true;
+            case "doc": doc = nextVal; break;
+            case "hsv":
+                string[] hsvParts = nextVal.Split(':');
+                if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out int hVal) && int.TryParse(hsvParts[1], out int sVal) && int.TryParse(hsvParts[2], out int vVal))
+                {
+                    var vis = ExtractFirstEmptyOrAdd(VisualType.HSV);
+                    vis.h = hVal; vis.s = sVal; vis.v = vVal;
+                    visuals.Add(vis);
+                }
+                break;
+            case "hue":
+                if (int.TryParse(nextVal, out int hueVal))
+                {
+                    var vis = ExtractFirstEmptyOrAdd(VisualType.Hue);
+                    vis.hue = hueVal;
+                    visuals.Add(vis);
+                }
+                break;
+            case "thue":
+                {
+                    var vis = ExtractFirstEmptyOrAdd(VisualType.THue);
+                    vis.thue = UnpackTHue(nextVal);
+                    visuals.Add(vis);
+                }
+                break;
+            case "p":
+                {
+                    var vis = ExtractFirstEmptyOrAdd(VisualType.P);
+                    vis.p = UnpackP(nextVal);
+                    vis.RawValue = nextVal;
+                    visuals.Add(vis);
+                }
+                break;
+            case "b":
+                {
+                    var vis = ExtractFirstEmptyOrAdd(VisualType.B);
+                    vis.RawValue = nextVal;
+                    visuals.Add(vis);
+                }
+                break;
+            case "draw":
+                {
+                    var vis = ExtractFirstEmptyOrAdd(VisualType.Draw);
+                    vis.RawValue = nextVal;
+                    visuals.Add(vis);
+                }
+                break;
+            case "rect":
+                {
+                    var vis = ExtractFirstEmptyOrAdd(VisualType.Rect);
+                    vis.RawValue = nextVal;
+                    visuals.Add(vis);
+                }
+                break;
+            default: return false;
+        }
+        i++; // Consume the value token
+        return true;
+    }
     protected void AppendColorModifier(StringBuilder sb)
     {
         foreach (var vis in visuals)
