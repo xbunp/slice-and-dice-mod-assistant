@@ -460,28 +460,42 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
     protected bool TryProcessTriggerData(List<string> tokens, ref int i, string tokenLower)
     {
-        if (tokenLower == "triggerhpdata")
+        // Intercept standard triggers OR those prefixed with ".i." (which Section 8 exports)
+        bool isI = tokenLower == "i";
+        int peekIdx = isI ? i + 1 : i;
+
+        if (peekIdx >= tokens.Count) return false;
+
+        string targetToken = tokens[peekIdx].ToLower();
+
+        if (targetToken == "triggerhpdata" || targetToken == "onhitdata")
         {
-            if (i + 1 < tokens.Count)
+            if (peekIdx + 1 < tokens.Count)
             {
-                string payload = tokens[++i];
-                TriggerHPData thp = new TriggerHPData();
-                thp.Parse(StaticBranchTracing.StripOuterParens(payload));
-                AddCustomAbility(thp);
+                string payload = tokens[++peekIdx]; // Advance to the payload token
+
+                if (targetToken == "triggerhpdata")
+                {
+                    TriggerHPData thp = new TriggerHPData();
+                    thp.Parse(StaticBranchTracing.StripOuterParens(payload));
+                    AddCustomAbility(thp);
+                }
+                else
+                {
+                    OnHitData ohd = new OnHitData();
+                    ohd.Parse(StaticBranchTracing.StripOuterParens(payload));
+                    AddCustomAbility(ohd);
+                }
+
+                i = peekIdx; // Update parser index
+            }
+            else
+            {
+                i = peekIdx; // Consume the key even if payload is missing to prevent infinite loops
             }
             return true;
         }
-        if (tokenLower == "onhitdata")
-        {
-            if (i + 1 < tokens.Count)
-            {
-                string payload = tokens[++i];
-                OnHitData ohd = new OnHitData();
-                ohd.Parse(StaticBranchTracing.StripOuterParens(payload));
-                AddCustomAbility(ohd);
-            }
-            return true;
-        }
+
         return false;
     }
     public void InitializeDiceFaces()
@@ -567,9 +581,13 @@ public abstract class EntityData : SDData, IPayloadContainer
                     else if (result.Zone == PayloadInjectionZone.EntityWrapper) wrapperPayloads.Add(result.FormattedString);
                 }
             }
+            else if (payload.Data is OnHitData || payload.Data is TriggerHPData || payload.Data is AbilityData)
+            {
+                string exported = payload.Export();
+                if (!string.IsNullOrEmpty(exported)) outerPayloads.Add(exported);
+            }
             else
             {
-                // Non-item custom payloads default to InnerEntity
                 string exported = payload.Export();
                 if (!string.IsNullOrEmpty(exported)) innerPayloads.Add(exported);
             }
@@ -843,13 +861,33 @@ public abstract class EntityData : SDData, IPayloadContainer
                     diceSides[faceIdx].keywords.Add(cleanKw);
             }
 
+            // IN: ApplyMechanicToDiceSides()
+
             if (lowerPrefix == "k" || lowerPrefix == "")
             {
                 string keyword = payload.ToLower();
                 if (keyword == "ritemx.dae9" || keyword == "unpack.ritemx.644f") keyword = "future";
+                if (!string.IsNullOrEmpty(keyword))
+                {
+                    if (ItemDomainRules.TogItems.Contains(keyword))
+                    {
+                        /* // THIS IS WRONG, YOU CAN HAVE MULTIPLE OF THE SAME TOG. ALSO TOGS ARENT KEYWORDS, theyre items.
+                        if (!diceSides[faceIdx].sideItems.Contains(keyword))
+                            diceSides[faceIdx].sideItems.Add(keyword);
+                        */
 
-                if (!string.IsNullOrEmpty(keyword) && !diceSides[faceIdx].keywords.Contains(keyword))
-                    diceSides[faceIdx].keywords.Add(keyword);
+                        //THIS FEELS LIKE A TERRIBLE HACK, DICE FACES SHOULDNT BE HOLDING ITEMS, THATS NOT HOW IT WORKS. DICE FACES DONT EXIST, ENTITIES CONTAINING THEM DO. 
+                        ItemData newItem = new ItemData();
+                        newItem.Parse(keyword);
+
+                        diceSides[faceIdx].sideItems.Add(newItem);
+
+                    }
+                    else if (!diceSides[faceIdx].keywords.Contains(keyword))
+                    {
+                        diceSides[faceIdx].keywords.Add(keyword);
+                    }
+                }
             }
             else if (lowerPrefix == "facade")
             {
@@ -1259,15 +1297,18 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return false;
     }
+    // IN: Assets/Scripts/Data/Entities/EntityData.cs -> ProcessFaceKeywords()
+
+    // IN: ProcessFaceKeywords()
+
     private void ProcessFaceKeywords(DiceSideData face, List<string> chunks)
     {
-        // 1. Permissive must always be evaluated first if present
         if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
         {
             chunks.Add("k.permissive");
         }
 
-        // 2. Regular keywords
+        // Keywords (always prefixed with k.)
         foreach (var kw in face.keywords)
         {
             if (string.IsNullOrWhiteSpace(kw)) continue;
@@ -1276,6 +1317,16 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 if (cleanKw == "future") chunks.Add("ritemx.dae9");
                 else chunks.Add($"k.{cleanKw}");
+            }
+        }
+
+        // THIS FEELS LIKE A MASSIVE HACK, WHY IS THIS HAPPENING IN ProcessFaceKeywords??? TOGS ARE ITEMS NOT KEYWORDS.
+        // Tog Items (never prefixed with k.)
+        if (face.sideItems != null)
+        {
+            foreach (var item in face.sideItems)
+            {
+                chunks.Add(item.Export());
             }
         }
     }

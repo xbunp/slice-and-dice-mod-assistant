@@ -292,13 +292,28 @@ public abstract class AbilityData : HeroData
     public static AbilityData CreateAbility(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
+        string trimmed = data.Trim();
+
+        if (trimmed.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("i.onhitdata.", StringComparison.OrdinalIgnoreCase))
+        {
+            OnHitData onHit = new OnHitData();
+            onHit.Parse(trimmed);
+            return onHit;
+        }
+
+        if (trimmed.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("i.triggerhpdata.", StringComparison.OrdinalIgnoreCase))
+        {
+            TriggerHPData triggerHP = new TriggerHPData();
+            triggerHP.Parse(trimmed);
+            return triggerHP;
+        }
 
         string clean = StripPrefix(data);
-
         ProbeAbilityData probe = new ProbeAbilityData();
         probe.Parse(clean);
 
-        string trimmed = clean.Trim();
         if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.t.orb.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("t.orb.", StringComparison.OrdinalIgnoreCase))

@@ -308,7 +308,6 @@ public class ItemMechanic
         string corePayload = PayloadString;
 
         // DYNAMIC EXPORT: Pulls fresh data from the nested object if mutated.
-        // DYNAMIC EXPORT: Pulls fresh data from the nested object if mutated.
         if (PayloadData != null)
         {
             string exportedData = "";
@@ -340,6 +339,11 @@ public class ItemMechanic
             else if (PayloadData is SDData sdData)
             {
                 exportedData = sdData.Export();
+            }
+
+            if (!string.IsNullOrEmpty(exportedData))
+            {
+                corePayload = exportedData; //TODO: IS THIS NECCESSARY? SEEMS SUSPICIOUS
             }
         }
 
@@ -704,13 +708,13 @@ public class ItemData : SDData
     {
         if (string.IsNullOrEmpty(mech.PayloadString)) return;
         string core = StaticBranchTracing.StripOuterParens(mech.PayloadString);
-
         if (mech.Prefix == "hat")
         {
             if (StaticBranchTracing.IsMonsterEntity(core)) { MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster; }
             else { HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero; }
         }
-        else if (mech.Prefix == "onhitdata" || mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
+        else if (mech.Prefix == "onhitdata") { OnHitData ohd = new OnHitData(); ohd.Parse(core); mech.PayloadData = ohd; }
+        else if (mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
         else if (mech.Prefix == "enchant") { ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod; }
         else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata") { mech.PayloadData = AbilityData.CreateSpellOrTactic(core); }
         else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }

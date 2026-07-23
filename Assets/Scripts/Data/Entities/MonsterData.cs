@@ -276,33 +276,6 @@ public class MonsterData : EntityData
             if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
             if (TryProcessAppendedDoc(tokens, ref i, tokenLower)) continue;
 
-            if (tokenLower == "triggerhpdata" || tokenLower == "onhitdata")
-            {
-                if (i + 1 < tokens.Count)
-                {
-                    string payload = tokens[++i];
-                    if (payload.StartsWith("("))
-                    {
-                        var parsedAbility = AbilityData.CreateAbility(payload);
-                        if (parsedAbility is TriggerHPData trigHP)
-                        {
-                            if (customTriggerHPs == null) customTriggerHPs = new List<TriggerHPData>();
-                            customTriggerHPs.Add(trigHP);
-                        }
-                        else if (parsedAbility is OnHitData onHit)
-                        {
-                            if (customOnHits == null) customOnHits = new List<OnHitData>();
-                            customOnHits.Add(onHit);
-                        }
-                    }
-                    else
-                    {
-                        baseAbilityData.Add(payload);
-                    }
-                }
-                continue;
-            }
-
             if (tokenLower == "t")
             {
                 ProcessTraitToken(tokens, ref i);

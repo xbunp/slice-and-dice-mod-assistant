@@ -286,21 +286,7 @@ public class HeroData : EntityData
         if (!string.IsNullOrEmpty(baseReplica))
         {
             heroSb.Append($"{FormatName(FormatSpecialImageName(baseReplica))}");
-            AppendColorModifier(heroSb);
         }
-
-        if (!string.IsNullOrEmpty(entityName)) heroSb.Append($".n.{FormatName(entityName)}");
-
-        // Hats shouldn't force default tiers/hp to 0. We only export them if they are explicitly > 0.
-        //if (hp > 0) heroSb.Append($".hp.{hp}");
-        //if (tier > 0) heroSb.Append($".tier.{tier}");
-
-        //if (!string.IsNullOrEmpty(colorClass)) heroSb.Append($".col.{colorClass}");
-        //if (!string.IsNullOrEmpty(p)) heroSb.Append($".p.{p}");
-        //if (adj.HasValue) heroSb.Append($".adj.{adj.Value}");
-        //if (!string.IsNullOrEmpty(b)) heroSb.Append($".b.{b}");
-        //if (!string.IsNullOrEmpty(rect)) heroSb.Append($".rect.{rect}");
-        //if (!string.IsNullOrEmpty(draw)) heroSb.Append($".draw.{draw}");
 
         AppendDiceSides(heroSb);
 
@@ -311,10 +297,8 @@ public class HeroData : EntityData
         ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
 
         StringBuilder innerSb = new StringBuilder();
-        //if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) innerSb.Append($".i.t.{FormatName(t)}");
+
         if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
-        //if (blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) innerSb.Append($".gift.{FormatName(bl)}");
-        //if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) innerSb.Append($".i.t.jinx.{FormatName(c)}");
 
         foreach (var inner in innerPayloads)
         {
@@ -322,14 +306,6 @@ public class HeroData : EntityData
         }
 
         heroSb.Append(innerSb.ToString());
-
-        /*
-        if (!string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica)
-        {
-            heroSb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
-            AppendColorModifier(heroSb);
-        }
-        */
 
         // Return without outer parentheses, as ItemMechanic.Export() handles the wrapping
         return heroSb.ToString();
