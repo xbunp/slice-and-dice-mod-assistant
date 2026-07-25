@@ -260,13 +260,8 @@ public abstract class SDData
     protected void ProcessRecursiveParentheses(string originalToken, Action<List<string>> processingDelegate)
     {
         string inner = originalToken.Substring(1, originalToken.Length - 2);
-        List<string> innerChains = StaticBranchTracing.TopLevelSplit(inner, '#');
-        foreach (var chain in innerChains)
-        {
-            if (string.IsNullOrWhiteSpace(chain)) continue;
-            List<string> innerTokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-            processingDelegate(innerTokens);
-        }
+        List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
+        processingDelegate(innerTokens);
     }
 
     protected bool TryProcessCommonMetadata(List<string> tokens, ref int i, string tokenLower)
