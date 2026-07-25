@@ -50,17 +50,18 @@ public class DiceFaceBuilderWidget
     {
         public string Id { get; set; }
         public string DisplayName { get; set; }
-        public bool HasBaseAndPips { get; set; }
+        public bool HasBase { get; set; }
+        public bool HasPips { get; set; }
         public bool HasStringPayload { get; set; }
     }
 
     public static readonly List<PayloadType> RegisteredPayloads = new List<PayloadType>
     {
-    new PayloadType { Id = "standard", DisplayName = "Standard Base", HasBaseAndPips = true, HasStringPayload = false },
-    new PayloadType { Id = "sticker", DisplayName = "Sticker (Give Item)", HasBaseAndPips = false, HasStringPayload = true },
-    new PayloadType { Id = "cast", DisplayName = "Cast (Ability)", HasBaseAndPips = false, HasStringPayload = true },
-    new PayloadType { Id = "enchant", DisplayName = "Enchant (Give Modifier)", HasBaseAndPips = false, HasStringPayload = true },
-    new PayloadType { Id = "egg", DisplayName = "Egg (Summon)", HasBaseAndPips = false, HasStringPayload = true }
+    new PayloadType { Id = "standard", DisplayName = "Standard Base", HasBase = true, HasPips = true, HasStringPayload = false },
+    new PayloadType { Id = "sticker", DisplayName = "Sticker (Give Item)", HasBase = false, HasPips = false, HasStringPayload = true },
+    new PayloadType { Id = "cast", DisplayName = "Cast (Ability)", HasBase = false, HasPips = false, HasStringPayload = true },
+    new PayloadType { Id = "enchant", DisplayName = "Enchant (Give Modifier)", HasBase = false, HasPips = false, HasStringPayload = true },
+    new PayloadType { Id = "egg", DisplayName = "Egg (Summon)", HasBase = false, HasPips = true, HasStringPayload = true }
     };
 
     public static DiceSideData SharedClipboard = null;
@@ -274,13 +275,13 @@ public class DiceFaceBuilderWidget
             faceRows.Add(BuildFaceTypeSelector(index, face, faceType));
 
             // 1. Base
-            if (faceType.HasBaseAndPips) faceRows.Add(BuildBaseRow(index, face));
+            if (faceType.HasBase) faceRows.Add(BuildBaseRow(index, face));
 
             // 2. Facade
             if (allowFac) faceRows.AddRange(BuildFacades(index, face));
 
             // 3. Pips
-            if (faceType.HasBaseAndPips) faceRows.Add(BuildPipsRow(index, face));
+            if (faceType.HasPips) faceRows.Add(BuildPipsRow(index, face));
 
             // 3.5 HSV
             if (allowFac) faceRows.AddRange(BuildHSV(index, face));
@@ -376,7 +377,7 @@ public class DiceFaceBuilderWidget
                 eggDrop.SetValueWithoutNotify(0);
             }
 
-            if (faceType.HasBaseAndPips)
+            if (faceType.HasBase && faceType.HasPips)
             {
                 if (_diceUI.Inputs.TryGetValue($"ID_{i}", out var dId)) dId.SetTextWithoutNotify(face.effectID.ToString());
                 if (_diceUI.Inputs.TryGetValue($"Pips_{i}", out var dPip)) dPip.SetTextWithoutNotify(face.pips.ToString());
@@ -431,7 +432,7 @@ public class DiceFaceBuilderWidget
             var face = sides[i];
             var faceType = GetFaceType(i, face);
 
-            if (faceType.HasBaseAndPips && _diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
+            if (faceType.HasBase && _diceUI.Buttons.TryGetValue($"BaseBtn_{i}", out var baseBtn))
             {
                 Sprite s = _getBaseSprite?.Invoke(face.effectID);
                 StaticUI.SetButtonIcon(baseBtn, s);

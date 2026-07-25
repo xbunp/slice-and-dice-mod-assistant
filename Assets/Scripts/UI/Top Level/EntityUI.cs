@@ -54,7 +54,12 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     }
 
     // Virtualized to allow HeroUI to call .InitializeAsDefault()
-    protected virtual T CreateDefaultEntity() => new T();
+    protected virtual T CreateDefaultEntity()
+    {
+        T entity = new T();
+        if (entity.visuals != null) entity.visuals.Clear();
+        return entity;
+    }
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
         uiGenerator = uiGeneratorRef;
@@ -187,95 +192,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
-    protected virtual void UpdateUIFromData()
-    {
-        if (statsUI == null || diceUI == null) return;
-        isDrawingUI = true;
-
-        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentEntity.entityName);
-        if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
-            hpIn.SetTextWithoutNotify(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
-
-        if (statsUI.Inputs.TryGetValue("Doc", out var docIn)) docIn.SetTextWithoutNotify(CurrentEntity.doc);
-        if (statsUI.Inputs.TryGetValue("AppendedDoc", out var AppendeddocIn)) AppendeddocIn.SetTextWithoutNotify(CurrentEntity.appendedDoc);
-
-        if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
-
-        if (statsUI.Sliders.TryGetValue("PhueRangeSlider", out var phueRangeSlider))
-            phueRangeSlider.SetValueWithoutNotify(CurrentEntity.phue.colorRange);
-
-        if (statsUI.Sliders.TryGetValue("ThueRangeSlider", out var thueRangeSlider))
-            thueRangeSlider.SetValueWithoutNotify(CurrentEntity.thue.colorRange);
-
-        if (statsUI.Sliders.TryGetValue("ThueOffsetSlider", out var thueOffsetSlider))
-            thueOffsetSlider.SetValueWithoutNotify(CurrentEntity.thue.colorOffset);
-
-        if (statsUI.Inputs.TryGetValue("EntityFacH", out var hH)) hH.SetTextWithoutNotify(CurrentEntity.h.ToString());
-        if (statsUI.Inputs.TryGetValue("EntityFacS", out var hS)) hS.SetTextWithoutNotify(CurrentEntity.s.ToString());
-        if (statsUI.Inputs.TryGetValue("EntityFacV", out var hV)) hV.SetTextWithoutNotify(CurrentEntity.v.ToString());
-
-        if (statsUI.Sliders.TryGetValue("EntitySliH", out var shH)) shH.SetValueWithoutNotify(CurrentEntity.h);
-        if (statsUI.Sliders.TryGetValue("EntitySliS", out var shS)) shS.SetValueWithoutNotify(CurrentEntity.s);
-        if (statsUI.Sliders.TryGetValue("EntitySliV", out var shV)) shV.SetValueWithoutNotify(CurrentEntity.v);
-
-        UpdateSpecificUIFromData();
-        diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
-
-        isDrawingUI = false;
-        UpdateVisualsOnly();
-    }
-    protected virtual void UpdateVisualsOnly()
-    {
-        if (portraitPreview != null)
-        {
-            portraitPreview.SetNameText(CurrentEntity.entityName);
-            portraitPreview.SetHPText(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
-
-            UpdateSpecificVisuals();
-
-            portraitPreview.SetPortraitPHue(CurrentEntity.phue);
-            portraitPreview.SetPortraitTHue(CurrentEntity.thue);
-            portraitPreview.SetPortraitHSV(CurrentEntity.h, CurrentEntity.s, CurrentEntity.v);
-        }
-
-        if (statsUI != null && statsUI.Buttons != null)
-        {
-            if (statsUI.Buttons.TryGetValue("PhueStartBtn", out var phueStartBtn))
-            {
-                Color c = CurrentEntity.phue != null ? CurrentEntity.phue.colorStart : Color.white;
-                SetButtonColorPreview(phueStartBtn, c);
-            }
-            if (statsUI.Buttons.TryGetValue("PhueDestBtn", out var phueDestBtn))
-            {
-                Color c = CurrentEntity.phue != null ? CurrentEntity.phue.colorDestination : Color.white;
-                SetButtonColorPreview(phueDestBtn, c);
-            }
-            if (statsUI.Buttons.TryGetValue("ThueColorBtn", out var thueColorBtn))
-            {
-                Color c = CurrentEntity.thue != null ? CurrentEntity.thue.colorHex : Color.white;
-                SetButtonColorPreview(thueColorBtn, c);
-            }
-        }
-
-        // CHANGED: Update the portrait preview icons for all 6 faces...
-        for (int i = 0; i < 6; i++)
-        {
-            UpdateIcon(i);
-        }
-        // ...and delegate updating the dice scroll view's buttons to the widget
-        diceBuilderWidget?.UpdateVisuals(currentDiceTab);
-
-        if (rawTextOutput != null)
-        {
-            string exportedString = ExportEntity(CurrentEntity);
-            rawTextOutput.SetTextWithoutNotify(exportedString);
-
-            if (syntaxHighlighterText != null)
-            {
-                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
-            }
-        }
-    }
     protected void OpenColorPicker(Color initialColor, Action<Color> onColorChanged)
     {
         if (uiGenerator.colorPicker == null) return;
@@ -372,24 +288,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             NotifyStateChanged();
             RebuildDiceScrollView();
         }
-    }
-    protected void UpdateEntityHsvData(int componentIndex, int value)
-    {
-        if (isDrawingUI) return;
-
-        if (componentIndex == 0) CurrentEntity.h = value;
-        else if (componentIndex == 1) CurrentEntity.s = value;
-        else if (componentIndex == 2) CurrentEntity.v = value;
-
-        string inputKey = componentIndex == 0 ? "EntityFacH" : (componentIndex == 1 ? "EntityFacS" : "EntityFacV");
-        if (statsUI != null && statsUI.Inputs.TryGetValue(inputKey, out var input))
-            input.SetTextWithoutNotify(value.ToString());
-
-        string sliderKey = componentIndex == 0 ? "EntitySliH" : (componentIndex == 1 ? "EntitySliS" : "EntitySliV");
-        if (statsUI != null && statsUI.Sliders.TryGetValue(sliderKey, out var slider))
-            slider.SetValueWithoutNotify(value);
-
-        NotifyStateChanged();
     }
     protected void UpdateFaceHsv(int faceIndex, int componentIndex, int value)
     {
@@ -926,86 +824,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
         }
     }
-    protected void AppendColorModifiersLayout(List<GridRowSpec> layout)
-    {
-        // 1. P-HUE
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("P-Hue Swap:", 0.30f),
-            GridCellSpec.CreateButton("PhueStartBtn", "Target", 0.35f, () => {
-                if (uiGenerator.colorPicker == null) return;
-                Color initialColor = CurrentEntity.phue != null ? CurrentEntity.phue.colorStart : Color.white;
-                OpenColorPicker(initialColor, (color) => {
-                    if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
-                    CurrentEntity.phue.colorStart = color;
-                    NotifyStateChanged();
-                });
-            }),
-            GridCellSpec.CreateButton("PhueDestBtn", "Replace", 0.35f, () => {
-                if (uiGenerator.colorPicker == null) return;
-                Color initialColor = CurrentEntity.phue != null ? CurrentEntity.phue.colorDestination : Color.white;
-                OpenColorPicker(initialColor, (color) => {
-                    if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
-                    CurrentEntity.phue.colorDestination = color;
-                    NotifyStateChanged();
-                });
-            })
-        ));
 
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("P-Hue Range:", 0.30f),
-            GridCellSpec.CreateSlider("PhueRangeSlider", 0, 99, true, 0.70f, (val) => {
-                if (CurrentEntity.phue == null) CurrentEntity.phue = new Phue();
-                CurrentEntity.phue.colorRange = Mathf.RoundToInt(val);
-                NotifyStateChanged();
-            })
-        ));
-
-        // 2. T-HUE
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("T-Hue Color:", 0.35f),
-            GridCellSpec.CreateButton("ThueColorBtn", "Pick Color", 0.65f, () => {
-                if (uiGenerator.colorPicker == null) return;
-                Color initialColor = CurrentEntity.thue != null ? CurrentEntity.thue.colorHex : Color.white;
-                OpenColorPicker(initialColor, (color) => {
-                    if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue { colorRange = 0, colorOffset = 0 };
-                    CurrentEntity.thue.colorHex = color;
-                    NotifyStateChanged();
-                });
-            })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("T-Hue Range:", 0.20f),
-            GridCellSpec.CreateSlider("ThueRangeSlider", 0, 99, true, 0.30f, (val) => {
-                if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue();
-                CurrentEntity.thue.colorRange = Mathf.RoundToInt(val);
-                NotifyStateChanged();
-            }),
-            GridCellSpec.CreateLabel("T-Hue Shift:", 0.20f),
-            GridCellSpec.CreateSlider("ThueOffsetSlider", -99, 99, true, 0.30f, (val) => {
-                if (CurrentEntity.thue == null) CurrentEntity.thue = new Thue();
-                CurrentEntity.thue.colorOffset = Mathf.RoundToInt(val);
-                NotifyStateChanged();
-            })
-        ));
-
-        // 3. HSV
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Hue:", 0.30f),
-            GridCellSpec.CreateSlider("EntitySliH", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(0, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput("EntityFacH", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateEntityHsvData(0, h); })
-        ));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Sat:", 0.30f),
-            GridCellSpec.CreateSlider("EntitySliS", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(1, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput("EntityFacS", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateEntityHsvData(1, s); })
-        ));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Val:", 0.30f),
-            GridCellSpec.CreateSlider("EntitySliV", -99, 99, true, 0.50f, (val) => UpdateEntityHsvData(2, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput("EntityFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateEntityHsvData(2, v); })
-        ));
-    }
     protected void AppendDocLayout(List<GridRowSpec> layout)
     {
         layout.Add(new GridRowSpec(
@@ -1256,4 +1075,282 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         iconPicker.OpenModal(config);
     }
     #endregion
+
+    // =====================================================================
+    // DYNAMIC COLOR MODIFIER STATE MANAGEMENT
+    // =====================================================================
+    protected void RemoveVisualModifier(int index)
+    {
+        if (CurrentEntity.visuals != null && index >= 0 && index < CurrentEntity.visuals.Count)
+        {
+            CurrentEntity.visuals.RemoveAt(index);
+            NotifyStateChanged();
+            RebuildStatsUI();
+        }
+    }
+    protected void MoveVisualModifier(int index, int direction)
+    {
+        if (CurrentEntity.visuals == null) return;
+        int newIndex = index + direction;
+        if (newIndex >= 0 && newIndex < CurrentEntity.visuals.Count)
+        {
+            var item = CurrentEntity.visuals[index];
+            CurrentEntity.visuals.RemoveAt(index);
+            CurrentEntity.visuals.Insert(newIndex, item);
+            NotifyStateChanged();
+            RebuildStatsUI();
+        }
+    }
+    private string GetNiceVisualName(VisualType type)
+    {
+        switch (type)
+        {
+            case VisualType.P: return "P-Hue Swap";
+            case VisualType.THue: return "T-Hue Range Shift";
+            case VisualType.HSV: return "Global HSV Adjustment";
+            case VisualType.Hue: return "Global Hue Shift";
+            default: return type.ToString();
+        }
+    }
+    private void AppendVisualHeader(List<GridRowSpec> layout, string title, int index)
+    {
+        string upText = index == 0 ? "-" : "▲";
+        string downText = index == CurrentEntity.visuals.Count - 1 ? "-" : "▼";
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel($"<color=#aaaaaa>-- {title.ToUpper()} --</color>", 0.50f),
+            GridCellSpec.CreateButton($"VisUp_{index}", upText, 0.15f, () => MoveVisualModifier(index, -1)),
+            GridCellSpec.CreateButton($"VisDown_{index}", downText, 0.15f, () => MoveVisualModifier(index, 1)),
+            GridCellSpec.CreateButton($"VisDel_{index}", "<color=red>[X]</color>", 0.20f, () => RemoveVisualModifier(index))
+        ));
+    }
+    protected void AppendColorModifiersLayout(List<GridRowSpec> layout)
+    {
+        // Dropdown to select and add a new visual modifier to the list
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Add Color Modifier:", 0.40f),
+            GridCellSpec.CreateFilteredDropdown("AddVisualDrop", "Select...", 0.60f,
+                new string[] { "Select...", "P-Hue Swap", "T-Hue Color", "Global HSV", "Global Hue" },
+                (idx) => {
+                    if (idx == 1) AddVisualModifier(VisualType.P);
+                    else if (idx == 2) AddVisualModifier(VisualType.THue);
+                    else if (idx == 3) AddVisualModifier(VisualType.HSV);
+                    else if (idx == 4) AddVisualModifier(VisualType.Hue);
+                })
+        ));
+
+        if (CurrentEntity.visuals == null || CurrentEntity.visuals.Count == 0) return;
+
+        // Render visual modifiers strictly in array order
+        for (int i = 0; i < CurrentEntity.visuals.Count; i++)
+        {
+            int index = i;
+            var vis = CurrentEntity.visuals[index];
+
+            if (vis.Type == VisualType.B || vis.Type == VisualType.Draw || vis.Type == VisualType.Rect)
+                continue;
+
+            AppendVisualHeader(layout, GetNiceVisualName(vis.Type), index);
+
+            if (vis.Type == VisualType.P)
+            {
+                if (vis.p == null) vis.p = new Phue();
+
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Colors:", 0.30f),
+                    GridCellSpec.CreateButton($"VisPhueStartBtn_{index}", "Target", 0.35f, () => {
+                        if (uiGenerator.colorPicker == null) return;
+                        OpenColorPicker(vis.p.colorStart, (color) => {
+                            vis.p.colorStart = color;
+                            NotifyStateChanged();
+                        });
+                    }),
+                    GridCellSpec.CreateButton($"VisPhueDestBtn_{index}", "Replace", 0.35f, () => {
+                        if (uiGenerator.colorPicker == null) return;
+                        OpenColorPicker(vis.p.colorDestination, (color) => {
+                            vis.p.colorDestination = color;
+                            NotifyStateChanged();
+                        });
+                    })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Range:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisPhueRange_{index}", 0, 99, true, 0.70f, (val) => {
+                        vis.p.colorRange = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    })
+                ));
+            }
+            else if (vis.Type == VisualType.THue)
+            {
+                if (vis.thue == null) vis.thue = new Thue();
+
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Target Color:", 0.35f),
+                    GridCellSpec.CreateButton($"VisThueColorBtn_{index}", "Pick Color", 0.65f, () => {
+                        if (uiGenerator.colorPicker == null) return;
+                        OpenColorPicker(vis.thue.colorHex, (color) => {
+                            vis.thue.colorHex = color;
+                            NotifyStateChanged();
+                        });
+                    })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Range:", 0.20f),
+                    GridCellSpec.CreateSlider($"VisThueRange_{index}", 0, 99, true, 0.30f, (val) => {
+                        vis.thue.colorRange = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    }),
+                    GridCellSpec.CreateLabel("Shift:", 0.20f),
+                    GridCellSpec.CreateSlider($"VisThueOffset_{index}", -99, 99, true, 0.30f, (val) => {
+                        vis.thue.colorOffset = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    })
+                ));
+            }
+            else if (vis.Type == VisualType.HSV)
+            {
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Hue:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHsvH_{index}", -99, 99, true, 0.50f, (val) => { vis.h = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHsvHIn_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) { vis.h = h; NotifyStateChanged(); } })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Sat:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHsvS_{index}", -99, 99, true, 0.50f, (val) => { vis.s = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHsvSIn_{index}", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) { vis.s = s; NotifyStateChanged(); } })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Val:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHsvV_{index}", -99, 99, true, 0.50f, (val) => { vis.v = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHsvVIn_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) { vis.v = v; NotifyStateChanged(); } })
+                ));
+            }
+            else if (vis.Type == VisualType.Hue)
+            {
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Hue:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHue_{index}", -99, 99, true, 0.50f, (val) => { vis.hue = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHueIn_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int hue)) { vis.hue = hue; NotifyStateChanged(); } })
+                ));
+            }
+        }
+    }
+    protected virtual void UpdateUIFromData()
+    {
+        if (statsUI == null || diceUI == null) return;
+        isDrawingUI = true;
+
+        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentEntity.entityName);
+        if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
+            hpIn.SetTextWithoutNotify(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
+
+        if (statsUI.Inputs.TryGetValue("Doc", out var docIn)) docIn.SetTextWithoutNotify(CurrentEntity.doc);
+        if (statsUI.Inputs.TryGetValue("AppendedDoc", out var AppendeddocIn)) AppendeddocIn.SetTextWithoutNotify(CurrentEntity.appendedDoc);
+
+        if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
+
+        // CHANGED: Dynamic loop reads controls by index instead of hardcoded keys
+        if (CurrentEntity.visuals != null)
+        {
+            for (int i = 0; i < CurrentEntity.visuals.Count; i++)
+            {
+                var vis = CurrentEntity.visuals[i];
+                if (vis.Type == VisualType.P)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisPhueRange_{i}", out var sRange))
+                        sRange.SetValueWithoutNotify(vis.p?.colorRange ?? 0);
+                }
+                else if (vis.Type == VisualType.THue)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisThueRange_{i}", out var tRange))
+                        tRange.SetValueWithoutNotify(vis.thue?.colorRange ?? 0);
+                    if (statsUI.Sliders.TryGetValue($"VisThueOffset_{i}", out var tOff))
+                        tOff.SetValueWithoutNotify(vis.thue?.colorOffset ?? 0);
+                }
+                else if (vis.Type == VisualType.HSV)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisHsvH_{i}", out var sH)) sH.SetValueWithoutNotify(vis.h);
+                    if (statsUI.Sliders.TryGetValue($"VisHsvS_{i}", out var sS)) sS.SetValueWithoutNotify(vis.s);
+                    if (statsUI.Sliders.TryGetValue($"VisHsvV_{i}", out var sV)) sV.SetValueWithoutNotify(vis.v);
+
+                    if (statsUI.Inputs.TryGetValue($"VisHsvHIn_{i}", out var iH)) iH.SetTextWithoutNotify(vis.h.ToString());
+                    if (statsUI.Inputs.TryGetValue($"VisHsvSIn_{i}", out var iS)) iS.SetTextWithoutNotify(vis.s.ToString());
+                    if (statsUI.Inputs.TryGetValue($"VisHsvVIn_{i}", out var iV)) iV.SetTextWithoutNotify(vis.v.ToString());
+                }
+                else if (vis.Type == VisualType.Hue)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisHue_{i}", out var sHue)) sHue.SetValueWithoutNotify(vis.hue);
+                    if (statsUI.Inputs.TryGetValue($"VisHueIn_{i}", out var iHue)) iHue.SetTextWithoutNotify(vis.hue.ToString());
+                }
+            }
+        }
+
+        UpdateSpecificUIFromData();
+        diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
+
+        isDrawingUI = false;
+        UpdateVisualsOnly();
+    }
+    protected virtual void UpdateVisualsOnly()
+    {
+        if (portraitPreview != null)
+        {
+            portraitPreview.SetNameText(CurrentEntity.entityName);
+            portraitPreview.SetHPText(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
+
+            UpdateSpecificVisuals();
+
+            // Pass full dynamic visuals array directly to Portrait Preview
+            portraitPreview.SetPortraitVisualModifiers(CurrentEntity.visuals);
+        }
+
+        // CHANGED: Dynamically update preview button background colors by index
+        if (statsUI != null && statsUI.Buttons != null && CurrentEntity.visuals != null)
+        {
+            for (int i = 0; i < CurrentEntity.visuals.Count; i++)
+            {
+                var vis = CurrentEntity.visuals[i];
+                if (vis.Type == VisualType.P)
+                {
+                    if (statsUI.Buttons.TryGetValue($"VisPhueStartBtn_{i}", out var startBtn))
+                        SetButtonColorPreview(startBtn, vis.p != null ? vis.p.colorStart : Color.white);
+                    if (statsUI.Buttons.TryGetValue($"VisPhueDestBtn_{i}", out var destBtn))
+                        SetButtonColorPreview(destBtn, vis.p != null ? vis.p.colorDestination : Color.white);
+                }
+                else if (vis.Type == VisualType.THue)
+                {
+                    if (statsUI.Buttons.TryGetValue($"VisThueColorBtn_{i}", out var thueColorBtn))
+                        SetButtonColorPreview(thueColorBtn, vis.thue != null ? vis.thue.colorHex : Color.white);
+                }
+            }
+        }
+
+        for (int i = 0; i < 6; i++) UpdateIcon(i);
+        diceBuilderWidget?.UpdateVisuals(currentDiceTab);
+
+        if (rawTextOutput != null)
+        {
+            string exportedString = ExportEntity(CurrentEntity);
+            rawTextOutput.SetTextWithoutNotify(exportedString);
+
+            if (syntaxHighlighterText != null)
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
+        }
+    }
+    protected void AddVisualModifier(VisualType type)
+    {
+        if (CurrentEntity.visuals == null) CurrentEntity.visuals = new List<VisualModifier>();
+
+        if (CurrentEntity.visuals.Count >= 16) return;
+
+        var newVis = new VisualModifier { Type = type };
+        if (type == VisualType.P) newVis.p = new Phue { colorRange = 1 };
+        else if (type == VisualType.THue) newVis.thue = new Thue { colorRange = 1 };
+        else if (type == VisualType.HSV) { newVis.v = 1; }
+
+        CurrentEntity.visuals.Add(newVis);
+        NotifyStateChanged();
+        RebuildStatsUI();
+    }
 }

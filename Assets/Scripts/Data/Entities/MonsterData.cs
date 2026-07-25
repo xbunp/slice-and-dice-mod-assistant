@@ -378,7 +378,7 @@ public class MonsterData : EntityData
         baseMonster = "Wolf";
         bal = null;
         hp = 0; h = 0; s = 0; v = 0; hue = 0;
-        p = null; b = null; rect = null; draw = null; thue = null; doc = null; phue = null;
+        doc = null; 
         appendedDoc = null;
         payloadData = null;
 
@@ -391,8 +391,8 @@ public class MonsterData : EntityData
         customTriggerHPs = new List<TriggerHPData>();
         customPayloads = new List<CustomPayload>();
         customOrbs = new List<OrbData>();
-        thue = new Thue();
-        phue = new Phue();
+
+        visuals.Clear();
         _itemPipeline.Clear();
 
         // Safely instantiate the array structure

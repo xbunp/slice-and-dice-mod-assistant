@@ -551,6 +551,7 @@ public class ItemUI : RootUI
         PopulateLoadDropdown();
         ModPackage.Instance.NotifyActiveEntityChanged<ItemData>(this);
     }
+
     /// <summary>
     /// Clears the workspace and recursively reconstructs the visual tree from ItemData.
     /// </summary>
@@ -564,119 +565,160 @@ public class ItemUI : RootUI
         ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
         if (rootZone == null) return;
 
-        bool hasMetadata = !string.IsNullOrEmpty(item.entityName) || item.Tier.HasValue;
-        if (hasMetadata)
-        {
-            EntityCard equipCard = CreateEntityCard(ItemNodeType.Equippable) as EntityCard;
-            equipCard.RootData = item;
-            rootZone.AddEntrant(equipCard);
-        }
+        // 1. Build Root UI Context
+        ReorderableZone targetZone = BuildRootEquippableCard(item, rootZone);
 
-        // Parse mechanics, merging external face modifiers into their parent Hat
-        for (int i = 0; i < item.Mechanics.Count; i++)
+        // 2. Unroll nested compiler wrappers
+        List<ItemMechanic> mechanics = GetUnrolledMechanics(item);
+
+        // 3. Process Mechanics Pipeline
+        ProcessMechanicsList(mechanics, targetZone);
+
+        RefreshSidebar();
+        AutoCompile();
+    }
+    // ==========================================================
+    // UI LOADING PIPELINE SUB-METHODS
+    // ==========================================================
+    private ReorderableZone BuildRootEquippableCard(ItemData item, ReorderableZone defaultZone)
+    {
+        if (!item.IsEquippable) return defaultZone;
+
+        EntityCard equipCard = CreateEntityCard(ItemNodeType.Equippable) as EntityCard;
+        equipCard.RootData = item;
+        defaultZone.AddEntrant(equipCard);
+
+        return equipCard.PayloadPort != null ? equipCard.PayloadPort : defaultZone;
+    }
+    private List<ItemMechanic> GetUnrolledMechanics(ItemData item)
+    {
+        if (item.Mechanics.Count == 1)
         {
-            var mechanic = item.Mechanics[i];
+            var rootMech = item.Mechanics[0];
+            if ((rootMech.Prefix == "i" || string.IsNullOrEmpty(rootMech.Prefix)) && rootMech.PayloadData is ItemData nestedRoot)
+            {
+                return nestedRoot.Mechanics;
+            }
+        }
+        return item.Mechanics;
+    }
+    private void ProcessMechanicsList(List<ItemMechanic> mechanics, ReorderableZone targetZone)
+    {
+        for (int i = 0; i < mechanics.Count; i++)
+        {
+            var mechanic = mechanics[i];
             string prefix = mechanic.Prefix?.ToLower() ?? "";
 
             if (prefix.EndsWith("hat"))
             {
-                // 1. Spawn Hat Card
-                EntityCard hatCard = CreateEntityCard(ItemNodeType.Hat) as EntityCard;
-                hatCard.MechanicData = mechanic;
-                rootZone.AddEntrant(hatCard);
-
-                HeroData heroData = new HeroData();
-                heroData.InitializeDiceFaces();
-                hatCard.MechanicData.PayloadData = heroData;
-
-                string rawPayload = mechanic.PayloadString ?? "";
-                if (rawPayload.StartsWith("(") && rawPayload.EndsWith(")"))
-                {
-                    rawPayload = rawPayload.Substring(1, rawPayload.Length - 2);
-                }
-
-                // 2. Separate Hat core from nested item packs
-                string hatCore = rawPayload;
-                string nestedPackStr = "";
-
-                int iIndex = rawPayload.IndexOf(".i.");
-                if (iIndex >= 0)
-                {
-                    hatCore = rawPayload.Substring(0, iIndex);
-                    nestedPackStr = rawPayload.Substring(iIndex + 1);
-                }
-
-                heroData.Parse(hatCore);
-
-                // 3. Lookahead: Fold subsequent facade/appearance modifiers directly into this Hat's HeroData
-                while (i + 1 < item.Mechanics.Count)
-                {
-                    var nextMech = item.Mechanics[i + 1];
-                    string nextPrefix = nextMech.Prefix?.ToLower() ?? "";
-                    string nextPayload = nextMech.PayloadString ?? "";
-
-                    // FIX: Explicitly check for the facade prefix
-                    if (nextPrefix == "facade" || (nextPrefix == "i" && nextPayload.Contains("facade")))
-                    {
-                        string targetStr = nextMech.Targets.Count > 0 ? nextMech.Targets[0] : "all";
-                        string facadeStr = nextPrefix == "facade" ? $"{targetStr}.facade.{nextPayload}" : nextPayload;
-                        ApplyFacadeToHeroData(heroData, facadeStr);
-                        i++; // Consume this mechanic
-                    }
-                    else if (nextPrefix == "sidesc" || nextPrefix == "img" || (nextPrefix == "i" && (nextPayload.Contains("sidesc") || nextPayload.Contains("img"))))
-                    {
-                        ApplyFacadeToHeroData(heroData, nextPayload);
-                        i++;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
-                // 4. Process nested Item Pack inside Hat's Payload Port
-                if (!string.IsNullOrWhiteSpace(nestedPackStr))
-                {
-                    ItemData nestedPack = new ItemData();
-                    nestedPack.Parse(nestedPackStr);
-
-                    List<string> remainingPackParts = new List<string>();
-
-                    foreach (var childMech in nestedPack.Mechanics)
-                    {
-                        // FIX: Intercept native Hat features and fold them instead of spawning cards
-                        if (childMech.Prefix == "k")
-                        {
-                            ApplyKeywordToHeroData(heroData, childMech);
-                        }
-                        else if (childMech.Prefix == "sticker")
-                        {
-                            ApplyStickerToHeroData(heroData, childMech);
-                        }
-                        else
-                        {
-                            // Keep tog items, ritems, and base items as part of the nested base pack
-                            remainingPackParts.Add(childMech.Export());
-                        }
-                    }
-
-                    // FIX: Recombine remaining Base Items into a SINGLE node payload 
-                    if (remainingPackParts.Count > 0)
-                    {
-                        string packedString = string.Join("#", remainingPackParts);
-                        ItemMechanic packMech = new ItemMechanic { PayloadString = packedString };
-                        LoadMechanicIntoUI(packMech, hatCard.PayloadPort, 1);
-                    }
-                }
+                i = ProcessHatNode(mechanics, i, targetZone);
             }
             else
             {
-                LoadMechanicIntoUI(mechanic, rootZone, 0);
+                LoadMechanicIntoUI(mechanic, targetZone, 0);
+            }
+        }
+    }
+    private int ProcessHatNode(List<ItemMechanic> mechanics, int currentIndex, ReorderableZone targetZone)
+    {
+        var mechanic = mechanics[currentIndex];
+
+        EntityCard hatCard = CreateEntityCard(ItemNodeType.Hat) as EntityCard;
+        hatCard.MechanicData = mechanic;
+        targetZone.AddEntrant(hatCard);
+
+        HeroData heroData = new HeroData();
+        heroData.InitializeDiceFaces();
+        hatCard.MechanicData.PayloadData = heroData;
+
+        string rawPayload = mechanic.PayloadString ?? "";
+        if (rawPayload.StartsWith("(") && rawPayload.EndsWith(")"))
+        {
+            rawPayload = rawPayload.Substring(1, rawPayload.Length - 2);
+        }
+
+        string hatCore = rawPayload;
+        string nestedPackStr = "";
+        int iIndex = rawPayload.IndexOf(".i.");
+
+        if (iIndex >= 0)
+        {
+            hatCore = rawPayload.Substring(0, iIndex);
+            nestedPackStr = rawPayload.Substring(iIndex + 3);
+        }
+
+        // Clean native entity parse without data-wiping hacks
+        heroData.Parse(hatCore);
+
+        int iter = currentIndex;
+        while (iter + 1 < mechanics.Count)
+        {
+            var nextMech = mechanics[iter + 1];
+            string nextPrefix = nextMech.Prefix?.ToLower() ?? "";
+            string nextPayload = nextMech.PayloadString ?? "";
+
+            if (nextPrefix == "facade" || (nextPrefix == "i" && nextPayload.Contains("facade")))
+            {
+                string targetStr = nextMech.Targets.Count > 0 ? nextMech.Targets[0] : "all";
+                string facadeStr = nextPrefix == "facade" ? $"{targetStr}.facade.{nextPayload}" : nextPayload;
+                ApplyFacadeToHeroData(heroData, facadeStr);
+                iter++;
+            }
+            else if (nextPrefix == "sidesc" || nextPrefix == "img" || (nextPrefix == "i" && (nextPayload.Contains("sidesc") || nextPayload.Contains("img"))))
+            {
+                ApplyFacadeToHeroData(heroData, nextPayload);
+                iter++;
+            }
+            else
+            {
+                break;
             }
         }
 
-        RefreshSidebar();
-        AutoCompile();
+        if (!string.IsNullOrWhiteSpace(nestedPackStr))
+        {
+            ProcessNestedHatPack(nestedPackStr, heroData, hatCard.PayloadPort);
+        }
+
+        return iter;
+    }
+
+    private void ProcessNestedHatPack(string nestedPackStr, HeroData heroData, ReorderableZone payloadPort)
+    {
+        ItemData nestedPack = new ItemData();
+        nestedPack.Parse(nestedPackStr);
+
+        List<ItemMechanic> looseBaseItems = new List<ItemMechanic>();
+
+        foreach (var childMech in nestedPack.Mechanics)
+        {
+            string prefix = childMech.Prefix?.ToLower() ?? "";
+
+            if (prefix == "k")
+            {
+                ApplyKeywordToHeroData(heroData, childMech);
+            }
+            else if (prefix == "sticker")
+            {
+                ApplyStickerToHeroData(heroData, childMech);
+            }
+            else if (prefix == "hat")
+            {
+                LoadMechanicIntoUI(childMech, payloadPort, 1);
+            }
+            else
+            {
+                // Pure BaseItems / TogItems / Operators collect for the BaseItem Pack
+                looseBaseItems.Add(childMech);
+            }
+        }
+
+        if (looseBaseItems.Count > 0)
+        {
+            string packedString = string.Join("#", looseBaseItems.Select(m => m.Export()));
+            ItemMechanic packMech = new ItemMechanic { PayloadString = packedString };
+            LoadMechanicIntoUI(packMech, payloadPort, 1);
+        }
     }
 
     private void ApplyKeywordToHeroData(HeroData heroData, ItemMechanic mech)

@@ -64,7 +64,7 @@ public class HeroData : EntityData
     {
         entityName = null; imageOverride = null; baseReplica = null; colorClass = null;
         hp = 0; h = 0; s = 0; v = 0; tier = 0; hue = 0;
-        p = null; b = null; rect = null; draw = null; thue = null; doc = null; speech = null; adj = null; phue = null;
+        doc = null; speech = null; adj = null;
         appendedDoc = null;
 
         items = new List<string>();
@@ -78,10 +78,10 @@ public class HeroData : EntityData
         customTriggerHPs = new List<TriggerHPData>();
         customPayloads = new List<CustomPayload>();
         customOrbs = new List<OrbData>();
-        thue = new Thue();
-        phue = new Phue();
-
         diceSides = new DiceSideData[6];
+
+        visuals.Clear();
+
         for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData { effectID = 0, pips = 0, facadeID = null, keywords = new List<string>() };
     }
     public override void Parse(string data)

@@ -123,6 +123,36 @@ public static class ItemDomainRules
         "facade", "sidesc"
     };
 
+    public static readonly HashSet<string> RootMetadataProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "n", "tier", "img", "doc", "hsv", "hue", "thue", "p", "b", "draw", "rect", "cleardesc", "clearicon", "learn"
+    };
+
+    /// <summary>
+    /// Evaluates if a token represents a strict architectural boundary that should 
+    /// terminate payload accumulation (preventing greedy token swallowing).
+    /// </summary>
+    public static bool IsMechanicBoundary(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        string clean = token.ToLower();
+
+        // 1. Hard Context Shifts (Indicates the start of an entirely new bounded payload context)
+        if (clean == "hat" || clean == "sticker" || clean == "enchant" || clean == "cast" ||
+            clean == "onhitdata" || clean == "triggerhpdata" || clean == "i")
+        {
+            return true;
+        }
+
+        // 2. Root Metadata Intercept (Prevents internal mechanics from swallowing structural root properties)
+        if (RootMetadataProperties.Contains(clean))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     public static bool IsRepeatPrefix(string token, out int count)
     {
         count = 1;
@@ -404,54 +434,17 @@ public class ItemData : SDData
     /// <summary> (.tier) Rarity reward pool index. Valid range: -5 to 20. </summary>
     public int? Tier { get; set; }
     /// <summary> (.doc) Rich text description of the item's custom mechanics or use. </summary>
-    public string DocumentedDescription { get; set; } = string.Empty;
-    /// <summary> (.hsv) Direct Hue, Saturation, and Value shifting values (-99 to 99). </summary>
-    public ItemHsvShift? HsvShift { get; set; }
-    /// <summary> (.hue) Simple single-axis hue shift value. </summary>
-    public int? SimpleHue { get; set; }
-    /// <summary> (.p) Palette override configuration. Format: "fff:fff:##" (e.g. "aaa:a0a:60") </summary>
-    public string PaletteOverride { get; set; } = string.Empty;
-    /// <summary> (.b) Custom border color overlay determined by 3 hex characters (e.g., "f0f"). </summary>
-    public string BorderColorCode { get; set; } = string.Empty;
-    /// <summary> (.draw) Complex arbitrary UI sprite rendering instructions. </summary>
-    public string UiDrawInstructions { get; set; } = string.Empty;
-    /// <summary> (.rect) UI single-color layout rectangle drawing parameters. </summary>
-    public string UiRectInstructions { get; set; } = string.Empty;
-    /// <summary> (learn.) Base game spells or tactics given to the player. </summary>
     public List<string> LearnedAbilities { get; set; } = new List<string>();
-
     /// <summary> (cleardesc) item Suppresses the game's auto-generated description of an item's effect. </summary>
     public bool ClearDescription { get; set; }
     /// <summary> (clearicon) item Suppresses the game's auto-generated item graphics. </summary>
-
     public bool ClearIcon { get; set; }
+
     public List<ItemProperty> Containers = new List<ItemProperty>();
     public List<ItemMechanic> Mechanics = new List<ItemMechanic>();
 
-    // now handled through item mechanics. 
-    /*
-    /// <summary> 
-    /// (abilitydata.) Custom tactical/spell data payloads. 
-    /// These are raw strings that should be handed off to SpellData or TacticData parsers.
-    /// </summary>
-    public List<string> CustomAbilities { get; set; } = new List<string>();
-
-    /// <summary> 
-    /// (t.) Passive traits mapped to this item. 
-    /// Highly common usage: "t.jinx.[ModifierName]" which invokes a gameplay modifier as a passive trait.
-    /// </summary>
-    public List<string> PassiveTraits { get; set; } = new List<string>();
-
-    /// <summary> 
-    /// (self.) Modifiers applied strictly to the item-carrying entity. 
-    /// Unlike standard modifiers which are global, this payload isolates the effect to the single hero/monster.
-    /// Payload can be a basic name or a fully nested (ModifierData) scope.
-    /// </summary>
-    public List<string> SelfModifiers { get; set; } = new List<string>();
-    */
-
     public bool IsEquippable => !string.IsNullOrEmpty(entityName) || Tier.HasValue;
-
+    /*
     public override void Parse(string data)
     {
         GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
@@ -491,73 +484,61 @@ public class ItemData : SDData
             }
         }
     }
+    */
 
-    private void PropertiesClear()
+    public override void Parse(string data)
     {
-        thue = new Thue();
-        phue = new Phue();
-        entityName = string.Empty; imageOverride = string.Empty; Tier = null; DocumentedDescription = string.Empty;
-        HsvShift = null; SimpleHue = null; PaletteOverride = string.Empty;
-        BorderColorCode = string.Empty; UiDrawInstructions = string.Empty; UiRectInstructions = string.Empty;
-        ClearDescription = false; ClearIcon = false; LearnedAbilities.Clear();
-    }
+        GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
+        if (string.IsNullOrWhiteSpace(data)) return;
 
-    /*
-    private void ExtractKnowledge(List<string> tokens, ItemData item)
-    {
-        for (int i = 0; i < tokens.Count; i++)
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
+        string itemCore = chunks[0];
+
+        for (int c = 1; c < chunks.Count; c++)
         {
-            string tokenLower = tokens[i].ToLower();
-            string originalToken = tokens[i];
+            List<string> hiddenTokens = StaticBranchTracing.TopLevelSplit(chunks[c], '.');
+            if (hiddenTokens.Count > 0 && (hiddenTokens[0].ToLower() == "hidden" || hiddenTokens[0].ToLower() == "temporary"))
+                GlobalTags.Add(hiddenTokens[0]);
+        }
 
-            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
+        itemCore = StaticBranchTracing.StripOuterParens(itemCore);
+
+        List<string> chains = StaticBranchTracing.TopLevelSplit(itemCore, '#');
+
+        List<string> lastTargets = null;
+
+        foreach (var chain in chains)
+        {
+            if (string.IsNullOrWhiteSpace(chain)) continue;
+            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
+
+            ExtractKnowledge(tokens, this, lastTargets);
+
+            if (Mechanics.Count > 0)
             {
-                string inner = originalToken.Substring(1, originalToken.Length - 2);
-                List<string> innerChains = StaticBranchTracing.TopLevelSplit(inner, '#');
-                foreach (var chain in innerChains)
+                // SURGICAL FIX: Force a clean instantiation of the target list so reference clearing doesn't wipe inherited chains
+                var lastMechTargets = Mechanics.Last().Targets;
+                if (lastMechTargets != null && lastMechTargets.Count > 0)
                 {
-                    if (string.IsNullOrWhiteSpace(chain)) continue;
-                    List<string> innerTokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-                    ExtractKnowledge(innerTokens, item);
+                    lastTargets = new List<string>(lastMechTargets);
                 }
-                continue;
-            }
-
-            switch (tokenLower)
-            {
-                case "n": if (i + 1 < tokens.Count) item.entityName = tokens[++i]; break;
-                case "tier": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) item.Tier = t; break;
-                case "doc":
-                case "sidesc": if (i + 1 < tokens.Count) item.DocumentedDescription = tokens[++i]; break;
-                case "img": if (i + 1 < tokens.Count) item.imageOverride = tokens[++i]; break;
-                case "hsv":
-                    if (i + 1 < tokens.Count)
-                    {
-                        string[] hsvParts = tokens[++i].Split(':');
-                        if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out int h) && int.TryParse(hsvParts[1], out int s) && int.TryParse(hsvParts[2], out int v))
-                            item.HsvShift = new ItemHsvShift(h, s, v);
-                    }
-                    break;
-                case "hue": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int hueVal)) item.SimpleHue = hueVal; break;
-                case "thue": if (i + 1 < tokens.Count) item.TargetedHue = tokens[++i]; break;
-                case "p": if (i + 1 < tokens.Count) item.PaletteOverride = tokens[++i]; break;
-                case "b": if (i + 1 < tokens.Count) item.BorderColorCode = tokens[++i]; break;
-                case "draw": if (i + 1 < tokens.Count) item.UiDrawInstructions = tokens[++i]; break;
-                case "rect": if (i + 1 < tokens.Count) item.UiRectInstructions = tokens[++i]; break;
-                case "learn": if (i + 1 < tokens.Count) item.LearnedAbilities.Add(tokens[++i]); break;
-                case "cleardesc": item.ClearDescription = true; break;
-                case "clearicon": item.ClearIcon = true; break;
-
-                default:
-                    if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken)) { }
-                    else if (IsMechanicTriggerToken(tokenLower)) ProcessMechanicChain(tokens, ref i, originalToken);
-                    break;
             }
         }
     }
-    */
 
-    // FIX: Add inheritedTargets parameter
+    private void PropertiesClear()
+    {
+        entityName = null;
+        imageOverride = null;
+        Tier = null;
+        doc = null;
+        visuals.Clear();
+        ClearDescription = false;
+        ClearIcon = false;
+        LearnedAbilities.Clear();
+    }
+
+    /*
     private void ExtractKnowledge(List<string> tokens, ItemData item, List<string> inheritedTargets = null)
     {
         bool isFirstMechanic = true; // Track if we are at the start of a # chain
@@ -576,6 +557,7 @@ public class ItemData : SDData
 
             if (TryProcessCommonMetadata(tokens, ref i, tokenLower))
             {
+
                 if (tokenLower == "hsv") item.HsvShift = new ItemHsvShift(h, s, v);
                 else if (tokenLower == "hue") item.SimpleHue = hue;
                 else if (tokenLower == "thue") item.thue = UnpackTHue(tokens[i]);
@@ -589,6 +571,9 @@ public class ItemData : SDData
 
             switch (tokenLower)
             {
+                // CRITICAL FIX: Restore missing root property parsers!
+                case "n": if (i + 1 < tokens.Count) item.entityName = tokens[++i]; break;
+                case "img": if (i + 1 < tokens.Count) item.imageOverride = tokens[++i]; break;
                 case "tier": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) item.Tier = t; break;
                 case "sidesc": if (i + 1 < tokens.Count) item.DocumentedDescription = tokens[++i]; break;
                 case "learn": if (i + 1 < tokens.Count) item.LearnedAbilities.Add(tokens[++i]); break;
@@ -599,7 +584,6 @@ public class ItemData : SDData
                     if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken)) { }
                     else if (IsMechanicTriggerToken(tokenLower))
                     {
-                        // FIX: Pass inherited targets ONLY to the first mechanic, then turn it off
                         ProcessMechanicChain(tokens, ref i, originalToken, isFirstMechanic ? inheritedTargets : null);
                         isFirstMechanic = false;
                     }
@@ -607,8 +591,74 @@ public class ItemData : SDData
             }
         }
     }
+    */
 
-    // FIX: Add inheritedTargets parameter
+    private void ExtractKnowledge(List<string> tokens, ItemData item, List<string> inheritedTargets = null)
+    {
+        bool isFirstMechanic = true;
+
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            string tokenLower = tokens[i].ToLower();
+            string originalToken = tokens[i];
+
+            // 1. Recursive Scope Resolution
+            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
+            {
+                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, item, null));
+                continue;
+            }
+
+            // 2. Base Entity Metadata (n, img, doc, visuals array)
+            if (item.TryProcessCommonMetadata(tokens, ref i, tokenLower))
+            {
+                continue;
+            }
+
+            // 3. Item-Specific Metadata (tier, sidesc, learn, toggles)
+            if (TryProcessItemMetadata(tokens, ref i, tokenLower, item))
+            {
+                continue;
+            }
+
+            // 4. Complex Data Containers
+            if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken))
+            {
+                continue;
+            }
+
+            // 5. Mechanics & Targeting
+            if (IsMechanicTriggerToken(tokenLower))
+            {
+                ProcessMechanicChain(tokens, ref i, originalToken, isFirstMechanic ? inheritedTargets : null);
+                isFirstMechanic = false;
+            }
+        }
+    }
+
+    private bool TryProcessItemMetadata(List<string> tokens, ref int i, string tokenLower, ItemData item)
+    {
+        switch (tokenLower)
+        {
+            case "tier":
+                if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) item.Tier = t;
+                return true;
+            case "sidesc":
+                if (i + 1 < tokens.Count) item.doc = tokens[++i];
+                return true;
+            case "learn":
+                if (i + 1 < tokens.Count) item.LearnedAbilities.Add(tokens[++i]);
+                return true;
+            case "cleardesc":
+                item.ClearDescription = true;
+                return true;
+            case "clearicon":
+                item.ClearIcon = true;
+                return true;
+        }
+        return false;
+    }
+
     private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken, List<string> inheritedTargets = null)
     {
         ItemMechanic mech = new ItemMechanic();
@@ -683,7 +733,6 @@ public class ItemData : SDData
         AssignDomainPayload(mech);
         Mechanics.Add(mech);
     }
-
     private bool TryProcessGenericContainer(List<string> tokens, ref int i, string tokenLower, string originalToken)
     {
         if (ItemDomainRules.ContainerKeys.Contains(tokenLower) && !ItemDomainRules.MechanicPrefixes.Contains(tokenLower))
@@ -696,14 +745,12 @@ public class ItemData : SDData
         }
         return false;
     }
-
     private bool IsMechanicTriggerToken(string token)
     {
         return ItemDomainRules.MechanicPrefixes.Contains(token) || token == "pertier" || token == "unpack" ||
                ItemDomainRules.ValidTargets.Contains(token) || ItemDomainRules.IsItemIdentifier(token) ||
                ItemDomainRules.IsRepeatPrefix(token, out _);
     }
-
     private void AssignDomainPayload(ItemMechanic mech)
     {
         if (string.IsNullOrEmpty(mech.PayloadString)) return;
@@ -749,29 +796,23 @@ public class ItemData : SDData
         }
     }
 
-
     public override string Export()
     {
         List<string> chainParts = new List<string>();
+
         if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
         if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
-        if (!string.IsNullOrEmpty(DocumentedDescription)) chainParts.Add($"doc.{DocumentedDescription}");
-        if (!string.IsNullOrEmpty(imageOverride) && imageOverride != "None") chainParts.Add($"img.{imageOverride}");
-        if (HsvShift.HasValue) chainParts.Add($"hsv.{HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
-        if (SimpleHue.HasValue) chainParts.Add($"hue.{SimpleHue.Value}");
+        if (!string.IsNullOrEmpty(doc)) chainParts.Add($"doc.{doc}");
 
-        if (this.thue != null && this.thue.colorOffset != 0) chainParts.Add($".{PackTHue(this.thue)}");
+        // --- NEW: Fully Modular Sequenced Visuals Block ---
+        string visualsStr = ItemSyntaxCompiler.BuildVisualsString(this, imageOverride);
+        if (!string.IsNullOrEmpty(visualsStr)) chainParts.Add(visualsStr);
 
-        if (!string.IsNullOrEmpty(PaletteOverride)) chainParts.Add($"p.{PaletteOverride}");
-        if (!string.IsNullOrEmpty(BorderColorCode)) chainParts.Add($"b.{BorderColorCode}");
-        if (!string.IsNullOrEmpty(UiDrawInstructions)) chainParts.Add($"draw.{UiDrawInstructions}");
-        if (!string.IsNullOrEmpty(UiRectInstructions)) chainParts.Add($"rect.{UiRectInstructions}");
         if (ClearDescription) chainParts.Add("cleardesc");
         if (ClearIcon) chainParts.Add("clearicon");
 
         foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({cont.Value})");
 
-        // Run optimization and append the mechanics to chainParts
         OptimizeAndExportMechanics(chainParts);
 
         StringBuilder sb = new StringBuilder(string.Join(".", chainParts));
@@ -779,135 +820,6 @@ public class ItemData : SDData
 
         return sb.ToString();
     }
-
-    // Old Item Export
-    /*
-    private void OptimizeAndExportMechanics(List<string> chainParts)
-    {
-        List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();
-        foreach (var mech in Mechanics)
-        {
-            // Clone to prevent mutating original memory references during export operations
-            ItemMechanic clonedMech = CloneMechanic(mech);
-
-            // Case 1: Direct loose Tog Items
-            if (string.IsNullOrEmpty(clonedMech.Prefix) && ItemDomainRules.TogItems.Contains(clonedMech.PayloadString))
-            {
-                var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == clonedMech.Targets.Count && m.Targets.All(t => clonedMech.Targets.Contains(t)));
-                if (prev != null)
-                {
-                    prev.ChainedKeywords.Add(clonedMech.PayloadString);
-                    continue;
-                }
-            }
-
-            // Case 2: Tog Items wrapped inside of an inherent (i) Item Pack tuple
-            if (clonedMech.Prefix == "i" && clonedMech.PayloadData is ItemData nestedItem)
-            {
-                bool onlyTog = nestedItem.Mechanics.Count > 0 && nestedItem.Mechanics.All(m => string.IsNullOrEmpty(m.Prefix) && ItemDomainRules.TogItems.Contains(m.PayloadString));
-                if (onlyTog)
-                {
-                    bool allMerged = true;
-                    foreach (var innerMech in nestedItem.Mechanics)
-                    {
-                        var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
-                        if (prev != null)
-                        {
-                            prev.ChainedKeywords.Add(innerMech.PayloadString);
-                        }
-                        else
-                        {
-                            allMerged = false;
-                        }
-                    }
-
-                    // Skip appending this '.i' node if we successfully merged all its contents natively
-                    if (allMerged) continue;
-                }
-            }
-
-            optimizedMechanics.Add(clonedMech);
-        }
-
-        // --- EXPORT & CHAINING LOGIC ---
-        if (optimizedMechanics.Count > 0)
-        {
-            StringBuilder mechsSb = new StringBuilder();
-            List<string> lastTargets = null;
-            bool lastPerTier = false;
-            bool lastUnpack = false;
-
-            for (int i = 0; i < optimizedMechanics.Count; i++)
-            {
-                var mech = optimizedMechanics[i];
-                bool targetsMatch = false;
-
-                if (lastTargets != null && mech.Targets.Count == lastTargets.Count)
-                {
-                    targetsMatch = true;
-                    foreach (var t in mech.Targets)
-                    {
-                        if (!lastTargets.Contains(t))
-                        {
-                            targetsMatch = false;
-                            break;
-                        }
-                    }
-                }
-
-                bool safeToChain = targetsMatch;
-                if (safeToChain)
-                {
-                    // Do not falsely propagate scaling rules down the chain 
-                    if (lastPerTier && !mech.PerTier) safeToChain = false;
-                    if (lastUnpack && !mech.Unpack) safeToChain = false;
-                }
-
-                List<string> currentTargets = new List<string>(mech.Targets);
-                bool currentPerTier = mech.PerTier;
-                bool currentUnpack = mech.Unpack;
-
-                string exportedMech = mech.Export();
-
-                if (i == 0)
-                {
-                    // FIRST MECHANIC RULE:
-                    // It is strictly illegal for a naked side declaration (e.g. 'right.sticker') 
-                    // to begin an item sequence. It MUST be preceded by the 'i.' modifier boundary.
-                    if (exportedMech.StartsWith("i."))
-                    {
-                        mechsSb.Append(exportedMech); // Already prefixed natively (e.g., untargeted modifier)
-                    }
-                    else
-                    {
-                        mechsSb.Append("i.").Append(exportedMech); // Enforce strict boundary
-                    }
-                }
-                else
-                {
-                    if (safeToChain)
-                    {
-                        // Inherit targets via '#', clear explicit targets from export to prevent redeclaring side words
-                        mech.Targets.Clear();
-                        mechsSb.Append("#").Append(mech.Export());
-                    }
-                    else
-                    {
-                        // Context shift requires a clean boundary delimiter
-                        mechsSb.Append(".i.").Append(exportedMech);
-                    }
-                }
-
-                lastTargets = currentTargets;
-                lastPerTier = currentPerTier;
-                lastUnpack = currentUnpack;
-            }
-
-            // Append the entire formatted mechanic block to the parent chain parts array
-            chainParts.Add(mechsSb.ToString());
-        }
-    }
-    */
 
     // Current item export
     private void OptimizeAndExportMechanics(List<string> chainParts)
@@ -999,10 +911,6 @@ public class ItemData : SDData
 
                 if (i == 0)
                 {
-                    // FIX: Removed the redundant FIRST MECHANIC RULE enforcing `i.`. 
-                    // Contextual evaluation wrappers (CustomItemContextHelper & ItemSyntaxCompiler) 
-                    // handle this boundary injection natively. Redundantly applying it here 
-                    // causes `i.(i.x)` mutations in parent containers like MonsterData.
                     mechsSb.Append(exportedMech);
                 }
                 else
@@ -1011,7 +919,15 @@ public class ItemData : SDData
                     {
                         // Inherit targets via '#', clear explicit targets from export to prevent redeclaring side words
                         mech.Targets.Clear();
-                        mechsSb.Append("#").Append(mech.Export());
+
+                        // PREVENT silent Prefix drops if the chain inherits an inherently prefixed mechanic (like facade)
+                        string chainedExport = mech.Export();
+                        if (!string.IsNullOrEmpty(mech.Prefix) && !chainedExport.StartsWith(mech.Prefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            chainedExport = $"{mech.Prefix}.{chainedExport}";
+                        }
+
+                        mechsSb.Append("#").Append(chainedExport);
                     }
                     else
                     {
@@ -1029,7 +945,6 @@ public class ItemData : SDData
             chainParts.Add(mechsSb.ToString());
         }
     }
-
     private ItemMechanic CloneMechanic(ItemMechanic original)
     {
         return new ItemMechanic
@@ -1048,7 +963,6 @@ public class ItemData : SDData
             PartIndex = original.PartIndex
         };
     }
-
     public void DebugContentsToConsole(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -1057,7 +971,7 @@ public class ItemData : SDData
         sb.AppendLine($"{indent}Tier: {Tier}");
         string displayValue = !string.IsNullOrEmpty(imageOverride) && imageOverride.Length > 32 ? "<base64 string img>" : imageOverride;
         sb.AppendLine($"{indent}ImageRef: {displayValue}");
-        if (HsvShift.HasValue) sb.AppendLine($"{indent}HsvShift: {HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
+        //if (HsvShift.HasValue) sb.AppendLine($"{indent}HsvShift: {HsvShift.Value.Hue}:{HsvShift.Value.Saturation}:{HsvShift.Value.Value}");
 
         sb.AppendLine($"{indent}\n{indent}Mechanics ({Mechanics.Count}):");
         for (int i = 0; i < Mechanics.Count; i++)
@@ -1110,6 +1024,7 @@ public class ItemData : SDData
     /// delimiter for a new mechanic context, allowing a payload (like a keyword) to 
     /// swallow it will corrupt the parser's state machine and merge distinct mechanics.
     /// </summary>
+    /*
     private string BuildPayloadString(List<string> tokens, ref int i)
     {
         List<string> payloadTokens = new List<string>();
@@ -1128,6 +1043,66 @@ public class ItemData : SDData
 
             // CRITICAL FIX: Add 'i' to the break condition so keywords don't swallow adjacent item chains
             if (payloadTokens.Count > 0 && (majorPrefixes.Contains(peek) || peek == "i"))
+                break;
+
+            payloadTokens.Add(tokens[i]);
+            i++;
+        }
+        i--;
+        return string.Join(".", payloadTokens);
+    }
+    */
+
+    /// <summary>
+    /// Accumulates tokens for a mechanic's payload.
+    /// Aborts cleanly if the Domain Rules engine detects an architectural context shift.
+    /// </summary>
+    /// 
+    /*
+    private string BuildPayloadString(List<string> tokens, ref int i)
+    {
+        List<string> payloadTokens = new List<string>();
+
+        while (i < tokens.Count)
+        {
+            string peek = tokens[i].ToLower();
+
+            // 1. Break on standard trailing mechanic suffixes
+            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
+                break;
+
+            // 2. Break on authoritative domain boundaries 
+            // We require payloadTokens.Count > 0 so we don't accidentally abort if the payload explicitly STARTS with a boundary token.
+            if (payloadTokens.Count > 0 && ItemDomainRules.IsMechanicBoundary(peek))
+                break;
+
+            payloadTokens.Add(tokens[i]);
+            i++;
+        }
+        i--;
+        return string.Join(".", payloadTokens);
+    }
+    */
+
+    /// <summary>
+    /// Accumulates tokens for a mechanic's payload.
+    /// Aborts cleanly if the Domain Rules engine detects an architectural context shift.
+    /// </summary>
+    private string BuildPayloadString(List<string> tokens, ref int i)
+    {
+        List<string> payloadTokens = new List<string>();
+
+        while (i < tokens.Count)
+        {
+            string peek = tokens[i].ToLower();
+
+            // 1. Break on standard trailing mechanic suffixes
+            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
+                break;
+
+            // 2. Break on authoritative domain boundaries 
+            // CRITICAL FIX: Removed the Count > 0 requirement so it doesn't swallow adjacent boundaries like 'img'
+            if (ItemDomainRules.IsMechanicBoundary(peek))
                 break;
 
             payloadTokens.Add(tokens[i]);
