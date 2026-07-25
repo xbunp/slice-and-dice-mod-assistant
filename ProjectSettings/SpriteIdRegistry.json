@@ -286,121 +286,6 @@
             "id": 20
         },
         {
-            "prefix": "Ale",
-            "path": "alewis/Damage Death Mana-gain",
-            "id": 21
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/DamageRangedEliminate",
-            "id": 22
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/DoomAll",
-            "id": 23
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/EatCruel",
-            "id": 24
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/EatCruelExert",
-            "id": 25
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/ManaBig",
-            "id": 26
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/Pea",
-            "id": 27
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/PeaCleave",
-            "id": 28
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/PeaDescend",
-            "id": 29
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/PeaDoubleUse",
-            "id": 30
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/PeaHeavy",
-            "id": 31
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/PeaQuadUse",
-            "id": 32
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/PeaRanged",
-            "id": 33
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/PeaWeaken",
-            "id": 34
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/Spore",
-            "id": 35
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/SporeCantrip",
-            "id": 36
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/SporeDecay",
-            "id": 37
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/StarAll",
-            "id": 38
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/StarBack",
-            "id": 39
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/StarCleave",
-            "id": 40
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/StarFlanking",
-            "id": 41
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/WatermelonCleave",
-            "id": 42
-        },
-        {
-            "prefix": "Ale",
-            "path": "alewis/WatermelonCleaveWeaken",
-            "id": 43
-        },
-        {
             "prefix": "Bal",
             "path": "BallerKiD/4 Kunai side",
             "id": 0
@@ -8491,226 +8376,6 @@
             "id": 48
         },
         {
-            "prefix": "The",
-            "path": "theGreenDigi/AllAlliesPips",
-            "id": 49
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/AllEnemiesPips",
-            "id": 50
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/AllPips",
-            "id": 51
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/BannerBlue",
-            "id": 52
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/BannerGreen",
-            "id": 53
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/BannerGrey",
-            "id": 54
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/BannerOrange",
-            "id": 55
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/BannerRed",
-            "id": 56
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/BannerYellow",
-            "id": 57
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Barrel",
-            "id": 58
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Bats",
-            "id": 59
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Figurine",
-            "id": 60
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/FigurineBlue",
-            "id": 61
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/FigurineGreen",
-            "id": 62
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/FigurineGrey",
-            "id": 63
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/FigurineOrange",
-            "id": 64
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/FigurineRed",
-            "id": 65
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/FigurineYellow",
-            "id": 66
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Gas",
-            "id": 67
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/HealAllBoost",
-            "id": 68
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Hoard",
-            "id": 69
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/HoardAttack",
-            "id": 70
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/HoardShield",
-            "id": 71
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/ManaHammer",
-            "id": 72
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/PoisonApple",
-            "id": 73
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/ProperApple",
-            "id": 74
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/RangedExert",
-            "id": 75
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/RangedHeavy",
-            "id": 76
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/RangedPain",
-            "id": 77
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/RangedVulnerable",
-            "id": 78
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/RerollPain",
-            "id": 79
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/RockRedirect",
-            "id": 80
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/RockShrapnel",
-            "id": 81
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/ShieldQuad",
-            "id": 82
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/ShipBow",
-            "id": 83
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/SkullNBones",
-            "id": 84
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/SlateFist",
-            "id": 85
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/SlimeCleave",
-            "id": 86
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/SlimeSlam",
-            "id": 87
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/TacticalBlank",
-            "id": 88
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Trap",
-            "id": 89
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Tusks",
-            "id": 90
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/Wail",
-            "id": 91
-        },
-        {
-            "prefix": "The",
-            "path": "theGreenDigi/WeakenEye",
-            "id": 92
-        },
-        {
             "prefix": "Yca",
             "path": "Ycarou/Add Inspired",
             "id": 0
@@ -9119,6 +8784,121 @@
             "prefix": "Yca",
             "path": "Ycarou/samurai katana",
             "id": 81
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/Damage Death Mana-gain",
+            "id": 0
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/DamageRangedEliminate",
+            "id": 1
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/DoomAll",
+            "id": 2
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/EatCruel",
+            "id": 3
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/EatCruelExert",
+            "id": 4
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/ManaBig",
+            "id": 5
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/Pea",
+            "id": 6
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/PeaCleave",
+            "id": 7
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/PeaDescend",
+            "id": 8
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/PeaDoubleUse",
+            "id": 9
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/PeaHeavy",
+            "id": 10
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/PeaQuadUse",
+            "id": 11
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/PeaRanged",
+            "id": 12
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/PeaWeaken",
+            "id": 13
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/Spore",
+            "id": 14
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/SporeCantrip",
+            "id": 15
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/SporeDecay",
+            "id": 16
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/StarAll",
+            "id": 17
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/StarBack",
+            "id": 18
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/StarCleave",
+            "id": 19
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/StarFlanking",
+            "id": 20
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/WatermelonCleave",
+            "id": 21
+        },
+        {
+            "prefix": "ale",
+            "path": "alewis/WatermelonCleaveWeaken",
+            "id": 22
         },
         {
             "prefix": "alp",
@@ -15189,6 +14969,226 @@
             "prefix": "sym",
             "path": "symbols/questionmark",
             "id": 38
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/AllAlliesPips",
+            "id": 0
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/AllEnemiesPips",
+            "id": 1
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/AllPips",
+            "id": 2
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/BannerBlue",
+            "id": 3
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/BannerGreen",
+            "id": 4
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/BannerGrey",
+            "id": 5
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/BannerOrange",
+            "id": 6
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/BannerRed",
+            "id": 7
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/BannerYellow",
+            "id": 8
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Barrel",
+            "id": 9
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Bats",
+            "id": 10
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Figurine",
+            "id": 11
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/FigurineBlue",
+            "id": 12
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/FigurineGreen",
+            "id": 13
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/FigurineGrey",
+            "id": 14
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/FigurineOrange",
+            "id": 15
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/FigurineRed",
+            "id": 16
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/FigurineYellow",
+            "id": 17
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Gas",
+            "id": 18
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/HealAllBoost",
+            "id": 19
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Hoard",
+            "id": 20
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/HoardAttack",
+            "id": 21
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/HoardShield",
+            "id": 22
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/ManaHammer",
+            "id": 23
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/PoisonApple",
+            "id": 24
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/ProperApple",
+            "id": 25
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/RangedExert",
+            "id": 26
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/RangedHeavy",
+            "id": 27
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/RangedPain",
+            "id": 28
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/RangedVulnerable",
+            "id": 29
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/RerollPain",
+            "id": 30
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/RockRedirect",
+            "id": 31
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/RockShrapnel",
+            "id": 32
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/ShieldQuad",
+            "id": 33
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/ShipBow",
+            "id": 34
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/SkullNBones",
+            "id": 35
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/SlateFist",
+            "id": 36
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/SlimeCleave",
+            "id": 37
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/SlimeSlam",
+            "id": 38
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/TacticalBlank",
+            "id": 39
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Trap",
+            "id": 40
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Tusks",
+            "id": 41
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/Wail",
+            "id": 42
+        },
+        {
+            "prefix": "the",
+            "path": "theGreenDigi/WeakenEye",
+            "id": 43
         },
         {
             "prefix": "key",
