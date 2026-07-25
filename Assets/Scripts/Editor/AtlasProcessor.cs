@@ -365,7 +365,7 @@ public class AtlasProcessor : AssetPostprocessor
             public List<Entry> entries = new List<Entry>();
         }
 
-        private static readonly Dictionary<string, Dictionary<string, int>> Database = new Dictionary<string, Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, Dictionary<string, int>> Database = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);
 
         public static void Load()
         {
@@ -423,7 +423,7 @@ public class AtlasProcessor : AssetPostprocessor
         public static int GetOrAssignId(string prefix, string normalizedPath, HashSet<int> reservedIds)
         {
             if (!Database.ContainsKey(prefix))
-                Database[prefix] = new Dictionary<string, int>();
+                Database[prefix] = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             if (Database[prefix].TryGetValue(normalizedPath, out int existingId))
             {
