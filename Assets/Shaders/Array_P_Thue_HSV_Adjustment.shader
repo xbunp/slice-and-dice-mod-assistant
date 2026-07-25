@@ -60,9 +60,9 @@ Shader "UI/Custom/Array_P_THUE_HSV_Universal"
 
             int _OpCount;
             float _OpTypes[MAX_OPS]; // 1 = PSwap, 2 = THue, 3 = GlobalHSV
-            float4 _OpColorTargets[MAX_OPS]; // Target color for PSwap/THue
+            float4 _OpColorTargets[MAX_OPS]; // Target color for PSwap/THue (Gamma space)
             float4 _OpColorReplaces[MAX_OPS]; // Replace Color (PSwap) OR HSV values (x=H, y=S, z=V)
-            float4 _OpParams[MAX_OPS]; // x = range, y = rangeMult, z = shift
+            float4 _OpParams[MAX_OPS]; // x = range, y = rangeMult (default 1.46), z = shift
 
             // RGB to HSV Conversion
             float3 rgb2hsv(float3 c) {
@@ -99,12 +99,12 @@ Shader "UI/Custom/Array_P_THUE_HSV_Universal"
                 clip (color.a - 0.001);
                 #endif
 
-                // Convert to Gamma space once before processing
+                // Convert sampled sprite color to Gamma space once before processing operations
                 #ifndef UNITY_COLORSPACE_GAMMA
                     color.rgb = LinearToGammaSpace(color.rgb);
                 #endif
 
-                // Iterate through our arbitrary list of operations
+                // Iterate through our arbitrary list of operations in Gamma space
                 for(int j = 0; j < _OpCount; j++)
                 {
                     int type = (int)_OpTypes[j];
@@ -114,14 +114,9 @@ Shader "UI/Custom/Array_P_THUE_HSV_Universal"
                     {
                         float3 pColor = _OpColorTargets[j].rgb;
                         float3 pReplace = _OpColorReplaces[j].rgb;
-                        
-                        #ifndef UNITY_COLORSPACE_GAMMA
-                            pColor = LinearToGammaSpace(pColor);
-                            pReplace = LinearToGammaSpace(pReplace);
-                        #endif
 
                         float pDist = distance(color.rgb, pColor);
-                        float pThreshold = (_OpParams[j].x / 99.0) * _OpParams[j].y;
+                        float pThreshold = (_OpParams[j].x / 99.0) * _OpParams[j].y; // y = Range Multiplier (1.46)
                         float pMask = smoothstep(pThreshold + 1e-5, 0.0, pDist);
                         color.rgb = lerp(color.rgb, pReplace, pMask);
                     }
@@ -129,17 +124,13 @@ Shader "UI/Custom/Array_P_THUE_HSV_Universal"
                     else if (type == 2) 
                     {
                         float3 tColor = _OpColorTargets[j].rgb;
-                        
-                        #ifndef UNITY_COLORSPACE_GAMMA
-                            tColor = LinearToGammaSpace(tColor);
-                        #endif
 
                         float tDist = distance(color.rgb, tColor);
-                        float tThreshold = (_OpParams[j].x / 99.0) * _OpParams[j].y;
+                        float tThreshold = (_OpParams[j].x / 99.0) * _OpParams[j].y; // y = Range Multiplier (1.46)
                         float thueMask = step(tDist, tThreshold);
 
                         float3 hsv = rgb2hsv(color.rgb);
-                        float thueShiftAmount = (_OpParams[j].z / 99.0) * thueMask;
+                        float thueShiftAmount = (_OpParams[j].z / 99.0) * thueMask; // z = Hue Shift
                         hsv.x = frac(hsv.x + thueShiftAmount + 1.0);
                         color.rgb = hsv2rgb(hsv);
                     }
@@ -147,7 +138,7 @@ Shader "UI/Custom/Array_P_THUE_HSV_Universal"
                     else if (type == 3) 
                     {
                         float3 hsv = rgb2hsv(color.rgb);
-                        // _OpColorReplaces is holding (Hue, Saturation, Value, 0)
+                        // _OpColorReplaces holds (Hue, Saturation, Value, 0)
                         hsv.x = frac(hsv.x + (_OpColorReplaces[j].x / 100.0) + 1.0);
                         hsv.y = clamp(hsv.y + (_OpColorReplaces[j].y / 100.0), 0.0, 1.0);
                         hsv.z = clamp(hsv.z + (_OpColorReplaces[j].z / 100.0), 0.0, 1.0);
@@ -155,7 +146,7 @@ Shader "UI/Custom/Array_P_THUE_HSV_Universal"
                     }
                 }
 
-                // Return to Native Pipeline Space
+                // Return color to Native Pipeline Space (Linear if project is set to Linear)
                 #ifndef UNITY_COLORSPACE_GAMMA
                     color.rgb = GammaToLinearSpace(color.rgb);
                 #endif
