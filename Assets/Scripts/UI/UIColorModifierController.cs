@@ -54,7 +54,7 @@ public class UIColorModifierController : MonoBehaviour
     public void ApplyToMaterial()
     {
         if (_graphic == null) _graphic = GetComponent<Graphic>();
-        if (_graphic.material == null || _graphic.material.shader.name != "UI/Custom/FlexibleColorModifier") return;
+        if (_graphic.material == null || _graphic.material.shader.name != "UI/Custom/Array_P_THUE_HSV_Universal") return;
 
         // Instantiate material to avoid altering shared materials across the whole game
         if (_materialInstance == null || _graphic.material != _materialInstance)

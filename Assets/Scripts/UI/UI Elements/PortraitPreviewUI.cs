@@ -31,6 +31,12 @@ public class PortraitPreviewUI : MonoBehaviour
     public SlotUI top;
     public SlotUI bottom;
 
+    // Private Stack
+    private float[] _opTypes = new float[16];
+    private Vector4[] _opColorTargets = new Vector4[16];
+    private Vector4[] _opColorReplaces = new Vector4[16];
+    private Vector4[] _opParams = new Vector4[16];
+
     public event Action<int> OnFaceSelected;
     private Dictionary<string, List<Sprite>> _spriteGroups;
     [SerializeField] private Sprite[] pipsprites;
@@ -270,6 +276,90 @@ public class PortraitPreviewUI : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Safely updates the active state of character information components if they are assigned.
+    /// </summary>
+    public void SetCharacterInfoActive(bool active)
+    {
+        if (myName != null && myName.gameObject != null) myName.gameObject.SetActive(active);
+        if (hp != null && hp.gameObject != null) hp.gameObject.SetActive(active);
+        if (tier != null && tier.gameObject != null) tier.gameObject.SetActive(active);
+        if (portrait != null && portrait.gameObject != null) portrait.gameObject.SetActive(active);
+        if (backdrop != null && backdrop.gameObject != null) backdrop.gameObject.SetActive(active);
+    }
+    // =====================================================================
+    // DYNAMIC ARRAY-BASED VISUAL MODIFIERS
+    // =====================================================================
+    public void SetPortraitVisualModifiers(List<VisualModifier> visuals)
+    {
+        if (portrait == null || portrait.material == null) return;
+
+        int count = 0;
+
+        if (visuals != null)
+        {
+            foreach (var v in visuals)
+            {
+                if (count >= 16) break; // Shader max ops limit
+
+                if (v.Type == VisualType.P && v.p != null)
+                {
+                    _opTypes[count] = 1; // PSwap
+                    _opColorTargets[count] = v.p.colorStart;
+                    _opColorReplaces[count] = v.p.colorDestination;
+                    _opParams[count] = new Vector4(v.p.colorRange, 1.46f, 0, 0); // 1.46 is standard range multiplier
+                    count++;
+                }
+                else if (v.Type == VisualType.THue && v.thue != null)
+                {
+                    _opTypes[count] = 2; // THue
+                    _opColorTargets[count] = v.thue.colorHex;
+                    _opColorReplaces[count] = Vector4.zero;
+                    _opParams[count] = new Vector4(v.thue.colorRange, 1.46f, v.thue.colorOffset, 0);
+                    count++;
+                }
+                else if (v.Type == VisualType.HSV)
+                {
+                    _opTypes[count] = 3; // Global HSV
+                    _opColorTargets[count] = Vector4.zero;
+                    _opColorReplaces[count] = new Vector4(v.h, v.s, v.v, 0);
+                    _opParams[count] = Vector4.zero;
+                    count++;
+                }
+                else if (v.Type == VisualType.Hue)
+                {
+                    _opTypes[count] = 3; // Global HSV (Hue only)
+                    _opColorTargets[count] = Vector4.zero;
+                    _opColorReplaces[count] = new Vector4(v.hue, 0, 0, 0);
+                    _opParams[count] = Vector4.zero;
+                    count++;
+                }
+            }
+        }
+
+        // Fill remaining empty slots with 0 to prevent data bleed from previous changes
+        for (int i = count; i < 16; i++)
+        {
+            _opTypes[i] = 0;
+            _opColorTargets[i] = Vector4.zero;
+            _opColorReplaces[i] = Vector4.zero;
+            _opParams[i] = Vector4.zero;
+        }
+
+        // Push arrays directly to the shader
+        portrait.material.SetInt("_OpCount", count);
+        portrait.material.SetFloatArray("_OpTypes", _opTypes);
+        portrait.material.SetVectorArray("_OpColorTargets", _opColorTargets);
+        portrait.material.SetVectorArray("_OpColorReplaces", _opColorReplaces);
+        portrait.material.SetVectorArray("_OpParams", _opParams);
+    }
+
+}
+
+/*
+ * 
+ * 
+
     // Add this method to PortraitPreviewUI
     public void SetPortraitPHue(Phue phue)
     {
@@ -307,16 +397,4 @@ public class PortraitPreviewUI : MonoBehaviour
             }
         }
     }
-
-    /// <summary>
-    /// Safely updates the active state of character information components if they are assigned.
-    /// </summary>
-    public void SetCharacterInfoActive(bool active)
-    {
-        if (myName != null && myName.gameObject != null) myName.gameObject.SetActive(active);
-        if (hp != null && hp.gameObject != null) hp.gameObject.SetActive(active);
-        if (tier != null && tier.gameObject != null) tier.gameObject.SetActive(active);
-        if (portrait != null && portrait.gameObject != null) portrait.gameObject.SetActive(active);
-        if (backdrop != null && backdrop.gameObject != null) backdrop.gameObject.SetActive(active);
-    }
-}
+*/

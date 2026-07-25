@@ -3260,7 +3260,7 @@ public static class BaseAbilityDatabase
         new BaseAbility("Gaze", AbilityType.Spell, "1 mana", "Gain 1 reroll, future cooldown"),
         new BaseAbility("Bandage", AbilityType.Spell, "2 mana", "Heal and shield 1, singleCast cleave"),
         new BaseAbility("Poke", AbilityType.Spell, "1 mana", "1 damage, cooldown"),
-        new BaseAbility("Scroch", AbilityType.Spell, "2 mana", "1 damage, cleave singleCast"),
+        new BaseAbility("Scorch", AbilityType.Spell, "2 mana", "1 damage, cleave singleCast"),
         new BaseAbility("Slice", AbilityType.Spell, "3 mana", "1 damage to all enemies"),
         new BaseAbility("Gather", AbilityType.Spell, "2 mana", "Replace blank sides with \"2 mana\" this turn"),
         new BaseAbility("Cut", AbilityType.Spell, "1 mana", "3 damage to an ally, then 2 damage to the top-most enemy, cooldown"),
