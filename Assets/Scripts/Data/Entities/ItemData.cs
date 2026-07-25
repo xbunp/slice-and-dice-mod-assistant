@@ -136,20 +136,18 @@ public static class ItemDomainRules
     {
         if (string.IsNullOrEmpty(token)) return false;
         string clean = token.ToLower();
-
         // 1. Hard Context Shifts (Indicates the start of an entirely new bounded payload context)
         if (clean == "hat" || clean == "sticker" || clean == "enchant" || clean == "cast" ||
-            clean == "onhitdata" || clean == "triggerhpdata" || clean == "i")
+            clean == "onhitdata" || clean == "triggerhpdata" || clean == "i" ||
+            clean == "facade" || clean == "sidesc")
         {
             return true;
         }
-
         // 2. Root Metadata Intercept (Prevents internal mechanics from swallowing structural root properties)
         if (RootMetadataProperties.Contains(clean))
         {
             return true;
         }
-
         return false;
     }
 

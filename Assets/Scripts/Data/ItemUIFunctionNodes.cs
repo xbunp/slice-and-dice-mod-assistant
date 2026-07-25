@@ -258,7 +258,6 @@ public class HatNodeDef : AuthoringNodeDef
     public static string GetHatDiceString(HeroData heroData)
     {
         StringBuilder sb = new StringBuilder();
-
         string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Fey" : heroData.baseReplica;
         sb.Append(baseName);
 
@@ -271,7 +270,6 @@ public class HatNodeDef : AuthoringNodeDef
                 lastActiveIndex = i;
             }
         }
-
         if (lastActiveIndex != -1)
         {
             sb.Append(".sd.");
@@ -287,21 +285,46 @@ public class HatNodeDef : AuthoringNodeDef
                     if (side.pips == 0) sb.Append(side.effectID);
                     else sb.Append($"{side.effectID}-{side.pips}");
                 }
-
                 if (i < lastActiveIndex) sb.Append(":");
             }
         }
 
-        // 2. Delegate ALL face modifiers (keywords, facades, stickers, casts, enchants, eggs) 
-        // to EntityData's single authoritative serializer
-
-        //TODO THIS FEELS LIKE CODESTINK, THIS IS A SHITTY HACK, WHY IS ENTITYDATA DOING THE SRP OF ITEM DATA?
+        // 2. Output naturally tracked modifiers (keywords, traits)
         string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
         if (!string.IsNullOrEmpty(faceModifiers))
         {
             sb.Append(faceModifiers);
         }
 
+        // 3. NATIVE STICKER/PAYLOAD APPENDING: Automatically output sticker/cast/enchant/egg modifiers per side
+        for (int i = 0; i < 6; i++)
+        {
+            DiceSideData side = heroData.diceSides[i];
+            if (side != null &&
+               (side.faceType == DiceSideData.DiceFaceType.Sticker ||
+                side.faceType == DiceSideData.DiceFaceType.Cast ||
+                side.faceType == DiceSideData.DiceFaceType.Enchant ||
+                side.faceType == DiceSideData.DiceFaceType.Egg)
+                && !string.IsNullOrWhiteSpace(side.payload))
+            {
+                string cleanPayload = side.payload.Trim();
+                while (cleanPayload.StartsWith("(") && cleanPayload.EndsWith(")"))
+                {
+                    cleanPayload = cleanPayload.Substring(1, cleanPayload.Length - 2).Trim();
+                }
+                string prefixTag = "sticker";
+                if (side.faceType == DiceSideData.DiceFaceType.Cast) prefixTag = "cast";
+                else if (side.faceType == DiceSideData.DiceFaceType.Enchant) prefixTag = "enchant";
+                else if (side.faceType == DiceSideData.DiceFaceType.Egg) prefixTag = "egg";
+
+                if (cleanPayload.Contains(".") || cleanPayload.Contains("#") || cleanPayload.Contains(":"))
+                {
+                    cleanPayload = $"({cleanPayload})";
+                }
+                string targetName = DiceTargetHelper.FaceNames[i];
+                sb.Append($".i.{targetName}.{prefixTag}.{cleanPayload}");
+            }
+        }
         return sb.ToString();
     }
 

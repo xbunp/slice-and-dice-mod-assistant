@@ -272,33 +272,72 @@ public static class ItemSyntaxCompiler
     /// Do not use string subtraction/replacement (e.g., fullMods.Replace(innerMods, "")) because 
     /// overlapping multi-face keywords or delimiters will mismatch, causing massive compilation corruption.
     /// </summary>
+    /// <summary>
+    /// Compiles a Hat card. 
+    /// NOTE: Facades must be extracted and appended manually by querying the HeroData sides directly.
+    /// Do not use string subtraction/replacement (e.g., fullMods.Replace(innerMods, "")) because 
+    /// overlapping multi-face keywords or delimiters will mismatch, causing massive compilation corruption.
+    /// </summary>
     private static string BuildHat(EntityCard card, string childrenCompiled)
     {
         if (!(card.MechanicData.PayloadData is HeroData heroData)) return "";
-
         var validTargets = card.MechanicData.Targets?.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
         string targets = (validTargets != null && validTargets.Count > 0) ? string.Join(".", validTargets) : "left";
         string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
         string hatDice = HatNodeDef.GetHatDiceString(heroData);
 
-        // 1. Move Facades INSIDE the Hat's payload
-        List<string> fMods = new List<string>();
+        // 1. Calculate the target mask of the Hat itself
+        int hatMask = 63; // Defaults to 'all'
+        if (validTargets != null && validTargets.Count > 0 && !validTargets.Contains("all", StringComparer.OrdinalIgnoreCase))
+        {
+            hatMask = 0;
+            foreach (var t in validTargets)
+            {
+                var alias = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.name != null && a.name.Equals(t, StringComparison.OrdinalIgnoreCase));
+                if (alias.name != null) hatMask |= alias.mask;
+            }
+        }
+
+        // 2. Identify which faces have Facades and build their combined mask
+        int facadeMask = 0;
+        string sharedFacade = null;
+        bool multipleDistinctFacades = false;
         for (int i = 0; i < 6; i++)
         {
             string fac = GetFacadeOutput(heroData.diceSides[i]);
             if (!string.IsNullOrEmpty(fac))
             {
-                fMods.Add($"{DiceTargetHelper.FaceNames[i]}.facade.{fac}");
+                facadeMask |= (1 << i);
+                if (sharedFacade == null) sharedFacade = fac;
+                else if (sharedFacade != fac) multipleDistinctFacades = true;
             }
         }
 
-        if (fMods.Count > 0)
+        // 3. Intelligently format the Facade string based on mask alignment
+        string facadeMods = "";
+        if (facadeMask != 0)
         {
-            string facadeStr = string.Join(".i.", fMods);
-
-            // Append with an inherent boundary (.i.) inside the hat's parentheses
-            if (string.IsNullOrEmpty(hatDice)) hatDice = facadeStr;
-            else hatDice += $".i.{facadeStr}";
+            if (facadeMask == hatMask && !multipleDistinctFacades)
+            {
+                facadeMods = $"#facade.{sharedFacade}";
+            }
+            else if (facadeMask == 63 && !multipleDistinctFacades)
+            {
+                facadeMods = $"#facade.{sharedFacade}";
+            }
+            else
+            {
+                List<string> fMods = new List<string>();
+                for (int i = 0; i < 6; i++)
+                {
+                    string fac = GetFacadeOutput(heroData.diceSides[i]);
+                    if (!string.IsNullOrEmpty(fac))
+                    {
+                        fMods.Add($"{DiceTargetHelper.FaceNames[i]}.facade.{fac}");
+                    }
+                }
+                facadeMods = "#" + string.Join("#", fMods);
+            }
         }
 
         string hatCore = "";
@@ -307,7 +346,6 @@ public static class ItemSyntaxCompiler
             string inner = childrenCompiled.Trim();
             if (inner.StartsWith(".")) inner = inner.Substring(1);
 
-            // Contextual merge optimization for nested items
             string rawInner = inner;
             if (rawInner.StartsWith("(") && rawInner.EndsWith(")"))
             {
@@ -325,7 +363,6 @@ public static class ItemSyntaxCompiler
             }
 
             bool mergedSuccessfully = false;
-
             if (!string.IsNullOrEmpty(firstTarget))
             {
                 string expectedStickerPrefix = $".i.{firstTarget}.sticker.";
@@ -341,13 +378,11 @@ public static class ItemSyntaxCompiler
                             innerChains[c] = innerChains[c].Substring(firstTarget.Length + 1);
                         }
                     }
-
                     string optimizedInner = string.Join("#", innerChains);
                     hatCore = $"{prefix}hat.({hatDice}#{optimizedInner})";
                     mergedSuccessfully = true;
                 }
             }
-
             if (!mergedSuccessfully)
             {
                 hatCore = $"{prefix}hat.({hatDice}.i.{inner})";
@@ -358,13 +393,12 @@ public static class ItemSyntaxCompiler
             hatCore = $"{prefix}hat.({hatDice})";
         }
 
-        // 2. Safely scope targeted declarations in parentheses to prevent `#` target-bleed
         if (!string.IsNullOrEmpty(prefix))
         {
             hatCore = $"({hatCore})";
         }
 
-        return hatCore;
+        return $"{hatCore}{facadeMods}";
     }
 
 

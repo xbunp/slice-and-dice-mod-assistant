@@ -845,7 +845,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 items.Add(item.entityName);
             }
-
             if (item.LearnedAbilities != null && item.LearnedAbilities.Count > 0)
             {
                 foreach (var ab in item.LearnedAbilities)
@@ -854,20 +853,17 @@ public abstract class EntityData : SDData, IPayloadContainer
                         baseAbilityData.Add(ab);
                 }
             }
-
             return;
         }
 
         foreach (var mech in item.Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
-
             if (mech.PayloadData is ModifierData)
             {
                 canMapNatively = false;
                 break;
             }
-
             // Check if this 'hat' is secretly a structured Sticker Target rule OR an Egg rule
             if (pfx == "hat")
             {
@@ -890,19 +886,40 @@ public abstract class EntityData : SDData, IPayloadContainer
                     continue; // Is natively mappable!
                 }
             }
-
             if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "")
             {
                 canMapNatively = false;
                 break;
             }
-
             if ((pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "") && mech.Targets.Count == 0)
             {
                 if (pfx == "" && ItemDomainRules.TogItems.Contains(mech.PayloadString)) continue;
                 canMapNatively = false;
                 break;
             }
+        }
+
+        // Safely transfer Entity metadata that was absorbed by the Item block 
+        // We wipe them from the item instance so they don't double-export as .i.(n.Item.img.Apple)
+        if (!string.IsNullOrEmpty(item.imageOverride) && !item.imageOverride.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            this.imageOverride = item.imageOverride;
+            item.imageOverride = null;
+        }
+        if (item.visuals != null && item.visuals.Count > 0)
+        {
+            this.visuals.AddRange(item.visuals);
+            item.visuals.Clear();
+        }
+        if (!string.IsNullOrEmpty(item.doc))
+        {
+            this.doc = item.doc;
+            item.doc = null;
+        }
+        if (item.Tier.HasValue && this is HeroData heroData)
+        {
+            heroData.tier = item.Tier.Value;
+            item.Tier = null;
         }
 
         if (!canMapNatively)
@@ -927,7 +944,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         foreach (var mech in item.Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
-
             if (pfx == "t")
             {
                 if (mech.PayloadString != null && mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
@@ -959,14 +975,12 @@ public abstract class EntityData : SDData, IPayloadContainer
                     if (mech.Targets != null && mech.Targets.Count > 0)
                     {
                         List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
-
                         if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) &&
                             mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
                             mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
                         {
                             targetFaces.Remove(1);
                         }
-
                         ApplyMechanicToDiceSides(targetFaces, innerSticker, parsedTarget);
                     }
                 }
@@ -975,23 +989,19 @@ public abstract class EntityData : SDData, IPayloadContainer
                     if (mech.Targets != null && mech.Targets.Count > 0)
                     {
                         List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
-
                         if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) &&
                             mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
                             mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
                         {
                             targetFaces.Remove(1);
                         }
-
                         string innerPayload = mech.PayloadString.Substring(4).Trim();
                         innerPayload = StaticBranchTracing.StripOuterParens(innerPayload);
-
                         foreach (int faceIdx in targetFaces)
                         {
                             if (faceIdx < 0 || faceIdx >= 6) continue;
                             if (diceSides == null) InitializeDiceFaces();
                             if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
-
                             diceSides[faceIdx].faceType = DiceSideData.DiceFaceType.Egg;
                             diceSides[faceIdx].payload = innerPayload;
                         }
@@ -1003,14 +1013,12 @@ public abstract class EntityData : SDData, IPayloadContainer
                 if (mech.Targets != null && mech.Targets.Count > 0)
                 {
                     List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
-
                     if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) &&
                         mech.Targets.Contains("left", StringComparer.OrdinalIgnoreCase) &&
                         mech.Targets.Contains("mid", StringComparer.OrdinalIgnoreCase))
                     {
                         targetFaces.Remove(1);
                     }
-
                     string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
                     if (keyword == "blindfold")
                     {
@@ -1029,7 +1037,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                         }
                         if (appliedToEgg) continue;
                     }
-
                     ApplyMechanicToDiceSides(targetFaces, mech);
                 }
             }
