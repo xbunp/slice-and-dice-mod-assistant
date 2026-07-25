@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: UI_Custom_HSV_Adjustment
-  m_Shader: {fileID: 4800000, guid: f8fdb879c4b9ad143b6094bba81cb05c, type: 3}
+  m_Shader: {fileID: 4800000, guid: e7aea55de79c68b45b540aa264897494, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

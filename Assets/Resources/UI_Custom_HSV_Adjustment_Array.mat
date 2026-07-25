@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: UI_Custom_HSV_Adjustment_HERO
-  m_Shader: {fileID: 4800000, guid: f8fdb879c4b9ad143b6094bba81cb05c, type: 3}
+  m_Name: UI_Custom_HSV_Adjustment_Array
+  m_Shader: {fileID: 4800000, guid: 024f7d9d39ddd344b8315b6b16f9b5f4, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
