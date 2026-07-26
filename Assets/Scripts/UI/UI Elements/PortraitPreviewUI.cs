@@ -169,12 +169,12 @@ public class PortraitPreviewUI : MonoBehaviour
 
     public void SetSlotIcon(int index, string facadeID, int effectID, string facadeColor, int pips, string basePrefix = null)
     {
-        Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Entered for slot {index}. params -> facadeID: '{facadeID}' | effectID: {effectID} | basePrefix: '{basePrefix}'");
+        //Debug.Log($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Entered for slot {index}. params -> facadeID: '{facadeID}' | effectID: {effectID} | basePrefix: '{basePrefix}'");
 
         SlotUI slot = GetSlotByIndex(index);
         if (slot.background == null)
         {
-            Debug.LogError($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Slot background Image component is NULL at index {index}!");
+            //Debug.LogError($"[DEBUG] [PortraitPreviewUI.SetSlotIcon] Slot background Image component is NULL at index {index}!");
             return;
         }
 

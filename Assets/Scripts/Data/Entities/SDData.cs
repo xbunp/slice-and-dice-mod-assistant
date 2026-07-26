@@ -355,7 +355,7 @@ public abstract class SDData
                     if (vis.thue != null && (vis.thue.colorRange != 0 || vis.thue.colorOffset != 0))
                     {
                         string packed = PackTHue(vis.thue);
-                        Debug.Log($"[THue Debug] AppendColorModifier called. PackTHue returned: '{packed}'");
+                        //Debug.Log($"[THue Debug] AppendColorModifier called. PackTHue returned: '{packed}'");
                         sb.Append($".{packed}");
                     }
                     break;
@@ -503,7 +503,7 @@ public abstract class SDData
         if (string.IsNullOrWhiteSpace(thue)) return null;
 
         string payload = thue.Trim();
-        Debug.Log($"[THue Debug] UnpackTHue received raw payload: '{payload}'");
+        //Debug.Log($"[THue Debug] UnpackTHue received raw payload: '{payload}'");
 
         if (payload.StartsWith("thue.", System.StringComparison.OrdinalIgnoreCase))
             payload = payload.Substring(5);
@@ -511,7 +511,7 @@ public abstract class SDData
         string[] parts = payload.Split(':');
         if (parts.Length < 3)
         {
-            Debug.LogError($"[THue FATAL] UnpackTHue failed to split 3 parts! It only found {parts.Length} parts. Payload was: '{payload}'");
+            //Debug.LogError($"[THue FATAL] UnpackTHue failed to split 3 parts! It only found {parts.Length} parts. Payload was: '{payload}'");
             return null;
         }
 
