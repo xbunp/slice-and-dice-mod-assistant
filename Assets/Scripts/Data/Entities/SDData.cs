@@ -216,7 +216,6 @@ public abstract class SDData
             new VisualModifier { Type = VisualType.HSV }
         };
     }
-
     #endregion
 
     [Header("Deep Payloads")]
@@ -230,46 +229,62 @@ public abstract class SDData
     public List<MonsterData> customMonsters =>
         customPayloads?.Where(p => p.Type == PayloadType.Monster).Select(p => p.Data as MonsterData).ToList() ?? new List<MonsterData>();
 
-    public virtual string Export()
-    {
-        return $"n.{entityName}.img.{imageOverride}";
-    }
-
     public virtual void Parse(string data)
     {
         _hasClearedVisualsForParse = false;
         if (string.IsNullOrWhiteSpace(data)) return;
-
         visuals.Clear();
-
         string[] tokens = data.Split('.');
         for (int i = 0; i < tokens.Length - 1; i++)
         {
             string token = tokens[i].ToLower();
-            if (token == "n")
-            {
-                entityName = tokens[++i];
-            }
-            else if (token == "img")
-            {
-                imageOverride = tokens[++i];
-            }
+            if (token == "n") entityName = tokens[++i];
+            else if (token == "img") imageOverride = tokens[++i];
         }
     }
-
     protected void ProcessRecursiveParentheses(string originalToken, Action<List<string>> processingDelegate)
     {
         string inner = originalToken.Substring(1, originalToken.Length - 2);
         List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
         processingDelegate(innerTokens);
     }
-
-    protected bool TryProcessCommonMetadata(List<string> tokens, ref int i, string tokenLower)
+    protected bool TryParseSpecialOrNormalImage(TokenStream stream, out string resultImageName)
     {
-        if (i + 1 >= tokens.Count) return false;
-        string nextVal = tokens[i + 1];
+        resultImageName = null;
+        if (stream.IsEOF) return false;
 
-        // The first metadata token parsed in ANY derived class will wipe pre-existing defaults
+        string firstToken = stream.Consume();
+        if (!stream.IsEOF)
+        {
+            string combinedDot = $"{firstToken}.{stream.Peek()}";
+            foreach (var kvp in NameFixes.SpecialNameOverrides)
+            {
+                if (string.Equals(kvp.Value, combinedDot, StringComparison.OrdinalIgnoreCase))
+                {
+                    resultImageName = kvp.Key;
+                    stream.Consume(); // Consume the second part safely
+                    return true;
+                }
+            }
+        }
+
+        foreach (var kvp in NameFixes.SpecialNameOverrides)
+        {
+            if (string.Equals(kvp.Value, firstToken, StringComparison.OrdinalIgnoreCase))
+            {
+                resultImageName = kvp.Key;
+                return true;
+            }
+        }
+
+        resultImageName = firstToken;
+        return true;
+    }
+    protected bool TryProcessCommonMetadata(TokenStream stream)
+    {
+        if (stream.IsEOF) return false;
+        string tokenLower = stream.Peek().ToLower();
+
         if (!_hasClearedVisualsForParse)
         {
             visuals.Clear();
@@ -278,69 +293,80 @@ public abstract class SDData
 
         switch (tokenLower)
         {
-            case "n": entityName = nextVal; break;
+            case "n":
+                stream.Consume();
+                if (!stream.IsEOF) entityName = stream.Consume();
+                return true;
             case "img":
-                if (TryParseSpecialOrNormalImage(tokens, ref i, out string parsedImg))
+                stream.Consume(); // Consume 'img'
+                if (TryParseSpecialOrNormalImage(stream, out string parsedImg)) imageOverride = parsedImg;
+                return true;
+            case "doc":
+                stream.Consume();
+                if (!stream.IsEOF) doc = stream.Consume();
+                return true;
+            case "hsv":
+                stream.Consume();
+                if (!stream.IsEOF)
                 {
-                    imageOverride = parsedImg;
+                    string[] hsvParts = stream.Consume().Split(':');
+                    if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out int h) && int.TryParse(hsvParts[1], out int s) && int.TryParse(hsvParts[2], out int v))
+                        visuals.Add(new VisualModifier { Type = VisualType.HSV, h = h, s = s, v = v });
                 }
                 return true;
-            case "doc": doc = nextVal; break;
-            case "hsv":
-                string[] hsvParts = nextVal.Split(':');
-                if (hsvParts.Length == 3 && int.TryParse(hsvParts[0], out int hVal) && int.TryParse(hsvParts[1], out int sVal) && int.TryParse(hsvParts[2], out int vVal))
-                {
-                    visuals.Add(new VisualModifier { Type = VisualType.HSV, h = hVal, s = sVal, v = vVal });
-                }
-                break;
             case "hue":
-                if (int.TryParse(nextVal, out int hueVal))
-                {
+                stream.Consume();
+                if (!stream.IsEOF && int.TryParse(stream.Consume(), out int hueVal))
                     visuals.Add(new VisualModifier { Type = VisualType.Hue, hue = hueVal });
-                }
-                break;
+                return true;
             case "thue":
-                {
-                    visuals.Add(new VisualModifier { Type = VisualType.THue, thue = UnpackTHue(nextVal) });
-                }
-                break;
+                stream.Consume();
+                if (!stream.IsEOF) visuals.Add(new VisualModifier { Type = VisualType.THue, thue = UnpackTHue(stream.Consume()) });
+                return true;
             case "p":
+                stream.Consume();
+                if (!stream.IsEOF)
                 {
-                    visuals.Add(new VisualModifier { Type = VisualType.P, p = UnpackP(nextVal), RawValue = nextVal });
+                    string pVal = stream.Consume();
+                    visuals.Add(new VisualModifier { Type = VisualType.P, p = UnpackP(pVal), RawValue = pVal });
                 }
-                break;
+                return true;
             case "b":
-                {
-                    visuals.Add(new VisualModifier { Type = VisualType.B, RawValue = nextVal });
-                }
-                break;
+                stream.Consume();
+                if (!stream.IsEOF) visuals.Add(new VisualModifier { Type = VisualType.B, RawValue = stream.Consume() });
+                return true;
             case "draw":
+                stream.Consume();
+                if (!stream.IsEOF)
                 {
+                    string nextVal = stream.Consume();
                     string spriteRef = nextVal;
                     int x = 0, y = 0;
-
-                    if (!string.IsNullOrEmpty(nextVal) && nextVal.Contains(":"))
+                    if (nextVal.Contains(":"))
                     {
                         string[] parts = nextVal.Split(':');
                         spriteRef = parts[0];
                         if (parts.Length > 1 && int.TryParse(parts[1], out int px)) x = px;
                         if (parts.Length > 2 && int.TryParse(parts[2], out int py)) y = py;
                     }
-
                     visuals.Add(new VisualModifier { Type = VisualType.Draw, RawValue = spriteRef, x = x, y = y });
                 }
-                break;
+                return true;
             case "rect":
+                stream.Consume();
+                if (!stream.IsEOF)
                 {
-                    visuals.Add(new VisualModifier { Type = VisualType.Rect, RawValue = nextVal });
+                    string peek = stream.Peek().ToLower();
+                    if (peek != "tier" && peek != "doc" && peek != "n" && peek != "p" && peek != "img" && peek != "b")
+                        visuals.Add(new VisualModifier { Type = VisualType.Rect, RawValue = stream.Consume() });
+                    else
+                        visuals.Add(new VisualModifier { Type = VisualType.Rect, RawValue = "" });
                 }
-                break;
-            default: return false;
+                else visuals.Add(new VisualModifier { Type = VisualType.Rect, RawValue = "" });
+                return true;
         }
-        i++; // Consume the value token
-        return true;
+        return false;
     }
-
     protected void AppendColorModifier(StringBuilder sb)
     {
         foreach (var vis in visuals)
@@ -348,43 +374,40 @@ public abstract class SDData
             switch (vis.Type)
             {
                 case VisualType.P:
-                    if (vis.p != null && vis.p.colorRange != 0)
-                        sb.Append($".{PackP(vis.p)}");
+                    if (vis.p != null && vis.p.colorRange != 0) sb.Append($".{PackP(vis.p)}");
                     break;
                 case VisualType.THue:
-                    if (vis.thue != null && (vis.thue.colorRange != 0 || vis.thue.colorOffset != 0))
-                    {
-                        string packed = PackTHue(vis.thue);
-                        //Debug.Log($"[THue Debug] AppendColorModifier called. PackTHue returned: '{packed}'");
-                        sb.Append($".{packed}");
-                    }
+                    if (vis.thue != null && (vis.thue.colorRange != 0 || vis.thue.colorOffset != 0)) sb.Append($".{PackTHue(vis.thue)}");
                     break;
                 case VisualType.HSV:
-                    if (vis.h != 0 || vis.s != 0 || vis.v != 0)
-                        sb.Append($".hsv.{vis.h}:{vis.s}:{vis.v}");
+                    if (vis.h != 0 || vis.s != 0 || vis.v != 0) sb.Append($".hsv.{vis.h}:{vis.s}:{vis.v}");
                     break;
                 case VisualType.Hue:
-                    if (vis.hue != 0)
-                        sb.Append($".hue.{vis.hue}");
+                    if (vis.hue != 0) sb.Append($".hue.{vis.hue}");
                     break;
                 case VisualType.B:
-                    if (!string.IsNullOrWhiteSpace(vis.RawValue))
-                        sb.Append($".b.{vis.RawValue}");
+                    if (!string.IsNullOrWhiteSpace(vis.RawValue)) sb.Append($".b.{vis.RawValue}");
                     break;
                 case VisualType.Draw:
                     if (!string.IsNullOrWhiteSpace(vis.RawValue))
-                        sb.Append($".draw.{vis.RawValue}");
+                    {
+                        if (vis.x != 0 || vis.y != 0) sb.Append($".draw.{vis.RawValue}:{vis.x}:{vis.y}");
+                        else sb.Append($".draw.{vis.RawValue}");
+                    }
                     break;
                 case VisualType.Rect:
-                    if (!string.IsNullOrWhiteSpace(vis.RawValue))
-                        sb.Append($".rect.{vis.RawValue}");
+                    if (!string.IsNullOrWhiteSpace(vis.RawValue)) sb.Append($".rect.{vis.RawValue}");
                     break;
             }
         }
     }
 
-    protected static string FormatName(string name) => name?.Trim() ?? "";
+    public virtual string Export()
+    {
+        return $"n.{entityName}.img.{imageOverride}";
+    }
 
+    protected static string FormatName(string name) => name?.Trim() ?? "";
     protected static string PackP(Phue p)
     {
         if (p == null) return string.Empty;
@@ -394,7 +417,6 @@ public abstract class SDData
         string rangeStr = p.colorRange.ToString("D2");
         return $"p.{hexStart}:{hexDest}:{rangeStr}";
     }
-
     protected static Phue UnpackP(string p)
     {
         if (string.IsNullOrWhiteSpace(p)) return null;
@@ -413,7 +435,6 @@ public abstract class SDData
 
         return result;
     }
-
     protected static Color ParseColor(string hexStr)
     {
         hexStr = hexStr.Trim();
@@ -423,7 +444,6 @@ public abstract class SDData
             return parsedColor;
         return UnityEngine.Color.white;
     }
-
     protected static string ColorToHex(Color colorHex)
     {
         int r = UnityEngine.Mathf.RoundToInt(colorHex.r * 255f);
@@ -435,7 +455,6 @@ public abstract class SDData
         else
             return UnityEngine.ColorUtility.ToHtmlStringRGB(colorHex).ToLower();
     }
-
     public static string FormatSpecialImageName(string rawName)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return rawName;
@@ -446,7 +465,6 @@ public abstract class SDData
         }
         return trimmed;
     }
-
     protected bool TryParseSpecialOrNormalImage(List<string> tokens, ref int index, out string resultImageName)
     {
         resultImageName = null;
@@ -482,7 +500,6 @@ public abstract class SDData
         index += 1;
         return true;
     }
-
     protected static string PackTHue(Thue thue)
     {
         if (thue == null) return string.Empty;
@@ -497,7 +514,6 @@ public abstract class SDData
 
         return result;
     }
-
     protected static Thue UnpackTHue(string thue)
     {
         if (string.IsNullOrWhiteSpace(thue)) return null;

@@ -150,50 +150,49 @@ public static class ItemDomainRules
         }
         return false;
     }
-
     public static bool IsRepeatPrefix(string token, out int count)
     {
         count = 1;
         if (string.IsNullOrEmpty(token) || char.ToLower(token[0]) != 'x') return false;
         return int.TryParse(token.Substring(1), out count);
     }
-
-    // NEW SRP:
     public static int GetItemBlockLength(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
+        int parenDepth = 0; // FIX: Track depth to prevent internal boundary shattering
 
         while (endIndex < tokens.Count)
         {
             string peek = tokens[endIndex].ToLower();
 
-            if (peek.StartsWith("(") && peek.EndsWith(")"))
+            // Adjust depth
+            if (peek.StartsWith("(")) parenDepth++;
+            if (peek.EndsWith(")")) parenDepth--;
+
+            // If we are deep inside parens, skip ALL boundary checks! The inner parser handles it.
+            if (parenDepth > 0)
             {
                 endIndex++;
                 continue;
             }
 
-            // Route nested scopes to their correct domains
+            // Standard boundary checks ONLY apply at depth 0
             if (ModifierDomainRules.IsModifierStartToken(peek))
             {
                 endIndex += ModifierDomainRules.GetModifierBlockLength(tokens, endIndex);
                 continue;
             }
-
             if (AbilityDomainRules.IsAbilityStartSequence(tokens, endIndex))
             {
                 endIndex += AbilityDomainRules.GetAbilityBlockLength(tokens, endIndex);
                 continue;
             }
 
-            // FIX: Prevent naked 'i' from swallowing subsequent distinct item blocks in flat chains.
-            // When parsing an entity, 'i' signifies a new distinct item boundary. Stop accumulating.
             if (peek == "i" && endIndex > startIndex)
             {
-                break;
+                break; // Hard boundary for new items in flat chains
             }
 
-            // Stop immediately if it's not a valid item dictionary token
             if (!IsTokenClaimedByItem(tokens, endIndex))
             {
                 break;
@@ -203,7 +202,6 @@ public static class ItemDomainRules
         }
         return endIndex - startIndex;
     }
-
     public static bool IsTokenClaimedByItem(List<string> tokens, int index)
     {
         string token = tokens[index].ToLower();
@@ -335,34 +333,12 @@ public class ItemMechanic
 
         string corePayload = PayloadString;
 
-        // DYNAMIC EXPORT: Pulls fresh data from the nested object if mutated.
         if (PayloadData != null)
         {
             string exportedData = "";
-
-            // Route Hats to the specialized clean export method
             if (Prefix == "hat" && PayloadData is HeroData hd)
             {
                 exportedData = hd.ExportAsHat();
-
-                // --- NEW PRESERVATION LOGIC ---
-                // If the original payload string had trailing nested custom items (like .i.togunt)
-                // that the native HeroData export doesn't capture, preserve them.
-                if (!string.IsNullOrEmpty(PayloadString) && !string.IsNullOrEmpty(exportedData))
-                {
-                    string origCore = StaticBranchTracing.StripOuterParens(PayloadString).Trim();
-                    string cleanExported = exportedData.Trim();
-
-                    if (origCore.StartsWith(cleanExported, StringComparison.OrdinalIgnoreCase) && origCore.Length > cleanExported.Length)
-                    {
-                        string trailing = origCore.Substring(cleanExported.Length);
-                        // Ensure we only append if the trailing part contains a valid dot or operator sequence
-                        if (trailing.StartsWith(".") || trailing.StartsWith("#"))
-                        {
-                            exportedData = cleanExported + trailing;
-                        }
-                    }
-                }
             }
             else if (PayloadData is SDData sdData)
             {
@@ -371,14 +347,22 @@ public class ItemMechanic
 
             if (!string.IsNullOrEmpty(exportedData))
             {
-                corePayload = exportedData; //TODO: IS THIS NECCESSARY? SEEMS SUSPICIOUS
+                corePayload = exportedData;
+            }
+        }
+
+        // FIX: Ensure hat, enchant, and cast payloads are wrapped in parens if complex
+        if ((Prefix == "hat" || Prefix == "enchant" || Prefix == "cast" || Prefix == "sticker") && !string.IsNullOrEmpty(corePayload))
+        {
+            if (!corePayload.StartsWith("(") && (corePayload.Contains(".") || corePayload.Contains("#") || corePayload.Contains(":")))
+            {
+                corePayload = $"({corePayload})";
             }
         }
 
         if (ChainedKeywords.Count > 0)
         {
             string chains = "#" + string.Join("#", ChainedKeywords);
-            // Inject chained keywords inside parens if the payload is a wrapped group
             if (corePayload.StartsWith("(") && corePayload.EndsWith(")"))
             {
                 corePayload = corePayload.Substring(0, corePayload.Length - 1) + chains + ")";
@@ -442,14 +426,14 @@ public class ItemData : SDData
     public List<ItemMechanic> Mechanics = new List<ItemMechanic>();
 
     public bool IsEquippable => !string.IsNullOrEmpty(entityName) || Tier.HasValue;
-    /*
+
     public override void Parse(string data)
     {
         GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
         if (string.IsNullOrWhiteSpace(data)) return;
 
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
-        string itemCore = chunks[0];
+        string itemCore = StaticBranchTracing.StripOuterParens(chunks[0]);
 
         for (int c = 1; c < chunks.Count; c++)
         {
@@ -458,70 +442,244 @@ public class ItemData : SDData
                 GlobalTags.Add(hiddenTokens[0]);
         }
 
-        itemCore = StaticBranchTracing.StripOuterParens(itemCore);
-
         List<string> chains = StaticBranchTracing.TopLevelSplit(itemCore, '#');
-
-        // FIX: Track and propagate targets across '#' splits. Because '#' is a semantic 'AND',
-        // the subsequent split chunk must inherit the target context of the chunk directly to its left
-        // if it doesn't declare an explicit target of its own.
         List<string> lastTargets = null;
 
         foreach (var chain in chains)
         {
             if (string.IsNullOrWhiteSpace(chain)) continue;
-            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
+            var stream = new TokenStream(StaticBranchTracing.TopLevelSplit(chain, '.'));
+            ExtractKnowledge(stream, this, lastTargets);
 
-            // Pass the targets down to be inherited
-            ExtractKnowledge(tokens, this, lastTargets);
-
-            // Update the tracked targets to whatever the last parsed mechanic used
             if (Mechanics.Count > 0)
             {
-                lastTargets = Mechanics.Last().Targets.ToList();
+                var lastMechTargets = Mechanics.Last().Targets;
+                if (lastMechTargets != null && lastMechTargets.Count > 0)
+                    lastTargets = new List<string>(lastMechTargets);
             }
         }
     }
-    */
-
-    public override void Parse(string data)
+    private void ExtractKnowledge(TokenStream stream, ItemData item, List<string> inheritedTargets)
     {
-        GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
-        if (string.IsNullOrWhiteSpace(data)) return;
+        bool isFirstMechanic = true;
 
-        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
-        string itemCore = chunks[0];
-
-        for (int c = 1; c < chunks.Count; c++)
+        while (!stream.IsEOF)
         {
-            List<string> hiddenTokens = StaticBranchTracing.TopLevelSplit(chunks[c], '.');
-            if (hiddenTokens.Count > 0 && (hiddenTokens[0].ToLower() == "hidden" || hiddenTokens[0].ToLower() == "temporary"))
-                GlobalTags.Add(hiddenTokens[0]);
-        }
+            string originalToken = stream.Peek();
+            string tokenLower = originalToken.ToLower();
 
-        itemCore = StaticBranchTracing.StripOuterParens(itemCore);
-
-        List<string> chains = StaticBranchTracing.TopLevelSplit(itemCore, '#');
-
-        List<string> lastTargets = null;
-
-        foreach (var chain in chains)
-        {
-            if (string.IsNullOrWhiteSpace(chain)) continue;
-            List<string> tokens = StaticBranchTracing.TopLevelSplit(chain, '.');
-
-            ExtractKnowledge(tokens, this, lastTargets);
-
-            if (Mechanics.Count > 0)
+            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
-                // SURGICAL FIX: Force a clean instantiation of the target list so reference clearing doesn't wipe inherited chains
-                var lastMechTargets = Mechanics.Last().Targets;
-                if (lastMechTargets != null && lastMechTargets.Count > 0)
-                {
-                    lastTargets = new List<string>(lastMechTargets);
-                }
+                stream.Consume();
+                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(new TokenStream(innerTokens), item, null));
+                continue;
+            }
+
+            if (item.TryProcessCommonMetadata(stream)) continue;
+
+            // Simplified Fallthrough Rules
+            switch (tokenLower)
+            {
+                case "tier": item.Tier = int.Parse(stream.ConsumeNext()); continue;
+                case "sidesc": item.doc = stream.ConsumeNext(); continue;
+                case "learn": item.LearnedAbilities.Add(stream.ConsumeNext()); continue;
+                case "cleardesc": item.ClearDescription = true; stream.Consume(); continue;
+                case "clearicon": item.ClearIcon = true; stream.Consume(); continue;
+            }
+
+            if (ItemDomainRules.ContainerKeys.Contains(tokenLower) && !ItemDomainRules.MechanicPrefixes.Contains(tokenLower))
+            {
+                item.Containers.Add(new ItemProperty(stream.Consume(), stream.Consume()));
+                continue;
+            }
+
+            if (IsMechanicTriggerToken(tokenLower))
+            {
+                ProcessMechanicChain(stream, isFirstMechanic ? inheritedTargets : null);
+                isFirstMechanic = false;
+            }
+            else
+            {
+                stream.Consume(); // Prevent infinite loops on unknown tokens
             }
         }
+    }
+    private void ProcessMechanicChain(TokenStream stream, List<string> inheritedTargets)
+    {
+        ItemMechanic mech = new ItemMechanic();
+        bool hasExplicitTargets = false;
+
+        while (!stream.IsEOF)
+        {
+            string originalToken = stream.Peek();
+            string tLower = originalToken.ToLower();
+
+            if (tLower == "i")
+            {
+                stream.Consume();
+                continue;
+            }
+
+            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
+            {
+                mech.Prefix = stream.Consume();
+                mech.PayloadString = BuildPayloadString(stream);
+                break;
+            }
+            else if (ItemDomainRules.ValidTargets.Contains(tLower))
+            {
+                if (!hasExplicitTargets)
+                {
+                    mech.Targets.Clear();
+                    hasExplicitTargets = true;
+                }
+                mech.AddTarget(stream.Consume());
+            }
+            else if (ItemDomainRules.IsRepeatPrefix(tLower, out int reps))
+            {
+                mech.RepeatTimes = reps;
+                stream.Consume();
+            }
+            else if (tLower == "pertier") { mech.PerTier = true; stream.Consume(); }
+            else if (tLower == "unpack") { mech.Unpack = true; stream.Consume(); }
+            else
+            {
+                stream.Consume();
+                string subsequent = BuildPayloadString(stream);
+                mech.PayloadString = string.IsNullOrEmpty(subsequent) ? originalToken : $"{originalToken}.{subsequent}";
+                break;
+            }
+        }
+
+        if (!hasExplicitTargets && inheritedTargets != null && inheritedTargets.Count > 0)
+        {
+            mech.Targets.AddRange(inheritedTargets);
+        }
+
+        // Process trailing suffixes (part, multiplier, mrg, splice)
+        while (!stream.IsEOF)
+        {
+            string nextTokenLower = stream.Peek().ToLower();
+            if (nextTokenLower == "part") { stream.Consume(); mech.PartIndex = int.Parse(stream.Consume()); }
+            else if (nextTokenLower == "m") { stream.Consume(); mech.Multiplier = int.Parse(stream.Consume()); }
+            else if (nextTokenLower == "mrg") { stream.Consume(); mech.MergedItem = stream.Consume(); }
+            else if (nextTokenLower == "splice") { stream.Consume(); mech.SplicedItem = stream.Consume(); }
+            else break;
+        }
+
+        AssignDomainPayload(mech);
+        Mechanics.Add(mech);
+    }
+    private string BuildPayloadString(TokenStream stream)
+    {
+        List<string> payloadTokens = new List<string>();
+        while (!stream.IsEOF)
+        {
+            string peek = stream.Peek().ToLower();
+            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
+                break;
+            if (ItemDomainRules.IsMechanicBoundary(peek))
+                break;
+
+            payloadTokens.Add(stream.Consume());
+        }
+        return string.Join(".", payloadTokens);
+    }
+    // INVERSION OF CONTROL
+    // The ItemData maps its own mechanics onto the given Entity, removing this massive logic from EntityData
+    public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)
+    {
+        bool canMapNatively = true;
+
+        foreach (var mech in Mechanics)
+        {
+            string pfx = mech.Prefix?.ToLower() ?? "";
+            if (mech.PayloadData is ModifierData) return false;
+
+            // FIX: Removed 'hat', 'cast', 'enchant' from this allowed list!
+            // This forces them to return FALSE, meaning EntityData will black-box them
+            // into customPayloads and correctly export them retaining ALL their native syntax!
+            if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "")
+            {
+                return false;
+            }
+
+            if ((pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "") && mech.Targets.Count == 0)
+            {
+                if (pfx == "" && ItemDomainRules.TogItems.Contains(mech.PayloadString)) continue;
+                return false;
+            }
+        }
+
+        // Apply metadata directly
+        if (!string.IsNullOrEmpty(imageOverride) && !imageOverride.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            entity.imageOverride = imageOverride;
+            imageOverride = null;
+        }
+        if (visuals != null && visuals.Count > 0)
+        {
+            entity.visuals.AddRange(visuals);
+            visuals.Clear();
+        }
+        if (!string.IsNullOrEmpty(doc))
+        {
+            entity.doc = doc;
+            doc = null;
+        }
+        if (Tier.HasValue && entity is HeroData heroData)
+        {
+            heroData.tier = Tier.Value;
+            Tier = null;
+        }
+
+        foreach (var ab in LearnedAbilities)
+        {
+            if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
+                entity.baseAbilityData.Add(ab);
+        }
+
+        foreach (var mech in Mechanics)
+        {
+            string pfx = mech.Prefix?.ToLower() ?? "";
+            if (pfx == "t")
+            {
+                if (mech.PayloadString != null && mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+                {
+                    string curse = mech.PayloadString.Substring(5);
+                    if (!entity.curses.Contains(curse, StringComparer.OrdinalIgnoreCase)) entity.curses.Add(curse);
+                }
+                else if (!entity.traits.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase))
+                    entity.traits.Add(mech.PayloadString);
+            }
+            else if (pfx == "gift")
+            {
+                if (!entity.blessings.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase)) entity.blessings.Add(mech.PayloadString);
+            }
+            else if (pfx == "learn" || pfx == "abilitydata")
+            {
+                if (!entity.baseAbilityData.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase)) entity.baseAbilityData.Add(mech.PayloadString);
+            }
+            else if (pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "")
+            {
+                List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
+                if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid")) targetFaces.Remove(1);
+
+                string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
+                if (keyword == "blindfold")
+                {
+                    foreach (int faceIdx in targetFaces)
+                    {
+                        if (entity.diceSides != null && entity.diceSides[faceIdx] != null && entity.diceSides[faceIdx].faceType == DiceSideData.DiceFaceType.Egg)
+                            if (!entity.diceSides[faceIdx].payload.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase))
+                                entity.diceSides[faceIdx].payload += "#blindfold";
+                    }
+                    continue;
+                }
+                entity.ApplyMechanicToDiceSides(targetFaces, mech);
+            }
+        }
+        return canMapNatively;
     }
 
     private void PropertiesClear()
@@ -535,105 +693,6 @@ public class ItemData : SDData
         ClearIcon = false;
         LearnedAbilities.Clear();
     }
-
-    /*
-    private void ExtractKnowledge(List<string> tokens, ItemData item, List<string> inheritedTargets = null)
-    {
-        bool isFirstMechanic = true; // Track if we are at the start of a # chain
-
-        for (int i = 0; i < tokens.Count; i++)
-        {
-            string tokenLower = tokens[i].ToLower();
-            string originalToken = tokens[i];
-
-            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
-            {
-                // We pass null into recursive parentheses to prevent unexpected deep inheritance
-                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, item, null));
-                continue;
-            }
-
-            if (TryProcessCommonMetadata(tokens, ref i, tokenLower))
-            {
-
-                if (tokenLower == "hsv") item.HsvShift = new ItemHsvShift(h, s, v);
-                else if (tokenLower == "hue") item.SimpleHue = hue;
-                else if (tokenLower == "thue") item.thue = UnpackTHue(tokens[i]);
-                else if (tokenLower == "p") item.PaletteOverride = p;
-                else if (tokenLower == "b") item.BorderColorCode = b;
-                else if (tokenLower == "draw") item.UiDrawInstructions = draw;
-                else if (tokenLower == "rect") item.UiRectInstructions = rect;
-                else if (tokenLower == "doc") item.DocumentedDescription = doc;
-                continue;
-            }
-
-            switch (tokenLower)
-            {
-                // CRITICAL FIX: Restore missing root property parsers!
-                case "n": if (i + 1 < tokens.Count) item.entityName = tokens[++i]; break;
-                case "img": if (i + 1 < tokens.Count) item.imageOverride = tokens[++i]; break;
-                case "tier": if (i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) item.Tier = t; break;
-                case "sidesc": if (i + 1 < tokens.Count) item.DocumentedDescription = tokens[++i]; break;
-                case "learn": if (i + 1 < tokens.Count) item.LearnedAbilities.Add(tokens[++i]); break;
-                case "cleardesc": item.ClearDescription = true; break;
-                case "clearicon": item.ClearIcon = true; break;
-
-                default:
-                    if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken)) { }
-                    else if (IsMechanicTriggerToken(tokenLower))
-                    {
-                        ProcessMechanicChain(tokens, ref i, originalToken, isFirstMechanic ? inheritedTargets : null);
-                        isFirstMechanic = false;
-                    }
-                    break;
-            }
-        }
-    }
-    */
-
-    private void ExtractKnowledge(List<string> tokens, ItemData item, List<string> inheritedTargets = null)
-    {
-        bool isFirstMechanic = true;
-
-        for (int i = 0; i < tokens.Count; i++)
-        {
-            string tokenLower = tokens[i].ToLower();
-            string originalToken = tokens[i];
-
-            // 1. Recursive Scope Resolution
-            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
-            {
-                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, item, null));
-                continue;
-            }
-
-            // 2. Base Entity Metadata (n, img, doc, visuals array)
-            if (item.TryProcessCommonMetadata(tokens, ref i, tokenLower))
-            {
-                continue;
-            }
-
-            // 3. Item-Specific Metadata (tier, sidesc, learn, toggles)
-            if (TryProcessItemMetadata(tokens, ref i, tokenLower, item))
-            {
-                continue;
-            }
-
-            // 4. Complex Data Containers
-            if (TryProcessGenericContainer(tokens, ref i, tokenLower, originalToken))
-            {
-                continue;
-            }
-
-            // 5. Mechanics & Targeting
-            if (IsMechanicTriggerToken(tokenLower))
-            {
-                ProcessMechanicChain(tokens, ref i, originalToken, isFirstMechanic ? inheritedTargets : null);
-                isFirstMechanic = false;
-            }
-        }
-    }
-
     private bool TryProcessItemMetadata(List<string> tokens, ref int i, string tokenLower, ItemData item)
     {
         switch (tokenLower)
@@ -655,81 +714,6 @@ public class ItemData : SDData
                 return true;
         }
         return false;
-    }
-
-    private void ProcessMechanicChain(List<string> tokens, ref int i, string initialToken, List<string> inheritedTargets = null)
-    {
-        ItemMechanic mech = new ItemMechanic();
-        bool hasExplicitTargets = false; // Track if this specific item defined its own targets
-
-        while (i < tokens.Count)
-        {
-            string originalToken = tokens[i];
-            string tLower = originalToken.ToLower();
-
-            if (tLower == "i")
-            {
-                i++;
-                continue;
-            }
-
-            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
-            {
-                mech.Prefix = tLower;
-                i++; // Move past the prefix
-                mech.PayloadString = BuildPayloadString(tokens, ref i);
-                break; // Exits the mechanic loop immediately once the payload is assigned
-            }
-            else if (ItemDomainRules.ValidTargets.Contains(tLower))
-            {
-                // FIX: If this item explicitly declares a target, clear out anything we were going to inherit
-                if (!hasExplicitTargets)
-                {
-                    mech.Targets.Clear();
-                    hasExplicitTargets = true;
-                }
-                mech.AddTarget(originalToken);
-            }
-            else if (ItemDomainRules.IsRepeatPrefix(tLower, out int reps))
-            {
-                mech.RepeatTimes = reps;
-            }
-            else if (tLower == "pertier") mech.PerTier = true;
-            else if (tLower == "unpack") mech.Unpack = true;
-            else
-            {
-                List<string> payloadTokens = new List<string> { originalToken };
-                i++;
-
-                string subsequent = BuildPayloadString(tokens, ref i);
-                if (!string.IsNullOrEmpty(subsequent)) payloadTokens.Add(subsequent);
-
-                mech.PayloadString = string.Join(".", payloadTokens);
-                break;
-            }
-            i++;
-        }
-
-        // FIX: If no explicit targets were found, but we inherited some from a '#' split, apply them!
-        if (!hasExplicitTargets && inheritedTargets != null && inheritedTargets.Count > 0)
-        {
-            mech.Targets.AddRange(inheritedTargets);
-        }
-
-        // Process trailing suffixes (part, multiplier, mrg, splice)
-        while (i + 1 < tokens.Count)
-        {
-            string nextTokenLower = tokens[i + 1].ToLower();
-
-            if (nextTokenLower == "part" && i + 2 < tokens.Count) { if (int.TryParse(tokens[i + 2], out int pIdx)) { mech.PartIndex = pIdx; i += 2; } else break; }
-            else if (nextTokenLower == "m" && i + 2 < tokens.Count) { if (int.TryParse(tokens[i + 2], out int mult)) { mech.Multiplier = mult; i += 2; } else break; }
-            else if (nextTokenLower == "mrg" && i + 2 < tokens.Count) { mech.MergedItem = tokens[i + 2]; i += 2; }
-            else if (nextTokenLower == "splice" && i + 2 < tokens.Count) { mech.SplicedItem = tokens[i + 2]; i += 2; }
-            else break;
-        }
-
-        AssignDomainPayload(mech);
-        Mechanics.Add(mech);
     }
     private bool TryProcessGenericContainer(List<string> tokens, ref int i, string tokenLower, string originalToken)
     {
@@ -798,24 +782,31 @@ public class ItemData : SDData
     {
         List<string> chainParts = new List<string>();
 
-        if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
-        if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
-        if (!string.IsNullOrEmpty(doc)) chainParts.Add($"doc.{doc}");
+        // 1. Containers
+        foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({cont.Value})");
 
-        // --- NEW: Fully Modular Sequenced Visuals Block ---
+        // 2. Mechanics
+        OptimizeAndExportMechanics(chainParts);
+
+        // 3. Visuals
         string visualsStr = ItemSyntaxCompiler.BuildVisualsString(this, imageOverride);
         if (!string.IsNullOrEmpty(visualsStr)) chainParts.Add(visualsStr);
 
+        // 4. Clear flags
         if (ClearDescription) chainParts.Add("cleardesc");
         if (ClearIcon) chainParts.Add("clearicon");
 
-        foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({cont.Value})");
+        // 5. Tier (Canonical Order is near the end)
+        if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
 
-        OptimizeAndExportMechanics(chainParts);
+        // 6. Doc
+        if (!string.IsNullOrEmpty(doc)) chainParts.Add($"doc.{doc}");
+
+        // 7. Name (Canonical Order is absolute last)
+        if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
 
         StringBuilder sb = new StringBuilder(string.Join(".", chainParts));
         foreach (var tag in GlobalTags) sb.Append($"&{tag}");
-
         return sb.ToString();
     }
 
@@ -1013,102 +1004,6 @@ public class ItemData : SDData
         }
         UnityEngine.Debug.Log(sb.ToString());
     }
-
-    // Helper method to safely collect forward payload tokens without suffix collisions
-    // Inside ItemData.cs class
-    /// <summary>
-    /// Accumulates tokens for a mechanic's payload.
-    /// NOTE: Must explicitly halt if it encounters 'i'. Because 'i' is the universal 
-    /// delimiter for a new mechanic context, allowing a payload (like a keyword) to 
-    /// swallow it will corrupt the parser's state machine and merge distinct mechanics.
-    /// </summary>
-    /*
-    private string BuildPayloadString(List<string> tokens, ref int i)
-    {
-        List<string> payloadTokens = new List<string>();
-
-        // Define major structural prefixes that should break inline payload accumulation
-        HashSet<string> majorPrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "hat", "sticker", "enchant", "cast", "facade", "sidesc", "onhitdata", "triggerhpdata"
-        };
-
-        while (i < tokens.Count)
-        {
-            string peek = tokens[i].ToLower();
-            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
-                break;
-
-            // CRITICAL FIX: Add 'i' to the break condition so keywords don't swallow adjacent item chains
-            if (payloadTokens.Count > 0 && (majorPrefixes.Contains(peek) || peek == "i"))
-                break;
-
-            payloadTokens.Add(tokens[i]);
-            i++;
-        }
-        i--;
-        return string.Join(".", payloadTokens);
-    }
-    */
-
-    /// <summary>
-    /// Accumulates tokens for a mechanic's payload.
-    /// Aborts cleanly if the Domain Rules engine detects an architectural context shift.
-    /// </summary>
-    /// 
-    /*
-    private string BuildPayloadString(List<string> tokens, ref int i)
-    {
-        List<string> payloadTokens = new List<string>();
-
-        while (i < tokens.Count)
-        {
-            string peek = tokens[i].ToLower();
-
-            // 1. Break on standard trailing mechanic suffixes
-            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
-                break;
-
-            // 2. Break on authoritative domain boundaries 
-            // We require payloadTokens.Count > 0 so we don't accidentally abort if the payload explicitly STARTS with a boundary token.
-            if (payloadTokens.Count > 0 && ItemDomainRules.IsMechanicBoundary(peek))
-                break;
-
-            payloadTokens.Add(tokens[i]);
-            i++;
-        }
-        i--;
-        return string.Join(".", payloadTokens);
-    }
-    */
-
-    /// <summary>
-    /// Accumulates tokens for a mechanic's payload.
-    /// Aborts cleanly if the Domain Rules engine detects an architectural context shift.
-    /// </summary>
-    private string BuildPayloadString(List<string> tokens, ref int i)
-    {
-        List<string> payloadTokens = new List<string>();
-
-        while (i < tokens.Count)
-        {
-            string peek = tokens[i].ToLower();
-
-            // 1. Break on standard trailing mechanic suffixes
-            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
-                break;
-
-            // 2. Break on authoritative domain boundaries 
-            // CRITICAL FIX: Removed the Count > 0 requirement so it doesn't swallow adjacent boundaries like 'img'
-            if (ItemDomainRules.IsMechanicBoundary(peek))
-                break;
-
-            payloadTokens.Add(tokens[i]);
-            i++;
-        }
-        i--;
-        return string.Join(".", payloadTokens);
-    }
 }
 
 public enum PayloadInjectionZone
@@ -1137,9 +1032,6 @@ public static class CustomItemContextHelper
         if (string.IsNullOrWhiteSpace(rawItem)) return new ItemInjectionResult { FormattedString = "" };
         string contentToEvaluate = rawItem.Trim();
 
-        // ====================================================================
-        // RULE 1: EXTERNAL PROPERTIES & ABILITIES (OuterEntity Zone)
-        // ====================================================================
         if (contentToEvaluate.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase) ||
             contentToEvaluate.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
             contentToEvaluate.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
@@ -1155,9 +1047,6 @@ public static class CustomItemContextHelper
             };
         }
 
-        // ====================================================================
-        // RULE 2: MODIFIERS & EQUIPMENT (Inner vs Outer Selection)
-        // ====================================================================
         string cleanCore = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase) ? contentToEvaluate.Substring(2) : contentToEvaluate;
         string unparenthesized = cleanCore;
         if (unparenthesized.StartsWith("(") && unparenthesized.EndsWith(")"))
@@ -1165,66 +1054,41 @@ public static class CustomItemContextHelper
             unparenthesized = StaticBranchTracing.StripOuterParens(unparenthesized);
         }
 
-        // Check first token or targets across '#' splits to see if it modifies entity/dice
         List<string> chains = StaticBranchTracing.TopLevelSplit(unparenthesized, '#');
         bool isInnerProperty = false;
-
         foreach (var chain in chains)
         {
             if (string.IsNullOrWhiteSpace(chain)) continue;
             string chainTrim = chain.Trim();
             string firstToken = chainTrim.Split(new[] { '.', ':', '(' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLower() ?? "";
 
+            // FIX: Removed 'hat', 'enchant', 'cast', 'sticker' from InnerEntity routing.
+            // This forces them into OuterEntity, which correctly wraps the base string in parens! ((replica...).i.left.hat...)
             if (chainTrim.StartsWith("t.", StringComparison.OrdinalIgnoreCase) ||
                 chainTrim.StartsWith("i.t.", StringComparison.OrdinalIgnoreCase) ||
                 chainTrim.StartsWith("self.", StringComparison.OrdinalIgnoreCase) ||
                 chainTrim.StartsWith("i.self.", StringComparison.OrdinalIgnoreCase) ||
                 chainTrim.StartsWith("gift.", StringComparison.OrdinalIgnoreCase) ||
-                chainTrim.StartsWith("i.gift.", StringComparison.OrdinalIgnoreCase) ||
-                ItemDomainRules.ValidTargets.Contains(firstToken) ||
-                firstToken == "hat" || firstToken == "sticker" || firstToken == "enchant" ||
-                firstToken == "cast" || firstToken == "k" || firstToken == "facade" ||
-                firstToken == "sd" || firstToken == "sidesc")
+                chainTrim.StartsWith("i.gift.", StringComparison.OrdinalIgnoreCase))
             {
                 isInnerProperty = true;
                 break;
             }
         }
 
-        // Format payload string cleanly with proper parens grouping for compound items
         string formattedPayload;
         bool hasHash = contentToEvaluate.Contains("#") || contentToEvaluate.Contains(".i.");
         bool isWrapped = contentToEvaluate.StartsWith("(") && contentToEvaluate.EndsWith(")");
         bool alreadyHasIPrefix = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase);
 
-        if (alreadyHasIPrefix)
-        {
-            formattedPayload = contentToEvaluate;
-        }
-        else if (hasHash && !isWrapped)
-        {
-            formattedPayload = $"i.({contentToEvaluate})";
-        }
-        else
-        {
-            formattedPayload = $"i.{contentToEvaluate}";
-        }
+        if (alreadyHasIPrefix) formattedPayload = contentToEvaluate;
+        else if (hasHash && !isWrapped) formattedPayload = $"i.({contentToEvaluate})";
+        else formattedPayload = $"i.{contentToEvaluate}";
 
-        if (isInnerProperty)
+        return new ItemInjectionResult
         {
-            return new ItemInjectionResult
-            {
-                FormattedString = formattedPayload,
-                Zone = PayloadInjectionZone.InnerEntity
-            };
-        }
-        else
-        {
-            return new ItemInjectionResult
-            {
-                FormattedString = formattedPayload,
-                Zone = PayloadInjectionZone.OuterEntity
-            };
-        }
+            FormattedString = formattedPayload,
+            Zone = isInnerProperty ? PayloadInjectionZone.InnerEntity : PayloadInjectionZone.OuterEntity
+        };
     }
 }

@@ -121,7 +121,6 @@ public abstract class AbilityData : HeroData
         customPayloads = new List<CustomPayload>();
         _itemPipeline = new List<ItemData>();
     }
-
     public override void Parse(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
@@ -163,14 +162,17 @@ public abstract class AbilityData : HeroData
                 spell.manaCost = spell.diceSides[4].pips;
         }
     }
-    protected override bool TryProcessSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
+    protected override bool TryProcessSpecificMetadata(TokenStream stream)
     {
-        if (tokenLower == "col" && i + 1 < tokens.Count) { colorClass = tokens[++i]; return true; }
-        if (tokenLower == "tier" && i + 1 < tokens.Count && int.TryParse(tokens[++i], out int t)) { tier = t; return true; }
-        if (tokenLower == "adj" && i + 1 < tokens.Count && int.TryParse(tokens[++i], out int a)) { adj = a; return true; }
-        if (tokenLower == "speech" && i + 1 < tokens.Count) { speech = tokens[++i]; return true; }
-
-        return base.TryProcessSpecificMetadata(tokens, ref i, tokenLower);
+        string tokenLower = stream.Peek().ToLower();
+        switch (tokenLower)
+        {
+            case "col": stream.Consume(); colorClass = stream.Consume(); return true;
+            case "tier": stream.Consume(); if (int.TryParse(stream.Consume(), out int t)) tier = t; return true;
+            case "adj": stream.Consume(); if (int.TryParse(stream.Consume(), out int a)) adj = a; return true;
+            case "speech": stream.Consume(); speech = stream.Consume(); return true;
+        }
+        return base.TryProcessSpecificMetadata(stream);
     }
 
     public override string Export() { return ExportWrapped(); }

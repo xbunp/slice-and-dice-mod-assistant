@@ -25,36 +25,17 @@ public class MonsterData : EntityData
 
     [Header("Monster Modifiers")]
     public string bal;
-    /*
+
     public override void Parse(string data)
     {
         InitializeAsBlank();
-
         if (string.IsNullOrWhiteSpace(data)) return;
 
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string core = StaticBranchTracing.StripOuterParens(chunks[0]);
         List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
 
-        bool isFirstToken = true;
-        ExtractKnowledge(tokens, isFirstToken);
-        ExecuteItemPipeline();
-    }
-    */
-
-    public override void Parse(string data)
-    {
-        InitializeAsBlank();
-
-        if (string.IsNullOrWhiteSpace(data)) return;
-
-        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
-        string core = StaticBranchTracing.StripOuterParens(chunks[0]);
-        List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
-
-        // Unpack parenthesized groups wrapping the core entity details at the start.
-        // This flattens nested metadata so individual properties aren't swallowed
-        // as a single token when determining the base monster name.
+        // Unpack outer parens wrapping the core details
         while (tokens.Count > 0 && tokens[0].StartsWith("(") && tokens[0].EndsWith(")"))
         {
             string inner = StaticBranchTracing.StripOuterParens(tokens[0]);
@@ -65,18 +46,22 @@ public class MonsterData : EntityData
 
         if (tokens.Count > 0)
         {
-            // Reuses the base class's built-in parser to cleanly map "rmon.0" -> "rm_n"
-            int baseIdx = -1;
-            if (TryParseSpecialOrNormalImage(tokens, ref baseIdx, out string baseName))
+            // 1. Extract Base Monster Name / Image
+            var tempStream = new TokenStream(tokens);
+            if (TryParseSpecialOrNormalImage(tempStream, out string baseName))
             {
                 baseMonster = baseName;
-                tokens.RemoveRange(0, baseIdx + 1); // Consume the parsed base name tokens
+                tokens.RemoveRange(0, tempStream.Index);
+            }
+            else if (!MonsterDomainRules.MonsterPropertyKeys.Contains(tokens[0]))
+            {
+                baseMonster = tokens[0];
+                tokens.RemoveAt(0);
             }
 
+            // 2. Extract Specialized Containers (egg, vase, orb, jinx)
             string firstTokenLower = baseMonster.ToLower();
-
-            // Clean, simplified check for actual payload containers (excluding "rmon")
-            if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx")
+            if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx" || firstTokenLower == "rmon")
             {
                 if (tokens.Count > 0)
                 {
@@ -97,7 +82,9 @@ public class MonsterData : EntityData
 
                     if (firstTokenLower == "jinx" || firstTokenLower == "vase")
                     {
-                        ModifierData mod = new ModifierData(); mod.Parse(corePayload); payloadData = mod;
+                        ModifierData mod = new ModifierData();
+                        mod.Parse(corePayload);
+                        payloadData = mod;
                     }
                     else if (firstTokenLower == "orb")
                     {
@@ -107,88 +94,38 @@ public class MonsterData : EntityData
                     {
                         if (StaticBranchTracing.IsMonsterEntity(corePayload))
                         {
-                            MonsterData nestedMonster = new MonsterData(); nestedMonster.Parse(corePayload); payloadData = nestedMonster;
+                            MonsterData nestedMonster = new MonsterData();
+                            nestedMonster.Parse(corePayload);
+                            payloadData = nestedMonster;
                         }
                         else
                         {
-                            HeroData nestedHero = new HeroData(); nestedHero.Parse(corePayload); payloadData = nestedHero;
+                            HeroData nestedHero = new HeroData();
+                            nestedHero.Parse(corePayload);
+                            payloadData = nestedHero;
                         }
                     }
                 }
             }
         }
 
-        ExtractKnowledge(tokens, _itemPipeline, true);
+        // 3. Delegate ALL property, dice, and item parsing to the base TokenStream pipeline in EntityData
+        ExtractKnowledge(tokens, _itemPipeline, processTraitsAndCollections: true);
         ExecuteItemPipeline();
         SyncMonsterSize();
     }
-    protected override bool TryProcessSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
+
+    // Handles monster-specific metadata keys during the TokenStream pass
+    protected override bool TryProcessSpecificMetadata(TokenStream stream)
     {
-        if (tokenLower == "bal")
+        if (stream.Peek().Equals("bal", StringComparison.OrdinalIgnoreCase))
         {
-            if (i + 1 < tokens.Count) { bal = tokens[++i]; return true; }
+            stream.Consume(); // consume 'bal'
+            if (!stream.IsEOF) bal = stream.Consume();
+            return true;
         }
-        return false;
+        return base.TryProcessSpecificMetadata(stream);
     }
-
-    /*
-    public static string Export(MonsterData monster)
-    {
-        if (monster == null) return string.Empty;
-        StringBuilder sb = new StringBuilder();
-
-        bool hasImageOverride = !string.IsNullOrEmpty(monster.imageOverride)
-            && !string.Equals(monster.imageOverride, "None", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(monster.imageOverride, monster.baseMonster, StringComparison.OrdinalIgnoreCase);
-
-        sb.Append($"{FormatName(monster.baseMonster)}");
-        if (!hasImageOverride) monster.AppendColorModifier(sb);
-
-        if (!string.IsNullOrEmpty(monster.entityName) && !string.Equals(monster.entityName, monster.baseMonster, StringComparison.OrdinalIgnoreCase))
-        {
-            sb.Append($".n.{FormatName(monster.entityName)}");
-        }
-
-        if (monster.hp > 0) sb.Append($".hp.{monster.hp}");
-
-        if (!string.IsNullOrEmpty(monster.p)) sb.Append($".p.{monster.p}");
-        if (!string.IsNullOrEmpty(monster.b)) sb.Append($".b.{monster.b}");
-        if (!string.IsNullOrEmpty(monster.rect)) sb.Append($".rect.{monster.rect}");
-        if (!string.IsNullOrEmpty(monster.draw)) sb.Append($".draw.{monster.draw}");
-
-        if (monster.thue != null && monster.thue.colorOffset != 0) sb.Append($".{PackTHue(monster.thue)}");
-
-        monster.AppendDiceSides(sb);
-
-        string faceModifiers = monster.BuildFaceModifiers(includeInlineFacades: true);
-        if (!string.IsNullOrEmpty(faceModifiers))
-        {
-            faceModifiers = Regex.Replace(faceModifiers, @"(\.facade\.[^.:\s]+)(?=\.|$)", "$1:0");
-            sb.Append(faceModifiers);
-        }
-
-        if (!string.IsNullOrEmpty(monster.doc)) sb.Append($".doc.{monster.doc}");
-        if (hasImageOverride) { sb.Append($".img.{FormatName(monster.imageOverride)}"); monster.AppendColorModifier(sb); }
-
-        if (monster.traits != null) foreach (var t in monster.traits) if (!string.IsNullOrEmpty(t)) sb.Append($".t.{FormatName(t)}");
-        if (monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) sb.Append($".{orb.ExportAsTrait(useITPrefix: false)}"); // Added
-        if (monster.items != null) foreach (var i in monster.items) if (!string.IsNullOrEmpty(i)) sb.Append($".i.{FormatName(i)}");
-
-        if (monster.customPayloads != null)
-        {
-            foreach (var payload in monster.customPayloads)
-            {
-                string exported = payload.Export();
-                if (!string.IsNullOrEmpty(exported)) sb.Append($".{exported}");
-            }
-        }
-
-        if (monster.curses != null) foreach (var c in monster.curses) if (!string.IsNullOrEmpty(c)) sb.Append($".t.jinx.{FormatName(c)}");
-        if (!string.IsNullOrEmpty(monster.bal)) sb.Append($".bal.{FormatName(monster.bal)}");
-
-        return sb.ToString();
-    }
-    */
     public static string ExportAsSpirit(MonsterData monster)
     {
         if (monster == null) return string.Empty;
@@ -270,15 +207,16 @@ public class MonsterData : EntityData
                 continue;
             }
 
-            if (TryProcessCommonMetadata(tokens, ref i, tokenLower)) continue;
-            if (TryProcessEntityMetadata(tokens, ref i, tokenLower)) continue;
-            if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
-            if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
-            if (TryProcessAppendedDoc(tokens, ref i, tokenLower)) continue;
+            // TODO: CONVERT TO TOKEN STREAM
+            //if (TryProcessCommonMetadata(tokens, ref i, tokenLower)) continue;
+            //if (TryProcessEntityMetadata(tokens, ref i, tokenLower)) continue;
+            ////if (TryProcessDiceSides(tokens, ref i, tokenLower)) continue;
+            //if (TryProcessTriggerData(tokens, ref i, tokenLower)) continue;
+            //if (TryProcessAppendedDoc(tokens, ref i, tokenLower)) continue;
 
             if (tokenLower == "t")
             {
-                ProcessTraitToken(tokens, ref i);
+                //ProcessTraitToken(tokens, ref i);
                 continue;
             }
 

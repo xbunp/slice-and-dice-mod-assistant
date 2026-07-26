@@ -45,6 +45,41 @@ public class HeroData : EntityData
     [JsonProperty]
     public List<TacticData> customTactics;
 
+    public override void Parse(string data)
+    {
+        InitializeAsBlank();
+        if (string.IsNullOrWhiteSpace(data)) return;
+        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
+        string heroCore = StaticBranchTracing.StripOuterParens(chunks[0]);
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(heroCore, '.');
+        if (tokens.Count > 0)
+        {
+            string baseTokenClean = ExtractBaseIdentifier(tokens[0]);
+            string firstLower = baseTokenClean.ToLower();
+            if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
+            {
+                baseReplica = baseTokenClean;
+                tokens.RemoveAt(0); // Ensures ExtractKnowledge doesn't discard it
+            }
+        }
+        ExtractKnowledge(tokens, _itemPipeline, false);
+        ExecuteItemPipeline();
+    }
+    protected override bool TryProcessSpecificMetadata(TokenStream stream)
+    {
+        string tokenLower = stream.Peek().ToLower();
+        switch (tokenLower)
+        {
+            case "replica": stream.Consume(); baseReplica = stream.Consume(); return true;
+            case "col": stream.Consume(); colorClass = stream.Consume(); return true;
+            case "tier": stream.Consume(); if (int.TryParse(stream.Consume(), out int t)) tier = t; return true;
+            case "adj":
+            case "x": stream.Consume(); if (int.TryParse(stream.Consume(), out int a)) adj = a; return true;
+            case "speech": stream.Consume(); speech = stream.Consume(); return true;
+        }
+        return false;
+    }
+
     public override IReadOnlyList<AbilityData> customAbilityData
     {
         get
@@ -84,46 +119,6 @@ public class HeroData : EntityData
 
         for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData { effectID = 0, pips = 0, facadeID = null, keywords = new List<string>() };
     }
-    public override void Parse(string data)
-    {
-        InitializeAsBlank();
-        if (string.IsNullOrWhiteSpace(data)) return;
-        List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
-        string heroCore = StaticBranchTracing.StripOuterParens(chunks[0]);
-        List<string> tokens = StaticBranchTracing.TopLevelSplit(heroCore, '.');
-
-        if (tokens.Count > 0)
-        {
-            string baseTokenClean = ExtractBaseIdentifier(tokens[0]);
-            string firstLower = baseTokenClean.ToLower();
-            if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
-            {
-                baseReplica = baseTokenClean;
-            }
-        }
-
-        ExtractKnowledge(tokens, _itemPipeline, false);
-        ExecuteItemPipeline();
-    }
-
-    protected override bool TryProcessSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
-    {
-        if (i + 1 >= tokens.Count) return false;
-        string nextVal = tokens[i + 1];
-
-        switch (tokenLower)
-        {
-            case "replica": baseReplica = nextVal; break;
-            case "col": colorClass = nextVal; break;
-            case "tier": if (int.TryParse(nextVal, out int t)) tier = t; break;
-            case "x": if (int.TryParse(nextVal, out int a)) adj = a; break;
-            case "speech": speech = nextVal; break;
-            default: return false;
-        }
-        i++;
-        return true;
-    }
-
     private bool TryProcessHeroSpecificMetadata(List<string> tokens, ref int i, string tokenLower)
     {
         if (i + 1 >= tokens.Count) return false;
@@ -141,143 +136,6 @@ public class HeroData : EntityData
         i++;
         return true;
     }
-
-    /*
-    public override string Export()
-    {
-        StringBuilder heroSb = new StringBuilder();
-        heroSb.Append("(");
-        bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica;
-
-        if (!string.IsNullOrEmpty(baseReplica))
-        {
-            string formattedReplica = FormatSpecialImageName(baseReplica);
-            heroSb.Append($"replica.{FormatName(formattedReplica)}");
-            if (!hasImageOverride) AppendColorModifier(heroSb);
-        }
-        if (!string.IsNullOrEmpty(entityName)) heroSb.Append($".n.{FormatName(entityName)}");
-
-        bool skipColor = false;
-        string activeVisual = hasImageOverride ? imageOverride : baseReplica;
-        if (!string.IsNullOrEmpty(activeVisual) && Enum.TryParse(activeVisual, true, out HeroType parsedHero))
-        {
-            if (SDColors.HeroColorMap.TryGetValue(parsedHero, out HeroColorOption defaultColor))
-            {
-                if (EntityUIHelpers.ReverseLookupColor(colorClass) == defaultColor)
-                {
-                    skipColor = true;
-                }
-            }
-        }
-
-        if (!skipColor && !string.IsNullOrEmpty(colorClass))
-        {
-            heroSb.Append($".col.{colorClass}");
-        }
-
-        if (hp > 0) heroSb.Append($".hp.{hp}");
-        if (tier >= 0) heroSb.Append($".tier.{tier}");
-        if (!string.IsNullOrEmpty(p)) heroSb.Append($".p.{p}");
-        if (adj.HasValue) heroSb.Append($".adj.{adj.Value}");
-        if (!string.IsNullOrEmpty(b)) heroSb.Append($".b.{b}");
-        if (!string.IsNullOrEmpty(rect)) heroSb.Append($".rect.{rect}");
-        if (!string.IsNullOrEmpty(draw)) heroSb.Append($".draw.{draw}");
-
-        AppendDiceSides(heroSb);
-        if (!string.IsNullOrEmpty(speech)) heroSb.Append($".speech.{speech}");
-
-        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
-        if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
-
-        // 1. Sort all custom payloads based on Entity-level rules
-        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
-
-        // 2. Append Inner items (Items, Traits, Curses, inner payloads) BEFORE the image override
-        StringBuilder innerSb = new StringBuilder();
-        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) innerSb.Append($".i.t.{FormatName(t)}");
-        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
-        if (blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) innerSb.Append($".gift.{FormatName(bl)}");
-        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) innerSb.Append($".i.t.jinx.{FormatName(c)}");
-
-        foreach (var inner in innerPayloads)
-        {
-            innerSb.Append($".{inner}");
-        }
-
-        heroSb.Append(innerSb.ToString());
-
-        // 3. Append the Image Override (resets visual rendering to the override payload)
-        if (hasImageOverride)
-        {
-            string formattedImg = FormatSpecialImageName(imageOverride);
-            heroSb.Append($".img.{FormatName(formattedImg)}");
-            AppendColorModifier(heroSb);
-        }
-
-        heroSb.Append(")");
-
-        string baseHeroString = heroSb.ToString();
-        string fullContentString = baseHeroString;
-
-        // 4. Append Outer Abilities and Outer Items OUTSIDE the entity string
-        StringBuilder outerSb = new StringBuilder();
-
-        // Base ability data (spells/tactics) relocated to outer shell
-        if (baseAbilityData != null)
-            foreach (var ab in baseAbilityData)
-                if (!string.IsNullOrEmpty(ab))
-                    outerSb.Append($".i.learn.{FormatName(ab)}");
-
-        if (customAbilityData != null && customAbilityData.Count > 0)
-        {
-            foreach (var cab in customAbilityData)
-            {
-                if (cab != null)
-                {
-                    if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.({cab.Export()})");
-                    else if (cab is OnHitData) outerSb.Append($".onhitdata.({cab.Export()})");
-                    else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-                    else outerSb.Append($".abilitydata.({cab.Export()})");
-                }
-            }
-        }
-
-        foreach (var outer in outerPayloads)
-        {
-            outerSb.Append($".{outer}");
-        }
-
-        if (outerSb.Length > 0)
-        {
-            // Wrap the base hero and the abilities up: ((hero).abilities)
-            fullContentString = $"({baseHeroString}{outerSb.ToString()})";
-        }
-
-        // 5. Apply Wrappers (if an item explicitly demands wrapping the entire hero)
-        foreach (var wrapper in wrapperPayloads)
-        {
-            if (wrapper.Contains("{0}"))
-                fullContentString = string.Format(wrapper, fullContentString);
-            else
-                fullContentString = $"({fullContentString}.{wrapper})"; // Failsafe
-        }
-
-        bool hasDoc = !string.IsNullOrEmpty(doc);
-        bool hasAppendedDoc = !string.IsNullOrEmpty(appendedDoc);
-        if (hasDoc || hasAppendedDoc)
-        {
-            StringBuilder tailSb = new StringBuilder();
-
-            if (hasDoc) tailSb.Append($".doc.{doc}");
-            if (hasAppendedDoc) tailSb.Append($".i.self.Wolf.doc.{appendedDoc}.spirit");
-
-            return $"({fullContentString}{tailSb.ToString()})";
-        }
-
-        return fullContentString;
-    }
-    */
-
     public string ExportAsHat()
     {
         StringBuilder heroSb = new StringBuilder();
@@ -333,7 +191,6 @@ public class HeroData : EntityData
         if (customTactics != null)
             customTactics.RemoveAll(a => a != null && string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
     }
-
     public void DebugContentsToConsoleCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -414,7 +271,6 @@ public class HeroData : EntityData
 
         return 1;
     }
-
 }
 
 
