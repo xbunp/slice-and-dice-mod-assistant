@@ -133,18 +133,40 @@ public static class StaticBranchTracing
 
     public static bool IsMonsterEntity(string core)
     {
-        if (string.IsNullOrEmpty(core) || core.Contains("replica", StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.IsNullOrEmpty(core)) return false;
+
         string firstToken = TopLevelSplit(core, '.')[0].ToLower();
         while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
         {
             firstToken = StripOuterParens(firstToken);
             firstToken = TopLevelSplit(firstToken, '.')[0].ToLower();
         }
-        if (firstToken == "replica") return false;
+
+        // Skip repeat multiplier prefixes (e.g., x2.egg)
+        if (firstToken.StartsWith("x") && firstToken.Length > 1 && char.IsDigit(firstToken[1]))
+        {
+            var tokens = TopLevelSplit(core, '.');
+            if (tokens.Count > 1)
+            {
+                firstToken = tokens[1].ToLower();
+                while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
+                {
+                    firstToken = StripOuterParens(firstToken);
+                    firstToken = TopLevelSplit(firstToken, '.')[0].ToLower();
+                }
+            }
+        }
+
+        // Match container prefixes FIRST before checking for 'replica'
         if (firstToken == "egg" || firstToken == "vase" || firstToken == "orb" || firstToken == "jinx" || firstToken == "rmon") return true;
+
+        if (core.Contains("replica", StringComparison.OrdinalIgnoreCase)) return false;
+
+        if (firstToken == "replica") return false;
         foreach (string monsterName in EntityHelper.FormattedMonsterNames)
             if (string.Equals(firstToken, monsterName, StringComparison.OrdinalIgnoreCase)) return true;
         if (firstToken.Contains("jinx") || firstToken.Contains("vase") || firstToken.Contains("orb") || firstToken.Contains("rmon")) return true;
+
         return false;
     }
 

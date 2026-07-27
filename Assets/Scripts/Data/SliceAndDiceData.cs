@@ -3581,7 +3581,7 @@ public static class BaseAbilityDatabase
 }
 
 
-public static class CurseDataset
+public static class ModifierDataSet
 {
     public static readonly Dictionary<string, string> Curses = new Dictionary<string, string>
     {
@@ -4546,10 +4546,7 @@ public static class CurseDataset
         { "Wurst/4", "First 2 turns: No burst" },
         { "Wurst/5", "No burst" }
     };
-}
 
-public static class BlessingDataset
-{
     public static readonly Dictionary<string, string> Blessings = new Dictionary<string, string>
     {
         // Standard Blessings
@@ -4802,6 +4799,48 @@ public static class BlessingDataset
         { "i.[Tier 17 item]", "Gain the [Tier 17 item]" }
         */
     };
+
+    public static readonly Dictionary<string, string> Tweaks = new Dictionary<string, string>
+    {
+        { "Caped Monsters", "All monsters: Copy the left side onto the middle row" },
+        { "Choosy", "-1 item quality\n+1 offered item" },
+        { "Choozy", "+1 item quality\n-1 offered item" },
+        { "Crumbling Caste", "All monsters: +6 hp\nAt the end of the 6th turn, kill all enemies" },
+        { "Crust", "All monsters: -2 hp\nAll monsters: The outer 2 hp: must be removed individually" },
+        { "Fingers Crossed", "All heroes: Add critical & fumble to the right side" },
+        { "High Roller", "All heroes: Add lucky & +2 pips to the top side" },
+        { "Historical Accuracy", "Archer & Sniper: Add ranged to all sides" },
+        { "Huge Plague", "All huge enemies: Add poison & pain to all sides" },
+        { "Insidious Whispers", "All heroes: Add enduring & evil to the left side" },
+        { "Keep Rolling", "+2 Rerolls\nYou can't lock dice" },
+        { "Knife School", "All heroes: Replace blank sides with '1 damage cantrip pain'" },
+        { "Less hp", "All monsters: -1 hp\nAll heroes: -2 hp" },
+        { "Loan", "All heroes: +5 hp\nAll heroes: Add pain to all sides" },
+        { "Mana Flux", "Spells cost +1 mana\nAll heroes: +1 to all mana/manaGain sides" },
+        { "Monster Wands", "All monsters: Add singleUse & +1 pip to all sides" },
+        { "More hp", "All heroes and monsters: +2 hp" },
+        { "No Flee", "No Fleeing" },
+        { "Power down", "All heroes and monsters: -1 pip to all sides" },
+        { "Power Up", "All heroes: +1 pip to all sides\nAll monsters: +2 pips to all sides" },
+        { "Pungent Balm", "All heroes: Add selfcleanse to the left side\nAll heroes: -1 hp" },
+        { "Roll Bank", "Keep unused rerolls\n-2 rerolls\nThe 1st turn: +6 rerolls" },
+        { "Small Sacrifice", "All tiny enemies: +3 pips & Add death to all sides" },
+        { "Specialist", "All heroes: +1 pip to the left side & replace the middle side with 'blank'" },
+        { "Strained Top", "All heroes : +2 pips & add exert to the top side" },
+        { "Threesy Street", "All heroes: Add threesy to the rightmost side" },
+        { "Ting", "All monsters: The outer hp: must be removed individually\nAll heroes: Add rampage to the middle two sides" },
+        { "Topsy Turvy", "All heroes: Replace all sides with the hero above's base sides" },
+        { "Toxic Fog", "All heroes and monsters: Start poisoned" },
+        { "Truce", "The 1st turn: All heroes and monsters: Cannot die" },
+        { "Tweaked Monsters", "All monsters: -2 hp\nAll monsters: +1 pip to all sides" }
+    };
+}
+
+
+
+public static class BlessingDataset
+{
+
 }
 
 public static class HpPipMapper

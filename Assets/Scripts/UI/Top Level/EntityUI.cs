@@ -976,10 +976,10 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         // Curses
         AppendCollectionSelector<string>(
             layout: layout, label: "Add Curse:", uniqueKey: "Curse",
-            availableChoices: CurseDataset.Curses.Keys.ToList(),
+            availableChoices: ModifierDataSet.Curses.Keys.ToList(),
             currentActiveItems: CurrentEntity.curses ?? new List<string>(),
             getKey: (curseName) => curseName,
-            getDisplay: (curseName) => CurseDataset.Curses.TryGetValue(curseName, out string desc) ? $"{curseName}: {desc}" : curseName,
+            getDisplay: (curseName) => ModifierDataSet.Curses.TryGetValue(curseName, out string desc) ? $"{curseName}: {desc}" : curseName,
             onAdd: (curseName) => {
                 if (CurrentEntity.curses == null) CurrentEntity.curses = new List<string>();
                 if (!CurrentEntity.curses.Contains(curseName)) { CurrentEntity.curses.Add(curseName); NotifyStateChanged(); RebuildStatsUI(); }

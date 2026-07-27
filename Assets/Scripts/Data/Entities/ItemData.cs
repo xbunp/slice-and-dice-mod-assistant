@@ -574,43 +574,93 @@ public class ItemData : SDData
     // The ItemData maps its own mechanics onto the given Entity, removing this massive logic from EntityData
     public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)
     {
-        bool canMapNatively = true;
+        bool isPureEntityName = Mechanics.Count == 0 &&
+                                !string.IsNullOrEmpty(entityName) &&
+                                string.IsNullOrEmpty(imageOverride) &&
+                                visuals.Count == 0 &&
+                                !Tier.HasValue &&
+                                string.IsNullOrEmpty(doc) &&
+                                LearnedAbilities.Count == 0 &&
+                                Containers.Count == 0;
 
+        if (isPureEntityName)
+        {
+            entity.items.Add(entityName);
+            return true;
+        }
+
+        bool isPureBaseItem = Mechanics.Count == 1 &&
+                              string.IsNullOrEmpty(Mechanics[0].Prefix) &&
+                              Mechanics[0].Targets.Count == 0 &&
+                              Mechanics[0].ChainedKeywords.Count == 0 &&
+                              Mechanics[0].Multiplier == 1 &&
+                              Mechanics[0].RepeatTimes == 1 &&
+                              !Mechanics[0].PerTier &&
+                              !Mechanics[0].Unpack &&
+                              string.IsNullOrEmpty(Mechanics[0].MergedItem) &&
+                              string.IsNullOrEmpty(Mechanics[0].SplicedItem) &&
+                              !Mechanics[0].PartIndex.HasValue &&
+                              string.IsNullOrEmpty(imageOverride) &&
+                              visuals.Count == 0 &&
+                              !Tier.HasValue &&
+                              string.IsNullOrEmpty(doc) &&
+                              LearnedAbilities.Count == 0 &&
+                              Containers.Count == 0;
+
+        if (isPureBaseItem)
+        {
+            entity.items.Add(Mechanics[0].PayloadString);
+            return true;
+        }
+
+        bool canMapNatively = true;
         foreach (var mech in Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
             if (mech.PayloadData is ModifierData) return false;
 
-            // FIX: Removed 'hat', 'cast', 'enchant' from this allowed list!
-            // This forces them to return FALSE, meaning EntityData will black-box them
-            // into customPayloads and correctly export them retaining ALL their native syntax!
             if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "")
             {
                 return false;
             }
-
             if ((pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "") && mech.Targets.Count == 0)
             {
                 return false;
             }
+
+            // CRITICAL: Prevent sequential face operations from flattening each other!
+            // If the face already has a sticker/hat/cast payload, black-box this into customPayloads to preserve sequential syntax.
+            if (pfx == "sticker" || pfx == "hat" || pfx == "cast" || pfx == "enchant")
+            {
+                List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
+                foreach (int face in targetFaces)
+                {
+                    if (entity.diceSides != null && face >= 0 && face < 6 && entity.diceSides[face] != null)
+                    {
+                        if (!string.IsNullOrEmpty(entity.diceSides[face].payload)) return false;
+                    }
+                }
+            }
         }
 
-        // Apply metadata directly
         if (!string.IsNullOrEmpty(imageOverride) && !imageOverride.Equals("None", StringComparison.OrdinalIgnoreCase))
         {
             entity.imageOverride = imageOverride;
             imageOverride = null;
         }
+
         if (visuals != null && visuals.Count > 0)
         {
             entity.visuals.AddRange(visuals);
             visuals.Clear();
         }
+
         if (!string.IsNullOrEmpty(doc))
         {
             entity.doc = doc;
             doc = null;
         }
+
         if (Tier.HasValue && entity is HeroData heroData)
         {
             heroData.tier = Tier.Value;
@@ -663,6 +713,7 @@ public class ItemData : SDData
                 entity.ApplyMechanicToDiceSides(targetFaces, mech);
             }
         }
+
         return canMapNatively;
     }
 

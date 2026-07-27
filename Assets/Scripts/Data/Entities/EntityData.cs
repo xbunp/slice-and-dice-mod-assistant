@@ -354,40 +354,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return priority;
     }
-    private bool IsStickerTargetOverrideHat(HeroData hatHero, out DiceSideData.PayloadTarget? target, out ItemMechanic innerSticker)
-    {
-        target = null;
-        innerSticker = null;
-
-        if (!string.Equals(hatHero.baseReplica, "Fey", StringComparison.OrdinalIgnoreCase)) return false;
-
-        int leftSd = hatHero.diceSides[0]?.effectID ?? 0;
-        if (leftSd != 179 && leftSd != 185 && leftSd != 186) return false;
-
-        DiceSideData stickerFace = hatHero.diceSides.FirstOrDefault(s => s != null && s.faceType == DiceSideData.DiceFaceType.Sticker);
-
-        if (stickerFace == null || !stickerFace.keywords.Contains("togtarg")) return false;
-
-        bool hasTogfri = stickerFace.keywords.Contains("togfri");
-
-        // Strict, direct enum mapping based on the Left Face ID rules
-        if (leftSd == 179) target = hasTogfri ? DiceSideData.PayloadTarget.AllEnemies : DiceSideData.PayloadTarget.AllAllies;
-        else if (leftSd == 185) target = DiceSideData.PayloadTarget.Everyone;
-        else if (leftSd == 186) target = DiceSideData.PayloadTarget.Self;
-
-        innerSticker = new ItemMechanic
-        {
-            Prefix = "sticker",
-            PayloadString = stickerFace.payload
-        };
-
-        foreach (var kw in stickerFace.keywords)
-        {
-            if (kw != "togtarg" && kw != "togfri") innerSticker.ChainedKeywords.Add(kw);
-        }
-
-        return true;
-    }
     protected string ExtractBaseIdentifier(string token)
     {
         if (string.IsNullOrEmpty(token)) return token;
@@ -407,7 +373,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return token;
     }
-
     protected virtual bool TryProcessSpecificMetadata(TokenStream stream) { return false; }
     protected bool TryProcessEntityMetadata(TokenStream stream)
     {
@@ -569,74 +534,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-    protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
-    {
-        var stream = new TokenStream(tokens);
-
-        while (!stream.IsEOF)
-        {
-            string originalToken = stream.Peek();
-            string tokenLower = originalToken.ToLower();
-
-            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
-            {
-                stream.Consume();
-                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, itemPipeline, processTraitsAndCollections));
-                continue;
-            }
-
-            if (TryProcessCommonMetadata(stream)) continue;
-            if (TryProcessEntityMetadata(stream)) continue;
-            if (TryProcessSpecificMetadata(stream)) continue;
-            if (TryProcessDiceSides(stream)) continue;
-            if (TryProcessTriggerData(stream)) continue;
-            if (TryProcessOrbData(stream)) continue;
-            if (TryProcessAppendedDoc(stream)) continue;
-
-            if (processTraitsAndCollections)
-            {
-                if (tokenLower == "t") { ProcessTraitToken(stream); continue; }
-                if (TryProcessCollections(stream)) continue;
-            }
-
-            if (tokenLower == "i")
-            {
-                int startIndex = stream.Index + 1;
-                if (startIndex >= stream.GetRawList().Count) { stream.Consume(); continue; }
-                int length = ItemDomainRules.GetItemBlockLength(stream.GetRawList(), startIndex);
-                // FIX: Track depth during intercept to prevent shattering nested objects
-                int depth = 0;
-                for (int k = 0; k < length; k++)
-                {
-                    string peek = stream.GetRawList()[startIndex + k].ToLower();
-                    if (peek.StartsWith("(")) depth++;
-                    if (peek.EndsWith(")")) depth--;
-                    if (depth <= 0 && EntityDomainRules.CommonMetadataKeys.Contains(peek))
-                    {
-                        length = k;
-                        break;
-                    }
-                }
-                if (length > 0)
-                {
-                    stream.Consume(); // 'i'
-                    List<string> subTokens = stream.ConsumeRange(length);
-                    string itemString = string.Join(".", subTokens);
-                    ItemData parsedItem = new ItemData();
-                    parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
-                    bool isItemParsedDataEmpty = string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0 && parsedItem.LearnedAbilities.Count == 0 && parsedItem.Containers.Count == 0 && !parsedItem.Tier.HasValue && string.IsNullOrEmpty(parsedItem.doc) && string.IsNullOrEmpty(parsedItem.imageOverride);
-                    if (isItemParsedDataEmpty) parsedItem.entityName = itemString;
-                    itemPipeline.Add(parsedItem);
-                    continue;
-                }
-            }
-
-            if (TryProcessModifierData(stream)) continue;
-
-
-            stream.Consume(); // Fallback consume
-        }
-    }
     protected bool TryProcessModifierData(TokenStream stream)
     {
         string peek = stream.Peek().ToLower();
@@ -678,6 +575,98 @@ public abstract class EntityData : SDData, IPayloadContainer
             // FIX: Route non-native items (Hats, Enchants) to CustomPayloads so CustomItemContextHelper can correctly bracket them to the outside!
             customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
         }
+    }
+    private void ProcessFaceKeywords(DiceSideData face, List<string> chunks)
+    {
+        if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
+        {
+            chunks.Add("k.permissive");
+        }
+
+        foreach (var kw in face.keywords)
+        {
+            if (string.IsNullOrWhiteSpace(kw)) continue;
+            string cleanKw = kw.Trim().ToLower();
+            if (cleanKw != "permissive" && cleanKw != "stasis")
+            {
+                if (cleanKw == "future") chunks.Add("ritemx.dae9");
+                // FIX: Do NOT add 'k.' prefix to Tog items
+                else if (ItemDomainRules.TogItems.Contains(cleanKw)) chunks.Add(cleanKw);
+                else chunks.Add($"k.{cleanKw}");
+            }
+        }
+
+        if (face.sideItems != null)
+        {
+            foreach (var item in face.sideItems)
+            {
+                chunks.Add(item.Export());
+            }
+        }
+    }
+    public void ApplyMechanicToDiceSides(List<int> targetFaces, ItemMechanic mech, DiceSideData.PayloadTarget? overrideTarget = null)
+    {
+        foreach (int faceIdx in targetFaces)
+        {
+            if (faceIdx < 0 || faceIdx >= 6) continue;
+            if (diceSides == null) InitializeDiceFaces();
+            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+
+            string lowerPrefix = mech.Prefix?.ToLower() ?? "";
+            string payload = mech.PayloadString?.Trim() ?? "";
+
+            foreach (string chainKw in mech.ChainedKeywords)
+            {
+                string cleanKw = chainKw.Trim().ToLower();
+                if (cleanKw.StartsWith("k.")) cleanKw = cleanKw.Substring(2);
+                if (!diceSides[faceIdx].keywords.Contains(cleanKw)) diceSides[faceIdx].keywords.Add(cleanKw);
+            }
+
+            if (lowerPrefix == "k" || lowerPrefix == "")
+            {
+                string keyword = payload.ToLower();
+                if (keyword == "ritemx.dae9" || keyword == "unpack.ritemx.644f") keyword = "future";
+                if (!string.IsNullOrEmpty(keyword) && !diceSides[faceIdx].keywords.Contains(keyword)) diceSides[faceIdx].keywords.Add(keyword);
+            }
+            else if (lowerPrefix == "facade")
+            {
+                string cleanPayload = payload;
+                int firstColon = payload.IndexOf(':');
+                if (firstColon != -1 && payload.IndexOf('.', firstColon) != -1) cleanPayload = payload.Substring(0, payload.IndexOf('.', firstColon));
+
+                string[] facadeParts = cleanPayload.Split(':');
+                diceSides[faceIdx].facadeID = facadeParts[0];
+                if (facadeParts.Length > 1)
+                {
+                    var colorParts = facadeParts.Skip(1).Take(3).Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim()).ToList();
+                    while (colorParts.Count < 3) colorParts.Add("0");
+                    diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
+                }
+            }
+            else if (lowerPrefix == "sticker" || lowerPrefix == "cast" || lowerPrefix == "enchant" || lowerPrefix == "hat")
+            {
+                // Assign payload directly. The enum mappings are handled strictly by Export() prefixing
+                if (lowerPrefix == "hat" && mech.PayloadData is HeroData hatHero)
+                {
+                    diceSides[faceIdx].faceType = DiceSideData.DiceFaceType.Sticker;
+                    diceSides[faceIdx].payload = hatHero.ExportAsHat();
+                }
+                else
+                {
+                    diceSides[faceIdx].faceType = lowerPrefix == "cast" ? DiceSideData.DiceFaceType.Cast :
+                                                  lowerPrefix == "enchant" ? DiceSideData.DiceFaceType.Enchant :
+                                                  DiceSideData.DiceFaceType.Sticker;
+                    diceSides[faceIdx].payload = payload;
+                }
+            }
+        }
+    }
+    protected void DetectBracketingState(string rawData)
+    {
+        if (string.IsNullOrWhiteSpace(rawData)) return;
+        string trimmed = rawData.Trim();
+        isOuterWrappedInParens = trimmed.StartsWith("((") && trimmed.EndsWith(")");
+        isCoreWrappedInParens = trimmed.StartsWith("(");
     }
 
     ////////////////////////////
@@ -772,7 +761,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
         string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
-
         string fullSummonExport = cleanSummon; // Fallback to raw string if entity lookup fails
         if (ModPackage.Instance != null)
         {
@@ -784,28 +772,26 @@ public abstract class EntityData : SDData, IPayloadContainer
                 if (summonMonster != null) fullSummonExport = summonMonster.Export();
             }
         }
-
         if (!fullSummonExport.StartsWith("("))
         {
             fullSummonExport = $"({fullSummonExport})";
         }
 
-        string eggPrefix = "egg.";
+        string repeatPrefix = "";
         if (face.pips > 1)
         {
-            eggPrefix = $"x{face.pips}.egg.";
+            repeatPrefix = $"x{face.pips}.";
         }
 
-        // 1. Hat MUST come first to establish the dice face override
-        chunks.Add($"hat.({eggPrefix}{fullSummonExport})");
+        // Place repeat multiplier outside the hat so ItemData can absorb it
+        chunks.Add($"{repeatPrefix}hat.(egg.{fullSummonExport})");
 
-        // 2. Blindfold item MUST come immediately after the Hat
+        // Blindfold item MUST come immediately after the Hat
         if (hasBlindfold)
         {
             chunks.Add("blindfold");
         }
-
-        return true; // Indicates a hat wrapper is active for this face
+        return true;
     }
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
@@ -924,18 +910,149 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
     }
 
-    /////////////////////////////////////////
+    // ====================================================================
+    // EXPORT PIPELINE DEDICATED HELPER METHODS
+    // ====================================================================
+    protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
+    {
+        var stream = new TokenStream(tokens);
+        while (!stream.IsEOF)
+        {
+            string originalToken = stream.Peek();
+            string tokenLower = originalToken.ToLower();
+            if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
+            {
+                stream.Consume();
+                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, itemPipeline, processTraitsAndCollections));
+                continue;
+            }
 
+            if (TryProcessCommonMetadata(stream)) continue;
+            if (TryProcessEntityMetadata(stream)) continue;
+            if (TryProcessSpecificMetadata(stream)) continue;
+            if (TryProcessDiceSides(stream)) continue;
+            if (TryProcessTriggerData(stream)) continue;
+            if (TryProcessOrbData(stream)) continue;
+            if (TryProcessAppendedDoc(stream)) continue;
+
+            if (processTraitsAndCollections)
+            {
+                if (tokenLower == "t") { ProcessTraitToken(stream); continue; }
+                if (TryProcessCollections(stream)) continue;
+            }
+
+            if (tokenLower == "i")
+            {
+                int startIndex = stream.Index + 1;
+                if (startIndex >= stream.GetRawList().Count) { stream.Consume(); continue; }
+                int length = ItemDomainRules.GetItemBlockLength(stream.GetRawList(), startIndex);
+
+                // FIX: Track depth accurately by counting parentheses 
+                int depth = 0;
+                for (int k = 0; k < length; k++)
+                {
+                    string peek = stream.GetRawList()[startIndex + k].ToLower();
+                    depth += peek.Count(c => c == '(') - peek.Count(c => c == ')');
+
+                    if (depth <= 0 && EntityDomainRules.CommonMetadataKeys.Contains(peek))
+                    {
+                        length = k;
+                        break;
+                    }
+                }
+
+                if (length > 0)
+                {
+                    stream.Consume(); // 'i'
+                    List<string> subTokens = stream.ConsumeRange(length);
+                    string itemString = string.Join(".", subTokens);
+                    ItemData parsedItem = new ItemData();
+                    parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
+
+                    bool isItemParsedDataEmpty = string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0 && parsedItem.LearnedAbilities.Count == 0 && parsedItem.Containers.Count == 0 && !parsedItem.Tier.HasValue && string.IsNullOrEmpty(parsedItem.doc) && string.IsNullOrEmpty(parsedItem.imageOverride);
+                    if (isItemParsedDataEmpty) parsedItem.entityName = itemString;
+
+                    itemPipeline.Add(parsedItem);
+                    continue;
+                }
+            }
+            if (TryProcessModifierData(stream)) continue;
+            stream.Consume(); // Fallback consume
+        }
+    }
     public override string Export()
     {
-        StringBuilder sb = new StringBuilder();
-        bool isHero = this is HeroData;
         HeroData hero = this as HeroData;
         MonsterData monster = this as MonsterData;
-        string baseId = isHero ? hero.baseReplica : monster.baseMonster;
-        bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) && !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
+        bool isHero = hero != null;
 
-        // --- 1. CORE ENTITY BODY ---
+        if (!isHero) SyncMonsterContainerBaseIdentifier(monster);
+
+        string baseId = isHero ? hero.baseReplica : monster.baseMonster;
+        bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) &&
+                                !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
+
+        string coreBody = BuildCoreBody(hero, monster, isHero, baseId, hasImageOverride);
+        string trailingPayloads = BuildTrailingPayloads(hero, monster, isHero, out var wrapperPayloads);
+
+        string combined = $"{coreBody}{trailingPayloads}";
+        bool hasOuterExtensions = !string.IsNullOrEmpty(trailingPayloads);
+
+        return ApplyWrappersAndOuterBracketing(combined, wrapperPayloads, hasOuterExtensions);
+    }
+    private string ApplyWrappersAndOuterBracketing(string result, List<string> wrapperPayloads, bool hasOuterExtensions)
+    {
+        if (wrapperPayloads != null)
+        {
+            foreach (var wrapper in wrapperPayloads)
+            {
+                result = wrapper.Contains("{0}") ? string.Format(wrapper, result) : $"({result}.{wrapper})";
+            }
+        }
+
+        // If the entity has trailing data (items, abilities, curses), or was parsed with outer parens,
+        // enclose the ENTIRE expression in an outer set of brackets: ((Core).Trailing)
+        if (hasOuterExtensions || isOuterWrappedInParens)
+        {
+            result = $"({result})";
+        }
+
+        return result;
+    }
+    private void SyncMonsterContainerBaseIdentifier(MonsterData monster)
+    {
+        if (monster == null || monster.payloadData == null) return;
+
+        string prefix = monster.baseMonster;
+        int parenIdx = prefix.IndexOf('(');
+        if (parenIdx > 0)
+        {
+            prefix = prefix.Substring(0, parenIdx).TrimEnd('.');
+        }
+        else
+        {
+            int dotIdx = prefix.IndexOf('.');
+            if (dotIdx > 0) prefix = prefix.Substring(0, dotIdx);
+        }
+
+        if (monster.payloadData is AbilityData abPayload)
+        {
+            monster.baseMonster = $"{prefix}.({abPayload.Export()})";
+        }
+        else if (monster.payloadData is SDData sdPayload)
+        {
+            monster.baseMonster = $"{prefix}.({sdPayload.Export()})";
+        }
+        else if (monster.payloadData is ModifierData modPayload)
+        {
+            monster.baseMonster = $"{prefix}.({modPayload.Export()})";
+        }
+    }
+    private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride)
+    {
+        StringBuilder sb = new StringBuilder();
+
         if (!string.IsNullOrEmpty(baseId))
         {
             if (isHero) sb.Append($"replica.{FormatName(FormatSpecialImageName(baseId))}");
@@ -950,12 +1067,16 @@ public abstract class EntityData : SDData, IPayloadContainer
         if (hp > 0) sb.Append($".hp.{hp}");
         if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
         if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
+
         AppendDiceSides(sb);
+
         if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
 
+        // ONLY ITEMS WHICH AFFECT DICE FACES GO -INSIDE-
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
 
+        // Visuals go INSIDE the core entity bounds
         if (hasImageOverride)
         {
             sb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
@@ -965,17 +1086,20 @@ public abstract class EntityData : SDData, IPayloadContainer
         string coreString = sb.ToString();
         if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
 
-        // Core entity stats/faces/visuals get wrapped in their own inner parenthesis
-        string formattedCore = $"({coreString})";
-
-        // --- TRAILING / OUTSIDE PAYLOADS ---
+        // CRITICAL RESTRICTION: Core Entity MUST be wrapped to protect boundaries
+        return $"({coreString})";
+    }
+    private string BuildTrailingPayloads(HeroData hero, MonsterData monster, bool isHero, out List<string> wrapperPayloads)
+    {
         StringBuilder outerSb = new StringBuilder();
 
-        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
+        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
+        if (!isHero && !string.IsNullOrEmpty(monster.bal)) outerSb.Append($".bal.{FormatName(monster.bal)}");
+
+        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out wrapperPayloads);
 
         string traitPrefix = isHero ? ".i.t." : ".t.";
         if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) outerSb.Append($"{traitPrefix}{FormatName(t)}");
-
         if (!isHero && monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
         if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) outerSb.Append($".i.{FormatName(i)}");
         if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) outerSb.Append($".gift.{FormatName(bl)}");
@@ -999,19 +1123,23 @@ public abstract class EntityData : SDData, IPayloadContainer
                 else outerSb.Append($".abilitydata.{cab.Export()}");
             }
         }
+
         foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
-
-        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
         if (isHero && !string.IsNullOrEmpty(hero.appendedDoc)) outerSb.Append($".i.self.Wolf.doc.{hero.appendedDoc}.spirit");
-        if (!isHero && !string.IsNullOrEmpty(monster.bal)) outerSb.Append($".bal.{FormatName(monster.bal)}");
 
-        string result = $"{formattedCore}{outerSb.ToString()}";
+        return outerSb.ToString();
+    }
+    private string ApplyWrappersAndOuterBracketing(string result, List<string> wrapperPayloads)
+    {
+        if (wrapperPayloads != null)
+        {
+            foreach (var wrapper in wrapperPayloads)
+            {
+                result = wrapper.Contains("{0}") ? string.Format(wrapper, result) : $"({result}.{wrapper})";
+            }
+        }
 
-        foreach (var wrapper in wrapperPayloads)
-            result = wrapper.Contains("{0}") ? string.Format(wrapper, result) : $"({result}.{wrapper})";
-
-        // Wrap the entire entity + trailing payloads in outer parens if trailing payloads exist
-        if (outerSb.Length > 0 || isOuterWrappedInParens)
+        if (isOuterWrappedInParens)
         {
             result = $"({result})";
         }
@@ -1019,98 +1147,54 @@ public abstract class EntityData : SDData, IPayloadContainer
         return result;
     }
 
-    private void ProcessFaceKeywords(DiceSideData face, List<string> chunks)
+    private bool IsImageOverridePresent(string baseId)
     {
-        if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
-        {
-            chunks.Add("k.permissive");
-        }
-
-        foreach (var kw in face.keywords)
-        {
-            if (string.IsNullOrWhiteSpace(kw)) continue;
-            string cleanKw = kw.Trim().ToLower();
-            if (cleanKw != "permissive" && cleanKw != "stasis")
-            {
-                if (cleanKw == "future") chunks.Add("ritemx.dae9");
-                // FIX: Do NOT add 'k.' prefix to Tog items
-                else if (ItemDomainRules.TogItems.Contains(cleanKw)) chunks.Add(cleanKw);
-                else chunks.Add($"k.{cleanKw}");
-            }
-        }
-
-        if (face.sideItems != null)
-        {
-            foreach (var item in face.sideItems)
-            {
-                chunks.Add(item.Export());
-            }
-        }
+        return !string.IsNullOrEmpty(imageOverride) &&
+               !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
     }
-    public void ApplyMechanicToDiceSides(List<int> targetFaces, ItemMechanic mech, DiceSideData.PayloadTarget? overrideTarget = null)
+    private string BuildVisualOverrides(bool hasImageOverride)
     {
-        foreach (int faceIdx in targetFaces)
-        {
-            if (faceIdx < 0 || faceIdx >= 6) continue;
-            if (diceSides == null) InitializeDiceFaces();
-            if (diceSides[faceIdx] == null) diceSides[faceIdx] = new DiceSideData();
+        if (!hasImageOverride) return string.Empty;
 
-            string lowerPrefix = mech.Prefix?.ToLower() ?? "";
-            string payload = mech.PayloadString?.Trim() ?? "";
-
-            foreach (string chainKw in mech.ChainedKeywords)
-            {
-                string cleanKw = chainKw.Trim().ToLower();
-                if (cleanKw.StartsWith("k.")) cleanKw = cleanKw.Substring(2);
-                if (!diceSides[faceIdx].keywords.Contains(cleanKw)) diceSides[faceIdx].keywords.Add(cleanKw);
-            }
-
-            if (lowerPrefix == "k" || lowerPrefix == "")
-            {
-                string keyword = payload.ToLower();
-                if (keyword == "ritemx.dae9" || keyword == "unpack.ritemx.644f") keyword = "future";
-                if (!string.IsNullOrEmpty(keyword) && !diceSides[faceIdx].keywords.Contains(keyword)) diceSides[faceIdx].keywords.Add(keyword);
-            }
-            else if (lowerPrefix == "facade")
-            {
-                string cleanPayload = payload;
-                int firstColon = payload.IndexOf(':');
-                if (firstColon != -1 && payload.IndexOf('.', firstColon) != -1) cleanPayload = payload.Substring(0, payload.IndexOf('.', firstColon));
-
-                string[] facadeParts = cleanPayload.Split(':');
-                diceSides[faceIdx].facadeID = facadeParts[0];
-                if (facadeParts.Length > 1)
-                {
-                    var colorParts = facadeParts.Skip(1).Take(3).Select(p => string.IsNullOrWhiteSpace(p) ? "0" : p.Trim()).ToList();
-                    while (colorParts.Count < 3) colorParts.Add("0");
-                    diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
-                }
-            }
-            else if (lowerPrefix == "sticker" || lowerPrefix == "cast" || lowerPrefix == "enchant" || lowerPrefix == "hat")
-            {
-                // Assign payload directly. The enum mappings are handled strictly by Export() prefixing
-                if (lowerPrefix == "hat" && mech.PayloadData is HeroData hatHero)
-                {
-                    diceSides[faceIdx].faceType = DiceSideData.DiceFaceType.Sticker;
-                    diceSides[faceIdx].payload = hatHero.ExportAsHat();
-                }
-                else
-                {
-                    diceSides[faceIdx].faceType = lowerPrefix == "cast" ? DiceSideData.DiceFaceType.Cast :
-                                                  lowerPrefix == "enchant" ? DiceSideData.DiceFaceType.Enchant :
-                                                  DiceSideData.DiceFaceType.Sticker;
-                    diceSides[faceIdx].payload = payload;
-                }
-            }
-        }
+        StringBuilder visSb = new StringBuilder();
+        visSb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
+        AppendColorModifier(visSb);
+        return visSb.ToString();
     }
-
-    protected void DetectBracketingState(string rawData)
+    private bool IsStickerTargetOverrideHat(HeroData hatHero, out DiceSideData.PayloadTarget? target, out ItemMechanic innerSticker)
     {
-        if (string.IsNullOrWhiteSpace(rawData)) return;
-        string trimmed = rawData.Trim();
-        isOuterWrappedInParens = trimmed.StartsWith("((") && trimmed.EndsWith(")");
-        isCoreWrappedInParens = trimmed.StartsWith("(");
+        target = null;
+        innerSticker = null;
+
+        if (!string.Equals(hatHero.baseReplica, "Fey", StringComparison.OrdinalIgnoreCase)) return false;
+
+        int leftSd = hatHero.diceSides[0]?.effectID ?? 0;
+        if (leftSd != 179 && leftSd != 185 && leftSd != 186) return false;
+
+        DiceSideData stickerFace = hatHero.diceSides.FirstOrDefault(s => s != null && s.faceType == DiceSideData.DiceFaceType.Sticker);
+
+        if (stickerFace == null || !stickerFace.keywords.Contains("togtarg")) return false;
+
+        bool hasTogfri = stickerFace.keywords.Contains("togfri");
+
+        // Strict, direct enum mapping based on the Left Face ID rules
+        if (leftSd == 179) target = hasTogfri ? DiceSideData.PayloadTarget.AllEnemies : DiceSideData.PayloadTarget.AllAllies;
+        else if (leftSd == 185) target = DiceSideData.PayloadTarget.Everyone;
+        else if (leftSd == 186) target = DiceSideData.PayloadTarget.Self;
+
+        innerSticker = new ItemMechanic
+        {
+            Prefix = "sticker",
+            PayloadString = stickerFace.payload
+        };
+
+        foreach (var kw in stickerFace.keywords)
+        {
+            if (kw != "togtarg" && kw != "togfri") innerSticker.ChainedKeywords.Add(kw);
+        }
+
+        return true;
     }
 
     ////////////////////////////////

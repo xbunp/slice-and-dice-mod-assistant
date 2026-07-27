@@ -69,6 +69,10 @@ public static class SyntaxRegressionTester
         new TestCase("Wose & Huorn", TargetType.Monster,
             "(Wizz.n.Wose.sd.12-2:0:10-2:10-2:0:9-3.i.left.k.cleave#facade.bas212:15:8:-2.i.mid2.hat.(egg.(Imp.n.Huorn.hp.4.sd.9-3:3-2:9-2:9-2:3-2:9-1.i.topbot.k.hypergrowth#facade.Ese30:0.i.rightmost.k.hypergrowth#facade.Ese30:0.i.left.k.hypergrowth#facade.Ese30:0.img.Tinder.p.fd8f4d:85d720:45))#blindfold#facade.Che3:0.img.Bramble.hsv.0:0:-8.draw.Druid:3:3.hsv.25:-11:-3.p.81a871:876113:12)"),
 
+                // --- MONSTER TESTS ---
+        new TestCase("Willow", TargetType.Monster,
+            "((rmon.ded.n.Old Man Willow.hp.12.sd.15-1:3-1:15-1:15-1:3-1:15-1.i.rightmost.k.petrify#facade.Eme89:0.i.left.k.petrify#facade.Eme89:0.i.mid2.k.petrify#k.weaken#facade.Eme176:0.i.topbot.k.petrify#facade.Eme201:0.img.Alpha.hsv.0:0:-99.draw.Bramble:-1:0.draw.Thorn:6:29.draw.Thorn:-12:27).i.topbot.hat.(Fey.sd.115:0:181-2:181-2.i.topbot.k.petrify#k.cleave.i.togvis)#facade.Eme201:0.i.onhitdata.(Fey.sd.181-1.i.left.k.cleanse.n.Cleanse))"),
+
         new TestCase("Wraith", TargetType.Monster,
             "(Blind.n.Wraith.sd.153.i.left.enchant.(left.Blank).i.mid.enchant.(mid.Blank).i.top.enchant.(top.Blank).i.bot.enchant.(bot.Blank).i.right.enchant.(right.Blank).i.rightmost.enchant.(rightmost.Blank).i.all.facade.ite164:54:-59:0.img.b3.75.draw.ite443:7:0.draw.ite284:-2:13.draw.Eme10:10:11.p.b07363:182773:43.hsv.0:-39:14)"),
 
@@ -80,8 +84,7 @@ public static class SyntaxRegressionTester
             "((Bell.n.Grond.sd.4-3:4-3:11-1:11-1:4-2:4-2.i.row.k.exert#facade.dar12:0:25:16.img.Sarcophagus.draw.Alpha:10:0).t.jinx.ea.sthief.abilitydata.(Statue.i.left.hat.egg.(rmon.1c.n.War Drum.hp.2.sd.128-2:128-1:128-1:128-1:128-1:128-1.img.Ber50)#blindfold))"),
 
         new TestCase("Monster - Petrified Troll", TargetType.Monster,
-            "(Alpha.n.Petrified Troll.sd.3-3:3-3:16-2:16-2:3-2:4-1.img.Troll.p.65623a:a6a6a6:35).i.(x6.Basilisk Scale.part.0).i.self.ea.sThief.abilitydata.(Fey.sd.178-1:0:0:0:76-1.i.left.k.cleanse)",
-            "((Alpha.n.Petrified Troll.sd.3-3:3-3:16-2:16-2:3-2:4-1.img.Troll.p.65623a:a6a6a6:35).i.(x6.Basilisk Scale.part.0).i.self.ea.sThief.abilitydata.(Fey.sd.178-1:0:0:0:76-1.i.left.k.cleanse))"),
+            "((Alpha.n.Petrified.hp.8.sd.3-2:3-1:16-1:16-1:16-1:3-1.i.right.k.exert.i.bot.k.exert.i.left.k.exert.img.Troll.p.65623a:a6a6a6:35).doc.Slowly thawing out!.i.(x6.Basilisk Scale.part.0).i.self.ea.sThief.abilitydata.(Fey.sd.178-1:0:0:0:76-1.i.left.k.cleanse))"),            
 
         /*
         //TODO: Make some modifiers for regression testing. 
