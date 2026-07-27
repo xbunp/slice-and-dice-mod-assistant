@@ -57,6 +57,11 @@ public static class EntityDomainRules
 [System.Serializable]
 public abstract class EntityData : SDData, IPayloadContainer
 {
+    [System.NonSerialized]
+    public bool isCoreWrappedInParens = true;
+    [System.NonSerialized]
+    public bool isOuterWrappedInParens = false;
+
     [Header("Core Shared Info")]
     public int hp = 0;
     public string appendedDoc = "";
@@ -168,7 +173,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     // ====================================================================
     // UNIFIED EXPORT PIPELINE (DRY Implementation)
     // ====================================================================
-
     protected void ProcessTraitPayload(string tPayload)
     {
         if (string.IsNullOrWhiteSpace(tPayload)) return;
@@ -274,9 +278,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         innerPayloads = new List<string>();
         outerPayloads = new List<string>();
         wrapperPayloads = new List<string>();
-
         if (customPayloads == null) return;
-
         foreach (var payload in customPayloads)
         {
             if (payload.Type == PayloadType.Item && payload.Data is ItemData itemData)
@@ -289,7 +291,7 @@ public abstract class EntityData : SDData, IPayloadContainer
                     else if (result.Zone == PayloadInjectionZone.EntityWrapper) wrapperPayloads.Add(result.FormattedString);
                 }
             }
-            else if (payload.Data is OnHitData || payload.Data is TriggerHPData || payload.Data is AbilityData)
+            else if (payload.Data is OnHitData || payload.Data is TriggerHPData || payload.Data is AbilityData || payload.Type == PayloadType.Modifier)
             {
                 string exported = payload.Export();
                 if (!string.IsNullOrEmpty(exported)) outerPayloads.Add(exported);
@@ -405,9 +407,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return token;
     }
-
-
-    ////////////////////////////////////
 
     protected virtual bool TryProcessSpecificMetadata(TokenStream stream) { return false; }
     protected bool TryProcessEntityMetadata(TokenStream stream)
@@ -570,7 +569,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-
     protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
     {
         var stream = new TokenStream(tokens);
@@ -605,9 +603,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 int startIndex = stream.Index + 1;
                 if (startIndex >= stream.GetRawList().Count) { stream.Consume(); continue; }
-
                 int length = ItemDomainRules.GetItemBlockLength(stream.GetRawList(), startIndex);
-
                 // FIX: Track depth during intercept to prevent shattering nested objects
                 int depth = 0;
                 for (int k = 0; k < length; k++)
@@ -615,33 +611,63 @@ public abstract class EntityData : SDData, IPayloadContainer
                     string peek = stream.GetRawList()[startIndex + k].ToLower();
                     if (peek.StartsWith("(")) depth++;
                     if (peek.EndsWith(")")) depth--;
-
                     if (depth <= 0 && EntityDomainRules.CommonMetadataKeys.Contains(peek))
                     {
                         length = k;
                         break;
                     }
                 }
-
                 if (length > 0)
                 {
                     stream.Consume(); // 'i'
                     List<string> subTokens = stream.ConsumeRange(length);
                     string itemString = string.Join(".", subTokens);
-
                     ItemData parsedItem = new ItemData();
                     parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
-
                     bool isItemParsedDataEmpty = string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0 && parsedItem.LearnedAbilities.Count == 0 && parsedItem.Containers.Count == 0 && !parsedItem.Tier.HasValue && string.IsNullOrEmpty(parsedItem.doc) && string.IsNullOrEmpty(parsedItem.imageOverride);
                     if (isItemParsedDataEmpty) parsedItem.entityName = itemString;
-
                     itemPipeline.Add(parsedItem);
                     continue;
                 }
             }
 
+            if (TryProcessModifierData(stream)) continue;
+
+
             stream.Consume(); // Fallback consume
         }
+    }
+    protected bool TryProcessModifierData(TokenStream stream)
+    {
+        string peek = stream.Peek().ToLower();
+        string prefix = "";
+
+        // Handle "t" or "i" prefixes explicitly so outer modifiers (like t.jinx or i.self) retain their context
+        if (peek == "t" || peek == "i")
+        {
+            string next = stream.PeekNext().ToLower();
+            if (ModifierDomainRules.IsModifierStartToken(next))
+            {
+                prefix = peek;
+                stream.Consume(); // Consume the 't' or 'i' prefix
+                peek = stream.Peek().ToLower();
+            }
+        }
+
+        if (ModifierDomainRules.IsModifierStartToken(peek))
+        {
+            int length = ModifierDomainRules.GetModifierBlockLength(stream.GetRawList(), stream.Index);
+            if (length > 0)
+            {
+                string payload = string.Join(".", stream.ConsumeRange(length));
+                ModifierData mod = new ModifierData();
+                mod.Parse(payload);
+                if (customPayloads == null) customPayloads = new List<CustomPayload>();
+                customPayloads.Add(new CustomPayload { Prefix = prefix, Data = mod, Type = PayloadType.Modifier });
+                return true;
+            }
+        }
+        return false;
     }
     private void HydrateEntityFromItem(ItemData item)
     {
@@ -899,7 +925,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
 
     /////////////////////////////////////////
-    ///
 
     public override string Export()
     {
@@ -910,10 +935,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         string baseId = isHero ? hero.baseReplica : monster.baseMonster;
         bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) && !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
 
-        // --- 1. CORE WRAPPER & BASE ID ---
-        // ALWAYS wrap core in parens (matches game engine format)
-        sb.Append("(");
-
+        // --- 1. CORE ENTITY BODY ---
         if (!string.IsNullOrEmpty(baseId))
         {
             if (isHero) sb.Append($"replica.{FormatName(FormatSpecialImageName(baseId))}");
@@ -928,27 +950,11 @@ public abstract class EntityData : SDData, IPayloadContainer
         if (hp > 0) sb.Append($".hp.{hp}");
         if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
         if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
-
         AppendDiceSides(sb);
         if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
 
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
-
-        // --- 2. INNER PAYLOADS ---
-        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
-
-        StringBuilder innerSb = new StringBuilder();
-        string traitPrefix = isHero ? ".i.t." : ".t.";
-        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) innerSb.Append($"{traitPrefix}{FormatName(t)}");
-        if (!isHero && monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) innerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
-        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
-        if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) innerSb.Append($".gift.{FormatName(bl)}");
-        string jinxPrefix = isHero ? ".i.t.jinx." : ".t.jinx.";
-        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) innerSb.Append($"{jinxPrefix}{FormatName(c)}");
-        foreach (var inner in innerPayloads) innerSb.Append($".{inner}");
-
-        sb.Append(innerSb.ToString());
 
         if (hasImageOverride)
         {
@@ -956,12 +962,29 @@ public abstract class EntityData : SDData, IPayloadContainer
             AppendColorModifier(sb);
         }
 
-        sb.Append(")"); // Close core parenthesis
+        string coreString = sb.ToString();
+        if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
 
-        string fullContentString = sb.ToString();
+        // Core entity stats/faces/visuals get wrapped in their own inner parenthesis
+        string formattedCore = $"({coreString})";
 
-        // --- 3. OUTER PAYLOADS ---
+        // --- TRAILING / OUTSIDE PAYLOADS ---
         StringBuilder outerSb = new StringBuilder();
+
+        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
+
+        string traitPrefix = isHero ? ".i.t." : ".t.";
+        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) outerSb.Append($"{traitPrefix}{FormatName(t)}");
+
+        if (!isHero && monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
+        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) outerSb.Append($".i.{FormatName(i)}");
+        if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) outerSb.Append($".gift.{FormatName(bl)}");
+
+        string jinxPrefix = isHero ? ".i.t.jinx." : ".t.jinx.";
+        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) outerSb.Append($"{jinxPrefix}{FormatName(c)}");
+
+        foreach (var inner in innerPayloads) outerSb.Append($".{inner}");
+
         if (isHero && hero.baseAbilityData != null)
             foreach (var ab in hero.baseAbilityData) if (!string.IsNullOrEmpty(ab)) outerSb.Append($".i.learn.{FormatName(ab)}");
 
@@ -970,27 +993,32 @@ public abstract class EntityData : SDData, IPayloadContainer
             foreach (var cab in customAbilityData)
             {
                 if (cab == null) continue;
-                if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.({cab.Export()})");
-                else if (cab is OnHitData) outerSb.Append($".i.onhitdata.({cab.Export()})");
+                if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.{cab.Export()}");
+                else if (cab is OnHitData) outerSb.Append($".i.onhitdata.{cab.Export()}");
                 else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-                else outerSb.Append($".abilitydata.({cab.Export()})");
+                else outerSb.Append($".abilitydata.{cab.Export()}");
             }
         }
         foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
 
-        if (outerSb.Length > 0) fullContentString = $"({fullContentString}{outerSb.ToString()})";
+        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
+        if (isHero && !string.IsNullOrEmpty(hero.appendedDoc)) outerSb.Append($".i.self.Wolf.doc.{hero.appendedDoc}.spirit");
+        if (!isHero && !string.IsNullOrEmpty(monster.bal)) outerSb.Append($".bal.{FormatName(monster.bal)}");
 
-        foreach (var wrapper in wrapperPayloads) fullContentString = wrapper.Contains("{0}") ? string.Format(wrapper, fullContentString) : $"({fullContentString}.{wrapper})";
+        string result = $"{formattedCore}{outerSb.ToString()}";
 
-        StringBuilder tailSb = new StringBuilder();
-        if (!string.IsNullOrEmpty(doc)) tailSb.Append($".doc.{doc}");
-        if (isHero && !string.IsNullOrEmpty(hero.appendedDoc)) tailSb.Append($".i.self.Wolf.doc.{hero.appendedDoc}.spirit");
-        if (!isHero && !string.IsNullOrEmpty(monster.bal)) tailSb.Append($".bal.{FormatName(monster.bal)}");
+        foreach (var wrapper in wrapperPayloads)
+            result = wrapper.Contains("{0}") ? string.Format(wrapper, result) : $"({result}.{wrapper})";
 
-        if (tailSb.Length > 0) return $"({fullContentString}{tailSb.ToString()})";
+        // Wrap the entire entity + trailing payloads in outer parens if trailing payloads exist
+        if (outerSb.Length > 0 || isOuterWrappedInParens)
+        {
+            result = $"({result})";
+        }
 
-        return fullContentString;
+        return result;
     }
+
     private void ProcessFaceKeywords(DiceSideData face, List<string> chunks)
     {
         if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
@@ -1075,6 +1103,14 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
+    }
+
+    protected void DetectBracketingState(string rawData)
+    {
+        if (string.IsNullOrWhiteSpace(rawData)) return;
+        string trimmed = rawData.Trim();
+        isOuterWrappedInParens = trimmed.StartsWith("((") && trimmed.EndsWith(")");
+        isCoreWrappedInParens = trimmed.StartsWith("(");
     }
 
     ////////////////////////////////

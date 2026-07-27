@@ -30,6 +30,7 @@ public class MonsterData : EntityData
     {
         InitializeAsBlank();
         if (string.IsNullOrWhiteSpace(data)) return;
+        DetectBracketingState(data);
 
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string core = StaticBranchTracing.StripOuterParens(chunks[0]);

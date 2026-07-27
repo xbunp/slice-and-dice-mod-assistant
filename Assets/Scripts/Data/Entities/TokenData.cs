@@ -25,11 +25,10 @@ public class CustomPayload
     {
         if (Data is SDData sd)
         {
-            if (string.IsNullOrEmpty(Prefix)) return sd.Export();
-            if (Prefix == "add") return $"add.({sd.Export()})";
             string exported = sd.Export();
-            if (exported.StartsWith("(") && exported.EndsWith(")")) return $"{Prefix}.{exported}";
-            return $"{Prefix}.({exported})";
+            if (string.IsNullOrEmpty(Prefix)) return exported;
+            if (exported.StartsWith($"{Prefix}.", StringComparison.OrdinalIgnoreCase)) return exported;
+            return $"{Prefix}.{exported}";
         }
         return "";
     }
@@ -110,6 +109,26 @@ public static class StaticBranchTracing
             else break;
         }
         return t;
+    }
+
+    public static string SafeBracket(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return content;
+        string stripped = StripOuterParens(content);
+
+        int depth = 0;
+        for (int i = 0; i < stripped.Length; i++)
+        {
+            if (stripped[i] == '(') depth++;
+            else if (stripped[i] == ')') depth--;
+            else if (depth == 0)
+            {
+                // Top-level delimiters dictate the expression is complex and MUST be wrapped
+                if (stripped[i] == '#' || stripped[i] == ':' || stripped[i] == '-' || stripped[i] == '&')
+                    return $"({stripped})";
+            }
+        }
+        return stripped;
     }
 
     public static bool IsMonsterEntity(string core)

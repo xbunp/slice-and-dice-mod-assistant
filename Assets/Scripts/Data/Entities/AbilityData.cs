@@ -108,7 +108,7 @@ public abstract class AbilityData : HeroData
                 for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData();
             }
         }
-        public override string ExportWrapped() => string.Empty;
+        public override string Export() => string.Empty;
     }
 
     private void CleanData()
@@ -174,9 +174,10 @@ public abstract class AbilityData : HeroData
         }
         return base.TryProcessSpecificMetadata(stream);
     }
-
-    public override string Export() { return ExportWrapped(); }
-    public abstract string ExportWrapped();
+    public override string Export()
+    {
+        return StaticBranchTracing.SafeBracket(ExportInner());
+    }
     protected string ExportInner()
     {
         StringBuilder sb = new StringBuilder();
@@ -286,10 +287,9 @@ public abstract class AbilityData : HeroData
     {
         if (ability == null) return string.Empty;
         if (ability is OrbData orb) return orb.ExportAsTrait(useITPrefix: true);
-        if (ability is TriggerHPData) return $"i.triggerhpdata.{ability.ExportWrapped()}";
-        if (ability is OnHitData) return $"i.onhitdata.{ability.ExportWrapped()}";
-
-        return $"abilitydata.{ability.ExportWrapped()}";
+        if (ability is TriggerHPData) return $"i.triggerhpdata.{ability.Export()}";
+        if (ability is OnHitData) return $"i.onhitdata.{ability.Export()}";
+        return $"abilitydata.{ability.Export()}";
     }
     public static AbilityData CreateAbility(string data)
     {

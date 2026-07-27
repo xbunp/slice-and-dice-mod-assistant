@@ -175,18 +175,7 @@ MonoBehaviour:
     entityName: 
     imageOverride: 
     doc: 
-    h: 0
-    s: 0
-    v: 0
-    hue: 0
-    p: 
-    b: 
-    draw: 
-    rect: 
-    thue:
-      colorHex: {r: 0, g: 0, b: 0, a: 0}
-      colorRange: 0
-      colorOffset: 0
+    visuals: []
     customPayloads: []
     unityName: New Item
     GlobalTags: []
@@ -196,74 +185,76 @@ MonoBehaviour:
     entityName: 
     imageOverride: None
     doc: 
-    h: 0
-    s: 0
-    v: 0
-    hue: 0
-    p: 
-    b: 
-    draw: 
-    rect: 
-    thue:
-      colorHex: {r: 0, g: 0, b: 0, a: 0}
-      colorRange: 0
-      colorOffset: 0
+    visuals: []
     customPayloads: []
     hp: 0
+    appendedDoc: 
     items: []
     traits: []
     blessings: []
     curses: []
     baseAbilityData: []
     diceSides:
-    - effectID: 0
+    - faceType: 0
+      effectID: 0
       pips: 0
       facadeID: 
       facadeColor: 
       keywords: []
-      rawModifications: 
-      sticker: 
-      cast: 
-    - effectID: 0
+      sideItems: []
+      sidesc: 
+      togtime: 0
+      payload: 
+    - faceType: 0
+      effectID: 0
       pips: 0
       facadeID: 
       facadeColor: 
       keywords: []
-      rawModifications: 
-      sticker: 
-      cast: 
-    - effectID: 0
+      sideItems: []
+      sidesc: 
+      togtime: 0
+      payload: 
+    - faceType: 0
+      effectID: 0
       pips: 0
       facadeID: 
       facadeColor: 
       keywords: []
-      rawModifications: 
-      sticker: 
-      cast: 
-    - effectID: 0
+      sideItems: []
+      sidesc: 
+      togtime: 0
+      payload: 
+    - faceType: 0
+      effectID: 0
       pips: 0
       facadeID: 
       facadeColor: 
       keywords: []
-      rawModifications: 
-      sticker: 
-      cast: 
-    - effectID: 0
+      sideItems: []
+      sidesc: 
+      togtime: 0
+      payload: 
+    - faceType: 0
+      effectID: 0
       pips: 0
       facadeID: 
       facadeColor: 
       keywords: []
-      rawModifications: 
-      sticker: 
-      cast: 
-    - effectID: 0
+      sideItems: []
+      sidesc: 
+      togtime: 0
+      payload: 
+    - faceType: 0
+      effectID: 0
       pips: 0
       facadeID: 
       facadeColor: 
       keywords: []
-      rawModifications: 
-      sticker: 
-      cast: 
+      sideItems: []
+      sidesc: 
+      togtime: 0
+      payload: 
     baseReplica: 
     colorClass: 
     tier: 0

@@ -75,7 +75,8 @@ public class DiceSideData
             faceType = this.faceType,
             payloadTarget = this.payloadTarget,
             payload = this.payload,
-            sidesc = this.sidesc
+            sidesc = this.sidesc,
+            togtime = this.togtime
         };
     }
 }

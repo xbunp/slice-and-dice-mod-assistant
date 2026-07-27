@@ -159,44 +159,41 @@ public static class ItemDomainRules
     public static int GetItemBlockLength(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
-        int parenDepth = 0; // FIX: Track depth to prevent internal boundary shattering
-
+        int parenDepth = 0;
         while (endIndex < tokens.Count)
         {
             string peek = tokens[endIndex].ToLower();
-
-            // Adjust depth
             if (peek.StartsWith("(")) parenDepth++;
             if (peek.EndsWith(")")) parenDepth--;
 
-            // If we are deep inside parens, skip ALL boundary checks! The inner parser handles it.
             if (parenDepth > 0)
             {
                 endIndex++;
                 continue;
             }
 
-            // Standard boundary checks ONLY apply at depth 0
-            if (ModifierDomainRules.IsModifierStartToken(peek))
-            {
-                endIndex += ModifierDomainRules.GetModifierBlockLength(tokens, endIndex);
-                continue;
-            }
             if (AbilityDomainRules.IsAbilityStartSequence(tokens, endIndex))
             {
                 endIndex += AbilityDomainRules.GetAbilityBlockLength(tokens, endIndex);
                 continue;
             }
 
-            if (peek == "i" && endIndex > startIndex)
+            // Lookahead: Entity Modifiers (self, jinx, vase) shouldn't be swallowed by flat items
+            if (peek == "self" || peek == "jinx" || peek == "vase")
             {
-                break; // Hard boundary for new items in flat chains
+                if (endIndex + 1 < tokens.Count)
+                {
+                    string next = tokens[endIndex + 1].ToLower();
+                    if (next == "ea" || next == "add" || next == "party" || next == "spirit" || next == "i" || next.StartsWith("("))
+                    {
+                        break;
+                    }
+                }
             }
 
-            if (!IsTokenClaimedByItem(tokens, endIndex))
-            {
-                break;
-            }
+            if (peek == "i" && endIndex > startIndex) break;
+
+            if (!IsTokenClaimedByItem(tokens, endIndex)) break;
 
             endIndex++;
         }
@@ -332,26 +329,14 @@ public class ItemMechanic
         if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
 
         string corePayload = PayloadString;
-
         if (PayloadData != null)
         {
-            string exportedData = "";
             if (Prefix == "hat" && PayloadData is HeroData hd)
-            {
-                exportedData = hd.ExportAsHat();
-            }
+                corePayload = hd.ExportAsHat();
             else if (PayloadData is SDData sdData)
-            {
-                exportedData = sdData.Export();
-            }
-
-            if (!string.IsNullOrEmpty(exportedData))
-            {
-                corePayload = exportedData;
-            }
+                corePayload = sdData.Export();
         }
 
-        // FIX: Ensure hat, enchant, and cast payloads are wrapped in parens if complex
         if ((Prefix == "hat" || Prefix == "enchant" || Prefix == "cast" || Prefix == "sticker") && !string.IsNullOrEmpty(corePayload))
         {
             if (!corePayload.StartsWith("(") && (corePayload.Contains(".") || corePayload.Contains("#") || corePayload.Contains(":")))
@@ -606,7 +591,6 @@ public class ItemData : SDData
 
             if ((pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "") && mech.Targets.Count == 0)
             {
-                if (pfx == "" && ItemDomainRules.TogItems.Contains(mech.PayloadString)) continue;
                 return false;
             }
         }
@@ -781,12 +765,29 @@ public class ItemData : SDData
     public override string Export()
     {
         List<string> chainParts = new List<string>();
-
         // 1. Containers
-        foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({cont.Value})");
+        foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({StaticBranchTracing.StripOuterParens(cont.Value)})");
 
         // 2. Mechanics
-        OptimizeAndExportMechanics(chainParts);
+        List<string> mechanicParts = new List<string>();
+        OptimizeAndExportMechanics(mechanicParts);
+        if (mechanicParts.Count > 0)
+        {
+            string mechs = mechanicParts[0];
+
+            // Smart Bracketing for flat Base Items with vulnerable suffixes (like .part.0 or x6.)
+            bool needsBrackets = mechs.Contains(".part.") || mechs.Contains(".m.") || mechs.Contains("pertier.") || mechs.Contains("unpack.") || mechs.Contains(".mrg.") || mechs.Contains(".splice.");
+            if (needsBrackets && !mechs.StartsWith("("))
+            {
+                mechs = $"({mechs})";
+            }
+
+            // Ensure proper bounding WITHOUT aggressive blanket SafeBracket calls.
+            if (!mechs.StartsWith("i.", StringComparison.OrdinalIgnoreCase) && !mechs.StartsWith("sd.", StringComparison.OrdinalIgnoreCase))
+                chainParts.Add($"i.{mechs}");
+            else
+                chainParts.Add(mechs);
+        }
 
         // 3. Visuals
         string visualsStr = ItemSyntaxCompiler.BuildVisualsString(this, imageOverride);
@@ -796,13 +797,13 @@ public class ItemData : SDData
         if (ClearDescription) chainParts.Add("cleardesc");
         if (ClearIcon) chainParts.Add("clearicon");
 
-        // 5. Tier (Canonical Order is near the end)
+        // 5. Tier
         if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
 
         // 6. Doc
         if (!string.IsNullOrEmpty(doc)) chainParts.Add($"doc.{doc}");
 
-        // 7. Name (Canonical Order is absolute last)
+        // 7. Name
         if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
 
         StringBuilder sb = new StringBuilder(string.Join(".", chainParts));
@@ -1031,7 +1032,6 @@ public static class CustomItemContextHelper
         string rawItem = item.Export();
         if (string.IsNullOrWhiteSpace(rawItem)) return new ItemInjectionResult { FormattedString = "" };
         string contentToEvaluate = rawItem.Trim();
-
         if (contentToEvaluate.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase) ||
             contentToEvaluate.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
             contentToEvaluate.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
@@ -1047,48 +1047,13 @@ public static class CustomItemContextHelper
             };
         }
 
-        string cleanCore = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase) ? contentToEvaluate.Substring(2) : contentToEvaluate;
-        string unparenthesized = cleanCore;
-        if (unparenthesized.StartsWith("(") && unparenthesized.EndsWith(")"))
-        {
-            unparenthesized = StaticBranchTracing.StripOuterParens(unparenthesized);
-        }
-
-        List<string> chains = StaticBranchTracing.TopLevelSplit(unparenthesized, '#');
-        bool isInnerProperty = false;
-        foreach (var chain in chains)
-        {
-            if (string.IsNullOrWhiteSpace(chain)) continue;
-            string chainTrim = chain.Trim();
-            string firstToken = chainTrim.Split(new[] { '.', ':', '(' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLower() ?? "";
-
-            // FIX: Removed 'hat', 'enchant', 'cast', 'sticker' from InnerEntity routing.
-            // This forces them into OuterEntity, which correctly wraps the base string in parens! ((replica...).i.left.hat...)
-            if (chainTrim.StartsWith("t.", StringComparison.OrdinalIgnoreCase) ||
-                chainTrim.StartsWith("i.t.", StringComparison.OrdinalIgnoreCase) ||
-                chainTrim.StartsWith("self.", StringComparison.OrdinalIgnoreCase) ||
-                chainTrim.StartsWith("i.self.", StringComparison.OrdinalIgnoreCase) ||
-                chainTrim.StartsWith("gift.", StringComparison.OrdinalIgnoreCase) ||
-                chainTrim.StartsWith("i.gift.", StringComparison.OrdinalIgnoreCase))
-            {
-                isInnerProperty = true;
-                break;
-            }
-        }
-
-        string formattedPayload;
-        bool hasHash = contentToEvaluate.Contains("#") || contentToEvaluate.Contains(".i.");
-        bool isWrapped = contentToEvaluate.StartsWith("(") && contentToEvaluate.EndsWith(")");
         bool alreadyHasIPrefix = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase);
-
-        if (alreadyHasIPrefix) formattedPayload = contentToEvaluate;
-        else if (hasHash && !isWrapped) formattedPayload = $"i.({contentToEvaluate})";
-        else formattedPayload = $"i.{contentToEvaluate}";
+        string formattedPayload = alreadyHasIPrefix ? contentToEvaluate : $"i.{contentToEvaluate}";
 
         return new ItemInjectionResult
         {
             FormattedString = formattedPayload,
-            Zone = isInnerProperty ? PayloadInjectionZone.InnerEntity : PayloadInjectionZone.OuterEntity
+            Zone = PayloadInjectionZone.InnerEntity
         };
     }
 }

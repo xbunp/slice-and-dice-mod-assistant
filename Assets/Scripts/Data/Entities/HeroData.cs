@@ -49,6 +49,8 @@ public class HeroData : EntityData
     {
         InitializeAsBlank();
         if (string.IsNullOrWhiteSpace(data)) return;
+        DetectBracketingState(data);
+
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string heroCore = StaticBranchTracing.StripOuterParens(chunks[0]);
         List<string> tokens = StaticBranchTracing.TopLevelSplit(heroCore, '.');
@@ -139,34 +141,29 @@ public class HeroData : EntityData
     public string ExportAsHat()
     {
         StringBuilder heroSb = new StringBuilder();
-
         // Hats do not use the "replica." prefix, they just state the name directly.
         if (!string.IsNullOrEmpty(baseReplica))
         {
             heroSb.Append($"{FormatName(FormatSpecialImageName(baseReplica))}");
         }
-
         AppendDiceSides(heroSb);
-
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
-
         // Append internal items/traits
         ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
-
         StringBuilder innerSb = new StringBuilder();
-
         if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
-
         foreach (var inner in innerPayloads)
         {
             innerSb.Append($".{inner}");
         }
-
+        foreach (var outer in outerPayloads)
+        {
+            innerSb.Append($".{outer}");
+        }
         heroSb.Append(innerSb.ToString());
-
-        // Return without outer parentheses, as ItemMechanic.Export() handles the wrapping
-        return heroSb.ToString();
+        // Self-bracket safely rather than forcing the caller to bracket
+        return StaticBranchTracing.SafeBracket(heroSb.ToString());
     }
     public override void AddCustomAbility(AbilityData ability)
     {

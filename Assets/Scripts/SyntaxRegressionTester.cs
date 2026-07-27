@@ -50,12 +50,20 @@ public static class SyntaxRegressionTester
         new TestCase("Hero - Gollum 2", TargetType.Hero,
             "(replica.Statue.n.Precious.col.k.hp.6.tier.3.sd.13:13:13:13:13:13.i.row.mid.hat.(statue.sd.0:13.i.left.hat.((egg.(replica.Statue.n.Smeagol.col.k.hp.6.tier.3.sd.168-3:125-1:103-2:103-2:124:130.i.left.k.cantrip#facade.bas168:76:26:11.i.topbot.k.generous#facade.eba13:0.i.rightmost.k.sticky#facade.bas130:79:0:0.img.Alien.thue.c571da:92:8.hsv.0:-57:-1))).i.togunt).i.topbot.mid.hat.(statue.sd.0:13.i.left.hat.((egg.(replica.Statue.n.Gollum.col.k.hp.6.tier.3.sd.30-4:44-2:158-1:158-1:11-2:11-3.i.left.k.exert#facade.ale4:0.i.topbot.k.selfheal.img.Alien.thue.c571da:92:8.hsv.0:-57:-1))).i.togunt).i.row.facade.Eme97:0.i.topbot.facade.Eme114:-11:0:0.img.Alien.thue.c571da:92:8.hsv.0:-57:-1)"),
 
-        // --- ITEM TESTS ---
-        new TestCase("Item - Palantir", TargetType.Item,
-            "i.(mid.hat.(Fey.sd.125-2.i.left.k.pain.i.mid.sticker.(mid.hat.Fey.sd.0:12-1.i.mid.facade.DgK20:64:57:6).i.mid.sticker.(mid.hat.Fey.sd.0:12-1.i.mid.facade.DgK20:64:57:6).i.(mid.facade.the30:0#togpip#togkey#togunt))).img.Col9.hsv.17:25:1.p.8bf770:ff3d95:64.b.draw.:0:0.rect.tier.4.doc.Replace the middle side with \"Gain 2 rerolls cantrip pain\" once per turn.n.Palantir"),
+        // Lembas Test Case
+        new TestCase(
+            "Item - Lembas",
+            TargetType.Item,
+            // original
+            "i.(rightmost.hat.(Fey.sd.0:0:0:0:0:110-1.i.rightmost.k.enduring.i.rightmost.facade.Lem91:0)).img.ite17.p.c54016:128a1a:18.p.ff8105:19ac61:45.draw.Ese72:0:0.tier.3.n.Lembas", 
+            // optimized
+            "i.(rightmost.hat.(Fey.sd.0:0:0:0:0:110-1.i.rightmost.k.enduring#facade.Lem91:0)).img.ite17.p.c54016:128a1a:18.p.ff8105:19ac61:45.draw.Ese72:0:0.tier.3.n.Lembas"
+        ),
 
-        new TestCase("Item - Lembas", TargetType.Item,
-            "i.(rightmost.hat.(Fey.sd.0:0:0:0:0:110-1.i.rightmost.k.enduring.i.rightmost.facade.Lem91:0)).img.ite17.p.c54016:128a1a:18.p.ff8105:19ac61:45.draw.Ese72:0:0.tier.3.n.Lembas"),
+        new TestCase(
+            "Item - Two-way Item",
+            TargetType.Item,
+            "i.all.mid.hat.(Statue.sd.187.i.mid.sticker.(k.cantrip).i.togtarg.i.pendulum.i.mid.sticker.(k.nothing).i.mid.togfri.i.mid.togunt)"),
 
         // --- MONSTER TESTS ---
         new TestCase("Wose & Huorn", TargetType.Monster,
@@ -68,10 +76,12 @@ public static class SyntaxRegressionTester
             "(Troll.p.65623a:687a69:23.thue.d00051:36:20.hsv.-14:12:5.n.Cave Troll.sd.3-3:2-6:16-2:16-2:17-3.i.mid.k.exert#k.serrated#k.growth#facade.Ese105:31:34:2.i.right.k.engage#facade.bas205:42:-20:3.i.rightmost.hat.(x2.egg.((Slimelet.n.Orc.hp.3.sd.7-4:7-3:6-3:6-3.t.Caw.img.Bones.hsv.0:0:-70.draw.Goblin:-6:-4.p.6a6e34:5c7688:07).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg)))#blindfold#facade.bas209:38:0:0)"),
 
         new TestCase("Monster - GROND", TargetType.Monster,
-            "(Bell.n.Grond.sd.4-3:4-3:11-1:11-1:4-2:4-2.i.row.k.exert#facade.dar12:0:25:16.img.Sarcophagus.draw.Alpha:10:0).t.jinx.ea.sthief.abilitydata.(Statue.i.left.hat.egg.(rmon.1c.n.War Drum.hp.2.sd.128-2:128-1:128-1:128-1:128-1:128-1.img.Ber50)#blindfold)"),
+            "(Bell.n.Grond.sd.4-3:4-3:11-1:11-1:4-2:4-2.i.row.k.exert#facade.dar12:0:25:16.img.Sarcophagus.draw.Alpha:10:0).t.jinx.ea.sthief.abilitydata.(Statue.i.left.hat.egg.(rmon.1c.n.War Drum.hp.2.sd.128-2:128-1:128-1:128-1:128-1:128-1.img.Ber50)#blindfold)",
+            "((Bell.n.Grond.sd.4-3:4-3:11-1:11-1:4-2:4-2.i.row.k.exert#facade.dar12:0:25:16.img.Sarcophagus.draw.Alpha:10:0).t.jinx.ea.sthief.abilitydata.(Statue.i.left.hat.egg.(rmon.1c.n.War Drum.hp.2.sd.128-2:128-1:128-1:128-1:128-1:128-1.img.Ber50)#blindfold))"),
 
         new TestCase("Monster - Petrified Troll", TargetType.Monster,
-            "Slate.n.Stone Troll.sd.3-3:3-3:16-2:16-2:3-2:4-1.img.Troll.p.65623a:a6a6a6:35.i.(x6.Basilisk Scale.part.0).self.ea.sThief.abilitydata.(Fey.sd.186:0:0:0:76-1.i.left.k.cleanse)"),
+            "(Alpha.n.Petrified Troll.sd.3-3:3-3:16-2:16-2:3-2:4-1.img.Troll.p.65623a:a6a6a6:35).i.(x6.Basilisk Scale.part.0).i.self.ea.sThief.abilitydata.(Fey.sd.178-1:0:0:0:76-1.i.left.k.cleanse)",
+            "((Alpha.n.Petrified Troll.sd.3-3:3-3:16-2:16-2:3-2:4-1.img.Troll.p.65623a:a6a6a6:35).i.(x6.Basilisk Scale.part.0).i.self.ea.sThief.abilitydata.(Fey.sd.178-1:0:0:0:76-1.i.left.k.cleanse))"),
 
         /*
         //TODO: Make some modifiers for regression testing. 
@@ -85,11 +95,13 @@ public static class SyntaxRegressionTester
 
         // --- ABILITY TESTS ---
         new TestCase("On Hit Spell", TargetType.Ability,
-            "i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg))"),
-        /*
-        new TestCase("Orb Ability", TargetType.Ability,
-            "i.t.orb.Restore")
-        */
+            "i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg))",
+            "i.onhitdata.(Fey.sd.15-1.i.(left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg)))"),
+
+                // --- ABILITY TESTS ---
+        new TestCase("Tactic", TargetType.Ability,
+            "abilitydata.(Fey.sd.15-1:0:56-2.i.left.sticker.(Enchanted Shield)#togtime.img.ite2.n.Wary)")
+
     };
 
     // ======================================================================================

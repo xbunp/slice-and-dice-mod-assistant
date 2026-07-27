@@ -13,12 +13,7 @@ public class SpellData : AbilityData
     {
         if (diceSides[4].effectID == 0) diceSides[4].effectID = 76;
         diceSides[4].pips = manaCost;
-        return ExportInner();
-    }
-
-    public override string ExportWrapped()
-    {
-        return $"({Export()})";
+        return StaticBranchTracing.SafeBracket(ExportInner());
     }
 
     public DiceSideData ManaCostSide
@@ -53,12 +48,7 @@ public class TacticData : AbilityData
     {
         diceSides[4].effectID = 0;
         diceSides[4].pips = 0;
-        return ExportInner();
-    }
-
-    public override string ExportWrapped()
-    {
-        return $"({Export()})";
+        return StaticBranchTracing.SafeBracket(ExportInner());
     }
 }
 
@@ -84,13 +74,7 @@ public class OnHitData : AbilityData
             diceSides[i].effectID = 0;
             diceSides[i].pips = 0;
         }
-
-        return ExportInner();
-    }
-
-    public override string ExportWrapped()
-    {
-        return $"({Export()})";
+        return StaticBranchTracing.SafeBracket(ExportInner());
     }
 }
 
@@ -116,15 +100,9 @@ public class TriggerHPData : AbilityData
             diceSides[i].effectID = 0;
             diceSides[i].pips = 0;
         }
-
         // ExportInner() handles base properties and Color (via AppendColorModifier)
         // However, because AbilityData omits HP, we MUST manually append .hp.X to the end
-        return $"{ExportInner()}.hp.{hp}";
-    }
-
-    public override string ExportWrapped()
-    {
-        return $"({Export()})";
+        return StaticBranchTracing.SafeBracket($"{ExportInner()}.hp.{hp}");
     }
 }
 
@@ -188,13 +166,7 @@ public class OrbData : AbilityData
     public override string Export()
     {
         if (isHardcoded) return hardcodedAbilityName.ToLower();
-        return ExportInner();
-    }
-
-    public override string ExportWrapped()
-    {
-        if (isHardcoded) return hardcodedAbilityName.ToLower();
-        return $"({ExportInner()})";
+        return StaticBranchTracing.SafeBracket(ExportInner());
     }
 
     public string ExportAsTrait(bool useITPrefix = true)

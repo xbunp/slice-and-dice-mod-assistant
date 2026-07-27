@@ -140,6 +140,7 @@ public class DiceFaceBuilderWidget
         if (dropdownValue <= 0) return;
         string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
 
+        // Unpolluted return: Retrieves pure keyword name by 1-based index from raw Enum array
         string targetKeyword = rawOptions[dropdownValue - 1].ToLower();
 
         var sides = _getDiceSides?.Invoke();
@@ -524,11 +525,54 @@ public class DiceFaceBuilderWidget
     private List<GridRowSpec> BuildKeywords(int index, DiceSideData face)
     {
         var keywordRows = new List<GridRowSpec>();
-        string[] keywordOptions = EntityUIHelpers.GetKeywordOptions();
+        string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
+
+        List<string> displayOptions = new List<string>();
+
+        // FIX: Add placeholder at index 0 to align with AddKeywordToFace's (dropdownValue - 1) logic
+        displayOptions.Add("--- Select Keyword ---");
+
+        foreach (string rawKw in rawOptions)
+        {
+            // 1. Get colored label from EntityUIHelpers
+            string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(rawKw);
+            if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = rawKw;
+
+            // 2. Perform case-insensitive description lookup
+            string desc = null;
+            if (EffectKeywordColors.Descriptions.TryGetValue(rawKw, out string matchedDesc))
+            {
+                desc = matchedDesc;
+            }
+            else
+            {
+                var kvp = EffectKeywordColors.Descriptions.FirstOrDefault(x => string.Equals(x.Key, rawKw, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(kvp.Value)) desc = kvp.Value;
+            }
+
+            // 3. Align description at horizontal offset <pos=170> in a muted secondary color
+            if (!string.IsNullOrWhiteSpace(desc))
+            {
+                displayOptions.Add($"{coloredLabel}<pos=170><color=#AAAAAA>: {desc}</color>");
+            }
+            else
+            {
+                displayOptions.Add(coloredLabel);
+            }
+        }
 
         keywordRows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
-            GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "", 0.70f, keywordOptions, (val) => AddKeywordToFace(index, val))
+            GridCellSpec.CreateLabel("Add Keyword:", 1.0f)
+        ));
+
+        keywordRows.Add(new GridRowSpec(
+            GridCellSpec.CreateFilteredDropdown(
+                $"KwDrop_{index}",
+                "",
+                1.0f,
+                displayOptions.ToArray(),
+                (val) => AddKeywordToFace(index, val)
+            )
         ));
 
         foreach (var kw in face.keywords)
@@ -543,6 +587,7 @@ public class DiceFaceBuilderWidget
 
         return keywordRows;
     }
+
     private GridRowSpec BuildClipboardButtons(int index)
     {
         return new GridRowSpec(
@@ -622,8 +667,8 @@ public class DiceFaceBuilderWidget
             GridCellSpec.CreateLabel("Desc:", 0.25f),
             GridCellSpec.CreateInput($"SideDesc_{index}", "Enter side description...", 0.75f, (val) =>
             {
-                // ADDED: Sanitize rich input syntax
-                face.sidesc = (val ?? "").SanitizeRichInput();
+                string cleaned = (val ?? "").SanitizeRichInput();
+                face.sidesc = string.IsNullOrWhiteSpace(cleaned) ? null : cleaned;
                 _onStateChanged?.Invoke();
             })
         );

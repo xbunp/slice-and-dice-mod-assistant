@@ -155,7 +155,6 @@ public class ModifierData : SDData
         // 3. Parse Standard Structure
         ParseCore(data);
     }
-
     private void ParseCore(string data)
     {
         List<string> tokens = StaticBranchTracing.TopLevelSplit(data, '.');
@@ -271,7 +270,17 @@ public class ModifierData : SDData
             if (lower == "ea")
             {
                 ActionType = ModifierActionType.EndTurnAbility;
-                AbilityPayload = AbilityData.CreateAbility(remainingPayload);
+
+                string payloadToParse = remainingPayload;
+                // End Turn Abilities use a dummy carrier hero (like sThief.abilitydata.)
+                // We strip the carrier so the AbilityData parser just sees the actual payload.
+                int abDataIdx = payloadToParse.IndexOf("abilitydata.", StringComparison.OrdinalIgnoreCase);
+                if (abDataIdx != -1)
+                {
+                    payloadToParse = payloadToParse.Substring(abDataIdx + "abilitydata.".Length);
+                }
+
+                AbilityPayload = AbilityData.CreateAbility(payloadToParse);
                 break;
             }
             if (lower == "b")
@@ -395,13 +404,10 @@ public class ModifierData : SDData
                 UnityEngine.Debug.LogWarning($"COMPILER WARNING: If '{CoreEffectName}' has multiple parts (like Ghoststone), prefixes will cause the parser to crash. You must target parts explicitly.");
         }
     }
-
-
     public override string Export()
     {
         return ExportInternal(isRoot: true);
     }
-
     private string ExportInternal(bool isRoot)
     {
         Validate(isRoot);
@@ -460,7 +466,9 @@ public class ModifierData : SDData
             case ModifierActionType.PartyHeroes:
                 parts.Add("party"); parts.Add(StringPayload); break;
             case ModifierActionType.EndTurnAbility:
-                parts.Add("ea"); /* Requires AbilityPayload Export */ break;
+                parts.Add("ea");
+                if (AbilityPayload != null) parts.Add($"sThief.abilitydata.{AbilityPayload.Export()}");
+                break;
             case ModifierActionType.TransformHero:
                 parts.Add("b"); parts.Add(HeroPayload?.Export() ?? ""); break;
             case ModifierActionType.Jinx:
@@ -511,8 +519,6 @@ public class ModifierData : SDData
 
         return blockString;
     }
-
-
     public void DebugContentsToConsole(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
