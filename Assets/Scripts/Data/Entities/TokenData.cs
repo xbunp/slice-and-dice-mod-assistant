@@ -111,6 +111,7 @@ public static class StaticBranchTracing
         return t;
     }
 
+    /*
     public static string SafeBracket(string content)
     {
         if (string.IsNullOrWhiteSpace(content)) return content;
@@ -129,6 +130,15 @@ public static class StaticBranchTracing
             }
         }
         return stripped;
+    }
+    */
+
+    public static string SafeBracket(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return content;
+        string stripped = StripOuterParens(content);
+        // Temporary: DO NOT GUESS. ALWAYS BRACKET.
+        return $"({stripped})";
     }
 
     public static bool IsMonsterEntity(string core)

@@ -45,7 +45,7 @@ public class HeroData : EntityData
     [JsonProperty]
     public List<TacticData> customTactics;
 
-    public override void Parse(string data)
+    protected override void ParseCore(string data)
     {
         InitializeAsBlank();
         if (string.IsNullOrWhiteSpace(data)) return;
@@ -162,8 +162,12 @@ public class HeroData : EntityData
             innerSb.Append($".{outer}");
         }
         heroSb.Append(innerSb.ToString());
+
         // Self-bracket safely rather than forcing the caller to bracket
-        return StaticBranchTracing.SafeBracket(heroSb.ToString());
+        //return StaticBranchTracing.SafeBracket(heroSb.ToString());
+        // Temp: Always Bracket.
+        return $"({heroSb.ToString()})";
+
     }
     public override void AddCustomAbility(AbilityData ability)
     {

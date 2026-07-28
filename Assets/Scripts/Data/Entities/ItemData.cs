@@ -353,27 +353,30 @@ public class ItemMechanic
     {
         List<string> parts = new List<string>();
         if (Targets.Count > 0) parts.AddRange(Targets);
-        if (RepeatTimes != 1) parts.Add($"x{RepeatTimes}");
+
+        // ONLY output RepeatTimes if there is NO nested SDData payload handling the xMultiplier
+        //TODO: THIS MAY BE A MISTAKE?
+        bool payloadHandlesMultiplier = PayloadData is SDData sd && sd.xMultiplier > 1;
+        if (RepeatTimes != 1 && !payloadHandlesMultiplier)
+        {
+            parts.Add($"x{RepeatTimes}");
+        }
+
         if (PerTier) parts.Add("pertier");
         if (Unpack) parts.Add("unpack");
         if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
-
         string corePayload = PayloadString;
+
         if (PayloadData != null)
         {
+            // Children will now inherently self-bracket!
             if (Prefix == "hat" && PayloadData is HeroData hd)
                 corePayload = hd.ExportAsHat();
             else if (PayloadData is SDData sdData)
                 corePayload = sdData.Export();
         }
 
-        if ((Prefix == "hat" || Prefix == "enchant" || Prefix == "cast" || Prefix == "sticker") && !string.IsNullOrEmpty(corePayload))
-        {
-            if (!corePayload.StartsWith("(") && (corePayload.Contains(".") || corePayload.Contains("#") || corePayload.Contains(":")))
-            {
-                corePayload = $"({corePayload})";
-            }
-        }
+        // Formerly: Smart Bracketing occurred here.
 
         if (ChainedKeywords.Count > 0)
         {
@@ -393,6 +396,7 @@ public class ItemMechanic
         if (Multiplier != 1) { parts.Add("m"); parts.Add(Multiplier.ToString()); }
         if (!string.IsNullOrEmpty(MergedItem)) parts.Add($"mrg.{MergedItem}");
         if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
+
 
         return string.Join(".", parts);
     }
@@ -442,7 +446,7 @@ public class ItemData : SDData
 
     public bool IsEquippable => !string.IsNullOrEmpty(entityName) || Tier.HasValue;
 
-    public override void Parse(string data)
+    protected override void ParseCore(string data)
     {
         GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
         if (string.IsNullOrWhiteSpace(data)) return;
@@ -849,8 +853,7 @@ public class ItemData : SDData
         List<string> chainParts = new List<string>();
         foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({StaticBranchTracing.StripOuterParens(cont.Value)})");
 
-        List<string> mechanicParts = new List<string>();
-        OptimizeAndExportMechanics(mechanicParts);
+        /* // Old Smart bracketing, temporarily disabled.
         if (mechanicParts.Count > 0)
         {
             string mechs = mechanicParts[0];
@@ -873,6 +876,15 @@ public class ItemData : SDData
             else
                 chainParts.Add(mechs);
         }
+        */
+
+        List<string> mechanicParts = new List<string>();
+        OptimizeAndExportMechanics(mechanicParts);
+
+        if (mechanicParts.Count > 0)
+        {
+            chainParts.Add(mechanicParts[0]);
+        }
 
         string visualsStr = ItemSyntaxCompiler.BuildVisualsString(this, imageOverride);
         if (!string.IsNullOrEmpty(visualsStr)) chainParts.Add(visualsStr);
@@ -885,7 +897,13 @@ public class ItemData : SDData
 
         StringBuilder sb = new StringBuilder(string.Join(".", chainParts));
         foreach (var tag in GlobalTags) sb.Append($"&{tag}");
-        return sb.ToString();
+
+        string payload = sb.ToString();
+        if (string.IsNullOrWhiteSpace(payload)) return "";
+
+        // STRICT SELF-BRACKETING DOCTRINE.
+        // It brackets its own scope. It never guesses.
+        return $"({payload})";
     }
 
     // Current item export
@@ -1008,7 +1026,8 @@ public class ItemData : SDData
                 lastUnpack = currentUnpack;
             }
 
-            // Append the entire formatted mechanic block to the parent chain parts array
+            // NEW: Directly append the raw item syntax. 
+            // DO NOT inject "i." here. The parent/caller decides the modifier!
             chainParts.Add(mechsSb.ToString());
         }
     }
@@ -1103,6 +1122,8 @@ public static class CustomItemContextHelper
     /// Evaluates a Custom Item to determine its exact syntax and where it belongs 
     /// relative to the Entity's structural parentheses.
     /// </summary>
+    /// 
+    /*
     public static ItemInjectionResult EvaluateItem(ItemData item)
     {
         if (item == null) return new ItemInjectionResult { FormattedString = "" };
@@ -1130,6 +1151,43 @@ public static class CustomItemContextHelper
         return new ItemInjectionResult
         {
             FormattedString = formattedPayload,
+            Zone = PayloadInjectionZone.InnerEntity
+        };
+    }
+    */
+
+    /*
+    public static ItemInjectionResult EvaluateItem(ItemData item)
+    {
+        if (item == null) return new ItemInjectionResult { FormattedString = "" };
+
+        // item.Export() natively returns (...)
+        string rawItem = item.Export();
+        if (string.IsNullOrWhiteSpace(rawItem) || rawItem == "()")
+            return new ItemInjectionResult { FormattedString = "" };
+
+        // The item handles its brackets. We just declare the 'i' modifier.
+        return new ItemInjectionResult
+        {
+            FormattedString = $"i.{rawItem}",
+            Zone = PayloadInjectionZone.InnerEntity
+        };
+    }
+    */
+
+    public static ItemInjectionResult EvaluateItem(ItemData item)
+    {
+        if (item == null) return new ItemInjectionResult { FormattedString = "" };
+
+        // Returns the pure, self-bracketed item payload: e.g. "(hat.(Statue...))"
+        string rawItem = item.Export();
+        if (string.IsNullOrWhiteSpace(rawItem) || rawItem == "()")
+            return new ItemInjectionResult { FormattedString = "" };
+
+        // The helper acts on behalf of the Entity to apply the 'i.' action modifier.
+        return new ItemInjectionResult
+        {
+            FormattedString = $"i.{rawItem}",
             Zone = PayloadInjectionZone.InnerEntity
         };
     }

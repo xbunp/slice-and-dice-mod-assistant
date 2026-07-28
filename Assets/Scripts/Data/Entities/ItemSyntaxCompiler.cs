@@ -77,7 +77,9 @@ public static class ItemSyntaxCompiler
 
         string compiled = CleanupSyntax(sb.ToString());
 
+        // TEMP: DISABLED, i is a modifier, not an item technically.
         // AUTOMATIC i. PREFIX ENFORCEMENT AT ROOT LEVEL
+        /*
         if (isRoot && !string.IsNullOrWhiteSpace(compiled))
         {
             if (compiled.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
@@ -90,6 +92,7 @@ public static class ItemSyntaxCompiler
             }
             return $"i.{compiled}";
         }
+        */
 
         return compiled;
     }

@@ -54,6 +54,7 @@ public abstract class SDData
     public string entityName = "";
     public string imageOverride = "None";
     public string doc;
+    public int xMultiplier = 1;
 
     [Header("Visual Modifiers")]
     public List<VisualModifier> visuals = new List<VisualModifier>();
@@ -159,7 +160,6 @@ public abstract class SDData
             vis.RawValue = value;
         }
     }
-
     public Phue phue
     {
         get => GetVisual(VisualType.P)?.p;
@@ -175,7 +175,6 @@ public abstract class SDData
             vis.p = value;
         }
     }
-
     public Thue thue
     {
         get => GetVisual(VisualType.THue)?.thue;
@@ -232,16 +231,32 @@ public abstract class SDData
     public virtual void Parse(string data)
     {
         _hasClearedVisualsForParse = false;
+        xMultiplier = 1; // Reset to default
         if (string.IsNullOrWhiteSpace(data)) return;
-        visuals.Clear();
-        string[] tokens = data.Split('.');
-        for (int i = 0; i < tokens.Length - 1; i++)
+
+        string clean = data.Trim();
+        clean = StaticBranchTracing.StripOuterParens(clean);
+
+        // 1. UNIVERSAL MULTIPLIER EXTRACTION (x2 to x9)
+        if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
         {
-            string token = tokens[i].ToLower();
-            if (token == "n") entityName = tokens[++i];
-            else if (token == "img") imageOverride = tokens[++i];
+            int dotIdx = clean.IndexOf('.');
+            if (dotIdx > 1)
+            {
+                string multStr = clean.Substring(1, dotIdx - 1);
+                if (int.TryParse(multStr, out int mult))
+                {
+                    xMultiplier = mult;
+                    clean = clean.Substring(dotIdx + 1).Trim(); // Strip "xN." centrally
+                }
+            }
         }
+
+        // 2. Delegate cleaned payload to derived class
+        ParseCore(clean);
     }
+    protected abstract void ParseCore(string cleanData);
+
     protected void ProcessRecursiveParentheses(string originalToken, Action<List<string>> processingDelegate)
     {
         string inner = originalToken.Substring(1, originalToken.Length - 2);
@@ -364,6 +379,20 @@ public abstract class SDData
                 }
                 else visuals.Add(new VisualModifier { Type = VisualType.Rect, RawValue = "" });
                 return true;
+        }
+        return false;
+    }
+    protected bool TryProcessXMultiplier(List<string> tokens)
+    {
+        if (tokens.Count > 0)
+        {
+            string tokenLower = tokens[0].ToLower();
+            if (tokenLower.StartsWith("x") && tokenLower.Length > 1 && int.TryParse(tokenLower.Substring(1), out int mult))
+            {
+                xMultiplier = mult;
+                tokens.RemoveAt(0); // Consume the multiplier so the parser can see the real name
+                return true;
+            }
         }
         return false;
     }

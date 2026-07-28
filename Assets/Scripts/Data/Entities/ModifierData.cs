@@ -126,6 +126,7 @@ public class ModifierData : SDData
     public string ModName;           // "mn.Named Modifier"
     public string DocDescription;    // "doc.description text"
 
+    /*
     public override void Parse(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
@@ -367,6 +368,243 @@ public class ModifierData : SDData
             break;
         }
     }
+    */
+
+    // IN ModifierData.cs
+
+    // 1. Master template override: Handles combinator branching (& and .splice.)
+    protected override void ParseCore(string cleanData)
+    {
+        if (string.IsNullOrWhiteSpace(cleanData)) return;
+
+        // A. Check for Top-Level Chaining (&)
+        var chainParts = StaticBranchTracing.TopLevelSplit(cleanData, '&');
+        if (chainParts.Count > 1)
+        {
+            ParseSingleModifier(chainParts[0]);
+            ChainedModifier = new ModifierData();
+            ChainedModifier.Parse(string.Join("&", chainParts.Skip(1))); // Inherits SDData.Parse
+            return;
+        }
+
+        // B. Check for Top-Level Splicing (.splice.)
+        var spliceParts = StaticBranchTracing.TopLevelSplit(cleanData, '.');
+        int spliceIdx = spliceParts.FindIndex(p => p.Equals("splice", StringComparison.OrdinalIgnoreCase));
+        if (spliceIdx != -1)
+        {
+            ParseSingleModifier(string.Join(".", spliceParts.Take(spliceIdx)));
+            SplicedModifier = new ModifierData();
+            SplicedModifier.Parse(string.Join(".", spliceParts.Skip(spliceIdx + 1))); // Inherits SDData.Parse
+            return;
+        }
+
+        // C. Parse Standard Structure
+        ParseSingleModifier(cleanData);
+    }
+    private void ParseSingleModifier(string data)
+    {
+        List<string> tokens = StaticBranchTracing.TopLevelSplit(data, '.');
+        if (tokens.Count == 0) return;
+
+        // POP SUFFIXES FIRST (from end to front) to avoid them getting eaten by payloads
+        while (tokens.Count > 0)
+        {
+            string prev = tokens.Count > 1 ? tokens[tokens.Count - 2].ToLower() : "";
+
+            if (prev == "doc")
+            {
+                DocDescription = tokens.Last();
+                tokens.RemoveRange(tokens.Count - 2, 2);
+            }
+            else if (prev == "mn")
+            {
+                ModName = tokens.Last();
+                tokens.RemoveRange(tokens.Count - 2, 2);
+            }
+            else if (prev == "part")
+            {
+                if (int.TryParse(tokens.Last(), out int partVal))
+                {
+                    PartIndex = partVal;
+                    tokens.RemoveRange(tokens.Count - 2, 2);
+                }
+                else break;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // FORWARD PASS
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            string token = tokens[i];
+            string lower = token.ToLower();
+
+            if (ModifierDomainRules.IsModLevelToken(lower))
+            {
+                throw new NotImplementedException($"Mod-level structural token '{token}' is not supported in gameplay ModifierData.");
+            }
+
+            // Timing / Cadence
+            if (Regex.IsMatch(lower, @"^\d+(-\d+)?$")) { FloorLevel = token; continue; }
+            if (lower.StartsWith("t") && int.TryParse(lower.Substring(1), out _)) { Turn = token; continue; }
+            if (lower.StartsWith("et") && int.TryParse(lower.Substring(2), out _)) { EveryXTurns = token; continue; }
+            if (lower.StartsWith("e") && int.TryParse(lower.Substring(1), out _))
+            {
+                EveryXFights = token;
+                if (i + 1 < tokens.Count && int.TryParse(tokens[i + 1], out _))
+                {
+                    EveryXFightsOffset = tokens[++i];
+                }
+                continue;
+            }
+
+            // Stacking / Scaling
+            if (lower.StartsWith("x") && int.TryParse(lower.Substring(1), out _)) { RepeatTimes = token; continue; }
+            if (lower == "pl") { PerFightStack = true; continue; }
+            if (lower == "pb") { PerBossStack = true; continue; }
+            if (lower == "pt") { PerTurnStack = true; continue; }
+
+            // Configurations
+            if (lower == "modtier" && i + 1 < tokens.Count) { ModTier = tokens[++i]; continue; }
+            if (lower == "diff" && i + 1 < tokens.Count) { Difficulty = tokens[++i]; continue; }
+            if (lower == "unpack") { Unpack = true; continue; }
+
+            // Targets
+            if (lower == "hero") { TargetAllHeroes = true; continue; }
+            if (lower == "monster") { TargetAllMonsters = true; continue; }
+            if (lower == "inv") { InvertTarget = true; continue; }
+            if (lower == "h" && i + 1 < tokens.Count) { HeroPosition = tokens[++i]; continue; }
+            if (ModifierDomainRules.IsTargetAlias(lower)) { DiceFaceTarget = token; continue; }
+
+            // ==== ACTION PAYLOAD ROUTING ==== //
+            string remainingPayload = string.Join(".", tokens.Skip(i + 1));
+
+            if (lower == "add")
+            {
+                if (StaticBranchTracing.IsMonsterEntity(tokens[i + 1]))
+                {
+                    ActionType = ModifierActionType.AddMonster;
+                    MonsterPayload = new MonsterData();
+                    MonsterPayload.Parse(remainingPayload);
+                }
+                else
+                {
+                    ActionType = ModifierActionType.AddHero;
+                    HeroPayload = new HeroData();
+                    HeroPayload.Parse(remainingPayload);
+                }
+                break;
+            }
+            if (lower == "i" || lower == "allitem" || lower == "alliteme" || lower == "peritem")
+            {
+                ActionType = lower switch
+                {
+                    "i" => ModifierActionType.GiveItem,
+                    "allitem" => ModifierActionType.AllItem,
+                    "alliteme" => ModifierActionType.AllItemE,
+                    "peritem" => ModifierActionType.PerItem,
+                    _ => ModifierActionType.GiveItem
+                };
+                ItemPayload = new ItemData();
+                ItemPayload.Parse(remainingPayload);
+                break;
+            }
+            if (lower == "ea")
+            {
+                ActionType = ModifierActionType.EndTurnAbility;
+
+                string payloadToParse = remainingPayload;
+                int abDataIdx = payloadToParse.IndexOf("abilitydata.", StringComparison.OrdinalIgnoreCase);
+                if (abDataIdx != -1)
+                {
+                    payloadToParse = payloadToParse.Substring(abDataIdx + "abilitydata.".Length);
+                }
+
+                AbilityPayload = AbilityData.CreateAbility(payloadToParse);
+                break;
+            }
+            if (lower == "b")
+            {
+                ActionType = ModifierActionType.TransformHero;
+                HeroPayload = new HeroData();
+                HeroPayload.Parse(remainingPayload);
+                break;
+            }
+            if (lower == "party" || lower == "delivery" || lower == "rmod")
+            {
+                ActionType = lower switch
+                {
+                    "party" => ModifierActionType.PartyHeroes,
+                    "delivery" => ModifierActionType.Delivery,
+                    "rmod" => ModifierActionType.RMod,
+                    _ => ModifierActionType.RMod
+                };
+                StringPayload = remainingPayload;
+                break;
+            }
+            if (lower == "jinx" || lower == "vase" || lower == "self")
+            {
+                ActionType = lower switch
+                {
+                    "jinx" => ModifierActionType.Jinx,
+                    "vase" => ModifierActionType.Vase,
+                    "self" => ModifierActionType.Self,
+                    _ => ModifierActionType.Self
+                };
+                NestedModifierPayload = new ModifierData();
+                NestedModifierPayload.Parse(remainingPayload);
+                break;
+            }
+            if (lower == "spirit")
+            {
+                ActionType = ModifierActionType.MonsterSpirit;
+                break;
+            }
+
+            // Bare / Inline Entity Parsing
+            if (StaticBranchTracing.IsMonsterEntity(token) || StaticBranchTracing.IsHeroEntity(token))
+            {
+                int startIndex = i;
+                int endIndex = i + 1;
+
+                while (endIndex < tokens.Count)
+                {
+                    string peek = tokens[endIndex].ToLower();
+                    if (EntityDomainRules.CommonMetadataKeys.Contains(peek))
+                    {
+                        endIndex += 2;
+                        continue;
+                    }
+                    break;
+                }
+
+                string entityPayload = string.Join(".", tokens.GetRange(startIndex, endIndex - startIndex));
+
+                if (StaticBranchTracing.IsMonsterEntity(token))
+                {
+                    MonsterPayload = new MonsterData();
+                    MonsterPayload.Parse(entityPayload);
+                    if (ActionType == 0) ActionType = ModifierActionType.InlineMonster;
+                }
+                else
+                {
+                    HeroPayload = new HeroData();
+                    HeroPayload.Parse(entityPayload);
+                    if (ActionType == 0) ActionType = ModifierActionType.InlineHero;
+                }
+
+                i = endIndex - 1;
+                continue;
+            }
+
+            ActionType = ModifierActionType.CoreModifier;
+            CoreEffectName = token;
+            break;
+        }
+    }
 
     /// <summary>
     /// COMPILER PASS: Validates the author's input against the strict rules of the game engine.
@@ -408,10 +646,9 @@ public class ModifierData : SDData
     {
         return ExportInternal(isRoot: true);
     }
-    private string ExportInternal(bool isRoot)
+    public string ExportInternal(bool isRoot)
     {
         Validate(isRoot);
-
         List<string> parts = new List<string>();
 
         // 1. Setup (Unpack is local to the specific block)
@@ -452,13 +689,24 @@ public class ModifierData : SDData
             case ModifierActionType.AddHero:
                 parts.Add("add"); parts.Add(HeroPayload?.Export() ?? ""); break;
             case ModifierActionType.GiveItem:
-                parts.Add("i"); parts.Add(ItemPayload?.Export() ?? ""); break;
+                // Action is 'i'. Payload provides its own (...)
+                parts.Add("i");
+                parts.Add(ItemPayload?.Export() ?? "");
+                break;
             case ModifierActionType.AllItem:
-                parts.Add("allitem"); parts.Add(ItemPayload?.Export() ?? ""); break;
+                // Action is 'allitem'. Payload provides its own (...)
+                parts.Add("allitem");
+                parts.Add(ItemPayload?.Export() ?? "");
+                break;
+
             case ModifierActionType.AllItemE:
-                parts.Add("alliteme"); parts.Add(ItemPayload?.Export() ?? ""); break;
+                parts.Add("alliteme");
+                parts.Add(ItemPayload?.Export() ?? "");
+                break;
             case ModifierActionType.PerItem:
-                parts.Add("peritem"); parts.Add(ItemPayload?.Export() ?? ""); break;
+                parts.Add("peritem");
+                parts.Add(ItemPayload?.Export() ?? "()");
+                break;
             case ModifierActionType.Delivery:
                 parts.Add("delivery"); parts.Add(StringPayload); break; // StringPayload is the seed
             case ModifierActionType.RMod:
@@ -507,17 +755,18 @@ public class ModifierData : SDData
         {
             // By wrapping both sides of the ampersand in parenthesis, we protect prefixes from leaking
             // and prevent the parser from dropping trailing elements.
-            blockString = $"({blockString})&({ChainedModifier.ExportInternal(false)})";
+            blockString = $"{blockString}&{ChainedModifier.ExportInternal(false)}";
         }
 
-        // 10. Global Suffixes (Only applied to the very outermost edge of the package)
         if (isRoot)
         {
+            // Root level appends names/docs and is NEVER bracketed
             if (!string.IsNullOrEmpty(ModName)) blockString += $".mn.{ModName}";
             if (!string.IsNullOrEmpty(DocDescription)) blockString += $".doc.{DocDescription}";
+            return blockString;
         }
 
-        return blockString;
+        return $"({blockString})";
     }
     public void DebugContentsToConsole(string indent = "")
     {

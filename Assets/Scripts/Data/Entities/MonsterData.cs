@@ -26,7 +26,7 @@ public class MonsterData : EntityData
     [Header("Monster Modifiers")]
     public string bal;
 
-    public override void Parse(string data)
+    protected override void ParseCore(string data)
     {
         InitializeAsBlank();
         if (string.IsNullOrWhiteSpace(data)) return;
@@ -131,14 +131,12 @@ public class MonsterData : EntityData
     {
         if (monster == null) return string.Empty;
         StringBuilder sb = new StringBuilder();
-
         sb.Append(FormatName(monster.baseMonster));
         if (!string.IsNullOrEmpty(monster.doc))
         {
             sb.Append($".doc.{monster.doc}");
         }
-
-        return sb.ToString();
+        return $"({sb.ToString()})";
     }
     private void ExtractKnowledge(List<string> tokens, bool isFirstToken)
     {

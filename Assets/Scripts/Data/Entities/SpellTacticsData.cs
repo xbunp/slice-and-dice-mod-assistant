@@ -100,9 +100,12 @@ public class TriggerHPData : AbilityData
             diceSides[i].effectID = 0;
             diceSides[i].pips = 0;
         }
-        // ExportInner() handles base properties and Color (via AppendColorModifier)
-        // However, because AbilityData omits HP, we MUST manually append .hp.X to the end
-        return StaticBranchTracing.SafeBracket($"{ExportInner()}.hp.{hp}");
+
+        // ExportInner() handles base properties, Color, AND HP now!
+        // No manual HP. appending needed.
+
+        // TODO: LATER: sanity double check, make sure HP IS there for an TriggerHPData
+        return $"({ExportInner()})";
     }
 }
 
@@ -169,6 +172,8 @@ public class OrbData : AbilityData
         return StaticBranchTracing.SafeBracket(ExportInner());
     }
 
+
+    /*
     public string ExportAsTrait(bool useITPrefix = true)
     {
         string prefix = useITPrefix ? "i.t.orb." : "t.orb.";
@@ -179,5 +184,19 @@ public class OrbData : AbilityData
         }
         string carrier = !string.IsNullOrEmpty(carrierPrefix) ? carrierPrefix : "sthief.abilitydata";
         return $"{prefix}{carrier}.({ExportInner()})";
+    }
+    */
+
+    public string ExportAsTrait(bool useITPrefix = true)
+    {
+        string prefix = useITPrefix ? "i.t.orb." : "t.orb.";
+        if (isHardcoded)
+        {
+            string name = !string.IsNullOrEmpty(hardcodedAbilityName) ? hardcodedAbilityName.ToLower() : (entityName?.ToLower() ?? "slice");
+            return $"{prefix}{name}";
+        }
+        string carrier = !string.IsNullOrEmpty(carrierPrefix) ? carrierPrefix : "sthief.abilitydata";
+        // Export() now guarantees (...)
+        return $"{prefix}{carrier}.{Export()}";
     }
 }

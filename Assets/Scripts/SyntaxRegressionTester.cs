@@ -38,6 +38,8 @@ public static class SyntaxRegressionTester
     // ======================================================================================
     // ADD YOUR KNOWN WORKING STRINGS HERE
     // ======================================================================================
+    //old test cases
+    /*
     private static readonly List<TestCase> TestCases = new List<TestCase>
     {
         // --- HERO TESTS ---
@@ -93,7 +95,7 @@ public static class SyntaxRegressionTester
         new TestCase("Monster - Petrified Troll", TargetType.Monster,
             "((Alpha.n.Petrified.hp.8.sd.3-2:3-1:16-1:16-1:16-1:3-1.i.right.k.exert.i.bot.k.exert.i.left.k.exert.img.Troll.p.65623a:a6a6a6:35).doc.Slowly thawing out!.i.(x6.Basilisk Scale.part.0).i.self.ea.sThief.abilitydata.(Fey.sd.178-1:0:0:0:76-1.i.left.k.cleanse))"),            
 
-        /*
+
         //TODO: Make some modifiers for regression testing. 
         // --- MODIFIER TESTS ---
         new TestCase("Basic Modifier", TargetType.Modifier,
@@ -101,7 +103,7 @@ public static class SyntaxRegressionTester
 
         new TestCase("Chained & Spliced Modifier", TargetType.Modifier,
             "(t1.x2.h.top.inv.i.Apple.splice.cantrip)&(self.jinx.exert)"),
-        */
+
 
         // --- ABILITY TESTS ---
         new TestCase("On Hit Spell", TargetType.Ability,
@@ -112,6 +114,23 @@ public static class SyntaxRegressionTester
         new TestCase("Tactic", TargetType.Ability,
             "abilitydata.(Fey.sd.15-1:0:56-2.i.left.sticker.(Enchanted Shield)#togtime.img.ite2.n.Wary)")
 
+    };
+*/
+
+    private static readonly List<TestCase> TestCases = new List<TestCase>
+    {
+        new TestCase("Hero 1", TargetType.Hero,
+            "(replica.Statue.n.Precious.col.k.hp.6.tier.3.sd.181-1:143:126-2:126-2:131-1:12-1.i.left.k.cleave#k.vulnerable#facade.Leo18:-48:70:-8.i.right.k.cantrip#facade.har82:0.img.Alien.thue.c571da:92:8.hsv.0:-57:-1).doc.Swaps faces each turn.i.self.(et2.allitem.hat.(Statue.sd.177-1:171-3:171-1:171-1:187-1:11-2.i.left.k.cleave#k.vulnerable#k.mandatory#facade.Leo14:-48:70:-8.i.right.k.selfheal#k.cantrip#facade.eba13:0))",
+            "(replica.Statue.n.Precious.col.k.hp.6.tier.3.sd.181-1:143:126-2:126-2:131-1:12-1.i.(left.k.cleave#k.vulnerable#facade.Leo18:-48:70:-8).i.(right.k.cantrip#facade.har82:0).img.Alien.thue.c571da:92:8.hsv.0:-57:-1).doc.Swaps faces each turn.i.self.(et2.allitem.(hat.(Statue.sd.177-1:171-3:171-1:171-1:187-1:11-2.i.(left.k.cleave#k.vulnerable#k.mandatory#facade.Leo14:-48:70:-8).i.(right.k.selfheal#k.cantrip#facade.eba13:0))))"),
+
+        new TestCase("Hero 2", TargetType.Hero,
+            "(replica.Statue.n.Precious.col.k.hp.6.tier.3.sd.13:13:13:13:13:13.i.row.mid.hat.(statue.sd.0:13.i.left.hat.((egg.(replica.Statue.n.Smeagol.col.k.hp.6.tier.3.sd.168-3:125-1:103-2:103-2:124:130.i.left.k.cantrip#facade.bas168:76:26:11.i.topbot.k.generous#facade.eba13:0.i.rightmost.k.sticky#facade.bas130:79:0:0.img.Alien.thue.c571da:92:8.hsv.0:-57:-1))).i.togunt).i.topbot.mid.hat.(statue.sd.0:13.i.left.hat.((egg.(replica.Statue.n.Gollum.col.k.hp.6.tier.3.sd.30-4:44-2:158-1:158-1:11-2:11-3.i.left.k.exert#facade.ale4:0.i.topbot.k.selfheal.img.Alien.thue.c571da:92:8.hsv.0:-57:-1))).i.togunt).i.row.facade.Eme97:0.i.topbot.facade.Eme114:-11:0:0.img.Alien.thue.c571da:92:8.hsv.0:-57:-1)\r\n"),
+
+        new TestCase("Monster 1", TargetType.Monster,
+            "((rmon.ded.hsv.68:55:0.draw.bas199:4:4.p.0ca73c:1b0559:25.n.Watcher In The Water.hp.20.sd.23-2:24-2:11-1:11-1:16-2:16-1.i.left.facade.bas211:33:0:19.i.mid.facade.bas212:30:21:16.i.topbot.facade.Eme147:-35:0:0.i.right2.k.petrify#facade.Eme201:63:0:0).i.triggerhpdata.(Fey.col.p.sd.123-1.n.Dodge.hp.5).i.t.archer)"),
+
+        new TestCase("Monster 2", TargetType.Monster,
+            "(Troll.p.65623a:687a69:23.thue.d00051:36:20.hsv.-14:12:5.n.Cave Troll.sd.3-3:2-6:16-2:16-2:17-3.i.mid.k.exert#k.serrated#k.growth#facade.Ese105:31:34:2.i.right.k.engage#facade.bas205:42:-20:3.i.rightmost.mid.hat.(x2.egg.(Slimelet.n.Orc.hp.3.sd.7-4:7-3:6-3:6-3.t.Caw.img.Bones.hsv.0:0:-70.draw.Goblin:-6:-4.p.6a6e34:5c7688:07).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg)))#blindfold#facade.bas209:38:0:0)"),            
     };
 
     // ======================================================================================

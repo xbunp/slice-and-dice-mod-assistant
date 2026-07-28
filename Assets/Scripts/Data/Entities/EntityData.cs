@@ -734,7 +734,10 @@ public abstract class EntityData : SDData, IPayloadContainer
             foreach (string alias in optimalAliases)
             {
                 string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, alias) : templateString;
-                modSb.Append($".i.{alias}.{resolvedMod}");
+
+                // The payload resolves its scope, the parent applies the 'i' modifier.
+                string payload = $"({alias}.{resolvedMod})";
+                modSb.Append($".i.{payload}");
             }
         }
 
@@ -1010,76 +1013,155 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         StringBuilder sb = new StringBuilder();
 
+        // 1. Base Identifier
         if (!string.IsNullOrEmpty(baseId))
         {
             if (isHero) sb.Append($"replica.{FormatName(FormatSpecialImageName(baseId))}");
             else sb.Append(FormatName(FormatSpecialImageName(baseId)));
-            if (!hasImageOverride) AppendColorModifier(sb);
         }
 
-        if (!string.IsNullOrEmpty(entityName) && (isHero || !string.Equals(entityName, baseId, StringComparison.OrdinalIgnoreCase)))
-            sb.Append($".n.{FormatName(entityName)}");
+        // 2. Pre-Name Visual Modifiers (Monsters place visual colors before .n. if no image override)
+        if (!isHero && !hasImageOverride)
+        {
+            AppendColorModifier(sb);
+        }
 
+        // 3. Name
+        if (!string.IsNullOrEmpty(entityName) && (isHero || !string.Equals(entityName, baseId, StringComparison.OrdinalIgnoreCase)))
+        {
+            sb.Append($".n.{FormatName(entityName)}");
+        }
+
+        // 4. Color Class
         if (isHero && !string.IsNullOrEmpty(hero.colorClass)) sb.Append($".col.{hero.colorClass}");
+
+        // 5. HP & Tier & Adj
         if (hp > 0) sb.Append($".hp.{hp}");
         if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
         if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
 
+        // 6. Dice Sides
         AppendDiceSides(sb);
+
+        /* // moved to trailing payloads. 
+        // 7. Inline Traits (for egg/hat nested entities)
+        if (traits != null && traits.Count > 0 && !isHero && isCoreWrappedInParens)
+        {
+            foreach (var t in traits) if (!string.IsNullOrEmpty(t)) sb.Append($".t.{FormatName(t)}");
+        }
+        */
 
         if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
 
+        // 8. Face Modifiers (Hats, Stickers, Keywords, Facades)
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
 
+        // 9. Image Override AND Visual Modifiers (MUST BE AT THE VERY END OF CORE BODY)
         if (hasImageOverride)
         {
             sb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
             AppendColorModifier(sb);
         }
+        else if (isHero)
+        {
+            AppendColorModifier(sb);
+        }
 
         string coreString = sb.ToString();
         if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
-
         return $"({coreString})";
     }
     private string BuildTrailingPayloads(HeroData hero, MonsterData monster, bool isHero, out List<string> wrapperPayloads)
     {
         StringBuilder outerSb = new StringBuilder();
-
         ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out wrapperPayloads);
 
-        string traitPrefix = isHero ? ".i.t." : ".t.";
-        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) outerSb.Append($"{traitPrefix}{FormatName(t)}");
-        if (!isHero && monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
-        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) outerSb.Append($".i.{FormatName(i)}");
-        if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) outerSb.Append($".gift.{FormatName(bl)}");
+        // 1. Documentation immediately follows core body
+        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
 
-        foreach (var inner in innerPayloads) outerSb.Append($".{inner}");
-
-        if (isHero && hero.baseAbilityData != null)
-            foreach (var ab in hero.baseAbilityData) if (!string.IsNullOrEmpty(ab)) outerSb.Append($".i.learn.{FormatName(ab)}");
-
+        // 2. Custom Ability Data (TriggerHP, OnHit)
         if (customAbilityData != null && customAbilityData.Count > 0)
         {
             foreach (var cab in customAbilityData)
             {
                 if (cab == null) continue;
-                if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.{cab.Export()}");
+                // The parent declares the modifier. 
+                // The child (cab) provides the (...) via its Export() method.
+                if (cab is TriggerHPData) outerSb.Append($".i.triggerhpdata.{cab.Export()}");
                 else if (cab is OnHitData) outerSb.Append($".i.onhitdata.{cab.Export()}");
                 else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-                else outerSb.Append($".abilitydata.{cab.Export()}");
+                else outerSb.Append($".i.abilitydata.{cab.Export()}");
             }
         }
 
+        // 3. Stock Items and Learn
+        //if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) outerSb.Append($".i.{FormatName(i)}");
+        /*
+        if (items != null)
+        {
+            foreach (var i in items)
+            {
+                if (!string.IsNullOrEmpty(i))
+                {
+                    string payload = $"({FormatName(i)})"; // String resolves its own scope
+                    outerSb.Append($".i.{payload}");      // Modifier is applied
+                }
+            }
+        }
+        */
+
+        if (items != null)
+        {
+            foreach (var itm in items)
+            {
+                if (!string.IsNullOrEmpty(itm))
+                {
+                    // Entity applies the 'i.' modifier. 
+                    // The item string resolves its own brackets.
+                    outerSb.Append($".i.({FormatName(itm)})");
+                }
+            }
+        }
+
+        if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) outerSb.Append($".gift.{FormatName(bl)}");
+        foreach (var inner in innerPayloads) outerSb.Append($".{inner}");
+        if (isHero && hero.baseAbilityData != null)
+            foreach (var ab in hero.baseAbilityData) if (!string.IsNullOrEmpty(ab)) outerSb.Append($".i.learn.{FormatName(ab)}");
+
+        // 4. Modifiers & Outer Payloads (.i.self...)
         foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
 
+        // 5. Entity Level Traits (Placed at the very end of trailing payloads for Monsters)
+        string traitPrefix = isHero ? ".i.t." : ".i.t.";
+        /*
+        if (traits != null && (!isCoreWrappedInParens || isHero))
+        {
+            foreach (var t in traits) if (!string.IsNullOrEmpty(t)) outerSb.Append($"{traitPrefix}{FormatName(t)}");
+        }
+        */
+        if (traits != null && (!isCoreWrappedInParens || isHero))
+        {
+            foreach (var t in traits)
+            {
+                if (!string.IsNullOrEmpty(t))
+                {
+                    string payload = $"({FormatName(t)})"; // String resolves its own scope
+                    string prefix = isHero ? ".i.t." : ".t.";
+                    outerSb.Append($"{prefix}{payload}");  // Modifier is applied
+                }
+            }
+        }
+
+
+        if (!isHero && monster != null && monster.customOrbs != null)
+            foreach (var orb in monster.customOrbs) if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
+
+        // 6. Curses, Appended Doc, and Balance
         string jinxPrefix = isHero ? ".i.t.jinx." : ".t.jinx.";
         if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) outerSb.Append($"{jinxPrefix}{FormatName(c)}");
-
-        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
         if (isHero && !string.IsNullOrEmpty(hero.appendedDoc)) outerSb.Append($".i.self.Wolf.doc.{hero.appendedDoc}.spirit");
-        if (!isHero && !string.IsNullOrEmpty(monster.bal)) outerSb.Append($".bal.{FormatName(monster.bal)}");
+        if (!isHero && monster != null && !string.IsNullOrEmpty(monster.bal)) outerSb.Append($".bal.{FormatName(monster.bal)}");
 
         return outerSb.ToString();
     }
@@ -1103,8 +1185,8 @@ public abstract class EntityData : SDData, IPayloadContainer
     private void SyncMonsterContainerBaseIdentifier(MonsterData monster)
     {
         if (monster == null || monster.payloadData == null) return;
-
         string prefix = monster.baseMonster;
+
         int parenIdx = prefix.IndexOf('(');
         if (parenIdx > 0)
         {
@@ -1118,15 +1200,15 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         if (monster.payloadData is AbilityData abPayload)
         {
-            monster.baseMonster = $"{prefix}.({abPayload.Export()})";
+            monster.baseMonster = $"{prefix}.{abPayload.Export()}";
         }
         else if (monster.payloadData is SDData sdPayload)
         {
-            monster.baseMonster = $"{prefix}.({sdPayload.Export()})";
+            monster.baseMonster = $"{prefix}.{sdPayload.Export()}";
         }
         else if (monster.payloadData is ModifierData modPayload)
         {
-            monster.baseMonster = $"{prefix}.({modPayload.Export()})";
+            monster.baseMonster = $"{prefix}.{modPayload.ExportInternal(false)}";
         }
     }
 

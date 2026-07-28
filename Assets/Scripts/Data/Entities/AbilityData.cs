@@ -121,7 +121,7 @@ public abstract class AbilityData : HeroData
         customPayloads = new List<CustomPayload>();
         _itemPipeline = new List<ItemData>();
     }
-    public override void Parse(string data)
+    protected override void ParseCore(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
         CleanData(); // not sure if this is really needed.
@@ -176,33 +176,32 @@ public abstract class AbilityData : HeroData
     }
     public override string Export()
     {
-        return StaticBranchTracing.SafeBracket(ExportInner());
+        //return StaticBranchTracing.SafeBracket(ExportInner());
+        return $"({ExportInner()})";
     }
     protected string ExportInner()
     {
         StringBuilder sb = new StringBuilder();
         bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica;
 
+        // 1. Base Replica
         if (!string.IsNullOrEmpty(baseReplica)) sb.Append(FormatName(baseReplica));
-        if (!hasImageOverride) AppendColorModifier(sb);
 
-        // FIX: Removed `if (hp > 0)` to prevent duplicating the `.hp.5` threshold 
+        // 2. Name
+        if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity" && entityName != "Fey")
+            sb.Append($".n.{FormatName(entityName)}");
+
+        // 3. Color
         if (!string.IsNullOrEmpty(colorClass)) sb.Append($".col.{colorClass}");
 
+        // 4. HP (if present on TriggerHPData)
+        if (hp > 0) sb.Append($".hp.{hp}");
+
+        // 5. Dice Sides
         AppendDiceSides(sb);
 
-        // Standard items and the newly string-preserved unmappable items export here natively
+        // 6. Items & Base Abilities
         if (items != null) foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
-
-        // Export legacy custom payloads if any survived
-        if (customPayloads != null)
-        {
-            foreach (var cp in customPayloads)
-            {
-                string e = cp.Export();
-                if (!string.IsNullOrEmpty(e)) sb.Append($".{e}");
-            }
-        }
 
         if (baseAbilityData != null && baseAbilityData.Count > 0)
         {
@@ -215,13 +214,35 @@ public abstract class AbilityData : HeroData
             if (formattedAbilities.Count > 0) sb.Append($".abilitydata.{string.Join("#", formattedAbilities)}");
         }
 
+        // 7. Custom Payloads
+        if (customPayloads != null)
+        {
+            foreach (var cp in customPayloads)
+            {
+                string e = cp.Export();
+                if (!string.IsNullOrEmpty(e)) sb.Append($".{e}");
+            }
+        }
+
+        // 8. Face Modifiers
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
 
-        if (hasImageOverride) { sb.Append($".img.{FormatName(imageOverride)}"); AppendColorModifier(sb); }
+        // 9. Image Override & Visual Modifiers (MUST BE LAST)
+        if (hasImageOverride)
+        {
+            sb.Append($".img.{FormatName(imageOverride)}");
+            AppendColorModifier(sb);
+        }
+        else
+        {
+            AppendColorModifier(sb);
+        }
+
         if (thue != null && thue.colorOffset != 0) sb.Append($".{PackTHue(thue)}");
+
+        // 10. Documentation
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");
-        if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity" && entityName != "Fey") sb.Append($".n.{FormatName(entityName)}");
 
         return sb.ToString();
     }
