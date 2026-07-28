@@ -202,26 +202,39 @@ public static class ItemDomainRules
     public static bool IsTokenClaimedByItem(List<string> tokens, int index)
     {
         string token = tokens[index].ToLower();
+        string originalToken = tokens[index]; // Preserve casing for dictionary lookups
 
-        // 1. Evaluate chained tokens safely by inspecting inner '#' chunks
-        string[] hashChunks = token.Split('#');
-        foreach (var chunk in hashChunks)
+        // Strip parens so we can see what's inside
+        if (token.StartsWith("(") && token.EndsWith(")"))
         {
-            if (ValidItemProperties.Contains(chunk) || ValidTargets.Contains(chunk) ||
-                ContainerKeys.Contains(chunk) || MechanicPrefixes.Contains(chunk) ||
-                TogItems.Contains(chunk) || IsItemIdentifier(chunk) ||
-                IsRepeatPrefix(chunk, out _))
+            token = token.Substring(1, token.Length - 2);
+            originalToken = originalToken.Substring(1, originalToken.Length - 2);
+        }
+
+        // 1. First, check if this token is literally a known modifier effect from the datasets
+        if (IsKnownModifierEffect(originalToken)) return true;
+
+        // 2. Evaluate chained tokens safely by inspecting inner '#' chunks and '.' chunks
+        string[] dotChunks = token.Split('.');
+        foreach (var dotChunk in dotChunks)
+        {
+            string[] hashChunks = dotChunk.Split('#');
+            foreach (var chunk in hashChunks)
             {
-                return true;
+                if (ValidItemProperties.Contains(chunk) || ValidTargets.Contains(chunk) ||
+                    ContainerKeys.Contains(chunk) || MechanicPrefixes.Contains(chunk) ||
+                    TogItems.Contains(chunk) || IsItemIdentifier(chunk) ||
+                    IsRepeatPrefix(chunk, out _))
+                {
+                    return true;
+                }
             }
         }
 
-        // 2. Contextually allow values mapped to valid preceding keys
+        // 3. Contextually allow values mapped to valid preceding keys
         if (index > 0)
         {
             string prev = tokens[index - 1].ToLower();
-
-            // Extract the actual property suffix from the previous token if it was chained (e.g. "overdog#facade" -> "facade")
             string[] prevChunks = prev.Split('#');
             string truePrev = prevChunks[prevChunks.Length - 1];
 
@@ -229,10 +242,27 @@ public static class ItemDomainRules
             {
                 "tier", "n", "img", "doc", "sidesc", "m", "part", "mrg", "splice",
                 "hsv", "hue", "thue", "p", "b", "draw", "rect",
-                "k", "facade", "sticker", "enchant", "cast", "hat", "t", "gift", "learn", "i", "sd"
+                "k", "facade", "sticker", "enchant", "cast", "hat", "t", "gift", "learn", "i", "sd",
+                // Modifiers and actions that expect a direct subsequent payload
+                "self", "jinx", "vase", "ea", "add", "party", "b"
             };
+
             if (propertiesExpectingValue.Contains(truePrev)) return true;
         }
+        return false;
+    }
+
+    public static bool IsKnownModifierEffect(string originalToken)
+    {
+        // Direct O(1) checks against your exact modifier datasets
+        if (ModifierDataSet.Curses != null && ModifierDataSet.Curses.ContainsKey(originalToken)) return true;
+        if (ModifierDataSet.Blessings != null && ModifierDataSet.Blessings.ContainsKey(originalToken)) return true;
+        if (ModifierDataSet.Tweaks != null && ModifierDataSet.Tweaks.ContainsKey(originalToken)) return true;
+
+        // Fallback: Case-insensitive check just in case capitalization got mangled
+        if (ModifierDataSet.Curses != null && ModifierDataSet.Curses.Keys.Any(k => string.Equals(k, originalToken, StringComparison.OrdinalIgnoreCase))) return true;
+        if (ModifierDataSet.Blessings != null && ModifierDataSet.Blessings.Keys.Any(k => string.Equals(k, originalToken, StringComparison.OrdinalIgnoreCase))) return true;
+        if (ModifierDataSet.Tweaks != null && ModifierDataSet.Tweaks.Keys.Any(k => string.Equals(k, originalToken, StringComparison.OrdinalIgnoreCase))) return true;
 
         return false;
     }
@@ -485,7 +515,8 @@ public class ItemData : SDData
             }
             else
             {
-                stream.Consume(); // Prevent infinite loops on unknown tokens
+                string droppedToken = stream.Consume();
+                UnityEngine.Debug.LogError($"[ItemData Parser ERROR] Unrecognized string chunk discarded! Token '{droppedToken}' is not a valid target, prefix, or known modifier effect. Item context: {item.entityName ?? "Unknown"}");
             }
         }
     }
@@ -619,6 +650,7 @@ public class ItemData : SDData
             string pfx = mech.Prefix?.ToLower() ?? "";
             if (mech.PayloadData is ModifierData) return false;
 
+            // STRICT EXCLUSION: hat, cast, enchant MUST NOT map natively so they preserve syntax
             if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "")
             {
                 return false;
@@ -628,9 +660,8 @@ public class ItemData : SDData
                 return false;
             }
 
-            // CRITICAL: Prevent sequential face operations from flattening each other!
-            // If the face already has a sticker/hat/cast payload, black-box this into customPayloads to preserve sequential syntax.
-            if (pfx == "sticker" || pfx == "hat" || pfx == "cast" || pfx == "enchant")
+            // Protect existing face overrides from being flattened by combined target stickers
+            if (pfx == "sticker")
             {
                 List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
                 foreach (int face in targetFaces)
@@ -816,45 +847,40 @@ public class ItemData : SDData
     public override string Export()
     {
         List<string> chainParts = new List<string>();
-        // 1. Containers
         foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({StaticBranchTracing.StripOuterParens(cont.Value)})");
 
-        // 2. Mechanics
         List<string> mechanicParts = new List<string>();
         OptimizeAndExportMechanics(mechanicParts);
         if (mechanicParts.Count > 0)
         {
             string mechs = mechanicParts[0];
 
-            // Smart Bracketing for flat Base Items with vulnerable suffixes (like .part.0 or x6.)
-            bool needsBrackets = mechs.Contains(".part.") || mechs.Contains(".m.") || mechs.Contains("pertier.") || mechs.Contains("unpack.") || mechs.Contains(".mrg.") || mechs.Contains(".splice.");
+            bool needsBrackets = Mechanics.Any(m =>
+                m.PartIndex.HasValue ||
+                m.Multiplier != 1 ||
+                m.PerTier ||
+                m.Unpack ||
+                !string.IsNullOrEmpty(m.MergedItem) ||
+                !string.IsNullOrEmpty(m.SplicedItem));
+
             if (needsBrackets && !mechs.StartsWith("("))
             {
                 mechs = $"({mechs})";
             }
 
-            // Ensure proper bounding WITHOUT aggressive blanket SafeBracket calls.
             if (!mechs.StartsWith("i.", StringComparison.OrdinalIgnoreCase) && !mechs.StartsWith("sd.", StringComparison.OrdinalIgnoreCase))
                 chainParts.Add($"i.{mechs}");
             else
                 chainParts.Add(mechs);
         }
 
-        // 3. Visuals
         string visualsStr = ItemSyntaxCompiler.BuildVisualsString(this, imageOverride);
         if (!string.IsNullOrEmpty(visualsStr)) chainParts.Add(visualsStr);
 
-        // 4. Clear flags
         if (ClearDescription) chainParts.Add("cleardesc");
         if (ClearIcon) chainParts.Add("clearicon");
-
-        // 5. Tier
         if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
-
-        // 6. Doc
         if (!string.IsNullOrEmpty(doc)) chainParts.Add($"doc.{doc}");
-
-        // 7. Name
         if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
 
         StringBuilder sb = new StringBuilder(string.Join(".", chainParts));

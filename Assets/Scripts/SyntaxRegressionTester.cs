@@ -42,7 +42,8 @@ public static class SyntaxRegressionTester
     {
         // --- HERO TESTS ---
         new TestCase("Hero - Faramir", TargetType.Hero,
-            "((replica.Statue.n.Faramir.col.f.hp.13.tier.3.img.Collector.p.db604d:dad36b:30.thue.313172:18:-3).i.left.mid.hat.(Fey.sd.125-1:186.i.mid.k.annul#k.cantrip.i.togunt).i.left.facade.kas50:0.i.right5.hat.(Fey.sd.15-6:46-7:52-5:52-5:51-5:56-6.i.left.k.lucky.i.(togkey#togkey)).i.mid.facade.bas46:11:0:0.i.top.facade.bas52:11:0:0.i.bot.facade.bas52:11:0:0.i.right.facade.bas51:11:0:0.i.rightmost.facade.bas56:11:0:0)"),
+            "((replica.Statue.n.Faramir.col.f.hp.13.tier.3.img.Collector.p.db604d:dad36b:30.thue.313172:18:-3).i.left.mid.hat.(Fey.sd.125-1:186.i.mid.k.annul#k.cantrip.i.togunt).i.left.facade.kas50:0.i.right5.hat.(Fey.sd.15-6:46-7:52-5:52-5:51-5:56-6.i.left.k.lucky.i.(togkey#togkey)).i.mid.facade.bas46:11:0:0.i.top.facade.bas52:11:0:0.i.bot.facade.bas52:11:0:0.i.right.facade.bas51:11:0:0.i.rightmost.facade.bas56:11:0:0)",
+            "((replica.Statue.n.Faramir.col.f.hp.13.tier.3.img.Collector.p.db604d:dad36b:30.thue.313172:18:-3).i.left.mid.hat.(Fey.sd.125-1:186.i.mid.k.annul#k.cantrip.i.togunt).i.left.facade.kas50:0.i.right5.hat.(Fey.sd.15-6:46-7:52-5:52-5:51-5:56-6.i.left.k.lucky.i.togkey#togkey).i.mid.facade.bas46:11:0:0.i.top.facade.bas52:11:0:0.i.bot.facade.bas52:11:0:0.i.right.facade.bas51:11:0:0.i.rightmost.facade.bas56:11:0:0)"),
 
         new TestCase("Hero - Gollum", TargetType.Hero,
             "(replica.Statue.n.Precious.col.k.hp.6.tier.3.sd.181-1:143:126-2:126-2:131-1:12-1.i.left.k.cleave#k.vulnerable#facade.Leo18:-48:70:-8.i.right.k.cantrip#facade.har82:0.img.Alien.thue.c571da:92:8.hsv.0:-57:-1).doc.Swaps faces each turn.i.self.(et2.allitem.hat.(Statue.sd.177-1:171-3:171-1:171-1:187-1:11-2.i.left.k.cleave#k.vulnerable#k.mandatory#facade.Leo14:-48:70:-8.i.right.k.selfheal#k.cantrip#facade.eba13:0))"),
@@ -57,7 +58,7 @@ public static class SyntaxRegressionTester
             // original
             "i.(rightmost.hat.(Fey.sd.0:0:0:0:0:110-1.i.rightmost.k.enduring.i.rightmost.facade.Lem91:0)).img.ite17.p.c54016:128a1a:18.p.ff8105:19ac61:45.draw.Ese72:0:0.tier.3.n.Lembas", 
             // optimized
-            "i.(rightmost.hat.(Fey.sd.0:0:0:0:0:110-1.i.rightmost.k.enduring#facade.Lem91:0)).img.ite17.p.c54016:128a1a:18.p.ff8105:19ac61:45.draw.Ese72:0:0.tier.3.n.Lembas"
+            "i.rightmost.hat.(Fey.sd.0:0:0:0:0:110-1.i.rightmost.k.enduring#facade.Lem91:0).img.ite17.p.c54016:128a1a:18.p.ff8105:19ac61:45.draw.Ese72:0:0.tier.3.n.Lembas"
         ),
 
         new TestCase(
@@ -67,7 +68,8 @@ public static class SyntaxRegressionTester
 
         // --- MONSTER TESTS ---
         new TestCase("Wose & Huorn", TargetType.Monster,
-            "(Wizz.n.Wose.sd.12-2:0:10-2:10-2:0:9-3.i.left.k.cleave#facade.bas212:15:8:-2.i.mid2.hat.(egg.(Imp.n.Huorn.hp.4.sd.9-3:3-2:9-2:9-2:3-2:9-1.i.topbot.k.hypergrowth#facade.Ese30:0.i.rightmost.k.hypergrowth#facade.Ese30:0.i.left.k.hypergrowth#facade.Ese30:0.img.Tinder.p.fd8f4d:85d720:45))#blindfold#facade.Che3:0.img.Bramble.hsv.0:0:-8.draw.Druid:3:3.hsv.25:-11:-3.p.81a871:876113:12)"),
+            "(Wizz.n.Wose.sd.12-2:0:10-2:10-2:0:9-3.i.left.k.cleave#facade.bas212:15:8:-2.i.mid2.hat.(egg.(Imp.n.Huorn.hp.4.sd.9-3:3-2:9-2:9-2:3-2:9-1.i.topbot.k.hypergrowth#facade.Ese30:0.i.rightmost.k.hypergrowth#facade.Ese30:0.i.left.k.hypergrowth#facade.Ese30:0.img.Tinder.p.fd8f4d:85d720:45))#blindfold#facade.Che3:0.img.Bramble.hsv.0:0:-8.draw.Druid:3:3.hsv.25:-11:-3.p.81a871:876113:12)",
+            "((Wizz.n.Wose.sd.12-2:0:10-2:10-2:0:9-3.i.left.k.cleave#facade.bas212:15:8:-2.img.Bramble.hsv.0:0:-8.draw.Druid:3:3.hsv.25:-11:-3.p.81a871:876113:12).i.mid2.hat.(egg.((Imp.n.Huorn.hp.4.sd.9-3:3-2:9-2:9-2:3-2:9-1.i.topbot.k.hypergrowth#facade.Ese30:0.i.rightmost.k.hypergrowth#facade.Ese30:0.i.left.k.hypergrowth#facade.Ese30:0.img.Tinder.p.fd8f4d:85d720:45)))#blindfold#facade.Che3:0)"),
 
                 // --- MONSTER TESTS ---
         new TestCase("Willow", TargetType.Monster,
@@ -78,6 +80,11 @@ public static class SyntaxRegressionTester
 
         new TestCase("Monster (Cave Troll)", TargetType.Monster,
             "(Troll.p.65623a:687a69:23.thue.d00051:36:20.hsv.-14:12:5.n.Cave Troll.sd.3-3:2-6:16-2:16-2:17-3.i.mid.k.exert#k.serrated#k.growth#facade.Ese105:31:34:2.i.right.k.engage#facade.bas205:42:-20:3.i.rightmost.hat.(x2.egg.((Slimelet.n.Orc.hp.3.sd.7-4:7-3:6-3:6-3.t.Caw.img.Bones.hsv.0:0:-70.draw.Goblin:-6:-4.p.6a6e34:5c7688:07).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg)))#blindfold#facade.bas209:38:0:0)"),
+
+
+        new TestCase("Wraith", TargetType.Monster,
+            "((Wolf.n.Ringwraith.hp.5.sd.53-2:53-1:15-2:15-1:131-2:131-1.i.topbot.k.inflictpain#facade.Eme13:0.img.n1.75.hsv.59:-30:-17).i.(unpack.Determination).i.t.Shade.i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg))).i.t.jinx.allitem.learn.sthief.abilitydata.(Fey.sd.15-1:0:8.i.left.sticker.(all.mid.hat.(Fey.sd.90:115-1.i.mid.k.fierce.i.togvis).i.mid.facade.kas31:0)#k.exert.img.spe13.n.Torch)"),
+
 
         new TestCase("Monster - GROND", TargetType.Monster,
             "(Bell.n.Grond.sd.4-3:4-3:11-1:11-1:4-2:4-2.i.row.k.exert#facade.dar12:0:25:16.img.Sarcophagus.draw.Alpha:10:0).t.jinx.ea.sthief.abilitydata.(Statue.i.left.hat.egg.(rmon.1c.n.War Drum.hp.2.sd.128-2:128-1:128-1:128-1:128-1:128-1.img.Ber50)#blindfold)",
@@ -99,7 +106,7 @@ public static class SyntaxRegressionTester
         // --- ABILITY TESTS ---
         new TestCase("On Hit Spell", TargetType.Ability,
             "i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg))",
-            "i.onhitdata.(Fey.sd.15-1.i.(left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg)))"),
+            "i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg))"),
 
                 // --- ABILITY TESTS ---
         new TestCase("Tactic", TargetType.Ability,

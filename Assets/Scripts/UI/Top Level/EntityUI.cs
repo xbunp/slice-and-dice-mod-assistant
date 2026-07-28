@@ -960,10 +960,10 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         // Blessings
         AppendCollectionSelector<string>(
             layout: layout, label: "Add Blessing:", uniqueKey: "Blessing",
-            availableChoices: BlessingDataset.Blessings.Keys.ToList(),
+            availableChoices: ModifierDataSet.Blessings.Keys.ToList(),
             currentActiveItems: CurrentEntity.blessings ?? new List<string>(),
             getKey: (blessingName) => blessingName,
-            getDisplay: (blessingName) => BlessingDataset.Blessings.TryGetValue(blessingName, out string desc) ? $"{blessingName}: {desc}" : blessingName,
+            getDisplay: (blessingName) => ModifierDataSet.Blessings.TryGetValue(blessingName, out string desc) ? $"{blessingName}: {desc}" : blessingName,
             onAdd: (blessingName) => {
                 if (CurrentEntity.blessings == null) CurrentEntity.blessings = new List<string>();
                 if (!CurrentEntity.blessings.Contains(blessingName)) { CurrentEntity.blessings.Add(blessingName); NotifyStateChanged(); RebuildStatsUI(); }

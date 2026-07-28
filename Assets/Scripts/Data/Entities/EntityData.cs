@@ -977,9 +977,15 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
             if (TryProcessModifierData(stream)) continue;
-            stream.Consume(); // Fallback consume
+
+            string droppedToken = stream.Consume();
+            UnityEngine.Debug.LogError($"[EntityData Parser ERROR] Unrecognized string chunk discarded! Token '{droppedToken}' did not match any valid property, metadata, item, or modifier. Entity: {entityName ?? "Unknown"}");
         }
     }
+
+
+
+
     public override string Export()
     {
         HeroData hero = this as HeroData;
@@ -997,9 +1003,85 @@ public abstract class EntityData : SDData, IPayloadContainer
         string trailingPayloads = BuildTrailingPayloads(hero, monster, isHero, out var wrapperPayloads);
 
         string combined = $"{coreBody}{trailingPayloads}";
-        bool hasOuterExtensions = !string.IsNullOrEmpty(trailingPayloads);
 
-        return ApplyWrappersAndOuterBracketing(combined, wrapperPayloads, hasOuterExtensions);
+        return ApplyWrappersAndOuterBracketing(combined, wrapperPayloads);
+    }
+    private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride)
+    {
+        StringBuilder sb = new StringBuilder();
+
+        if (!string.IsNullOrEmpty(baseId))
+        {
+            if (isHero) sb.Append($"replica.{FormatName(FormatSpecialImageName(baseId))}");
+            else sb.Append(FormatName(FormatSpecialImageName(baseId)));
+            if (!hasImageOverride) AppendColorModifier(sb);
+        }
+
+        if (!string.IsNullOrEmpty(entityName) && (isHero || !string.Equals(entityName, baseId, StringComparison.OrdinalIgnoreCase)))
+            sb.Append($".n.{FormatName(entityName)}");
+
+        if (isHero && !string.IsNullOrEmpty(hero.colorClass)) sb.Append($".col.{hero.colorClass}");
+        if (hp > 0) sb.Append($".hp.{hp}");
+        if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
+        if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
+
+        AppendDiceSides(sb);
+
+        if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
+
+        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
+        if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
+
+        if (hasImageOverride)
+        {
+            sb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
+            AppendColorModifier(sb);
+        }
+
+        string coreString = sb.ToString();
+        if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
+
+        return $"({coreString})";
+    }
+    private string BuildTrailingPayloads(HeroData hero, MonsterData monster, bool isHero, out List<string> wrapperPayloads)
+    {
+        StringBuilder outerSb = new StringBuilder();
+
+        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out wrapperPayloads);
+
+        string traitPrefix = isHero ? ".i.t." : ".t.";
+        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) outerSb.Append($"{traitPrefix}{FormatName(t)}");
+        if (!isHero && monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
+        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) outerSb.Append($".i.{FormatName(i)}");
+        if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) outerSb.Append($".gift.{FormatName(bl)}");
+
+        foreach (var inner in innerPayloads) outerSb.Append($".{inner}");
+
+        if (isHero && hero.baseAbilityData != null)
+            foreach (var ab in hero.baseAbilityData) if (!string.IsNullOrEmpty(ab)) outerSb.Append($".i.learn.{FormatName(ab)}");
+
+        if (customAbilityData != null && customAbilityData.Count > 0)
+        {
+            foreach (var cab in customAbilityData)
+            {
+                if (cab == null) continue;
+                if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.{cab.Export()}");
+                else if (cab is OnHitData) outerSb.Append($".i.onhitdata.{cab.Export()}");
+                else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
+                else outerSb.Append($".abilitydata.{cab.Export()}");
+            }
+        }
+
+        foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
+
+        string jinxPrefix = isHero ? ".i.t.jinx." : ".t.jinx.";
+        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) outerSb.Append($"{jinxPrefix}{FormatName(c)}");
+
+        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
+        if (isHero && !string.IsNullOrEmpty(hero.appendedDoc)) outerSb.Append($".i.self.Wolf.doc.{hero.appendedDoc}.spirit");
+        if (!isHero && !string.IsNullOrEmpty(monster.bal)) outerSb.Append($".bal.{FormatName(monster.bal)}");
+
+        return outerSb.ToString();
     }
     private string ApplyWrappersAndOuterBracketing(string result, List<string> wrapperPayloads, bool hasOuterExtensions)
     {
@@ -1011,8 +1093,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
 
-        // If the entity has trailing data (items, abilities, curses), or was parsed with outer parens,
-        // enclose the ENTIRE expression in an outer set of brackets: ((Core).Trailing)
         if (hasOuterExtensions || isOuterWrappedInParens)
         {
             result = $"({result})";
@@ -1049,86 +1129,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             monster.baseMonster = $"{prefix}.({modPayload.Export()})";
         }
     }
-    private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride)
-    {
-        StringBuilder sb = new StringBuilder();
 
-        if (!string.IsNullOrEmpty(baseId))
-        {
-            if (isHero) sb.Append($"replica.{FormatName(FormatSpecialImageName(baseId))}");
-            else sb.Append(FormatName(FormatSpecialImageName(baseId)));
-            if (!hasImageOverride) AppendColorModifier(sb);
-        }
-
-        if (!string.IsNullOrEmpty(entityName) && (isHero || !string.Equals(entityName, baseId, StringComparison.OrdinalIgnoreCase)))
-            sb.Append($".n.{FormatName(entityName)}");
-
-        if (isHero && !string.IsNullOrEmpty(hero.colorClass)) sb.Append($".col.{hero.colorClass}");
-        if (hp > 0) sb.Append($".hp.{hp}");
-        if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
-        if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
-
-        AppendDiceSides(sb);
-
-        if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
-
-        // ONLY ITEMS WHICH AFFECT DICE FACES GO -INSIDE-
-        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
-        if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
-
-        // Visuals go INSIDE the core entity bounds
-        if (hasImageOverride)
-        {
-            sb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
-            AppendColorModifier(sb);
-        }
-
-        string coreString = sb.ToString();
-        if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
-
-        // CRITICAL RESTRICTION: Core Entity MUST be wrapped to protect boundaries
-        return $"({coreString})";
-    }
-    private string BuildTrailingPayloads(HeroData hero, MonsterData monster, bool isHero, out List<string> wrapperPayloads)
-    {
-        StringBuilder outerSb = new StringBuilder();
-
-        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
-        if (!isHero && !string.IsNullOrEmpty(monster.bal)) outerSb.Append($".bal.{FormatName(monster.bal)}");
-
-        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out wrapperPayloads);
-
-        string traitPrefix = isHero ? ".i.t." : ".t.";
-        if (traits != null) foreach (var t in traits) if (!string.IsNullOrEmpty(t)) outerSb.Append($"{traitPrefix}{FormatName(t)}");
-        if (!isHero && monster.customOrbs != null) foreach (var orb in monster.customOrbs) if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
-        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) outerSb.Append($".i.{FormatName(i)}");
-        if (isHero && blessings != null) foreach (var bl in blessings) if (!string.IsNullOrEmpty(bl)) outerSb.Append($".gift.{FormatName(bl)}");
-
-        string jinxPrefix = isHero ? ".i.t.jinx." : ".t.jinx.";
-        if (curses != null) foreach (var c in curses) if (!string.IsNullOrEmpty(c)) outerSb.Append($"{jinxPrefix}{FormatName(c)}");
-
-        foreach (var inner in innerPayloads) outerSb.Append($".{inner}");
-
-        if (isHero && hero.baseAbilityData != null)
-            foreach (var ab in hero.baseAbilityData) if (!string.IsNullOrEmpty(ab)) outerSb.Append($".i.learn.{FormatName(ab)}");
-
-        if (customAbilityData != null && customAbilityData.Count > 0)
-        {
-            foreach (var cab in customAbilityData)
-            {
-                if (cab == null) continue;
-                if (cab is TriggerHPData) outerSb.Append($".triggerhpdata.{cab.Export()}");
-                else if (cab is OnHitData) outerSb.Append($".i.onhitdata.{cab.Export()}");
-                else if (cab is OrbData orb) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-                else outerSb.Append($".abilitydata.{cab.Export()}");
-            }
-        }
-
-        foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
-        if (isHero && !string.IsNullOrEmpty(hero.appendedDoc)) outerSb.Append($".i.self.Wolf.doc.{hero.appendedDoc}.spirit");
-
-        return outerSb.ToString();
-    }
     private string ApplyWrappersAndOuterBracketing(string result, List<string> wrapperPayloads)
     {
         if (wrapperPayloads != null)
@@ -1146,7 +1147,6 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return result;
     }
-
     private bool IsImageOverridePresent(string baseId)
     {
         return !string.IsNullOrEmpty(imageOverride) &&
