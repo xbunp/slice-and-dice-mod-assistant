@@ -194,6 +194,7 @@ public class ModPackage : MonoBehaviour
         OnDirectivesChanged?.Invoke();
     }
 
+    /*
     private T Clone<T>(T source) where T : class
     {
         if (source == null) return null;
@@ -207,7 +208,24 @@ public class ModPackage : MonoBehaviour
 
         string json = JsonConvert.SerializeObject(source, settings);
         return JsonConvert.DeserializeObject(json, source.GetType(), settings) as T;
+    }*/
+
+    private T Clone<T>(T source) where T : class
+    {
+        if (source == null) return null;
+
+        var settings = new JsonSerializerSettings
+        {
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+            TypeNameHandling = TypeNameHandling.Auto,
+            ObjectCreationHandling = ObjectCreationHandling.Replace, // <-- CRITICAL: Prevents array appending/duplication on deserialization
+            ContractResolver = new UnityStructResolver()
+        };
+
+        string json = JsonConvert.SerializeObject(source, settings);
+        return JsonConvert.DeserializeObject(json, source.GetType(), settings) as T;
     }
+
 
     public void NotifyActiveEntityChanged<T>(object sender) where T : SDData
     {

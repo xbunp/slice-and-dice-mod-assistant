@@ -610,6 +610,7 @@ public class ItemData : SDData
     {
         bool isPureEntityName = Mechanics.Count == 0 &&
                                 !string.IsNullOrEmpty(entityName) &&
+                                !ItemDomainRules.TogItems.Contains(entityName) && // ADDED
                                 string.IsNullOrEmpty(imageOverride) &&
                                 visuals.Count == 0 &&
                                 !Tier.HasValue &&
@@ -625,6 +626,7 @@ public class ItemData : SDData
 
         bool isPureBaseItem = Mechanics.Count == 1 &&
                               string.IsNullOrEmpty(Mechanics[0].Prefix) &&
+                              !ItemDomainRules.TogItems.Contains(Mechanics[0].PayloadString ?? "") && // ADDED
                               Mechanics[0].Targets.Count == 0 &&
                               Mechanics[0].ChainedKeywords.Count == 0 &&
                               Mechanics[0].Multiplier == 1 &&
@@ -653,8 +655,8 @@ public class ItemData : SDData
             string pfx = mech.Prefix?.ToLower() ?? "";
             if (mech.PayloadData is ModifierData) return false;
 
-            // STRICT EXCLUSION: hat, cast, enchant MUST NOT map natively so they preserve syntax
-            if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "")
+            // STRICT EXCLUSION: hat, cast, enchant, facade MUST NOT map natively so they preserve syntax and export order
+            if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "sticker" && pfx != "") // REMOVED "facade"
             {
                 return false;
             }
@@ -925,6 +927,7 @@ public class ItemData : SDData
                 }
             }
 
+            /*
             // Case 2: Tog Items wrapped inside of an inherent (i) Item Pack tuple
             if (clonedMech.Prefix == "i" && clonedMech.PayloadData is ItemData nestedItem)
             {
@@ -947,6 +950,43 @@ public class ItemData : SDData
 
                     // Skip appending this '.i' node if we successfully merged all its contents natively
                     if (allMerged) continue;
+                }
+            }
+            */
+
+            // Case 2: Tog Items wrapped inside of an inherent (i) Item Pack tuple
+            if (clonedMech.Prefix == "i" && clonedMech.PayloadData is ItemData nestedItem)
+            {
+                bool onlyTog = nestedItem.Mechanics.Count > 0 && nestedItem.Mechanics.All(m => string.IsNullOrEmpty(m.Prefix) && ItemDomainRules.TogItems.Contains(m.PayloadString));
+                if (onlyTog)
+                {
+                    bool allMerged = true;
+
+                    // PASS 1: Validation. Ensure EVERY item can merge before we mutate anything.
+                    foreach (var innerMech in nestedItem.Mechanics)
+                    {
+                        var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
+                        if (prev == null)
+                        {
+                            allMerged = false;
+                            break;
+                        }
+                    }
+
+                    // PASS 2: Mutation. Only apply if the entire block successfully mapped.
+                    if (allMerged)
+                    {
+                        foreach (var innerMech in nestedItem.Mechanics)
+                        {
+                            var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
+                            if (prev != null)
+                            {
+                                prev.ChainedKeywords.Add(innerMech.PayloadString);
+                            }
+                        }
+                        // Skip appending this '.i' node because we successfully merged all its contents natively
+                        continue;
+                    }
                 }
             }
 

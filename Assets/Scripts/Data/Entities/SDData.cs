@@ -82,6 +82,9 @@ public abstract class SDData
                 vis = GetOrAddVisual(VisualType.HSV);
             }
             vis.h = value;
+
+            if (vis.h == 0 && vis.s == 0 && vis.v == 0)
+                visuals.Remove(vis);
         }
     }
     public int s
@@ -96,6 +99,9 @@ public abstract class SDData
                 vis = GetOrAddVisual(VisualType.HSV);
             }
             vis.s = value;
+
+            if (vis.h == 0 && vis.s == 0 && vis.v == 0)
+                visuals.Remove(vis);
         }
     }
     public int v
@@ -110,6 +116,9 @@ public abstract class SDData
                 vis = GetOrAddVisual(VisualType.HSV);
             }
             vis.v = value;
+
+            if (vis.h == 0 && vis.s == 0 && vis.v == 0)
+                visuals.Remove(vis);
         }
     }
     public int hue
@@ -130,17 +139,49 @@ public abstract class SDData
     public string b
     {
         get => GetVisual(VisualType.B)?.RawValue;
-        set { var vis = GetOrAddVisual(VisualType.B); vis.RawValue = value; }
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                var existing = GetVisual(VisualType.B);
+                if (existing != null) visuals.Remove(existing);
+                return;
+            }
+            var vis = GetOrAddVisual(VisualType.B);
+            vis.RawValue = value;
+        }
     }
     public string draw
     {
         get => GetVisual(VisualType.Draw)?.RawValue;
-        set { var vis = GetOrAddVisual(VisualType.Draw); vis.RawValue = value; }
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                var existing = GetVisual(VisualType.Draw);
+                if (existing != null) visuals.Remove(existing);
+                return;
+            }
+            var vis = GetOrAddVisual(VisualType.Draw);
+            vis.RawValue = value;
+        }
     }
     public string rect
     {
         get => GetVisual(VisualType.Rect)?.RawValue;
-        set { var vis = GetOrAddVisual(VisualType.Rect); vis.RawValue = value; }
+        set
+        {
+            // rect specifically supports "" (empty string) as a valid parameter in the parser. 
+            // Therefore, we only strip it if it is strictly null (like during JSON mapping)
+            if (value == null)
+            {
+                var existing = GetVisual(VisualType.Rect);
+                if (existing != null) visuals.Remove(existing);
+                return;
+            }
+            var vis = GetOrAddVisual(VisualType.Rect);
+            vis.RawValue = value;
+        }
     }
     public string p
     {
@@ -162,6 +203,17 @@ public abstract class SDData
         }
         set
         {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                var existing = GetVisual(VisualType.P);
+                if (existing != null)
+                {
+                    existing.RawValue = null;
+                    if (existing.p == null || existing.p.colorRange == 0)
+                        visuals.Remove(existing);
+                }
+                return;
+            }
             var vis = GetOrAddVisual(VisualType.P);
             vis.p = UnpackP(value);
             vis.RawValue = value;
@@ -175,7 +227,12 @@ public abstract class SDData
             var existing = GetVisual(VisualType.P);
             if (value == null || value.colorRange == 0)
             {
-                if (existing != null) visuals.Remove(existing);
+                if (existing != null)
+                {
+                    existing.p = null;
+                    if (string.IsNullOrWhiteSpace(existing.RawValue))
+                        visuals.Remove(existing);
+                }
                 return;
             }
             var vis = GetOrAddVisual(VisualType.P);
@@ -197,6 +254,7 @@ public abstract class SDData
             vis.thue = value;
         }
     }
+    #endregion
 
     private VisualModifier GetVisual(VisualType type) => visuals.FirstOrDefault(x => x.Type == type);
     private VisualModifier GetOrAddVisual(VisualType type)
@@ -222,7 +280,7 @@ public abstract class SDData
             new VisualModifier { Type = VisualType.HSV }
         };
     }
-    #endregion
+
 
     [Header("Deep Payloads")]
     public List<CustomPayload> customPayloads = new List<CustomPayload>();

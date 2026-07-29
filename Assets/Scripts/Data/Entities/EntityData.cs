@@ -314,6 +314,8 @@ public abstract class EntityData : SDData, IPayloadContainer
             _itemPipeline.Clear();
         }
     }
+
+    /*
     private void ResolveItemPipeline(List<ItemData> pipeline)
     {
         // 1. Resolve Coupling (Hat + Facade)
@@ -342,6 +344,53 @@ public abstract class EntityData : SDData, IPayloadContainer
             HydrateEntityFromItem(item);
         }
     }
+    */
+    // TODO: TEMP: Alternate pipeline resolver meant to fix item order mutations on import. Dubious? May incur tech debt down the road? The above is the old version, however it doesn't maintain correct item order. 
+    private void ResolveItemPipeline(List<ItemData> pipeline)
+    {
+        // 1. Stable Sort by Priority
+        // Priority 50 items (standard mechanics) maintain their exact parsed relative order.
+        var sortedPipeline = pipeline.OrderBy(item => GetItemPriority(item)).ToList();
+
+        bool timelineRuptured = false;
+
+        // 2. Hydrate Entity State
+        foreach (var item in sortedPipeline)
+        {
+            bool isDiceAffecting = IsDiceAffectingItem(item);
+
+            // If the sequential timeline was ruptured by an un-absorbable dice item, 
+            // force all subsequent dice-affecting items into the strict custom payload pipeline.
+            bool forceCustomPayload = timelineRuptured && isDiceAffecting;
+
+            HydrateEntityFromItem(item, forceCustomPayload);
+
+            // Detect if a dice-affecting item fell into the custom pipeline.
+            // If so, the static base-state can no longer accurately represent the sequence,
+            // meaning the timeline is now formally ruptured.
+            if (isDiceAffecting && customPayloads.Count > 0 && customPayloads.Last().Data == item)
+            {
+                timelineRuptured = true;
+            }
+        }
+    }
+    private void HydrateEntityFromItem(ItemData item, bool forceCustomPayload = false)
+    {
+        bool canMapNatively = false;
+
+        if (!forceCustomPayload)
+        {
+            canMapNatively = item.TryAbsorbIntoEntity(this);
+        }
+
+        if (!canMapNatively)
+        {
+            // Route non-native or sequentially-forced items to CustomPayloads 
+            // so CustomItemContextHelper can correctly bracket them to the outside!
+            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
+        }
+    }
+
     private int GetItemPriority(ItemData item)
     {
         int priority = 50;
@@ -464,6 +513,30 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         if (stream.Peek().ToLower() == "i")
         {
+            string nextToken = stream.PeekNext();
+            if (!string.IsNullOrEmpty(nextToken))
+            {
+                string stripped = StaticBranchTracing.StripOuterParens(nextToken);
+
+                int wolfDocIdx = stripped.IndexOf("Wolf.doc.", StringComparison.OrdinalIgnoreCase);
+                int spiritIdx = stripped.LastIndexOf("spirit", StringComparison.OrdinalIgnoreCase);
+
+                // Dynamically detect the presence of self., Wolf.doc., and spirit anywhere in the token
+                if (stripped.StartsWith("self.", StringComparison.OrdinalIgnoreCase) && wolfDocIdx != -1 && spiritIdx > wolfDocIdx)
+                {
+                    int start = wolfDocIdx + 9; // "Wolf.doc.".Length
+                    string rawDoc = stripped.Substring(start, spiritIdx - start);
+
+                    // Cleanly slice off trailing/leading delimiters (, ), ., space
+                    appendedDoc = rawDoc.TrimEnd('.', ')', '(', ' ');
+
+                    stream.Consume(); // Consume 'i'
+                    stream.Consume(); // Consume the doc token
+                    return true;
+                }
+            }
+
+            // Fallback for legacy flat token sequence support
             var raw = stream.GetRawList();
             int i = stream.Index;
             if (i + 5 < raw.Count &&
