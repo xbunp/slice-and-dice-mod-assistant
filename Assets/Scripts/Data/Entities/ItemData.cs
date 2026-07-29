@@ -354,10 +354,8 @@ public class ItemMechanic
         List<string> parts = new List<string>();
         if (Targets.Count > 0) parts.AddRange(Targets);
 
-        // ONLY output RepeatTimes if there is NO nested SDData payload handling the xMultiplier
-        //TODO: THIS MAY BE A MISTAKE?
-        bool payloadHandlesMultiplier = PayloadData is SDData sd && sd.xMultiplier > 1;
-        if (RepeatTimes != 1 && !payloadHandlesMultiplier)
+        bool payloadHandlesMultiplier = PayloadData is SDData sd && sd.xMultiplier >= 2 && sd.xMultiplier <= 9;
+        if (RepeatTimes >= 2 && RepeatTimes <= 9 && !payloadHandlesMultiplier)
         {
             parts.Add($"x{RepeatTimes}");
         }
@@ -365,30 +363,32 @@ public class ItemMechanic
         if (PerTier) parts.Add("pertier");
         if (Unpack) parts.Add("unpack");
         if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
-        string corePayload = PayloadString;
 
+        string corePayload = PayloadString;
         if (PayloadData != null)
         {
-            // Children will now inherently self-bracket!
+            // ONLY Heroes use ExportAsHat. Monsters export normally to preserve their entity data inside the hat!
             if (Prefix == "hat" && PayloadData is HeroData hd)
+            {
                 corePayload = hd.ExportAsHat();
+            }
             else if (PayloadData is SDData sdData)
+            {
                 corePayload = sdData.Export();
+
+                // LAW 3: Datatypes self-bracket at scope-change junctions.
+                // The mechanic brackets the payload transition so chained keywords attach to the mechanic.
+                if (!corePayload.StartsWith("("))
+                {
+                    corePayload = $"({corePayload})";
+                }
+            }
         }
 
-        // Formerly: Smart Bracketing occurred here.
-
+        // LAW 1 & 2: Chained Keywords append to the mechanic itself, not inside the payload's brackets!
         if (ChainedKeywords.Count > 0)
         {
-            string chains = "#" + string.Join("#", ChainedKeywords);
-            if (corePayload.StartsWith("(") && corePayload.EndsWith(")"))
-            {
-                corePayload = corePayload.Substring(0, corePayload.Length - 1) + chains + ")";
-            }
-            else
-            {
-                corePayload += chains;
-            }
+            corePayload += "#" + string.Join("#", ChainedKeywords);
         }
 
         if (!string.IsNullOrEmpty(corePayload)) parts.Add(corePayload);
@@ -396,7 +396,6 @@ public class ItemMechanic
         if (Multiplier != 1) { parts.Add("m"); parts.Add(Multiplier.ToString()); }
         if (!string.IsNullOrEmpty(MergedItem)) parts.Add($"mrg.{MergedItem}");
         if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
-
 
         return string.Join(".", parts);
     }
@@ -848,7 +847,7 @@ public class ItemData : SDData
         }
     }
 
-    public override string Export()
+    protected override string ExportCore()
     {
         List<string> chainParts = new List<string>();
         foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({StaticBranchTracing.StripOuterParens(cont.Value)})");

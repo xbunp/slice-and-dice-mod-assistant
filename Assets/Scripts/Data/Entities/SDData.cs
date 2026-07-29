@@ -54,7 +54,14 @@ public abstract class SDData
     public string entityName = "";
     public string imageOverride = "None";
     public string doc;
-    public int xMultiplier = 1;
+    [SerializeField] private int _xMultiplier = 1;
+
+    // Value Safety:
+    public int xMultiplier
+    {
+        get => (_xMultiplier >= 2 && _xMultiplier <= 9) ? _xMultiplier : 1;
+        set => _xMultiplier = (value >= 2 && value <= 9) ? value : 1;
+    }
 
     [Header("Visual Modifiers")]
     public List<VisualModifier> visuals = new List<VisualModifier>();
@@ -252,6 +259,20 @@ public abstract class SDData
             }
         }
 
+        if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
+        {
+            int dotIdx = clean.IndexOf('.');
+            if (dotIdx > 1)
+            {
+                string multStr = clean.Substring(1, dotIdx - 1);
+                if (int.TryParse(multStr, out int mult) && mult >= 2 && mult <= 9)
+                {
+                    xMultiplier = mult;
+                    clean = clean.Substring(dotIdx + 1).Trim(); // Strip "xN." centrally
+                }
+            }
+        }
+
         // 2. Delegate cleaned payload to derived class
         ParseCore(clean);
     }
@@ -431,10 +452,22 @@ public abstract class SDData
         }
     }
 
-    public virtual string Export()
+    // TEMPLATE METHOD: Sole entry point for all exports. Centrally owns xMultiplier formatting.
+    public string Export()
     {
-        return $"n.{entityName}.img.{imageOverride}";
+        string rawExport = ExportCore();
+        if (string.IsNullOrWhiteSpace(rawExport)) return string.Empty;
+
+        if (xMultiplier >= 2 && xMultiplier <= 9)
+        {
+            //TODO: this returns, for example, x2.(entity) which is slightly weird syntax. Its more natural to see (x2.entity). Fix later probably during optimization pass.
+            return $"x{xMultiplier}.{rawExport}";
+        }
+        return rawExport;
     }
+
+    // Subclasses only define their domain-specific body
+    protected abstract string ExportCore();
 
     protected static string FormatName(string name) => name?.Trim() ?? "";
     protected static string PackP(Phue p)

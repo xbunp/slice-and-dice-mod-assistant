@@ -648,7 +648,7 @@ public static class BaseItemMetadataRegistry
     // ====================================================================
     // MAINTAIN ONLY THIS SINGLE LIST OF NATURAL NAMES
     // ====================================================================
-    private static readonly HashSet<string> RawDiceAffectingItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    public static readonly HashSet<string> RawDiceAffectingItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "Abacus",
         "Ace of Spades",
@@ -672,6 +672,7 @@ public static class BaseItemMetadataRegistry
         "Banana Peel",
         "Bandana",
         "Banned",
+        "Basilisk Scale",
         "Bent Fork",
         "Bent Spoon",
         "Bent Spork",
@@ -732,6 +733,7 @@ public static class BaseItemMetadataRegistry
         "Corset",
         "Corruption",
         "Courage Potion",
+        "Cracked Emerald",
         "Cracked Phylactery",
         "Cracked Wheel",
         "Crescent Shield",
@@ -758,12 +760,16 @@ public static class BaseItemMetadataRegistry
         "Duelling Pistol",
         "Dull Wit",
         "Dumbbell",
+        "Dusty Emerald",
         "Duvet",
         "Dynamo",
         "Early Grave",
         "Economancy",
         "Egg Basket",
         "Eggshell",
+        "Emerald Mirror",
+        "Emerald Satchel",
+        "Emerald Shard",
         "Enchanted Harp",
         "Enhance Wand",
         "Erythrocyte",
@@ -779,7 +785,6 @@ public static class BaseItemMetadataRegistry
         "Fearless",
         "Fertiliser",
         "Fidget Spinner",
-        "First aid Kit",
         "Flea",
         "Flickering Blade",
         "Flute",
@@ -867,6 +872,7 @@ public static class BaseItemMetadataRegistry
         "Necromancer Tome",
         "Needle",
         "Nunchaku",
+        "Origami",
         "Obol",
         "Obsidian Edge",
         "Ocular Amulet",
@@ -891,6 +897,7 @@ public static class BaseItemMetadataRegistry
         "Poem",
         "Poison Dip",
         "Polearm",
+        "Polished Emerald",
         "Poodle",
         "Poseidon Charm",
         "Potion Shard",
@@ -927,6 +934,7 @@ public static class BaseItemMetadataRegistry
         "Serration",
         "Sharp Wit",
         "Shining Bow",
+        "Shining Emerald",
         "Shiny Gauntlets",
         "Shortsword",
         "Shuriken",

@@ -9,7 +9,7 @@ public class SpellData : AbilityData
     [Header("Spell Properties")]
     public int manaCost = 1;
 
-    public override string Export()
+    protected override string ExportCore()
     {
         if (diceSides[4].effectID == 0) diceSides[4].effectID = 76;
         diceSides[4].pips = manaCost;
@@ -44,7 +44,7 @@ public class TacticData : AbilityData
         diceSides[4].pips = 0;
     }
 
-    public override string Export()
+    protected override string ExportCore()
     {
         diceSides[4].effectID = 0;
         diceSides[4].pips = 0;
@@ -66,7 +66,7 @@ public class OnHitData : AbilityData
         }
     }
 
-    public override string Export()
+    protected override string ExportCore()
     {
         // Ensure faces 1 through 5 are cleared so they don't show up in the text string
         for (int i = 1; i <= 5; i++)
@@ -92,7 +92,7 @@ public class TriggerHPData : AbilityData
         }
     }
 
-    public override string Export()
+    protected override string ExportCore()
     {
         // Ensure unused faces are cleared
         for (int i = 1; i <= 5; i++)
@@ -166,7 +166,7 @@ public class OrbData : AbilityData
         }
     }
 
-    public override string Export()
+    protected override string ExportCore()
     {
         if (isHardcoded) return hardcodedAbilityName.ToLower();
         return StaticBranchTracing.SafeBracket(ExportInner());

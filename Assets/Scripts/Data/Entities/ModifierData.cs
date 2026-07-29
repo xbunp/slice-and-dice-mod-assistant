@@ -642,7 +642,7 @@ public class ModifierData : SDData
                 UnityEngine.Debug.LogWarning($"COMPILER WARNING: If '{CoreEffectName}' has multiple parts (like Ghoststone), prefixes will cause the parser to crash. You must target parts explicitly.");
         }
     }
-    public override string Export()
+    protected override string ExportCore()
     {
         return ExportInternal(isRoot: true);
     }

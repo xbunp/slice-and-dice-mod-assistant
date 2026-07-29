@@ -108,7 +108,7 @@ public abstract class AbilityData : HeroData
                 for (int i = 0; i < 6; i++) diceSides[i] = new DiceSideData();
             }
         }
-        public override string Export() => string.Empty;
+        protected override string ExportCore() => string.Empty;
     }
 
     private void CleanData()
@@ -174,7 +174,7 @@ public abstract class AbilityData : HeroData
         }
         return base.TryProcessSpecificMetadata(stream);
     }
-    public override string Export()
+    protected override string ExportCore()
     {
         //return StaticBranchTracing.SafeBracket(ExportInner());
         return $"({ExportInner()})";

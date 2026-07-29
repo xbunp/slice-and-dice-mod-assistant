@@ -138,7 +138,9 @@ public class HeroData : EntityData
         i++;
         return true;
     }
-    public string ExportAsHat()
+
+    /* // temporarily removed while EntityData tries to take over.
+    public override string ExportAsHat()
     {
         StringBuilder heroSb = new StringBuilder();
         // Hats do not use the "replica." prefix, they just state the name directly.
@@ -169,6 +171,8 @@ public class HeroData : EntityData
         return $"({heroSb.ToString()})";
 
     }
+    */
+
     public override void AddCustomAbility(AbilityData ability)
     {
         if (ability == null) return;
