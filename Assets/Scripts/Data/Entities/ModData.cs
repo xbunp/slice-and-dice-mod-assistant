@@ -14,7 +14,6 @@ public class ModData
 
     [SerializeField] private List<SpellData> _spells = new List<SpellData>();
     [SerializeField] private List<TacticData> _tactics = new List<TacticData>();
-    // NEW: Add missing AbilityData subclasses so Unity serializes them properly
     [SerializeField] private List<OnHitData> _onHits = new List<OnHitData>();
     [SerializeField] private List<TriggerHPData> _triggerHPs = new List<TriggerHPData>();
     [SerializeField] private List<OrbData> _orbs = new List<OrbData>();
