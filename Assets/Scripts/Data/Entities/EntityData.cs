@@ -787,8 +787,10 @@ public abstract class EntityData : SDData, IPayloadContainer
                     string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, "mid") : templateString;
                     string faceAlias = i == 0 ? "left" : (i == 2 ? "top" : (i == 3 ? "bot" : "rightmost"));
 
-                    // RULE 3 ENFORCEMENT: The Modifier datatype self-brackets its multi-part expression.
-                    modSb.Append($".i.({faceAlias}.mid.{resolvedMod})");
+                    ItemData giveItem = new ItemData();
+                    giveItem.Parse($"{faceAlias}.mid.{resolvedMod}");
+                    ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giveItem };
+                    modSb.Append($".{modifier.Export()}");
                 }
                 else
                 {
@@ -798,7 +800,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-
         // Apply best aliases for grouped identical faces
         foreach (var kvp in groupedModifiers)
         {
@@ -808,9 +809,10 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, alias) : templateString;
 
-                // The payload resolves its scope, the parent applies the 'i' modifier.
-                string payload = $"({alias}.{resolvedMod})";
-                modSb.Append($".i.{payload}");
+                ItemData giveItem = new ItemData();
+                giveItem.Parse($"{alias}.{resolvedMod}");
+                ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giveItem };
+                modSb.Append($".{modifier.Export()}");
             }
         }
 
@@ -881,7 +883,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
         string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
         string fullSummonExport = cleanSummon; // Fallback to raw string if entity lookup fails
-
         if (ModPackage.Instance != null)
         {
             var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(h => string.Equals(h.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
@@ -893,19 +894,15 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
 
-        if (!fullSummonExport.StartsWith("("))
+        MonsterData eggMonster = new MonsterData();
+        eggMonster.baseMonster = $"egg.{fullSummonExport}";
+        if (face.pips >= 2 && face.pips <= 9)
         {
-            fullSummonExport = $"({fullSummonExport})";
+            eggMonster.xMultiplier = face.pips;
         }
 
-        string repeatPrefix = "";
-        if (face.pips > 1)
-        {
-            repeatPrefix = $"x{face.pips}.";
-        }
-
-        // FIX: Place repeat multiplier inside the hat, attached to the egg
-        chunks.Add($"hat.({repeatPrefix}egg.{fullSummonExport})");
+        // EggMonster handles multiplier bracketing itself!
+        chunks.Add($"hat.{eggMonster.Export()}");
 
         // Blindfold item MUST come immediately after the Hat
         if (hasBlindfold)
@@ -917,9 +914,8 @@ public abstract class EntityData : SDData, IPayloadContainer
 
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
+        // If payloadStr is complex, ItemData self-brackets on export.
         string prefix = face.faceType.ToString().ToLower();
-        if (!payloadStr.StartsWith("(") && (payloadStr.Contains(".") || payloadStr.Contains("#") || payloadStr.Contains(":")))
-            payloadStr = $"({payloadStr})";
 
         bool applyStickerRules = face.faceType == DiceSideData.DiceFaceType.Sticker;
 
@@ -1433,7 +1429,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         if (!isHero) SyncMonsterContainerBaseIdentifier(monster);
 
         string baseId = isHero ? hero.baseReplica : monster.baseMonster;
-
         StringBuilder heroSb = new StringBuilder();
 
         // 1. Base Identifier (Hats do not use the "replica." prefix, they state the name directly)
@@ -1449,18 +1444,23 @@ public abstract class EntityData : SDData, IPayloadContainer
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
 
-        // 4. Append internal items/traits/payloads
+        // 4. Append internal custom item payloads (NO traits or abilities)
         ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
-
         StringBuilder innerSb = new StringBuilder();
         if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
         foreach (var inner in innerPayloads) if (!string.IsNullOrEmpty(inner)) innerSb.Append($".{inner}");
         foreach (var outer in outerPayloads) if (!string.IsNullOrEmpty(outer)) innerSb.Append($".{outer}");
-
         heroSb.Append(innerSb.ToString());
 
-        // Self-bracket safely as a single enclosed hat scope
-        return $"({heroSb.ToString()})";
+        string rawHat = $"({heroSb.ToString()})";
+
+        // Law 3: Safely bracket multipliers into the natively self-bracketed scope
+        if (xMultiplier >= 2 && xMultiplier <= 9)
+        {
+            return $"(x{xMultiplier}.{rawHat.Substring(1)}";
+        }
+
+        return rawHat;
     }
 
     // currently unused

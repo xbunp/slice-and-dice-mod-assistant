@@ -518,7 +518,12 @@ public abstract class SDData
 
         if (xMultiplier >= 2 && xMultiplier <= 9)
         {
-            //TODO: this returns, for example, x2.(entity) which is slightly weird syntax. Its more natural to see (x2.entity). Fix later probably during optimization pass.
+            // Law 3: If the core perfectly self-brackets the entire expression, place the multiplier cleanly inside
+            if (rawExport.StartsWith("(") && rawExport.EndsWith(")") &&
+                StaticBranchTracing.StripOuterParens(rawExport) == rawExport.Substring(1, rawExport.Length - 2))
+            {
+                return $"(x{xMultiplier}.{rawExport.Substring(1)}";
+            }
             return $"x{xMultiplier}.{rawExport}";
         }
         return rawExport;

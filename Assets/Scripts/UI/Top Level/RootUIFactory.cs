@@ -21,13 +21,14 @@ public class RootUIFactory : MonoBehaviour
     [SerializeField] private FullScreenUIGenerator uiGenerator;
     [SerializeField] private float topBarHeight = 45f;
 
-    // Direct, strongly-typed references to each instantiated class
     public IDEUI IDEUI { get; private set; }
-    public ScratchModUI ScratchModUI { get; private set; }
+    public ModBuilderUI ModBuilderUI { get; private set; }
     public HeroUI HeroUI { get; private set; }
     public MonsterUI MonsterUI { get; private set; }
     public ItemUI ItemUI { get; private set; }
     public AbilityUI AbilityUI { get; private set; }
+    public ModifierUI ModifierUI { get; private set; }
+    public AboutUI AboutUI { get; private set; }
 
     //public SettingsUI SettingsUI { get; private set; }
     //public AbilityDataFactory AbilityDataFactory { get; private set; } //todo: support abilities.
@@ -85,19 +86,19 @@ public class RootUIFactory : MonoBehaviour
         tabWrappers.Clear();
         tabNames.Clear();
         Canvas originalCanvas = uiGenerator.canvas;
-
         Canvas contentCanvas = contentContainer.gameObject.AddComponent<Canvas>();
         contentContainer.gameObject.AddComponent<GraphicRaycaster>();
-
         uiGenerator.canvas = contentCanvas;
 
-        // Instantiate classes directly, assign references, and register them as tabs
+        // Replaced ScratchModUI with ModBuilderUI, and added ModifierUI / AboutUI at the end
         IDEUI = CreateTabInstance<IDEUI>("IDEUI", "IDE");
-        ScratchModUI = CreateTabInstance<ScratchModUI>("ScratchModUI", "Modifiers");
+        ModBuilderUI = CreateTabInstance<ModBuilderUI>("ModBuilderUI", "Mod Builder");
         HeroUI = CreateTabInstance<HeroUI>("HeroUI", "Heroes");
         MonsterUI = CreateTabInstance<MonsterUI>("MonsterUI", "Monsters");
         ItemUI = CreateTabInstance<ItemUI>("ItemUI", "Items");
         AbilityUI = CreateTabInstance<AbilityUI>("AbilityUI", "Abilities");
+        ModifierUI = CreateTabInstance<ModifierUI>("ModifierUI", "Modifiers");
+        AboutUI = CreateTabInstance<AboutUI>("AboutUI", "About");
 
         uiGenerator.canvas = originalCanvas;
     }

@@ -62,6 +62,8 @@ public class MonsterData : EntityData
 
             // 2. Extract Specialized Containers (egg, vase, orb, jinx)
             string firstTokenLower = baseMonster.ToLower();
+
+            /*
             if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx" || firstTokenLower == "rmon")
             {
                 if (tokens.Count > 0)
@@ -77,6 +79,18 @@ public class MonsterData : EntityData
                         rawPayload = string.Join(".", tokens);
                         tokens.Clear();
                     }
+
+                    baseMonster += "." + rawPayload;
+                    string corePayload = StaticBranchTracing.StripOuterParens(rawPayload);
+            */
+
+            if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx" || firstTokenLower == "rmon")
+            {
+                if (tokens.Count > 0)
+                {
+                    // Pass everything to the inner payload entity (the Orc) so it owns its abilities
+                    string rawPayload = string.Join(".", tokens);
+                    tokens.Clear();
 
                     baseMonster += "." + rawPayload;
                     string corePayload = StaticBranchTracing.StripOuterParens(rawPayload);

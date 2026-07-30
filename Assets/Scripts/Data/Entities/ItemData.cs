@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using UnityEngine;
 
 /// <summary>
 /// Central authority for custom item domain parsing rules, syntax token definitions, and structural grammar constraints.
@@ -353,13 +355,11 @@ public class ItemMechanic
     {
         List<string> parts = new List<string>();
         if (Targets.Count > 0) parts.AddRange(Targets);
-
         bool payloadHandlesMultiplier = PayloadData is SDData sd && sd.xMultiplier >= 2 && sd.xMultiplier <= 9;
         if (RepeatTimes >= 2 && RepeatTimes <= 9 && !payloadHandlesMultiplier)
         {
             parts.Add($"x{RepeatTimes}");
         }
-
         if (PerTier) parts.Add("pertier");
         if (Unpack) parts.Add("unpack");
         if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
@@ -367,21 +367,19 @@ public class ItemMechanic
         string corePayload = PayloadString;
         if (PayloadData != null)
         {
-            // ONLY Heroes use ExportAsHat. Monsters export normally to preserve their entity data inside the hat!
-            if (Prefix == "hat" && PayloadData is HeroData hd)
+            // Both Heroes and Monsters (like Eggs) use ExportAsHat when attached as a Hat mechanic.
+            if (Prefix == "hat" && PayloadData is EntityData ed)
             {
-                corePayload = hd.ExportAsHat();
+                corePayload = ed.ExportAsHat();
             }
+            // EVERYTHING ELSE (Abilities, Traits, Triggers, Curses, Modifiers) exports natively
             else if (PayloadData is SDData sdData)
             {
                 corePayload = sdData.Export();
-
-                // LAW 3: Datatypes self-bracket at scope-change junctions.
-                // The mechanic brackets the payload transition so chained keywords attach to the mechanic.
-                if (!corePayload.StartsWith("("))
-                {
-                    corePayload = $"({corePayload})";
-                }
+            }
+            else
+            {
+                UnityEngine.Debug.LogError($"Tried to export unknown PayloadData type: {PayloadData.GetType()}");
             }
         }
 
@@ -489,7 +487,28 @@ public class ItemData : SDData
             if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
                 stream.Consume();
-                ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(new TokenStream(innerTokens), item, null));
+                string inner = originalToken.Substring(1, originalToken.Length - 2);
+
+                // Replicate top-level chaining rules for nested scopes
+                List<string> chains = StaticBranchTracing.TopLevelSplit(inner, '#');
+
+                // We pass down inherited targets to the first element in the parens if this is the first mechanic
+                List<string> currentLastTargets = isFirstMechanic ? inheritedTargets : null;
+
+                foreach (var chain in chains)
+                {
+                    var innerStream = new TokenStream(StaticBranchTracing.TopLevelSplit(chain, '.'));
+                    ExtractKnowledge(innerStream, item, currentLastTargets);
+
+                    if (item.Mechanics.Count > 0)
+                    {
+                        var lastMechTargets = item.Mechanics.Last().Targets;
+                        if (lastMechTargets != null && lastMechTargets.Count > 0)
+                            currentLastTargets = new List<string>(lastMechTargets);
+                    }
+                }
+
+                isFirstMechanic = false; // The evaluated parens safely terminate the prior context
                 continue;
             }
 
@@ -1369,15 +1388,16 @@ public static class CustomItemContextHelper
     {
         if (item == null) return new ItemInjectionResult { FormattedString = "" };
 
-        // Returns the pure, self-bracketed item payload: e.g. "(hat.(Statue...))"
-        string rawItem = item.Export();
-        if (string.IsNullOrWhiteSpace(rawItem) || rawItem == "()")
+        // Strictly architectural domain wrapper: GiveItem guarantees an 'i.(...)' output payload
+        ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = item };
+        string exported = giveItemMod.Export();
+
+        if (string.IsNullOrWhiteSpace(exported) || exported == "()")
             return new ItemInjectionResult { FormattedString = "" };
 
-        // The helper acts on behalf of the Entity to apply the 'i.' action modifier.
         return new ItemInjectionResult
         {
-            FormattedString = $"i.{rawItem}",
+            FormattedString = exported,
             Zone = PayloadInjectionZone.InnerEntity
         };
     }
