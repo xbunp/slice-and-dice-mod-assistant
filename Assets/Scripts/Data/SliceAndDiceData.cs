@@ -2001,6 +2001,7 @@ public static class SDColors
     { "Tw1n", "Hidden from the Party UI." },
 
     // Monsters
+    // Commented out monsters cannot be used as traits for unknown reasons, they just don't work. 
     { "Bones", "1 damage to adjacent allies upon death." },
     { "Imp", "On-hit: damage the attacker for 1" },
     { "Sniper", "Starts at the back" },
@@ -2014,7 +2015,7 @@ public static class SDColors
     { "Quartz", "The 3rd hp: I die if this hp is removed and no further" },
     { "Gnoll", "Reduce damage taken from abilities and dice by 1" },
     { "Goblin", "Flees if alone" },
-    { "Warchief", "All monsters: +1 pip to all sides" },
+    //{ "Warchief", "All monsters: +1 pip to all sides" },
     { "Bandit", "Flees if an adjacent monster is overkilled by 2 or more" },
     { "Zombie", "I die if I take 4 or more damage in a single attack" },
     { "Z0mbie", "Attacker dies if I take 4 or more damage in a single attack" },
@@ -2039,7 +2040,7 @@ public static class SDColors
     { "Cyclops", "The middle hp: Stunned this turn" },
     { "Hydra", "I die if I take damage 5 times in a turn" },
     { "Troll", "Regenerate 1 health at the end of each turn" },
-    { "Bramble", "All heroes: Add singleUse to all sides" },
+    //{ "Bramble", "All heroes: Add singleUse to all sides" },
     { "Agnes", "The 4th hp: 2 damage to the top-most enemy" },
     { "Gytha", "The 4th hp: 2 damage to the middle enemy" },
     { "Magrat", "The 4th hp: 2 damage to the bottom-most enemy" },
@@ -2049,18 +2050,19 @@ public static class SDColors
     { "Lich", "Starts at the back\nEvery 5th hp (Starts at 5th hp): summon a bones" },
     { "Rotten", "All heroes get -1 hp at the end of each turn (minimum 1)" },
     { "Baron", "Every 2nd hp (Starts at 2nd hp): +1 mana" },
-    { "Madness", "The top non-magic hero: Add possessed & mandatory to all sides" },
+    //{ "Madness", "The top non-magic hero: Add possessed & mandatory to all sides" },
     { "Troll King", "Regenerate 2 health at the end of each turn" },
     { "Tarantus", "The 10th hp: kill the top-most enemy" },
     { "Basalt", "The first time I take exactly 1 damage, double it to 2, then increase 1 to 2" },
     { "Hexia", "On-hit: attacker takes equal damage to me\nWhenever you use an ability: damage the bottom hero equal to the cost" },
-    { "The Hand", "All heroes: +1 pip to all sides" },
+    //{ "The Hand", "All heroes: +1 pip to all sides" },
     { "Inevitable", "Every 5th hp (Starts at 3rd hp): become immune to damage this turn (Hidden trait) Add era to all sides" },
     { "PainSigil", "All heroes: Add pain to all sides" },
     { "DecaySigil", "All heroes: Add decay to all sides" },
     { "DeathSigil", "All heroes: Add death to all sides" }
         // TODO
         // you can technically list all heroes with learn.abilities, t.mage for example will teach his spell.
+        // Commented out monsters cannot be used as traits for unknown reasons, they just don't work. 
 };
 
 

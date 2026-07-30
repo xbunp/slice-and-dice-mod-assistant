@@ -777,7 +777,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             if (chunks.Count > 0)
             {
                 string templateString = string.Join("#", chunks);
-
                 bool isLeftFaceHat = i == 0 && hasHatWrapper;
                 bool isEggOnOuterFace = face.faceType == DiceSideData.DiceFaceType.Egg && (i == 2 || i == 3 || i == 5);
 
@@ -788,7 +787,8 @@ public abstract class EntityData : SDData, IPayloadContainer
                     string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, "mid") : templateString;
                     string faceAlias = i == 0 ? "left" : (i == 2 ? "top" : (i == 3 ? "bot" : "rightmost"));
 
-                    modSb.Append($".i.{faceAlias}.mid.{resolvedMod}");
+                    // RULE 3 ENFORCEMENT: The Modifier datatype self-brackets its multi-part expression.
+                    modSb.Append($".i.({faceAlias}.mid.{resolvedMod})");
                 }
                 else
                 {
@@ -833,6 +833,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             return ProcessStandardPayload(face, payloadStr, chunks);
         }
     }
+    /*
     private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
@@ -869,10 +870,54 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return true;
     }
+    */
+
+    // File: Assets/Scripts/Data/Entities/EntityData.cs
+
+    // File: Assets/Scripts/Data/Entities/EntityData.cs
+
+    private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
+    {
+        bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
+        string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
+        string fullSummonExport = cleanSummon; // Fallback to raw string if entity lookup fails
+
+        if (ModPackage.Instance != null)
+        {
+            var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(h => string.Equals(h.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
+            if (summonHero != null) fullSummonExport = summonHero.Export();
+            else
+            {
+                var summonMonster = ModPackage.Instance.Monsters?.FirstOrDefault(m => string.Equals(m.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
+                if (summonMonster != null) fullSummonExport = summonMonster.Export();
+            }
+        }
+
+        if (!fullSummonExport.StartsWith("("))
+        {
+            fullSummonExport = $"({fullSummonExport})";
+        }
+
+        string repeatPrefix = "";
+        if (face.pips > 1)
+        {
+            repeatPrefix = $"x{face.pips}.";
+        }
+
+        // FIX: Place repeat multiplier inside the hat, attached to the egg
+        chunks.Add($"hat.({repeatPrefix}egg.{fullSummonExport})");
+
+        // Blindfold item MUST come immediately after the Hat
+        if (hasBlindfold)
+        {
+            chunks.Add("blindfold");
+        }
+        return true;
+    }
+
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
         string prefix = face.faceType.ToString().ToLower();
-
         if (!payloadStr.StartsWith("(") && (payloadStr.Contains(".") || payloadStr.Contains("#") || payloadStr.Contains(":")))
             payloadStr = $"({payloadStr})";
 
@@ -1187,15 +1232,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
 
-        // 8. Monster Orbs
-        if (!isHero && monster != null && monster.customOrbs != null)
-        {
-            foreach (var orb in monster.customOrbs)
-            {
-                if (orb != null) outerPayloads.Add(orb.ExportAsTrait(useITPrefix: true));
-            }
-        }
-
         // 9. Curses (Routes through RouteItemPayload for BOTH Heroes and Monsters)
         if (curses != null)
         {
@@ -1239,6 +1275,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
 
         string combined = $"{coreBody}{trailingSb.ToString()}";
+
         return ApplyWrappersAndOuterBracketing(combined, wrapperPayloads);
     }
     private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride, List<string> innerHeroPayloads)

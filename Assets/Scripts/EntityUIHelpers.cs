@@ -232,7 +232,7 @@ public static class EntityUIHelpers
         });
     }
     */
-
+    /*
     public static Sprite GetFacadeSprite(string facadeId)
     {
         if (string.IsNullOrEmpty(facadeId)) return null;
@@ -289,7 +289,80 @@ public static class EntityUIHelpers
             return name.Equals(facadeId, StringComparison.OrdinalIgnoreCase);
         });
     }
+    */
 
+    public static Sprite GetFacadeSprite(string facadeId)
+    {
+        if (string.IsNullOrEmpty(facadeId)) return null;
+
+        string targetPrefix = null;
+        int targetId = -1;
+
+        // REVERSE-TRANSLATION LAYER: Maps monolithic "bas" offsets back to local prefixes for sprite resolution
+        if (facadeId.StartsWith("bas", StringComparison.OrdinalIgnoreCase) && facadeId.Length > 3)
+        {
+            string numStr = facadeId.Substring(3);
+            if (int.TryParse(numStr, out int parsedId))
+            {
+                if (parsedId >= 188 && parsedId <= 219)
+                {
+                    targetPrefix = "big";
+                    targetId = parsedId - 188;
+                }
+                else if (parsedId >= 220 && parsedId <= 247)
+                {
+                    targetPrefix = "hug";
+                    targetId = parsedId - 220;
+                }
+                else if (parsedId >= 248 && parsedId <= 265)
+                {
+                    targetPrefix = "tin";
+                    targetId = parsedId - 248;
+                }
+            }
+        }
+
+        // PASS 1: Strict Exact Case Match (Ordinal)
+        Sprite exactMatch = Array.Find(AllActionSprites, s => {
+            if (s == null) return false;
+            string name = s.name;
+            string[] parts = name.Split('_');
+
+            if (parts.Length >= 2)
+            {
+                string key = $"{parts[0]}{parts[1]}";
+                if (key.Equals(facadeId, StringComparison.Ordinal)) return true;
+            }
+
+            return name.Equals(facadeId, StringComparison.Ordinal);
+        });
+
+        if (exactMatch != null) return exactMatch;
+
+        // PASS 2: Fallback Case-Insensitive Match (for legacy/monolithic offsets)
+        return Array.Find(AllActionSprites, s => {
+            if (s == null) return false;
+            string name = s.name;
+            string[] parts = name.Split('_');
+
+            if (parts.Length >= 2)
+            {
+                if (targetPrefix != null && targetId != -1)
+                {
+                    if (parts[0].Equals(targetPrefix, StringComparison.OrdinalIgnoreCase) &&
+                        int.TryParse(parts[1], out int spriteId) && spriteId == targetId)
+                    {
+                        return true;
+                    }
+                }
+
+                string key = $"{parts[0]}{parts[1]}";
+                if (key.Equals(facadeId, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            return name.Equals(facadeId, StringComparison.OrdinalIgnoreCase);
+        });
+    }
     public static Sprite GetSpriteForBase(int id)
     {
         string search = $"bas_{id}";

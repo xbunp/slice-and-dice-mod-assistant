@@ -703,10 +703,11 @@ public class AtlasProcessor : AssetPostprocessor
                     }
                 }
 
-                // If this is the Base Atlas, and it's a known game face,
-                // but wasn't explicitly defined in the dictionary, it's Dev Garbage. Burn it.
-                if (fileName == "base_atlas_image.png" && hasCustomMapping && !matchedHardcode)
+                // If a face prefix has explicit custom mappings (bas, tin, big, hug),
+                // any entry not explicitly defined in PrefixCustomIds is garbage/unmapped.
+                if (hasCustomMapping && !matchedHardcode)
                 {
+                    SpriteRegistry.Evict(sprite.prefix, sprite.normalizedPath);
                     continue; // Discard completely
                 }
 
@@ -731,22 +732,7 @@ public class AtlasProcessor : AssetPostprocessor
                 }
             }
 
-            // NEW: Filter out bas188 to bas203 leftovers specifically from the community atlas
-            var finalList = new List<ParsedSprite>();
             foreach (var sprite in validList)
-            {
-                if (fileName == "community_atlas_image.png" &&
-                    sprite.prefix == "bas" &&
-                    sprite.assignedId >= 188 &&
-                    sprite.assignedId <= 203)
-                {
-                    SpriteRegistry.Evict(sprite.prefix, sprite.normalizedPath);
-                    continue; // Skip adding to the final sprite collection
-                }
-                finalList.Add(sprite);
-            }
-
-            foreach (var sprite in finalList)
             {
                 int width = Mathf.RoundToInt(sprite.rect.width);
                 int height = Mathf.RoundToInt(sprite.rect.height);
