@@ -9,11 +9,20 @@ public class SpellData : AbilityData
     [Header("Spell Properties")]
     public int manaCost = 1;
 
-    protected override string ExportCore()
+    protected override string ExportInner()
     {
-        if (diceSides[4].effectID == 0) diceSides[4].effectID = 76;
-        diceSides[4].pips = manaCost;
-        return StaticBranchTracing.SafeBracket(ExportInner());
+        bool isBaseAbility = ExternalGameRegistry.IsValidAbility(baseReplica);
+        bool hasCustomMana = diceSides[4] != null && (diceSides[4].effectID != 0 || diceSides[4].pips != 0);
+
+        // Prevents base spells from having `.sd.0:0:0:0:76-1` forcibly appended, 
+        // which would ruin the string matching check
+        if (!isBaseAbility || hasCustomMana)
+        {
+            if (diceSides[4] == null) diceSides[4] = new DiceSideData();
+            if (diceSides[4].effectID == 0) diceSides[4].effectID = 76;
+            diceSides[4].pips = manaCost;
+        }
+        return base.ExportInner();
     }
 
     public DiceSideData ManaCostSide
@@ -44,11 +53,11 @@ public class TacticData : AbilityData
         diceSides[4].pips = 0;
     }
 
-    protected override string ExportCore()
+    protected override string ExportInner()
     {
         diceSides[4].effectID = 0;
         diceSides[4].pips = 0;
-        return StaticBranchTracing.SafeBracket(ExportInner());
+        return base.ExportInner();
     }
 }
 
@@ -66,15 +75,14 @@ public class OnHitData : AbilityData
         }
     }
 
-    protected override string ExportCore()
+    protected override string ExportInner()
     {
-        // Ensure faces 1 through 5 are cleared so they don't show up in the text string
         for (int i = 1; i <= 5; i++)
         {
             diceSides[i].effectID = 0;
             diceSides[i].pips = 0;
         }
-        return StaticBranchTracing.SafeBracket(ExportInner());
+        return base.ExportInner();
     }
 }
 
@@ -92,7 +100,7 @@ public class TriggerHPData : AbilityData
         }
     }
 
-    protected override string ExportCore()
+    protected override string ExportInner()
     {
         // Ensure unused faces are cleared
         for (int i = 1; i <= 5; i++)
@@ -100,12 +108,11 @@ public class TriggerHPData : AbilityData
             diceSides[i].effectID = 0;
             diceSides[i].pips = 0;
         }
-
         // ExportInner() handles base properties, Color, AND HP now!
         // No manual HP. appending needed.
 
         // TODO: LATER: sanity double check, make sure HP IS there for an TriggerHPData
-        return $"({ExportInner()})";
+        return base.ExportInner();
     }
 }
 
@@ -169,7 +176,7 @@ public class OrbData : AbilityData
     protected override string ExportCore()
     {
         if (isHardcoded) return hardcodedAbilityName.ToLower();
-        return StaticBranchTracing.SafeBracket(ExportInner());
+        return base.ExportCore(); // Base class will safely handle the bracketing check
     }
 
 

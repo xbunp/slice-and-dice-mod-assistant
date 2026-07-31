@@ -176,10 +176,12 @@ public abstract class AbilityData : HeroData
     }
     protected override string ExportCore()
     {
-        //return StaticBranchTracing.SafeBracket(ExportInner());
-        return $"({ExportInner()})";
+        string inner = ExportInner();
+        if (ExternalGameRegistry.IsValidAbility(inner)) return inner;
+        return StaticBranchTracing.SafeBracket(inner);
     }
-    protected string ExportInner()
+
+    protected virtual string ExportInner()
     {
         StringBuilder sb = new StringBuilder();
         bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica;

@@ -253,7 +253,6 @@ public static class ItemDomainRules
         }
         return false;
     }
-
     public static bool IsKnownModifierEffect(string originalToken)
     {
         // Direct O(1) checks against your exact modifier datasets
@@ -411,7 +410,13 @@ public static class ExternalGameRegistry
      */
     public static bool IsValidSprite(string atlasId) => true; // TODO: Link to project's Sprite Dictionary
     public static bool IsValidKeyword(string key) => Enum.TryParse<EffectKeyword>(key, true, out _);
-    public static bool IsValidAbility(string id) => BaseAbilityDatabase.ValidAbilities.Contains(id);
+    public static bool IsValidAbility(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        if (OrbData.ValidBaseOrbs != null && OrbData.ValidBaseOrbs.Contains(id)) return true;
+        if (BaseAbilityDatabase.Abilities != null && BaseAbilityDatabase.Abilities.Any(a => a != null && string.Equals(a.name, id, StringComparison.OrdinalIgnoreCase))) return true;
+        return false;
+    }
     public static bool IsValidItemName(string token) => Enum.TryParse<BaseItems>(token.Replace(" ", ""), true, out _);
 }
 
