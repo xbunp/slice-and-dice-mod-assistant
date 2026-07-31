@@ -1,0 +1,2 @@
+=(monsterpool.bee.part.0)&(heropool.fey.part.0)&(itempool.can.part.0)&Hidden.mn.Clear Pools,
+heropool.((replica.Statue.n.Gandalf.col.g.hp.6.tier.1.sd.18-1:76-2:187-1:93-2:180-2.i.left.k.acidic#facade.Che8:0.i.mid.k.acidic#facade.Spi86:0.i.top.k.poison#k.cantrip#facade.ite130:0.i.right.k.fierce#k.singleuse#facade.Ber100:0.img.Wizard).i.learn.Light)+((replica.Statue.n.Strider.hp.7.tier.1.sd.15-2:118-2:115-1:15-1:111-1:103-1.i.top.k.fierce#facade.kas31:0.i.bot.facade.Eme10:0.img.y1.75.p.923434:814d36:20.hsv.0:0:-13).i.learn.Mend).mn.Heroes 1.part.1,
