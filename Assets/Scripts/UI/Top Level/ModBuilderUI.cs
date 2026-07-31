@@ -13,6 +13,12 @@ public class ModBuilderUI : RootUI
     {
         var layoutRows = new List<GridRowSpec>
         {
+            new GridRowSpec(GridCellSpec.CreateLabel("LblModConfigHeader", "<b>MOD CONFIGURATION</b>", 1.0f)),
+            new GridRowSpec(
+                GridCellSpec.CreateLabel("LblFilename", "Output Filename:", 0.35f),
+                GridCellSpec.CreateInput("FilenameInput", "", 0.65f, (val) => _compiledModData.modFileName = val)
+            ),
+            new GridRowSpec(GridCellSpec.CreateLabel("Spacer1", "", 1.0f)),
             new GridRowSpec(GridCellSpec.CreateLabel("LblClearFlagsHeader", "<b>POOL CLEAR FLAGS</b>", 1.0f)),
             new GridRowSpec(
                 GridCellSpec.CreateToggle("TglClearMonster", "Clear Monster Pool", 1.0f, (val) => _compiledModData.clearMonsterPool = val)
@@ -23,7 +29,7 @@ public class ModBuilderUI : RootUI
             new GridRowSpec(
                 GridCellSpec.CreateToggle("TglClearItem", "Clear Item Pool", 1.0f, (val) => _compiledModData.clearItemPool = val)
             ),
-            new GridRowSpec(GridCellSpec.CreateLabel("Spacer1", "", 1.0f)),
+            new GridRowSpec(GridCellSpec.CreateLabel("Spacer2", "", 1.0f)),
             new GridRowSpec(GridCellSpec.CreateLabel("LblHeroImportHeader", "<b>HERO IMPORT</b>", 1.0f)),
             new GridRowSpec(
                 GridCellSpec.CreateInput("HeroImportInput", "", 0.70f, null),
@@ -43,6 +49,10 @@ public class ModBuilderUI : RootUI
         generatedScreen = uiGenerator.SetupScreen(columns, false);
         _mainScrollRect = generatedScreen.ColumnRefs["LeftColumn"].ScrollViews["MainScrollView"];
         _gridUI = uiGenerator.RebuildGrid(_mainScrollRect.content, layoutRows);
+
+        // Set initial filename input
+        if (_gridUI.Inputs.TryGetValue("FilenameInput", out TMP_InputField inpFilename))
+            inpFilename.SetTextWithoutNotify(_compiledModData.modFileName);
 
         // Set initial toggle states based on CompiledModData defaults
         if (_gridUI.Toggles.TryGetValue("TglClearMonster", out Toggle tglMonster))

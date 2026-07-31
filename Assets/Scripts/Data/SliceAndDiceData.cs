@@ -2229,7 +2229,6 @@ public static class SDColors
         }
         return "Unknown Color";
     }
-
     public static Color GetHeroColor(string code)
     {
         string key = code.Replace("col.", "").ToLower();
@@ -2239,7 +2238,14 @@ public static class SDColors
         }
         return Color.white; // Default fallback
     }
-
+    public static HashSet<string> GetHeroNames()
+    {
+        if (heroNames == null)
+        {
+            InitializePoolNames();
+        }
+        return heroNames;
+    }
     public static Color FromHex(string hex)
     {
         if (ColorUtility.TryParseHtmlString("#" + hex, out Color color))
@@ -2260,16 +2266,6 @@ public static class SDColors
         }
         return monsterNames;
     }
-
-    public static HashSet<string> GetHeroNames()
-    {
-        if (heroNames == null)
-        {
-            InitializePoolNames();
-        }
-        return heroNames;
-    }
-
     public static void InitializePoolNames()
     {
         if (monsterNames == null)

@@ -1,9 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using UnityEngine;
 
 public class CompiledModData
 {
+    // Filename
+    public string modFileName = "MyTextMod";
+
     // Pool Lists
     public List<string> monsterPool = new();
     public List<string> heroPool = new();
@@ -60,11 +65,11 @@ public class CompiledModData
 
         // Immediately compile and output
         Compile();
-        Console.WriteLine(compiledMod);
+        OutputMod();
     }
 
     /// <summary>
-    /// Builds the final Slice & Dice textmod string by combining separate modifier objects.
+    /// Builds the final Slice & Dice textmod string by combining separate modifier objects with line breaks.
     /// </summary>
     public void Compile()
     {
@@ -87,14 +92,14 @@ public class CompiledModData
         modObjects.AddRange(GetPoolChunks("hero", heroPool, "Heroes"));
         modObjects.AddRange(GetPoolChunks("item", itemPool, "Items"));
 
-        // 3. Assemble final string (Always starts with '=', separated by ',')
+        // 3. Assemble final string (Separated by comma + newline)
         if (modObjects.Count > 0)
         {
-            compiledMod = "=" + string.Join(",", modObjects) + ",";
+            compiledMod = "=" + string.Join(",\n", modObjects) + ",\n";
         }
         else
         {
-            compiledMod = "="; // Fallback if literally nothing is flagged/added
+            compiledMod = "=";
         }
     }
 
@@ -133,5 +138,71 @@ public class CompiledModData
         }
 
         return chunks;
+    }
+
+    /// <summary>
+    /// Logs the raw compiled mod to Unity's console and safely saves it to a unique file.
+    /// </summary>
+    public void OutputMod()
+    {
+        // 1. Pure log to Unity Console for easy copy-pasting
+        Debug.Log(compiledMod);
+
+        // 2. Safely output to file without overwriting
+        try
+        {
+        #if UNITY_EDITOR
+            string targetDirectory = Application.dataPath; // Saves in /Assets
+        #else
+        string targetDirectory = Application.persistentDataPath;
+        #endif
+
+            // Generate safe unique path (e.g. NewTextMod (1).txt)
+            string uniqueFilePath = GetUniqueFilePath(targetDirectory, modFileName);
+
+            File.WriteAllText(uniqueFilePath, compiledMod);
+
+        #if UNITY_EDITOR
+            // Refresh Unity's file database so it sees the new file immediately
+            UnityEditor.AssetDatabase.Refresh();
+
+            // Convert full path to an "Assets/..." relative path
+            string relativePath = "Assets" + uniqueFilePath.Substring(Application.dataPath.Length);
+            UnityEngine.Object fileContext = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(relativePath);
+
+            // Passing 'fileContext' as the 2nd parameter makes clicking the console log jump directly to the file!
+            Debug.Log($"[CompiledModData] Saved file safely to: {Path.GetFileName(uniqueFilePath)}", fileContext);
+        #else
+        Debug.Log($"[CompiledModData] Saved file safely to: {Path.GetFileName(uniqueFilePath)}");
+        #endif
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to write mod file: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Ensures a file isn't overwritten by appending (1), (2), etc., if it already exists.
+    /// </summary>
+    private string GetUniqueFilePath(string directory, string baseFileName)
+    {
+        string nameWithoutExt = Path.GetFileNameWithoutExtension(baseFileName);
+        string extension = Path.GetExtension(baseFileName);
+
+        // Default to .txt if no extension was provided in the UI
+        if (string.IsNullOrEmpty(extension)) extension = ".txt";
+
+        string filePath = Path.Combine(directory, $"{nameWithoutExt}{extension}");
+        int counter = 1;
+
+        // Increment filename if a match is found
+        while (File.Exists(filePath))
+        {
+            filePath = Path.Combine(directory, $"{nameWithoutExt} ({counter}){extension}");
+            counter++;
+        }
+
+        return filePath;
     }
 }

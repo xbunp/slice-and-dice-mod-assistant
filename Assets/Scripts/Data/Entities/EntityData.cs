@@ -1293,7 +1293,8 @@ public abstract class EntityData : SDData, IPayloadContainer
             sb.Append($".n.{FormatName(entityName)}");
 
         // 4. Hero Metadata
-        if (isHero && !string.IsNullOrEmpty(hero.colorClass)) sb.Append($".col.{hero.colorClass}");
+        if (isHero && !string.IsNullOrEmpty(hero.colorClass) && !IsDefaultHeroColor(hero.baseReplica, hero.colorClass))
+            sb.Append($".col.{hero.colorClass}");
         if (hp > 0) sb.Append($".hp.{hp}");
         if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
         if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
@@ -1763,4 +1764,21 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
 
     ////////////////////////////////
+    ///
+
+    protected bool IsDefaultHeroColor(string baseReplica, string colorClass)
+    {
+        if (string.IsNullOrEmpty(baseReplica) || string.IsNullOrEmpty(colorClass)) return false;
+        string cleanCode = colorClass.Replace("col.", "").Trim();
+        if (Enum.TryParse(baseReplica, true, out HeroType heroType))
+        {
+            if (SDColors.HeroColorMap.TryGetValue(heroType, out var defaultOption))
+            {
+                string defaultCode = SDColors.GetColorCode(defaultOption);
+                return string.Equals(cleanCode, defaultCode, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        return false;
+    }
+
 }

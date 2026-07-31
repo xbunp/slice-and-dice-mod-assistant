@@ -170,7 +170,6 @@ public class HatNodeDef : AuthoringNodeDef
         return sb.ToString();
     }
     */
-
     /*
     public static string GetHatDiceString(HeroData heroData)
     {
@@ -254,7 +253,7 @@ public class HatNodeDef : AuthoringNodeDef
         return sb.ToString();
     }
     */
-
+    /*
     public static string GetHatDiceString(HeroData heroData)
     {
         StringBuilder sb = new StringBuilder();
@@ -327,7 +326,51 @@ public class HatNodeDef : AuthoringNodeDef
         }
         return sb.ToString();
     }
+    */
 
+    public static string GetHatDiceString(HeroData heroData)
+    {
+        StringBuilder sb = new StringBuilder();
+        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Fey" : heroData.baseReplica;
+        sb.Append(baseName);
+
+        // 1. Append the .sd. block
+        int lastActiveIndex = -1;
+        for (int i = 0; i < 6; i++)
+        {
+            if (heroData.diceSides[i] != null && (heroData.diceSides[i].effectID != 0 || heroData.diceSides[i].pips != 0))
+            {
+                lastActiveIndex = i;
+            }
+        }
+        if (lastActiveIndex != -1)
+        {
+            sb.Append(".sd.");
+            for (int i = 0; i <= lastActiveIndex; i++)
+            {
+                var side = heroData.diceSides[i];
+                if (side == null || (side.effectID == 0 && side.pips == 0))
+                {
+                    sb.Append("0");
+                }
+                else
+                {
+                    if (side.pips == 0) sb.Append(side.effectID);
+                    else sb.Append($"{side.effectID}-{side.pips}");
+                }
+                if (i < lastActiveIndex) sb.Append(":");
+            }
+        }
+
+        // 2. Output authoritatively tracked modifiers & payloads (keywords, traits, cast, stickers, enchants, egg)
+        string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
+        if (!string.IsNullOrEmpty(faceModifiers))
+        {
+            sb.Append(faceModifiers);
+        }
+
+        return sb.ToString();
+    }
     public override string GetTitle(EntityCard card)
     {
         string targets = card.MechanicData.Targets.Count > 0 ? string.Join(".", card.MechanicData.Targets) : "mid";
