@@ -46,6 +46,8 @@ public static class StaticUI
 
 public class DiceFaceBuilderWidget
 {
+    private Dictionary<int, int> _stickerModeState = new Dictionary<int, int>();
+
     public class PayloadType
     {
         public string Id { get; set; }
@@ -339,6 +341,20 @@ public class DiceFaceBuilderWidget
             {
                 int typeIndex = RegisteredPayloads.IndexOf(faceType);
                 if (typeIndex >= 0) typeDrop.SetValueWithoutNotify(typeIndex);
+            }
+
+            if (_diceUI.Dropdowns.TryGetValue($"StickerModeDrop_{i}", out var stickerModeDrop))
+            {
+                int mode = _stickerModeState.TryGetValue(i, out int m) ? m : 0;
+                stickerModeDrop.SetValueWithoutNotify(mode);
+            }
+            if (_diceUI.Dropdowns.TryGetValue($"StickerKwDrop_{i}", out var stickerKwDrop))
+            {
+                stickerKwDrop.SetValueWithoutNotify(0);
+            }
+            if (_diceUI.Inputs.TryGetValue($"StickerRawInput_{i}", out var rawStickerInp))
+            {
+                rawStickerInp.SetTextWithoutNotify(GetFacePayload(face));
             }
 
             // Keep the custom item selector defaulted to the placeholder message
@@ -771,6 +787,7 @@ public class DiceFaceBuilderWidget
     }
 
     // Full Face Builders
+    /*
     private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
@@ -829,6 +846,152 @@ public class DiceFaceBuilderWidget
 
         return rows;
     }
+    */
+
+    private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
+    {
+        var rows = new List<GridRowSpec>();
+        string currentPayload = GetFacePayload(face);
+        bool hasPayload = !string.IsNullOrWhiteSpace(currentPayload);
+
+        int mode = _stickerModeState.TryGetValue(index, out int m) ? m : 0;
+
+        // Mode Selector Dropdown
+        rows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Sticker Type:", 0.30f),
+            GridCellSpec.CreateDropdown($"StickerModeDrop_{index}", "", 0.70f, new string[] { "Custom Item", "Keyword(s)", "Raw Input" }, (val) => {
+                _stickerModeState[index] = val;
+                _onRebuildRequested?.Invoke();
+            })
+        ));
+
+        if (mode == 0) // CUSTOM ITEM MODE
+        {
+            var customItems = ModPackage.Instance?.CustomItems;
+            var itemNames = new List<string> { "-- Select Custom Item --" };
+            if (customItems != null)
+            {
+                itemNames.AddRange(customItems
+                    .Select(i => !string.IsNullOrEmpty(i.unityName) ? i.unityName : (!string.IsNullOrEmpty(i.entityName) ? i.entityName : "Unnamed Item"))
+                    .Distinct());
+            }
+
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Set Item:", 0.30f),
+                GridCellSpec.CreateFilteredDropdown($"StickerItemDrop_{index}", "-- Select Custom Item --", 0.70f, itemNames.ToArray(), (val) => {
+                    if (val <= 0 || val >= itemNames.Count) return;
+                    string selectedName = itemNames[val];
+                    var targetItem = ModPackage.Instance?.CustomItems?.FirstOrDefault(i => i.unityName == selectedName || i.entityName == selectedName);
+                    if (targetItem != null)
+                    {
+                        string itemSyntax = targetItem.Export();
+                        if (itemSyntax.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+                        {
+                            itemSyntax = itemSyntax.Substring(2);
+                        }
+                        SetFacePayload(face, faceType.Id, itemSyntax);
+                        _onStateChanged?.Invoke();
+                        _onRebuildRequested?.Invoke();
+                    }
+                })
+            ));
+
+            if (hasPayload)
+            {
+                string displayLabel = currentPayload.Length > 25 ? currentPayload.Substring(0, 22) + "..." : currentPayload;
+                rows.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel($"ActiveSticker_{index}", displayLabel, 0.80f),
+                    GridCellSpec.CreateButton($"DelSticker_{index}", "[X]", 0.20f, () => {
+                        SetFacePayload(face, faceType.Id, "");
+                        _onStateChanged?.Invoke();
+                        _onRebuildRequested?.Invoke();
+                    })
+                ));
+            }
+        }
+        else if (mode == 1) // KEYWORD(S) MODE
+        {
+            string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
+            List<string> displayOptions = new List<string> { "--- Select Keyword ---" };
+
+            foreach (string rawKw in rawOptions)
+            {
+                string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(rawKw);
+                if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = rawKw;
+
+                string desc = null;
+                if (EffectKeywordColors.Descriptions.TryGetValue(rawKw, out string matchedDesc))
+                    desc = matchedDesc;
+                else
+                {
+                    var kvp = EffectKeywordColors.Descriptions.FirstOrDefault(x => string.Equals(x.Key, rawKw, StringComparison.OrdinalIgnoreCase));
+                    if (!string.IsNullOrEmpty(kvp.Value)) desc = kvp.Value;
+                }
+
+                if (!string.IsNullOrWhiteSpace(desc))
+                    displayOptions.Add($"{coloredLabel}<pos=170><color=#AAAAAA>: {desc}</color>");
+                else
+                    displayOptions.Add(coloredLabel);
+            }
+
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
+                GridCellSpec.CreateFilteredDropdown(
+                    $"StickerKwDrop_{index}",
+                    "",
+                    0.70f,
+                    displayOptions.ToArray(),
+                    (val) => {
+                        if (val <= 0) return;
+                        string targetKeyword = rawOptions[val - 1].ToLower();
+                        var currentKws = string.IsNullOrWhiteSpace(currentPayload) ? new List<string>() : currentPayload.Split(',').ToList();
+
+                        if (!currentKws.Contains(targetKeyword))
+                        {
+                            currentKws.Add(targetKeyword);
+                            SetFacePayload(face, faceType.Id, string.Join(",", currentKws));
+                            _onStateChanged?.Invoke();
+                            _onRebuildRequested?.Invoke();
+                        }
+                    }
+                )
+            ));
+
+            if (hasPayload)
+            {
+                var activeKws = currentPayload.Split(',').ToList();
+                foreach (var kw in activeKws)
+                {
+                    string keywordString = kw;
+                    string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
+                    if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = keywordString;
+
+                    rows.Add(new GridRowSpec(
+                        GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
+                        GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => {
+                            activeKws.Remove(keywordString);
+                            SetFacePayload(face, faceType.Id, string.Join(",", activeKws));
+                            _onStateChanged?.Invoke();
+                            _onRebuildRequested?.Invoke();
+                        })
+                    ));
+                }
+            }
+        }
+        else if (mode == 2) // RAW INPUT MODE
+        {
+            rows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Raw Payload:", 0.30f),
+                GridCellSpec.CreateInput($"StickerRawInput_{index}", currentPayload, 0.70f, (val) => {
+                    SetFacePayload(face, faceType.Id, val);
+                    _onStateChanged?.Invoke();
+                })
+            ));
+        }
+
+        return rows;
+    }
+
     private List<GridRowSpec> BuildCastPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();

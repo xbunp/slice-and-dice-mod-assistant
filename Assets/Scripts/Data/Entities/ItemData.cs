@@ -312,44 +312,7 @@ public class ItemMechanic
     /// Example: If an item grants "+2hp" (part.0) and "all sides blank" (part.1), targeting part.0 only gives the HP.
     /// </summary>
     public int? PartIndex { get; set; }
-
     public ItemMechanic AddTarget(string target) { Targets.Add(target); return this; }
-
-    /*
-    public string Export()
-    {
-        List<string> parts = new List<string>();
-        if (Targets.Count > 0) parts.AddRange(Targets);
-        if (RepeatTimes != 1) parts.Add($"x{RepeatTimes}");
-        if (PerTier) parts.Add("pertier");
-        if (Unpack) parts.Add("unpack");
-        if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
-
-        string corePayload = PayloadString;
-        if (ChainedKeywords.Count > 0)
-        {
-            string chains = "#" + string.Join("#", ChainedKeywords);
-
-            // Inject chained keywords inside parens if the payload is a wrapped group (e.g. hat data)
-            if (corePayload.StartsWith("(") && corePayload.EndsWith(")"))
-            {
-                corePayload = corePayload.Substring(0, corePayload.Length - 1) + chains + ")";
-            }
-            else
-            {
-                corePayload += chains;
-            }
-        }
-
-        if (!string.IsNullOrEmpty(corePayload)) parts.Add(corePayload);
-        if (PartIndex.HasValue) parts.Add($"part.{PartIndex.Value}");
-        if (Multiplier != 1) parts.Add($"m{Multiplier}");
-        if (!string.IsNullOrEmpty(MergedItem)) parts.Add($"mrg.{MergedItem}");
-        if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
-        return string.Join(".", parts);
-    }
-    */
-
     public string Export()
     {
         List<string> parts = new List<string>();
@@ -403,11 +366,6 @@ public static class ExternalGameRegistry
     // ======================================================================================
     // EXTERNAL REGISTRY PLACEHOLDERS (Loudly flagged for your existing dictionaries/enums)
     // ======================================================================================
-    /* 
-     * LOUD WARNING FOR LATER AI / COMPILER:
-     * DO NOT REDEFINE THESE TYPES. They exist in the primary game engine dictionaries.
-     * Replace the placeholder types below with references to your actual project assemblies.
-     */
     public static bool IsValidSprite(string atlasId) => true; // TODO: Link to project's Sprite Dictionary
     public static bool IsValidKeyword(string key) => Enum.TryParse<EffectKeyword>(key, true, out _);
     public static bool IsValidAbility(string id)
@@ -628,156 +586,6 @@ public class ItemData : SDData
         }
         return string.Join(".", payloadTokens);
     }
-    // INVERSION OF CONTROL
-    // The ItemData maps its own mechanics onto the given Entity, removing this massive logic from EntityData
-    /*
-    public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)
-    {
-        bool isPureEntityName = Mechanics.Count == 0 &&
-                                !string.IsNullOrEmpty(entityName) &&
-                                !ItemDomainRules.TogItems.Contains(entityName) && // ADDED
-                                string.IsNullOrEmpty(imageOverride) &&
-                                visuals.Count == 0 &&
-                                !Tier.HasValue &&
-                                string.IsNullOrEmpty(doc) &&
-                                LearnedAbilities.Count == 0 &&
-                                Containers.Count == 0;
-
-        if (isPureEntityName)
-        {
-            entity.items.Add(entityName);
-            return true;
-        }
-
-        bool isPureBaseItem = Mechanics.Count == 1 &&
-                              string.IsNullOrEmpty(Mechanics[0].Prefix) &&
-                              !ItemDomainRules.TogItems.Contains(Mechanics[0].PayloadString ?? "") && // ADDED
-                              Mechanics[0].Targets.Count == 0 &&
-                              Mechanics[0].ChainedKeywords.Count == 0 &&
-                              Mechanics[0].Multiplier == 1 &&
-                              Mechanics[0].RepeatTimes == 1 &&
-                              !Mechanics[0].PerTier &&
-                              !Mechanics[0].Unpack &&
-                              string.IsNullOrEmpty(Mechanics[0].MergedItem) &&
-                              string.IsNullOrEmpty(Mechanics[0].SplicedItem) &&
-                              !Mechanics[0].PartIndex.HasValue &&
-                              string.IsNullOrEmpty(imageOverride) &&
-                              visuals.Count == 0 &&
-                              !Tier.HasValue &&
-                              string.IsNullOrEmpty(doc) &&
-                              LearnedAbilities.Count == 0 &&
-                              Containers.Count == 0;
-
-        if (isPureBaseItem)
-        {
-            entity.items.Add(Mechanics[0].PayloadString);
-            return true;
-        }
-
-        bool canMapNatively = true;
-        foreach (var mech in Mechanics)
-        {
-            string pfx = mech.Prefix?.ToLower() ?? "";
-            if (mech.PayloadData is ModifierData) return false;
-
-            // STRICT EXCLUSION: hat, cast, enchant, facade MUST NOT map natively so they preserve syntax and export order
-            if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" && pfx != "k" && pfx != "sticker" && pfx != "") // REMOVED "facade"
-            {
-                return false;
-            }
-            if ((pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "") && mech.Targets.Count == 0)
-            {
-                return false;
-            }
-
-            // Protect existing face overrides from being flattened by combined target stickers
-            if (pfx == "sticker")
-            {
-                List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
-                foreach (int face in targetFaces)
-                {
-                    if (entity.diceSides != null && face >= 0 && face < 6 && entity.diceSides[face] != null)
-                    {
-                        if (!string.IsNullOrEmpty(entity.diceSides[face].payload)) return false;
-                    }
-                }
-            }
-        }
-
-        if (!string.IsNullOrEmpty(imageOverride) && !imageOverride.Equals("None", StringComparison.OrdinalIgnoreCase))
-        {
-            entity.imageOverride = imageOverride;
-            imageOverride = null;
-        }
-
-        if (visuals != null && visuals.Count > 0)
-        {
-            entity.visuals.AddRange(visuals);
-            visuals.Clear();
-        }
-
-        if (!string.IsNullOrEmpty(doc))
-        {
-            entity.doc = doc;
-            doc = null;
-        }
-
-        if (Tier.HasValue && entity is HeroData heroData)
-        {
-            heroData.tier = Tier.Value;
-            Tier = null;
-        }
-
-        foreach (var ab in LearnedAbilities)
-        {
-            if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
-                entity.baseAbilityData.Add(ab);
-        }
-
-        foreach (var mech in Mechanics)
-        {
-            string pfx = mech.Prefix?.ToLower() ?? "";
-            if (pfx == "t")
-            {
-                if (mech.PayloadString != null && mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
-                {
-                    string curse = mech.PayloadString.Substring(5);
-                    if (!entity.curses.Contains(curse, StringComparer.OrdinalIgnoreCase)) entity.curses.Add(curse);
-                }
-                else if (!entity.traits.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase))
-                    entity.traits.Add(mech.PayloadString);
-            }
-            else if (pfx == "gift")
-            {
-                if (!entity.blessings.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase)) entity.blessings.Add(mech.PayloadString);
-            }
-            else if (pfx == "learn" || pfx == "abilitydata")
-            {
-                if (!entity.baseAbilityData.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase)) entity.baseAbilityData.Add(mech.PayloadString);
-            }
-            else if (pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "")
-            {
-                List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
-                if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid")) targetFaces.Remove(1);
-
-                string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
-                if (keyword == "blindfold")
-                {
-                    foreach (int faceIdx in targetFaces)
-                    {
-                        if (entity.diceSides != null && entity.diceSides[faceIdx] != null && entity.diceSides[faceIdx].faceType == DiceSideData.DiceFaceType.Egg)
-                            if (!entity.diceSides[faceIdx].payload.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase))
-                                entity.diceSides[faceIdx].payload += "#blindfold";
-                    }
-                    continue;
-                }
-                entity.ApplyMechanicToDiceSides(targetFaces, mech);
-            }
-        }
-
-        return canMapNatively;
-    }
-    */
     public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)
     {
         bool isPureEntityName = Mechanics.Count == 0 &&
@@ -1333,63 +1141,6 @@ public struct ItemInjectionResult
 
 public static class CustomItemContextHelper
 {
-    /// <summary>
-    /// Evaluates a Custom Item to determine its exact syntax and where it belongs 
-    /// relative to the Entity's structural parentheses.
-    /// </summary>
-    /// 
-    /*
-    public static ItemInjectionResult EvaluateItem(ItemData item)
-    {
-        if (item == null) return new ItemInjectionResult { FormattedString = "" };
-        string rawItem = item.Export();
-        if (string.IsNullOrWhiteSpace(rawItem)) return new ItemInjectionResult { FormattedString = "" };
-        string contentToEvaluate = rawItem.Trim();
-        if (contentToEvaluate.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase) ||
-            contentToEvaluate.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
-            contentToEvaluate.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
-            contentToEvaluate.StartsWith("i.abilitydata.", StringComparison.OrdinalIgnoreCase) ||
-            contentToEvaluate.StartsWith("i.triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
-            contentToEvaluate.StartsWith("learn.", StringComparison.OrdinalIgnoreCase) ||
-            contentToEvaluate.StartsWith("i.learn.", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ItemInjectionResult
-            {
-                FormattedString = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase) ? contentToEvaluate : $"i.{contentToEvaluate}",
-                Zone = PayloadInjectionZone.OuterEntity
-            };
-        }
-
-        bool alreadyHasIPrefix = contentToEvaluate.StartsWith("i.", StringComparison.OrdinalIgnoreCase);
-        string formattedPayload = alreadyHasIPrefix ? contentToEvaluate : $"i.{contentToEvaluate}";
-
-        return new ItemInjectionResult
-        {
-            FormattedString = formattedPayload,
-            Zone = PayloadInjectionZone.InnerEntity
-        };
-    }
-    */
-
-    /*
-    public static ItemInjectionResult EvaluateItem(ItemData item)
-    {
-        if (item == null) return new ItemInjectionResult { FormattedString = "" };
-
-        // item.Export() natively returns (...)
-        string rawItem = item.Export();
-        if (string.IsNullOrWhiteSpace(rawItem) || rawItem == "()")
-            return new ItemInjectionResult { FormattedString = "" };
-
-        // The item handles its brackets. We just declare the 'i' modifier.
-        return new ItemInjectionResult
-        {
-            FormattedString = $"i.{rawItem}",
-            Zone = PayloadInjectionZone.InnerEntity
-        };
-    }
-    */
-
     public static ItemInjectionResult EvaluateItem(ItemData item)
     {
         if (item == null) return new ItemInjectionResult { FormattedString = "" };
