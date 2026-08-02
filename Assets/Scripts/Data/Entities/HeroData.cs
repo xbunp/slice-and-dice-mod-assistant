@@ -64,7 +64,7 @@ public class HeroData : EntityData
                 tokens.RemoveAt(0); // Ensures ExtractKnowledge doesn't discard it
             }
         }
-        ExtractKnowledge(tokens, _itemPipeline, false);
+        ExtractKnowledge(tokens, _itemPipeline, true); // was false before
         ExecuteItemPipeline();
     }
     protected override bool TryProcessSpecificMetadata(TokenStream stream)
@@ -101,7 +101,7 @@ public class HeroData : EntityData
     {
         entityName = null; imageOverride = null; baseReplica = null; colorClass = null;
         hp = 0; h = 0; s = 0; v = 0; tier = 0; hue = 0;
-        doc = null; speech = null; adj = null;
+        doc = null; doc2 = null;  speech = null; adj = null;
         appendedDoc = null;
 
         items = new List<string>();

@@ -245,6 +245,7 @@ public abstract class AbilityData : HeroData
 
         // 10. Documentation
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");
+        if (!string.IsNullOrEmpty(doc2)) sb.Append($".doc.{doc2}");
 
         return sb.ToString();
     }

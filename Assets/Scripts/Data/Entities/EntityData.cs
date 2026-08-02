@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using UnityEngine;
 
 public static class EntityDomainRules
@@ -18,7 +17,7 @@ public static class EntityDomainRules
     // Shared collection routing keys
     public static readonly HashSet<string> CommonCollectionKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "i", "t", "gift", "learn", "abilitydata", "triggerhpdata", "onhitdata", "orb" // Added "orb"
+        "i", "t", "gift", "learn", "abilitydata", "triggerhpdata", "onhitdata", "orb"
     };
 
 
@@ -45,10 +44,18 @@ public static class EntityDomainRules
             // Standard single-token payloads (like t.Beefy)
             if (endIndex == startIndex)
             {
-                endIndex++; continue;
-            }
+                endIndex++;
 
-            break; // Stop parsing collection string natively
+                // Fix for dot-separated identifiers to ensure trailing tokens are grouped together natively
+                if (peek == "rmon" || peek == "rmod" || peek == "ritem" || peek == "ritemx" || peek == "rditem")
+                {
+                    if (endIndex < tokens.Count && !tokens[endIndex].StartsWith("("))
+                        endIndex++;
+                }
+
+                continue;
+            }
+            break;
         }
         return endIndex - startIndex;
     }
@@ -406,10 +413,11 @@ public abstract class EntityData : SDData, IPayloadContainer
     protected string ExtractBaseIdentifier(string token)
     {
         if (string.IsNullOrEmpty(token)) return token;
-
         while (token.StartsWith("(") && token.EndsWith(")"))
         {
-            token = StaticBranchTracing.StripOuterParens(token);
+            string stripped = StaticBranchTracing.StripOuterParens(token);
+            if (stripped == token) break; // PREVENT INFINITE LOOP: string is balanced recursively but not globally enclosed
+            token = stripped;
             List<string> innerTokens = StaticBranchTracing.TopLevelSplit(token, '.');
             if (innerTokens.Count > 0)
             {
@@ -1030,7 +1038,7 @@ public abstract class EntityData : SDData, IPayloadContainer
     // ====================================================================
     // EXPORT PIPELINE DEDICATED HELPER METHODS
     // ====================================================================
-    protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
+        protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
     {
         var stream = new TokenStream(tokens);
         while (!stream.IsEOF)
@@ -1113,6 +1121,7 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         // 1. Setup injection scopes
         List<string> innerHeroPayloads = new List<string>();
+        List<string> lateInnerPayloads = new List<string>();
         List<string> outerPayloads = new List<string>();
         List<string> wrapperPayloads = new List<string>();
 
@@ -1137,14 +1146,18 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-
+            
         // 3. Custom Ability Data
         if (customAbilityData != null && customAbilityData.Count > 0)
         {
             foreach (var cab in customAbilityData)
             {
                 if (cab == null) continue;
-                if (cab is OrbData orb)
+                if (cab is SpellData || cab is TacticData)
+                {
+                    lateInnerPayloads.Add(AbilityData.GetFormattedExportString(cab));
+                }
+                else if (cab is OrbData orb)
                 {
                     outerPayloads.Add(orb.ExportAsTrait(useITPrefix: true));
                 }
@@ -1259,11 +1272,13 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
 
         // --- BUILD CORE BODY ---
-        string coreBody = BuildCoreBody(hero, monster, isHero, baseId, hasImageOverride, innerHeroPayloads);
+        string coreBody = BuildCoreBody(hero, monster, isHero, baseId, hasImageOverride, innerHeroPayloads, lateInnerPayloads);
 
         // --- BUILD TRAILING ---
         StringBuilder trailingSb = new StringBuilder();
         if (!string.IsNullOrEmpty(doc)) trailingSb.Append($".doc.{doc}");
+        if (!string.IsNullOrEmpty(doc2)) trailingSb.Append($".doc.{doc2}");
+
         foreach (var outer in outerPayloads) trailingSb.Append($".{outer}");
         if (!isHero && monster != null && !string.IsNullOrEmpty(monster.bal))
         {
@@ -1274,7 +1289,7 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return ApplyWrappersAndOuterBracketing(combined, wrapperPayloads);
     }
-    private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride, List<string> innerHeroPayloads)
+    private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride, List<string> innerHeroPayloads, List<string> lateInnerPayloads)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -1322,6 +1337,11 @@ public abstract class EntityData : SDData, IPayloadContainer
         else if (isHero)
         {
             AppendColorModifier(sb);
+        }
+        // 9. Late Inner Payloads (Spells/Tactics placed after visuals to prevent game parser bugs)
+        if (lateInnerPayloads != null)
+        {
+            foreach (var late in lateInnerPayloads) sb.Append($".{late}");
         }
 
         string coreString = sb.ToString();
@@ -1464,8 +1484,24 @@ public abstract class EntityData : SDData, IPayloadContainer
         return rawHat;
     }
 
-    // currently unused
-    private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride)
+    protected bool IsDefaultHeroColor(string baseReplica, string colorClass)
+    {
+        if (string.IsNullOrEmpty(baseReplica) || string.IsNullOrEmpty(colorClass)) return false;
+        string cleanCode = colorClass.Replace("col.", "").Trim();
+        if (Enum.TryParse(baseReplica, true, out HeroType heroType))
+        {
+            if (SDColors.HeroColorMap.TryGetValue(heroType, out var defaultOption))
+            {
+                string defaultCode = SDColors.GetColorCode(defaultOption);
+                return string.Equals(cleanCode, defaultCode, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        return false;
+    }
+
+    /*
+
+        private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -1505,7 +1541,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             foreach (var t in traits) if (!string.IsNullOrEmpty(t)) sb.Append($".t.{FormatName(t)}");
         }
-        */
+ 
 
         if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
 
@@ -1518,267 +1554,255 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             sb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
             AppendColorModifier(sb);
-        }
+}
         else if (isHero)
-        {
-            AppendColorModifier(sb);
-        }
+{
+    AppendColorModifier(sb);
+}
 
-        string coreString = sb.ToString();
-        if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
-        return $"({coreString})";
+string coreString = sb.ToString();
+if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
+return $"({coreString})";
     }
     private string BuildTrailingPayloads(HeroData hero, MonsterData monster, bool isHero, out List<string> wrapperPayloads)
+{
+    StringBuilder outerSb = new StringBuilder();
+    ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out wrapperPayloads);
+
+    // 1. Documentation immediately follows core body
+    if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
+
+    // 2. Custom Ability Data (TriggerHP, OnHit)
+    if (customAbilityData != null && customAbilityData.Count > 0)
     {
-        StringBuilder outerSb = new StringBuilder();
-        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out wrapperPayloads);
-
-        // 1. Documentation immediately follows core body
-        if (!string.IsNullOrEmpty(doc)) outerSb.Append($".doc.{doc}");
-
-        // 2. Custom Ability Data (TriggerHP, OnHit)
-        if (customAbilityData != null && customAbilityData.Count > 0)
+        foreach (var cab in customAbilityData)
         {
-            foreach (var cab in customAbilityData)
+            if (cab == null) continue;
+
+            if (cab is OrbData orb)
             {
-                if (cab == null) continue;
+                outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
+            }
+            else
+            {
+                string prefix = cab is TriggerHPData ? "triggerhpdata" :
+                                cab is OnHitData ? "onhitdata" : "abilitydata";
 
-                if (cab is OrbData orb)
-                {
-                    outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-                }
-                else
-                {
-                    string prefix = cab is TriggerHPData ? "triggerhpdata" :
-                                    cab is OnHitData ? "onhitdata" : "abilitydata";
+                ItemMechanic abilityMechanic = new ItemMechanic { Prefix = prefix, PayloadData = cab };
+                ItemData abilityItem = new ItemData();
+                abilityItem.Mechanics.Add(abilityMechanic);
 
-                    ItemMechanic abilityMechanic = new ItemMechanic { Prefix = prefix, PayloadData = cab };
-                    ItemData abilityItem = new ItemData();
-                    abilityItem.Mechanics.Add(abilityMechanic);
-
-                    ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = abilityItem };
-                    outerSb.Append($".{giveItemMod.Export()}");
-                }
+                ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = abilityItem };
+                outerSb.Append($".{giveItemMod.Export()}");
             }
         }
-
-        // 3. Stock Items and Learn
-        if (items != null)
-        {
-            foreach (var itm in items)
-            {
-                if (!string.IsNullOrEmpty(itm))
-                {
-                    ItemData parsedItem = new ItemData();
-                    parsedItem.Parse(itm);
-
-                    // Fallback to preserve vanilla item syntax instead of coercing to n.Item
-                    if (parsedItem.Mechanics.Count == 0 && !string.IsNullOrEmpty(parsedItem.entityName))
-                    {
-                        parsedItem = new ItemData();
-                        parsedItem.Mechanics.Add(new ItemMechanic { Prefix = "", PayloadString = itm });
-                    }
-
-                    ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = parsedItem };
-                    outerSb.Append($".{giveItemMod.Export()}");
-                }
-            }
-        }
-
-        if (isHero && blessings != null)
-        {
-            foreach (var bl in blessings)
-            {
-                if (!string.IsNullOrEmpty(bl))
-                {
-                    ModifierData blessMod = new ModifierData();
-                    blessMod.Parse(bl);
-
-                    ItemMechanic giftMechanic = new ItemMechanic { Prefix = "gift", PayloadData = blessMod };
-                    ItemData giftItem = new ItemData();
-                    giftItem.Mechanics.Add(giftMechanic);
-
-                    ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giftItem };
-                    outerSb.Append($".{giveItemMod.Export()}");
-                }
-            }
-        }
-
-        foreach (var inner in innerPayloads) outerSb.Append($".{inner}");
-
-        if (isHero && hero.baseAbilityData != null)
-        {
-            foreach (var ab in hero.baseAbilityData)
-            {
-                if (!string.IsNullOrEmpty(ab))
-                {
-                    AbilityData abilityPayload = AbilityData.CreateAbility(ab);
-                    ItemMechanic learnMechanic = new ItemMechanic { Prefix = "learn", PayloadData = abilityPayload };
-                    ItemData learnItem = new ItemData();
-                    learnItem.Mechanics.Add(learnMechanic);
-
-                    ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = learnItem };
-                    outerSb.Append($".{giveItemMod.Export()}");
-                }
-            }
-        }
-
-        // 4. Modifiers & Outer Payloads (.i.self...)
-        foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
-
-        // 5. Entity Level Traits (Strict instantiation tree: Modifier(i) -> Item(t) -> Monster)
-        if (traits != null)
-        {
-            foreach (var t in traits)
-            {
-                if (!string.IsNullOrEmpty(t))
-                {
-                    MonsterData traitMonster = new MonsterData();
-                    traitMonster.Parse(t); // Monster parses the 'Archer' payload
-
-                    ItemMechanic traitMechanic = new ItemMechanic { Prefix = "t", PayloadData = traitMonster };
-                    ItemData traitItem = new ItemData();
-                    traitItem.Mechanics.Add(traitMechanic); // Item handles the 't' wrapper
-
-                    ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = traitItem };
-                    outerSb.Append($".{giveItemMod.Export()}"); // Modifier handles the 'i' wrapper
-                }
-            }
-        }
-
-        if (!isHero && monster != null && monster.customOrbs != null)
-        {
-            foreach (var orb in monster.customOrbs)
-            {
-                if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
-            }
-        }
-
-        // 6. Curses, Appended Doc, and Balance
-        if (curses != null)
-        {
-            foreach (var c in curses)
-            {
-                if (!string.IsNullOrEmpty(c))
-                {
-                    ModifierData curseMod = new ModifierData();
-                    curseMod.Parse(c); // Mod parses the Curse payload
-
-                    ModifierData jinxMod = new ModifierData { ActionType = ModifierActionType.Jinx, NestedModifierPayload = curseMod }; // Jinx wraps it
-
-                    ItemMechanic traitMechanic = new ItemMechanic { Prefix = "t", PayloadData = jinxMod };
-                    ItemData traitItem = new ItemData();
-                    traitItem.Mechanics.Add(traitMechanic); // Item wraps it in 't'
-
-                    ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = traitItem };
-                    outerSb.Append($".{giveItemMod.Export()}"); // Modifier wraps it in 'i'
-                }
-            }
-        }
-
-        if (isHero && !string.IsNullOrEmpty(hero.appendedDoc))
-        {
-            ModifierData parsedDocMod = new ModifierData();
-            parsedDocMod.Parse($"self.Wolf.doc.{hero.appendedDoc}.spirit");
-
-            ItemMechanic docMechanic = new ItemMechanic { Prefix = "", PayloadData = parsedDocMod };
-            ItemData docItem = new ItemData();
-            docItem.Mechanics.Add(docMechanic);
-
-            ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = docItem };
-            outerSb.Append($".{giveItemMod.Export()}");
-        }
-
-        if (!isHero && monster != null && !string.IsNullOrEmpty(monster.bal))
-        {
-            outerSb.Append($".bal.{FormatName(monster.bal)}");
-        }
-
-        return outerSb.ToString();
-    }
-    private string ApplyWrappersAndOuterBracketing(string result, List<string> wrapperPayloads, bool hasOuterExtensions)
-    {
-        if (wrapperPayloads != null)
-        {
-            foreach (var wrapper in wrapperPayloads)
-            {
-                result = wrapper.Contains("{0}") ? string.Format(wrapper, result) : $"({result}.{wrapper})";
-            }
-        }
-
-        if (hasOuterExtensions || isOuterWrappedInParens)
-        {
-            result = $"({result})";
-        }
-
-        return result;
-    }
-    private bool IsImageOverridePresent(string baseId)
-    {
-        return !string.IsNullOrEmpty(imageOverride) &&
-               !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) &&
-               !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
-    }
-    private string BuildVisualOverrides(bool hasImageOverride)
-    {
-        if (!hasImageOverride) return string.Empty;
-
-        StringBuilder visSb = new StringBuilder();
-        visSb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
-        AppendColorModifier(visSb);
-        return visSb.ToString();
-    }
-    private bool IsStickerTargetOverrideHat(HeroData hatHero, out DiceSideData.PayloadTarget? target, out ItemMechanic innerSticker)
-    {
-        target = null;
-        innerSticker = null;
-
-        if (!string.Equals(hatHero.baseReplica, "Fey", StringComparison.OrdinalIgnoreCase)) return false;
-
-        int leftSd = hatHero.diceSides[0]?.effectID ?? 0;
-        if (leftSd != 179 && leftSd != 185 && leftSd != 186) return false;
-
-        DiceSideData stickerFace = hatHero.diceSides.FirstOrDefault(s => s != null && s.faceType == DiceSideData.DiceFaceType.Sticker);
-
-        if (stickerFace == null || !stickerFace.keywords.Contains("togtarg")) return false;
-
-        bool hasTogfri = stickerFace.keywords.Contains("togfri");
-
-        // Strict, direct enum mapping based on the Left Face ID rules
-        if (leftSd == 179) target = hasTogfri ? DiceSideData.PayloadTarget.AllEnemies : DiceSideData.PayloadTarget.AllAllies;
-        else if (leftSd == 185) target = DiceSideData.PayloadTarget.Everyone;
-        else if (leftSd == 186) target = DiceSideData.PayloadTarget.Self;
-
-        innerSticker = new ItemMechanic
-        {
-            Prefix = "sticker",
-            PayloadString = stickerFace.payload
-        };
-
-        foreach (var kw in stickerFace.keywords)
-        {
-            if (kw != "togtarg" && kw != "togfri") innerSticker.ChainedKeywords.Add(kw);
-        }
-
-        return true;
     }
 
-    ////////////////////////////////
-    ///
-
-    protected bool IsDefaultHeroColor(string baseReplica, string colorClass)
+    // 3. Stock Items and Learn
+    if (items != null)
     {
-        if (string.IsNullOrEmpty(baseReplica) || string.IsNullOrEmpty(colorClass)) return false;
-        string cleanCode = colorClass.Replace("col.", "").Trim();
-        if (Enum.TryParse(baseReplica, true, out HeroType heroType))
+        foreach (var itm in items)
         {
-            if (SDColors.HeroColorMap.TryGetValue(heroType, out var defaultOption))
+            if (!string.IsNullOrEmpty(itm))
             {
-                string defaultCode = SDColors.GetColorCode(defaultOption);
-                return string.Equals(cleanCode, defaultCode, StringComparison.OrdinalIgnoreCase);
+                ItemData parsedItem = new ItemData();
+                parsedItem.Parse(itm);
+
+                // Fallback to preserve vanilla item syntax instead of coercing to n.Item
+                if (parsedItem.Mechanics.Count == 0 && !string.IsNullOrEmpty(parsedItem.entityName))
+                {
+                    parsedItem = new ItemData();
+                    parsedItem.Mechanics.Add(new ItemMechanic { Prefix = "", PayloadString = itm });
+                }
+
+                ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = parsedItem };
+                outerSb.Append($".{giveItemMod.Export()}");
             }
         }
-        return false;
     }
 
+    if (isHero && blessings != null)
+    {
+        foreach (var bl in blessings)
+        {
+            if (!string.IsNullOrEmpty(bl))
+            {
+                ModifierData blessMod = new ModifierData();
+                blessMod.Parse(bl);
+
+                ItemMechanic giftMechanic = new ItemMechanic { Prefix = "gift", PayloadData = blessMod };
+                ItemData giftItem = new ItemData();
+                giftItem.Mechanics.Add(giftMechanic);
+
+                ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giftItem };
+                outerSb.Append($".{giveItemMod.Export()}");
+            }
+        }
+    }
+
+    foreach (var inner in innerPayloads) outerSb.Append($".{inner}");
+
+    if (isHero && hero.baseAbilityData != null)
+    {
+        foreach (var ab in hero.baseAbilityData)
+        {
+            if (!string.IsNullOrEmpty(ab))
+            {
+                AbilityData abilityPayload = AbilityData.CreateAbility(ab);
+                ItemMechanic learnMechanic = new ItemMechanic { Prefix = "learn", PayloadData = abilityPayload };
+                ItemData learnItem = new ItemData();
+                learnItem.Mechanics.Add(learnMechanic);
+
+                ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = learnItem };
+                outerSb.Append($".{giveItemMod.Export()}");
+            }
+        }
+    }
+
+    // 4. Modifiers & Outer Payloads (.i.self...)
+    foreach (var outer in outerPayloads) outerSb.Append($".{outer}");
+
+    // 5. Entity Level Traits (Strict instantiation tree: Modifier(i) -> Item(t) -> Monster)
+    if (traits != null)
+    {
+        foreach (var t in traits)
+        {
+            if (!string.IsNullOrEmpty(t))
+            {
+                MonsterData traitMonster = new MonsterData();
+                traitMonster.Parse(t); // Monster parses the 'Archer' payload
+
+                ItemMechanic traitMechanic = new ItemMechanic { Prefix = "t", PayloadData = traitMonster };
+                ItemData traitItem = new ItemData();
+                traitItem.Mechanics.Add(traitMechanic); // Item handles the 't' wrapper
+
+                ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = traitItem };
+                outerSb.Append($".{giveItemMod.Export()}"); // Modifier handles the 'i' wrapper
+            }
+        }
+    }
+
+    if (!isHero && monster != null && monster.customOrbs != null)
+    {
+        foreach (var orb in monster.customOrbs)
+        {
+            if (orb != null) outerSb.Append($".{orb.ExportAsTrait(useITPrefix: true)}");
+        }
+    }
+
+    // 6. Curses, Appended Doc, and Balance
+    if (curses != null)
+    {
+        foreach (var c in curses)
+        {
+            if (!string.IsNullOrEmpty(c))
+            {
+                ModifierData curseMod = new ModifierData();
+                curseMod.Parse(c); // Mod parses the Curse payload
+
+                ModifierData jinxMod = new ModifierData { ActionType = ModifierActionType.Jinx, NestedModifierPayload = curseMod }; // Jinx wraps it
+
+                ItemMechanic traitMechanic = new ItemMechanic { Prefix = "t", PayloadData = jinxMod };
+                ItemData traitItem = new ItemData();
+                traitItem.Mechanics.Add(traitMechanic); // Item wraps it in 't'
+
+                ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = traitItem };
+                outerSb.Append($".{giveItemMod.Export()}"); // Modifier wraps it in 'i'
+            }
+        }
+    }
+
+    if (isHero && !string.IsNullOrEmpty(hero.appendedDoc))
+    {
+        ModifierData parsedDocMod = new ModifierData();
+        parsedDocMod.Parse($"self.Wolf.doc.{hero.appendedDoc}.spirit");
+
+        ItemMechanic docMechanic = new ItemMechanic { Prefix = "", PayloadData = parsedDocMod };
+        ItemData docItem = new ItemData();
+        docItem.Mechanics.Add(docMechanic);
+
+        ModifierData giveItemMod = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = docItem };
+        outerSb.Append($".{giveItemMod.Export()}");
+    }
+
+    if (!isHero && monster != null && !string.IsNullOrEmpty(monster.bal))
+    {
+        outerSb.Append($".bal.{FormatName(monster.bal)}");
+    }
+
+    return outerSb.ToString();
+}
+private string ApplyWrappersAndOuterBracketing(string result, List<string> wrapperPayloads, bool hasOuterExtensions)
+{
+    if (wrapperPayloads != null)
+    {
+        foreach (var wrapper in wrapperPayloads)
+        {
+            result = wrapper.Contains("{0}") ? string.Format(wrapper, result) : $"({result}.{wrapper})";
+        }
+    }
+
+    if (hasOuterExtensions || isOuterWrappedInParens)
+    {
+        result = $"({result})";
+    }
+
+    return result;
+}
+private bool IsImageOverridePresent(string baseId)
+{
+    return !string.IsNullOrEmpty(imageOverride) &&
+           !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) &&
+           !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
+}
+private string BuildVisualOverrides(bool hasImageOverride)
+{
+    if (!hasImageOverride) return string.Empty;
+
+    StringBuilder visSb = new StringBuilder();
+    visSb.Append($".img.{FormatName(FormatSpecialImageName(imageOverride))}");
+    AppendColorModifier(visSb);
+    return visSb.ToString();
+}
+private bool IsStickerTargetOverrideHat(HeroData hatHero, out DiceSideData.PayloadTarget? target, out ItemMechanic innerSticker)
+{
+    target = null;
+    innerSticker = null;
+
+    if (!string.Equals(hatHero.baseReplica, "Fey", StringComparison.OrdinalIgnoreCase)) return false;
+
+    int leftSd = hatHero.diceSides[0]?.effectID ?? 0;
+    if (leftSd != 179 && leftSd != 185 && leftSd != 186) return false;
+
+    DiceSideData stickerFace = hatHero.diceSides.FirstOrDefault(s => s != null && s.faceType == DiceSideData.DiceFaceType.Sticker);
+
+    if (stickerFace == null || !stickerFace.keywords.Contains("togtarg")) return false;
+
+    bool hasTogfri = stickerFace.keywords.Contains("togfri");
+
+    // Strict, direct enum mapping based on the Left Face ID rules
+    if (leftSd == 179) target = hasTogfri ? DiceSideData.PayloadTarget.AllEnemies : DiceSideData.PayloadTarget.AllAllies;
+    else if (leftSd == 185) target = DiceSideData.PayloadTarget.Everyone;
+    else if (leftSd == 186) target = DiceSideData.PayloadTarget.Self;
+
+    innerSticker = new ItemMechanic
+    {
+        Prefix = "sticker",
+        PayloadString = stickerFace.payload
+    };
+
+    foreach (var kw in stickerFace.keywords)
+    {
+        if (kw != "togtarg" && kw != "togfri") innerSticker.ChainedKeywords.Add(kw);
+    }
+
+    return true;
+}
+
+
+
+
+
+
+**/
 }

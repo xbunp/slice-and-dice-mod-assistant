@@ -245,8 +245,8 @@ public static class ItemDomainRules
                 "tier", "n", "img", "doc", "sidesc", "m", "part", "mrg", "splice",
                 "hsv", "hue", "thue", "p", "b", "draw", "rect",
                 "k", "facade", "sticker", "enchant", "cast", "hat", "t", "gift", "learn", "i", "sd",
-                // Modifiers and actions that expect a direct subsequent payload
-                "self", "jinx", "vase", "ea", "add", "party", "b"
+                "self", "jinx", "vase", "ea", "add", "party", "b",
+                "ritem", "ritemx", "rditem"
             };
 
             if (propertiesExpectingValue.Contains(truePrev)) return true;
@@ -934,6 +934,7 @@ public class ItemData : SDData
         imageOverride = null;
         Tier = null;
         doc = null;
+        doc2 = null;
         visuals.Clear();
         ClearDescription = false;
         ClearIcon = false;

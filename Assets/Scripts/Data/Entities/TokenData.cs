@@ -144,14 +144,14 @@ public static class StaticBranchTracing
     public static bool IsMonsterEntity(string core)
     {
         if (string.IsNullOrEmpty(core)) return false;
-
         string firstToken = TopLevelSplit(core, '.')[0].ToLower();
         while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
         {
-            firstToken = StripOuterParens(firstToken);
+            string stripped = StripOuterParens(firstToken);
+            if (stripped == firstToken) break; // PREVENT INFINITE LOOP
+            firstToken = stripped;
             firstToken = TopLevelSplit(firstToken, '.')[0].ToLower();
         }
-
         // Skip repeat multiplier prefixes (e.g., x2.egg)
         if (firstToken.StartsWith("x") && firstToken.Length > 1 && char.IsDigit(firstToken[1]))
         {
@@ -161,7 +161,9 @@ public static class StaticBranchTracing
                 firstToken = tokens[1].ToLower();
                 while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
                 {
-                    firstToken = StripOuterParens(firstToken);
+                    string stripped = StripOuterParens(firstToken);
+                    if (stripped == firstToken) break; // PREVENT INFINITE LOOP
+                    firstToken = stripped;
                     firstToken = TopLevelSplit(firstToken, '.')[0].ToLower();
                 }
             }
@@ -187,7 +189,9 @@ public static class StaticBranchTracing
         string firstToken = tokens[0].ToLower();
         while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
         {
-            firstToken = StripOuterParens(firstToken);
+            string stripped = StripOuterParens(firstToken);
+            if (stripped == firstToken) break; // PREVENT INFINITE LOOP
+            firstToken = stripped;
             tokens = TopLevelSplit(firstToken, '.');
             firstToken = tokens[0].ToLower();
         }
@@ -197,7 +201,9 @@ public static class StaticBranchTracing
             string secondToken = tokens[1].ToLower();
             while (secondToken.StartsWith("(") && secondToken.EndsWith(")"))
             {
-                secondToken = StripOuterParens(secondToken);
+                string stripped = StripOuterParens(secondToken);
+                if (stripped == secondToken) break; // PREVENT INFINITE LOOP
+                secondToken = stripped;
                 secondToken = TopLevelSplit(secondToken, '.')[0].ToLower();
             }
             if (EntityHelper.HeroNames.Contains(secondToken)) return true;

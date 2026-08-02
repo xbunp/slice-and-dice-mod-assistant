@@ -83,6 +83,8 @@ public class DiceFaceBuilderWidget
     // ADDED: Track manual toggle state overrides per face index
     private Dictionary<int, bool> _castIsCustomOverride = new Dictionary<int, bool>();
 
+    private Func<string[]> _getKeywordOptions;
+
     public DiceFaceBuilderWidget(
         Func<DiceSideData[]> getDiceSides,
         Func<bool> allowFacades,
@@ -91,7 +93,8 @@ public class DiceFaceBuilderWidget
         Func<int, Sprite> getBaseSprite,
         Func<string, Sprite> getFacadeSprite,
         Action onStateChanged,
-        Action onRebuildRequested)
+        Action onRebuildRequested,
+        Func<string[]> getKeywordOptions = null)
     {
         _getDiceSides = getDiceSides;
         _allowFacades = allowFacades;
@@ -101,6 +104,7 @@ public class DiceFaceBuilderWidget
         _getFacadeSprite = getFacadeSprite;
         _onStateChanged = onStateChanged;
         _onRebuildRequested = onRebuildRequested;
+        _getKeywordOptions = getKeywordOptions;
     }
 
     public void SetGridReferences(GridReferences gridRefs)
@@ -135,26 +139,6 @@ public class DiceFaceBuilderWidget
         }
     }
 
-    private void AddKeywordToFace(int faceIndex, int dropdownValue)
-    {
-        if (dropdownValue <= 0) return;
-        string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
-
-        // Unpolluted return: Retrieves pure keyword name by 1-based index from raw Enum array
-        string targetKeyword = rawOptions[dropdownValue - 1].ToLower();
-
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
-        {
-            var face = sides[faceIndex];
-            if (!face.keywords.Contains(targetKeyword))
-            {
-                face.keywords.Add(targetKeyword);
-                _onStateChanged?.Invoke();
-                _onRebuildRequested?.Invoke();
-            }
-        }
-    }
     private void RemoveKeywordFromFace(int faceIndex, string keyword)
     {
         var sides = _getDiceSides?.Invoke();
@@ -522,6 +506,28 @@ public class DiceFaceBuilderWidget
             )
         };
     }
+
+    /*
+    private void AddKeywordToFace(int faceIndex, int dropdownValue)
+    {
+        if (dropdownValue <= 0) return;
+        string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
+
+        // Unpolluted return: Retrieves pure keyword name by 1-based index from raw Enum array
+        string targetKeyword = rawOptions[dropdownValue - 1].ToLower();
+
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
+        {
+            var face = sides[faceIndex];
+            if (!face.keywords.Contains(targetKeyword))
+            {
+                face.keywords.Add(targetKeyword);
+                _onStateChanged?.Invoke();
+                _onRebuildRequested?.Invoke();
+            }
+        }
+    }
     private List<GridRowSpec> BuildKeywords(int index, DiceSideData face)
     {
         var keywordRows = new List<GridRowSpec>();
@@ -585,6 +591,84 @@ public class DiceFaceBuilderWidget
             ));
         }
 
+        return keywordRows;
+    }
+    */
+    private void AddKeywordToFace(int faceIndex, int dropdownValue)
+    {
+        if (dropdownValue <= 0) return;
+        string[] rawOptions = _getKeywordOptions != null ? _getKeywordOptions() : Enum.GetNames(typeof(EffectKeyword));
+        string targetKeyword = rawOptions[dropdownValue - 1].ToLower();
+
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
+        {
+            var face = sides[faceIndex];
+            if (!face.keywords.Contains(targetKeyword))
+            {
+                face.keywords.Add(targetKeyword);
+                _onStateChanged?.Invoke();
+                _onRebuildRequested?.Invoke();
+            }
+        }
+    }
+    private List<GridRowSpec> BuildKeywords(int index, DiceSideData face)
+    {
+        var keywordRows = new List<GridRowSpec>();
+        string[] rawOptions = _getKeywordOptions != null ? _getKeywordOptions() : Enum.GetNames(typeof(EffectKeyword));
+
+        List<string> displayOptions = new List<string>();
+        displayOptions.Add("--- Select Keyword ---");
+
+        foreach (string rawKw in rawOptions)
+        {
+            string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(rawKw);
+            if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = rawKw;
+
+            string desc = null;
+            if (EffectKeywordColors.Descriptions.TryGetValue(rawKw, out string matchedDesc))
+            {
+                desc = matchedDesc;
+            }
+            else
+            {
+                var kvp = EffectKeywordColors.Descriptions.FirstOrDefault(x => string.Equals(x.Key, rawKw, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(kvp.Value)) desc = kvp.Value;
+            }
+
+            if (!string.IsNullOrWhiteSpace(desc))
+            {
+                displayOptions.Add($"{coloredLabel}<pos=170><color=#AAAAAA>: {desc}</color>");
+            }
+            else
+            {
+                displayOptions.Add(coloredLabel);
+            }
+        }
+
+        keywordRows.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Add Keyword:", 1.0f)
+        ));
+
+        keywordRows.Add(new GridRowSpec(
+            GridCellSpec.CreateFilteredDropdown(
+                $"KwDrop_{index}",
+                "",
+                1.0f,
+                displayOptions.ToArray(),
+                (val) => AddKeywordToFace(index, val)
+            )
+        ));
+
+        foreach (var kw in face.keywords)
+        {
+            string keywordString = kw;
+            string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
+            keywordRows.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
+                GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => RemoveKeywordFromFace(index, keywordString))
+            ));
+        }
         return keywordRows;
     }
 

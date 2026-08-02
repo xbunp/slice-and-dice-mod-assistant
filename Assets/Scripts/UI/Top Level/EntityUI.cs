@@ -496,6 +496,22 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         bool wasDrawing = isDrawingUI;
         isDrawingUI = true;
 
+        // 1. Save focus state and caret position before destroying the UI
+        string focusedInputKey = null;
+        int savedCaretPosition = 0;
+        if (statsUI != null && statsUI.Inputs != null)
+        {
+            foreach (var kvp in statsUI.Inputs)
+            {
+                if (kvp.Value != null && kvp.Value.isFocused)
+                {
+                    focusedInputKey = kvp.Key;
+                    savedCaretPosition = kvp.Value.caretPosition;
+                    break;
+                }
+            }
+        }
+
         statsUI = uiGenerator.RebuildGrid(statsScrollRect.content, GenerateStatsLayout());
 
         float extraHeight = 0f;
@@ -506,7 +522,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             if (childCount > 1) extraHeight += layoutGroup.spacing * (childCount - 1);
             extraHeight += layoutGroup.padding.top + layoutGroup.padding.bottom;
         }
-
         statsScrollRect.content.sizeDelta = new Vector2(0, statsUI.TotalHeight + extraHeight);
         Canvas.ForceUpdateCanvases();
 
@@ -520,7 +535,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
                     {
                         CurrentEntity.GetType().GetProperty("imageOverride")?.SetValue(CurrentEntity, encodedStr);
-
                         _customImageString = encodedStr;
                         _customImageTexture = tex;
                         NotifyStateChanged();
@@ -530,10 +544,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 {
                     Transform placeholderParent = dummyReceiver.transform.parent;
                     Destroy(dummyReceiver.gameObject);
-
                     _persistentCustomImageReceiver.transform.SetParent(placeholderParent, false);
                     _persistentCustomImageReceiver.gameObject.SetActive(true);
-
                     RectTransform rt = _persistentCustomImageReceiver.GetComponent<RectTransform>();
                     FullScreenUIGenerator.SetAnchors(rt, 0, 0, 1, 1);
                 }
@@ -546,6 +558,26 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         isDrawingUI = wasDrawing;
         UpdateUIFromData();
+
+        // 2. Safely restore focus and caret position using a coroutine
+        if (focusedInputKey != null && statsUI.Inputs.TryGetValue(focusedInputKey, out var inputToFocus))
+        {
+            StartCoroutine(RestoreFocusRoutine(inputToFocus, savedCaretPosition));
+        }
+    }
+
+    private System.Collections.IEnumerator RestoreFocusRoutine(TMPro.TMP_InputField input, int caretPos)
+    {
+        // Yield 1 frame to guarantee TMP has processed the text mesh generation
+        // and layout group sizes before forcing a caret selection.
+        yield return null;
+
+        if (input != null)
+        {
+            input.ActivateInputField();
+            // Safety clamp the caret so it can't index out of bounds on pasted text
+            input.caretPosition = Mathf.Min(caretPos, input.text.Length);
+        }
     }
     protected void RebuildDiceScrollView()
     {
@@ -829,12 +861,54 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     {
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Doc:", 0.20f),
-            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => { CurrentEntity.doc = val.SanitizeRichInput(); NotifyStateChanged(); })
+            GridCellSpec.CreateInput("Doc", "", 0.80f, (val) => {
+                if (isDrawingUI) return;
+
+                bool wasEmpty = string.IsNullOrEmpty(CurrentEntity.doc);
+
+                if (string.IsNullOrEmpty(val) && !string.IsNullOrEmpty(CurrentEntity.doc2))
+                {
+                    // Shift doc2 up to doc if doc is cleared
+                    CurrentEntity.doc = CurrentEntity.doc2;
+                    CurrentEntity.doc2 = null;
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+                else
+                {
+                    // REMOVED SanitizeRichInput() to prevent Regex lag/stripping on valid game data
+                    CurrentEntity.doc = val;
+                    bool isEmpty = string.IsNullOrEmpty(CurrentEntity.doc);
+                    NotifyStateChanged();
+
+                    if (wasEmpty != isEmpty)
+                    {
+                        RebuildStatsUI();
+                    }
+                }
+            })
         ));
+
+        // Only render Doc 2 if Doc 1 has content
+        if (!string.IsNullOrEmpty(CurrentEntity.doc))
+        {
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Doc 2:", 0.20f),
+                GridCellSpec.CreateInput("Doc2", "", 0.80f, (val) => {
+                    if (isDrawingUI) return;
+                    CurrentEntity.doc2 = val; // No sanitizer
+                    NotifyStateChanged();
+                })
+            ));
+        }
 
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Appended Doc:", 0.20f),
-            GridCellSpec.CreateInput("AppendedDoc", "", 0.80f, (val) => { CurrentEntity.appendedDoc = val.SanitizeRichInput(); NotifyStateChanged(); })
+            GridCellSpec.CreateInput("AppendedDoc", "", 0.80f, (val) => {
+                if (isDrawingUI) return;
+                CurrentEntity.appendedDoc = val; // No sanitizer
+                NotifyStateChanged();
+            })
         ));
     }
     protected void AppendStandardItemsSelector(List<GridRowSpec> layout)
@@ -1101,17 +1175,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             RebuildStatsUI();
         }
     }
-    private string GetNiceVisualName(VisualType type)
-    {
-        switch (type)
-        {
-            case VisualType.P: return "P-Hue Swap";
-            case VisualType.THue: return "T-Hue Range Shift";
-            case VisualType.HSV: return "Global HSV Adjustment";
-            case VisualType.Hue: return "Global Hue Shift";
-            default: return type.ToString();
-        }
-    }
     private void AppendVisualHeader(List<GridRowSpec> layout, string title, int index)
     {
         string upText = index == 0 ? "-" : "▲";
@@ -1124,6 +1187,360 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             GridCellSpec.CreateButton($"VisDel_{index}", "<color=red>[X]</color>", 0.20f, () => RemoveVisualModifier(index))
         ));
     }
+
+    protected void AddVisualModifier(VisualType type)
+    {
+        if (CurrentEntity.visuals == null) CurrentEntity.visuals = new List<VisualModifier>();
+
+        if (CurrentEntity.visuals.Count >= 16) return;
+
+        var newVis = new VisualModifier { Type = type };
+        if (type == VisualType.P) newVis.p = new Phue { colorRange = 1 };
+        else if (type == VisualType.THue) newVis.thue = new Thue { colorRange = 1 };
+        else if (type == VisualType.HSV) { newVis.v = 1; }
+
+        CurrentEntity.visuals.Add(newVis);
+        NotifyStateChanged();
+        RebuildStatsUI();
+    }
+    protected void PasteVisualsFromClipboard()
+    {
+        string cb = GUIUtility.systemCopyBuffer;
+        if (string.IsNullOrWhiteSpace(cb)) return;
+        try
+        {
+            T tempEntity = ParseEntity(cb);
+            if (tempEntity != null)
+            {
+                CurrentEntity.imageOverride = tempEntity.imageOverride;
+
+                // Deep copy visuals to prevent reference sharing bugs
+                CurrentEntity.visuals = new List<VisualModifier>();
+                if (tempEntity.visuals != null)
+                {
+                    foreach (var v in tempEntity.visuals)
+                    {
+                        var clonedVis = new VisualModifier
+                        {
+                            Type = v.Type,
+                            RawValue = v.RawValue,
+                            x = v.x,
+                            y = v.y,
+                            h = v.h,
+                            s = v.s,
+                            v = v.v,
+                            hue = v.hue
+                        };
+                        if (v.p != null) clonedVis.p = new Phue { colorStart = v.p.colorStart, colorDestination = v.p.colorDestination, colorRange = v.p.colorRange };
+                        if (v.thue != null) clonedVis.thue = new Thue { colorHex = v.thue.colorHex, colorRange = v.thue.colorRange, colorOffset = v.thue.colorOffset };
+                        CurrentEntity.visuals.Add(clonedVis);
+                    }
+                }
+                NotifyStateChanged();
+                RebuildStatsUI();
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"Could not parse pasted visuals string: {ex.Message}");
+        }
+    }
+    protected void OpenDrawIconModal(Action<string> onIconSelected)
+    {
+        if (iconPicker == null) return;
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = EntityUIHelpers.AllActionSprites, // Includes heroes, monsters, and facades
+            IsValid = (index, sprite) => sprite != null,
+            GetSearchName = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
+            GetTooltip = (index, sprite) => sprite.name,
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (sprite != null)
+                {
+                    onIconSelected?.Invoke(IconPickerModal.GetCleanLeafName(sprite.name));
+                }
+            }
+        };
+        iconPicker.OpenModal(config);
+    }
+
+    private string GetNiceVisualName(VisualType type)
+    {
+        switch (type)
+        {
+            case VisualType.P: return "P-Hue Swap";
+            case VisualType.THue: return "T-Hue Range Shift";
+            case VisualType.HSV: return "Global HSV Adjustment";
+            case VisualType.Hue: return "Global Hue Shift";
+            case VisualType.Draw: return "Draw Icon Overlay";
+            default: return type.ToString();
+        }
+    }
+    protected void AppendColorModifiersLayout(List<GridRowSpec> layout)
+    {
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Manage Visuals:", 0.40f),
+            GridCellSpec.CreateButton("BtnPasteVisuals", "Paste Visuals from Clipboard", 0.60f, PasteVisualsFromClipboard)
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Add Visual Modifier:", 0.40f),
+            GridCellSpec.CreateFilteredDropdown("AddVisualDrop", "Select...", 0.60f,
+                new string[] { "Select...", "P-Hue Swap", "T-Hue Color", "Global HSV", "Global Hue", "Draw Icon" },
+                (idx) => {
+                    if (idx == 1) AddVisualModifier(VisualType.P);
+                    else if (idx == 2) AddVisualModifier(VisualType.THue);
+                    else if (idx == 3) AddVisualModifier(VisualType.HSV);
+                    else if (idx == 4) AddVisualModifier(VisualType.Hue);
+                    else if (idx == 5) AddVisualModifier(VisualType.Draw);
+                })
+        ));
+
+        if (CurrentEntity.visuals == null || CurrentEntity.visuals.Count == 0) return;
+
+        for (int i = 0; i < CurrentEntity.visuals.Count; i++)
+        {
+            int index = i;
+            var vis = CurrentEntity.visuals[index];
+
+            if (vis.Type == VisualType.B || vis.Type == VisualType.Rect)
+                continue;
+
+            AppendVisualHeader(layout, GetNiceVisualName(vis.Type), index);
+
+            if (vis.Type == VisualType.P)
+            {
+                if (vis.p == null) vis.p = new Phue();
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Colors:", 0.30f),
+                    GridCellSpec.CreateButton($"VisPhueStartBtn_{index}", "Target", 0.35f, () => {
+                        if (uiGenerator.colorPicker == null) return;
+                        OpenColorPicker(vis.p.colorStart, (color) => {
+                            vis.p.colorStart = color;
+                            NotifyStateChanged();
+                        });
+                    }),
+                    GridCellSpec.CreateButton($"VisPhueDestBtn_{index}", "Replace", 0.35f, () => {
+                        if (uiGenerator.colorPicker == null) return;
+                        OpenColorPicker(vis.p.colorDestination, (color) => {
+                            vis.p.colorDestination = color;
+                            NotifyStateChanged();
+                        });
+                    })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Range:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisPhueRange_{index}", 0, 99, true, 0.70f, (val) => {
+                        vis.p.colorRange = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    })
+                ));
+            }
+            else if (vis.Type == VisualType.THue)
+            {
+                if (vis.thue == null) vis.thue = new Thue();
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Target Color:", 0.35f),
+                    GridCellSpec.CreateButton($"VisThueColorBtn_{index}", "Pick Color", 0.65f, () => {
+                        if (uiGenerator.colorPicker == null) return;
+                        OpenColorPicker(vis.thue.colorHex, (color) => {
+                            vis.thue.colorHex = color;
+                            NotifyStateChanged();
+                        });
+                    })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Range:", 0.20f),
+                    GridCellSpec.CreateSlider($"VisThueRange_{index}", 0, 99, true, 0.30f, (val) => {
+                        vis.thue.colorRange = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    }),
+                    GridCellSpec.CreateLabel("Shift:", 0.20f),
+                    GridCellSpec.CreateSlider($"VisThueOffset_{index}", -99, 99, true, 0.30f, (val) => {
+                        vis.thue.colorOffset = Mathf.RoundToInt(val);
+                        NotifyStateChanged();
+                    })
+                ));
+            }
+            else if (vis.Type == VisualType.HSV)
+            {
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Hue:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHsvH_{index}", -99, 99, true, 0.50f, (val) => { vis.h = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHsvHIn_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) { vis.h = h; NotifyStateChanged(); } })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Sat:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHsvS_{index}", -99, 99, true, 0.50f, (val) => { vis.s = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHsvSIn_{index}", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) { vis.s = s; NotifyStateChanged(); } })
+                ));
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Val:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHsvV_{index}", -99, 99, true, 0.50f, (val) => { vis.v = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHsvVIn_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) { vis.v = v; NotifyStateChanged(); } })
+                ));
+            }
+            else if (vis.Type == VisualType.Hue)
+            {
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Hue:", 0.30f),
+                    GridCellSpec.CreateSlider($"VisHue_{index}", -99, 99, true, 0.50f, (val) => { vis.hue = Mathf.RoundToInt(val); NotifyStateChanged(); }),
+                    GridCellSpec.CreateInput($"VisHueIn_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int hue)) { vis.hue = hue; NotifyStateChanged(); } })
+                ));
+            }
+            else if (vis.Type == VisualType.Draw)
+            {
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Icon Name:", 0.20f),
+                    GridCellSpec.CreateDiceButton($"VisDrawBtn_{index}", "P", 0.10f, () => OpenDrawIconModal((val) => {
+                        vis.RawValue = val;
+                        NotifyStateChanged();
+                        UpdateUIFromData();
+                    })),
+                    GridCellSpec.CreateInput($"VisDrawName_{index}", "Name", 0.30f, (val) => { vis.RawValue = val; NotifyStateChanged(); }),
+                    GridCellSpec.CreateLabel("X:", 0.10f),
+                    GridCellSpec.CreateInput($"VisDrawX_{index}", "0", 0.10f, (val) => { if (int.TryParse(val, out int x)) { vis.x = x; NotifyStateChanged(); } }),
+                    GridCellSpec.CreateLabel("Y:", 0.10f),
+                    GridCellSpec.CreateInput($"VisDrawY_{index}", "0", 0.10f, (val) => { if (int.TryParse(val, out int y)) { vis.y = y; NotifyStateChanged(); } })
+                ));
+            }
+        }
+    }
+    protected virtual void UpdateUIFromData()
+    {
+        if (statsUI == null || diceUI == null) return;
+        isDrawingUI = true;
+
+        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentEntity.entityName);
+        if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
+            hpIn.SetTextWithoutNotify(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
+
+        // Apply richText=false and toggle .enabled to safely inject raw bracketed text without TMP lag/truncation
+        if (statsUI.Inputs.TryGetValue("Doc", out var docIn))
+        {
+            docIn.richText = false;
+            docIn.enabled = false;
+            docIn.SetTextWithoutNotify(CurrentEntity.doc);
+            docIn.enabled = true;
+        }
+        if (statsUI.Inputs.TryGetValue("Doc2", out var doc2In))
+        {
+            doc2In.richText = false;
+            doc2In.enabled = false;
+            doc2In.SetTextWithoutNotify(CurrentEntity.doc2);
+            doc2In.enabled = true;
+        }
+        if (statsUI.Inputs.TryGetValue("AppendedDoc", out var appendedDocIn))
+        {
+            appendedDocIn.richText = false;
+            appendedDocIn.enabled = false;
+            appendedDocIn.SetTextWithoutNotify(CurrentEntity.appendedDoc);
+            appendedDocIn.enabled = true;
+        }
+        if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
+
+        if (CurrentEntity.visuals != null)
+        {
+            for (int i = 0; i < CurrentEntity.visuals.Count; i++)
+            {
+                var vis = CurrentEntity.visuals[i];
+                if (vis.Type == VisualType.P)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisPhueRange_{i}", out var sRange))
+                        sRange.SetValueWithoutNotify(vis.p?.colorRange ?? 0);
+                }
+                else if (vis.Type == VisualType.THue)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisThueRange_{i}", out var tRange))
+                        tRange.SetValueWithoutNotify(vis.thue?.colorRange ?? 0);
+                    if (statsUI.Sliders.TryGetValue($"VisThueOffset_{i}", out var tOff))
+                        tOff.SetValueWithoutNotify(vis.thue?.colorOffset ?? 0);
+                }
+                else if (vis.Type == VisualType.HSV)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisHsvH_{i}", out var sH)) sH.SetValueWithoutNotify(vis.h);
+                    if (statsUI.Sliders.TryGetValue($"VisHsvS_{i}", out var sS)) sS.SetValueWithoutNotify(vis.s);
+                    if (statsUI.Sliders.TryGetValue($"VisHsvV_{i}", out var sV)) sV.SetValueWithoutNotify(vis.v);
+                    if (statsUI.Inputs.TryGetValue($"VisHsvHIn_{i}", out var iH)) iH.SetTextWithoutNotify(vis.h.ToString());
+                    if (statsUI.Inputs.TryGetValue($"VisHsvSIn_{i}", out var iS)) iS.SetTextWithoutNotify(vis.s.ToString());
+                    if (statsUI.Inputs.TryGetValue($"VisHsvVIn_{i}", out var iV)) iV.SetTextWithoutNotify(vis.v.ToString());
+                }
+                else if (vis.Type == VisualType.Hue)
+                {
+                    if (statsUI.Sliders.TryGetValue($"VisHue_{i}", out var sHue)) sHue.SetValueWithoutNotify(vis.hue);
+                    if (statsUI.Inputs.TryGetValue($"VisHueIn_{i}", out var iHue)) iHue.SetTextWithoutNotify(vis.hue.ToString());
+                }
+                else if (vis.Type == VisualType.Draw)
+                {
+                    if (statsUI.Inputs.TryGetValue($"VisDrawName_{i}", out var iName)) iName.SetTextWithoutNotify(vis.RawValue);
+                    if (statsUI.Inputs.TryGetValue($"VisDrawX_{i}", out var iX)) iX.SetTextWithoutNotify(vis.x.ToString());
+                    if (statsUI.Inputs.TryGetValue($"VisDrawY_{i}", out var iY)) iY.SetTextWithoutNotify(vis.y.ToString());
+                }
+            }
+        }
+
+        UpdateSpecificUIFromData();
+        diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
+
+        isDrawingUI = false;
+        UpdateVisualsOnly();
+    }
+    protected virtual void UpdateVisualsOnly()
+    {
+        if (portraitPreview != null)
+        {
+            portraitPreview.SetNameText(CurrentEntity.entityName);
+            portraitPreview.SetHPText(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
+            UpdateSpecificVisuals();
+
+            // Pass full dynamic visuals array directly to Portrait Preview
+            portraitPreview.SetPortraitVisualModifiers(CurrentEntity.visuals);
+        }
+
+        // Dynamically update preview button backgrounds/icons by index
+        if (statsUI != null && statsUI.Buttons != null && CurrentEntity.visuals != null)
+        {
+            for (int i = 0; i < CurrentEntity.visuals.Count; i++)
+            {
+                var vis = CurrentEntity.visuals[i];
+                if (vis.Type == VisualType.P)
+                {
+                    if (statsUI.Buttons.TryGetValue($"VisPhueStartBtn_{i}", out var startBtn))
+                        SetButtonColorPreview(startBtn, vis.p != null ? vis.p.colorStart : Color.white);
+                    if (statsUI.Buttons.TryGetValue($"VisPhueDestBtn_{i}", out var destBtn))
+                        SetButtonColorPreview(destBtn, vis.p != null ? vis.p.colorDestination : Color.white);
+                }
+                else if (vis.Type == VisualType.THue)
+                {
+                    if (statsUI.Buttons.TryGetValue($"VisThueColorBtn_{i}", out var thueColorBtn))
+                        SetButtonColorPreview(thueColorBtn, vis.thue != null ? vis.thue.colorHex : Color.white);
+                }
+                else if (vis.Type == VisualType.Draw)
+                {
+                    if (statsUI.Buttons.TryGetValue($"VisDrawBtn_{i}", out var drawBtn))
+                    {
+                        Sprite s = EntityUIHelpers.GetFacadeSprite(vis.RawValue);
+                        if (s == null) s = EntityUIHelpers.GetSpriteForPortrait(vis.RawValue);
+                        SetButtonIcon(drawBtn, s);
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < 6; i++) UpdateIcon(i);
+        diceBuilderWidget?.UpdateVisuals(currentDiceTab);
+
+        if (rawTextOutput != null)
+        {
+            string exportedString = ExportEntity(CurrentEntity);
+            rawTextOutput.SetTextWithoutNotify(exportedString);
+            if (syntaxHighlighterText != null)
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
+        }
+    }
+
+    /*
     protected void AppendColorModifiersLayout(List<GridRowSpec> layout)
     {
         // Dropdown to select and add a new visual modifier to the list
@@ -1236,6 +1653,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         }
     }
+    */
+    /*
     protected virtual void UpdateUIFromData()
     {
         if (statsUI == null || diceUI == null) return;
@@ -1338,19 +1757,5 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
         }
     }
-    protected void AddVisualModifier(VisualType type)
-    {
-        if (CurrentEntity.visuals == null) CurrentEntity.visuals = new List<VisualModifier>();
-
-        if (CurrentEntity.visuals.Count >= 16) return;
-
-        var newVis = new VisualModifier { Type = type };
-        if (type == VisualType.P) newVis.p = new Phue { colorRange = 1 };
-        else if (type == VisualType.THue) newVis.thue = new Thue { colorRange = 1 };
-        else if (type == VisualType.HSV) { newVis.v = 1; }
-
-        CurrentEntity.visuals.Add(newVis);
-        NotifyStateChanged();
-        RebuildStatsUI();
-    }
+    */
 }

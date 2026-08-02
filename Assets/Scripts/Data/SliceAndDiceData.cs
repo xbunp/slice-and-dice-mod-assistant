@@ -1677,16 +1677,18 @@ public enum EffectKeyword
 
 public static class SpecialAbilityKeywords
 {
-    public enum AbilityEffectKeyword
+    public enum AbilityOnlyKeywords
     {
-        //Special keywords
         Channel,
         Cooldown,
         Deplete,
         Future,
         SpellRescue,
         SingleCast,
-        //Standard keywords
+    }
+
+    public enum AbilityEffectKeyword
+    {
         Boost,
         Charged,
         Cleanse,
@@ -1737,15 +1739,6 @@ public static class SpecialAbilityKeywords
     public const string SingleCast = "k.singleuse";
 
     public const string OldFuture = "unpack.ritemx.644f";
-
-
-    // Old Version
-    //public const string Channel = "ritemx.302ea5e.part.0";
-    //public const string Cooldown = "Ritemx.161bf";
-    //public const string Deplete = "ritemx.539ce9a";
-    //public const string Future = "unpack.ritemx.644f";
-    //public const string SpellRescue = "Ritemx.62e8";
-    //public const string SingleCast = "Ritemx.132fb.part.1";
 }
 
 public enum HeroColorOption

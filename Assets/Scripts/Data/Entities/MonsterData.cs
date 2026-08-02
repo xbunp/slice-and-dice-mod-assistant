@@ -40,6 +40,7 @@ public class MonsterData : EntityData
         while (tokens.Count > 0 && tokens[0].StartsWith("(") && tokens[0].EndsWith(")"))
         {
             string inner = StaticBranchTracing.StripOuterParens(tokens[0]);
+            if (inner == tokens[0]) break; // PREVENT INFINITE LOOP
             List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
             tokens.RemoveAt(0);
             tokens.InsertRange(0, innerTokens);

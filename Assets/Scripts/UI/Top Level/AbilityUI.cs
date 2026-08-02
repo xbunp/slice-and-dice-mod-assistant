@@ -4,6 +4,7 @@ using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using static SpecialAbilityKeywords;
 
 public class AbilityUI : RootUI
 {
@@ -78,19 +79,18 @@ public class AbilityUI : RootUI
     }
     private void InitializeDiceWidgets()
     {
-        // Initialize widget delegates for Primary Face (Index 0)
         _primaryFaceBuilder = new DiceFaceBuilderWidget(
             getDiceSides: () => CurrentAbility?.diceSides,
-            allowFacades: () => false, // Abilities do not use standard facade ID overrides/HSV panels on their faces
+            allowFacades: () => false,
             openBaseModal: (idx) => OpenEffectBaseModal(idx, true),
             openFacadeModal: (idx) => { },
             getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
             getFacadeSprite: (id) => null,
             onStateChanged: () => NotifyStateChanged(),
-            onRebuildRequested: () => RebuildAbilityScrollView()
+            onRebuildRequested: () => RebuildAbilityScrollView(),
+            getKeywordOptions: () => Enum.GetNames(typeof(AbilityEffectKeyword))
         );
 
-        // Initialize widget delegates for Secondary Face (Index 1)
         _secondaryFaceBuilder = new DiceFaceBuilderWidget(
             getDiceSides: () => CurrentAbility?.diceSides,
             allowFacades: () => false,
@@ -99,7 +99,8 @@ public class AbilityUI : RootUI
             getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
             getFacadeSprite: (id) => null,
             onStateChanged: () => NotifyStateChanged(),
-            onRebuildRequested: () => RebuildAbilityScrollView()
+            onRebuildRequested: () => RebuildAbilityScrollView(),
+            getKeywordOptions: () => Enum.GetNames(typeof(AbilityEffectKeyword))
         );
     }
 
@@ -516,12 +517,12 @@ public class AbilityUI : RootUI
         ));
 
         var abilityOnlyKeywords = new Dictionary<string, string> {
-            { "Channel", SpecialAbilityKeywords.Channel },
-            { "Cooldown", SpecialAbilityKeywords.Cooldown },
-            { "Deplete", SpecialAbilityKeywords.Deplete },
-            { "Future", SpecialAbilityKeywords.Future },
-            { "Spell Rescue", SpecialAbilityKeywords.SpellRescue },
-            { "Single Cast", SpecialAbilityKeywords.SingleCast }
+            { "Channel", "k.growth" },
+            { "Cooldown", "k.exert" },
+            { "Deplete", "k.decay" },
+            { "Future", "ritemx.dae9" },
+            { "Spell Rescue", "k.rescue" },
+            { "Single Cast", "k.singleuse" }
         };
 
         var activeKeywordKeys = CurrentAbility.items
@@ -532,7 +533,7 @@ public class AbilityUI : RootUI
         AppendCollectionSelector<string>(
             layout: layout,
             label: "Add Ability-Only Keyword:",
-            uniqueKey: "SpellKeywords",
+            uniqueKey: "AbilityOnlyKeywords", // Changed key slightly to avoid caching overlaps
             availableChoices: abilityOnlyKeywords.Keys.ToList(),
             currentActiveItems: activeKeywordKeys,
             getKey: (niceName) => niceName,

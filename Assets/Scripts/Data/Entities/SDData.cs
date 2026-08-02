@@ -54,6 +54,7 @@ public abstract class SDData
     public string entityName = "";
     public string imageOverride = "None";
     public string doc;
+    public string doc2;
     [SerializeField] private int _xMultiplier = 1;
 
     // Value Safety:
@@ -397,7 +398,12 @@ public abstract class SDData
                 return true;
             case "doc":
                 stream.Consume();
-                if (!stream.IsEOF) doc = stream.Consume();
+                if (!stream.IsEOF)
+                {
+                    string parsedDoc = stream.Consume();
+                    if (string.IsNullOrEmpty(doc)) doc = parsedDoc;
+                    else doc2 = parsedDoc;
+                }
                 return true;
             case "hsv":
                 stream.Consume();
