@@ -17,6 +17,7 @@ public enum ItemNodeType
     Appearance,
     Equippable,
     BaseItem,
+    LearnAbility,
     Operator,
     Hat,
     Bracket,
@@ -835,6 +836,7 @@ public class ItemUI : RootUI
         if (prefix == "hat") type = ItemNodeType.Hat;
         else if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.Appearance;
         else if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
+        else if (AbilityDomainRules.AbilityStartTokens.Contains(prefix) || prefix == "abilitydata") type = ItemNodeType.LearnAbility;
 
         EntityCard mechCard = CreateEntityCard(type) as EntityCard;
 
@@ -849,7 +851,6 @@ public class ItemUI : RootUI
             {
                 rawExport = rawExport.Substring(2);
             }
-
             flatMech.PayloadString = rawExport;
             mechCard.MechanicData = flatMech;
         }
@@ -1531,5 +1532,56 @@ public class ItemUI : RootUI
         zone.OnZoneChanged += RefreshSidebar;
 
         entityCard.PayloadPort = zone;
+    }
+
+    public void CreateInspectorFilteredDropdown(string label, List<string> options, int currentIndex, UnityEngine.Events.UnityAction<int> onValueChanged)
+    {
+        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
+        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
+        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
+
+        RectTransform labelRect = CreateRect("Label", container);
+        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        labelText.text = label;
+        labelText.fontSize = 14;
+        labelText.color = Color.grey;
+        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
+
+        if (uiGenerator.filteredDropdown != null)
+        {
+            GameObject ddObj = Instantiate(uiGenerator.filteredDropdown, container);
+            var dropdown = ddObj.GetComponent<FilteredDropdown>();
+            dropdown.ClearOptions();
+            dropdown.AddOptions(options);
+            dropdown.value = currentIndex;
+            dropdown.onValueChanged.AddListener(onValueChanged);
+        }
+    }
+
+    public void CreateInspectorAbilityDropdown(string label, string currentAbilityName, UnityEngine.Events.UnityAction<string> onAbilitySelected)
+    {
+        var abilityNames = new List<string> { "-- Select Custom Ability --" };
+        int currentIndex = 0;
+
+        if (ModPackage.Instance != null && ModPackage.Instance.CustomAbilities != null)
+        {
+            var distinctAbilities = ModPackage.Instance.CustomAbilities
+                .Select(a => !string.IsNullOrEmpty(a.entityName) ? a.entityName : "Unnamed Ability")
+                .Distinct()
+                .ToList();
+
+            abilityNames.AddRange(distinctAbilities);
+
+            if (!string.IsNullOrEmpty(currentAbilityName))
+            {
+                int foundIdx = abilityNames.IndexOf(currentAbilityName);
+                if (foundIdx > 0) currentIndex = foundIdx;
+            }
+        }
+
+        CreateInspectorFilteredDropdown(label, abilityNames, currentIndex, (idx) => {
+            if (idx <= 0 || idx >= abilityNames.Count) return;
+            onAbilitySelected?.Invoke(abilityNames[idx]);
+        });
     }
 }

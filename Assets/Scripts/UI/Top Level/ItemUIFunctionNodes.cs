@@ -18,6 +18,7 @@ public static class NodeRegistry
             Register(new EquippableNodeDef());
             Register(new BaseItemNodeDef());
             Register(new HatNodeDef());
+            Register(new LearnAbilityNodeDef());
             Register(new OperatorNodeDef());
             Register(new ManualBracketNodeDef());
             Register(new RawStringNodeDef());
@@ -2027,6 +2028,21 @@ public class BaseItemNodeDef : AuthoringNodeDef
         }
     }
 
+    private void NormalizeOperators(List<BaseItemEntry> entries)
+    {
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (i == entries.Count - 1)
+            {
+                entries[i].NextOp = ""; // Last item never has a trailing operator
+            }
+            else if (string.IsNullOrEmpty(entries[i].NextOp))
+            {
+                entries[i].NextOp = "#"; // Default fallback to prevent concatenation
+            }
+        }
+    }
+
     private static string[] _targetOptions;
     private static string[] GetTargetOptions()
     {
@@ -2119,27 +2135,63 @@ public class BaseItemNodeDef : AuthoringNodeDef
 
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("Spacer_Top", "", 1.0f)));
     }
-
     private void BuildEntryUI(List<GridRowSpec> layout, int index, List<BaseItemEntry> entries, Action saveState, Action saveAndRebuild)
     {
         var entry = entries[index];
-        float btnDelW = 0.12f;
-        Action onDelete = () => { entries.RemoveAt(index); saveAndRebuild(); };
+
+        Action onUp = () => {
+            if (index > 0)
+            {
+                // 1. Save the exact order of operators
+                var ops = entries.Select(e => e.NextOp).ToList();
+
+                // 2. Move the item
+                var itemToMove = entries[index];
+                entries.RemoveAt(index);
+                entries.Insert(index - 1, itemToMove);
+
+                // 3. Restore operators to their original slots & sanitize
+                for (int i = 0; i < entries.Count; i++) entries[i].NextOp = ops[i];
+                NormalizeOperators(entries);
+
+                saveAndRebuild();
+            }
+        };
+
+        Action onDown = () => {
+            if (index < entries.Count - 1)
+            {
+                var ops = entries.Select(e => e.NextOp).ToList();
+
+                var itemToMove = entries[index];
+                entries.RemoveAt(index);
+                entries.Insert(index + 1, itemToMove);
+
+                for (int i = 0; i < entries.Count; i++) entries[i].NextOp = ops[i];
+                NormalizeOperators(entries);
+
+                saveAndRebuild();
+            }
+        };
+
+        Action onDelete = () => {
+            entries.RemoveAt(index);
+            NormalizeOperators(entries);
+            saveAndRebuild();
+        };
 
         switch (entry.Type)
         {
             case BasePackEntryType.BaseItem:
             case BasePackEntryType.Ritem:
             case BasePackEntryType.Ritemx:
-                BuildBaseOrRitemRows(layout, index, entry, saveState, saveAndRebuild, onDelete, btnDelW);
+                BuildBaseOrRitemRows(layout, index, entry, saveState, saveAndRebuild, onUp, onDown, onDelete);
                 break;
-
             case BasePackEntryType.Keyword:
-                BuildKeywordRow(layout, index, entry, saveState, onDelete, btnDelW);
+                BuildKeywordRow(layout, index, entry, saveState, onUp, onDown, onDelete);
                 break;
-
             case BasePackEntryType.TogItem:
-                BuildTogItemRow(layout, index, entry, saveState, onDelete, btnDelW);
+                BuildTogItemRow(layout, index, entry, saveState, onUp, onDown, onDelete);
                 break;
         }
 
@@ -2149,59 +2201,82 @@ public class BaseItemNodeDef : AuthoringNodeDef
         }
     }
 
-    private void BuildBaseOrRitemRows(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveState, Action saveAndRebuild, Action onDelete, float btnDelW)
+    // --- DRY HELPER METHODS ---
+    private GridCellSpec CreateTargetDropdownSpec(int index, BaseItemEntry entry, float ratio, Action saveState)
+    {
+        return GridCellSpec.CreateFilteredDropdown($"Target_{index}", entry.Target, ratio, GetTargetOptions(), (val) => {
+            entry.Target = GetTargetOptions()[val];
+            saveState();
+        });
+    }
+    private GridRowSpec BuildControlRow(IEnumerable<GridCellSpec> contentSpecs, int index, Action onUp, Action onDown, Action onDelete)
+    {
+        var cells = new List<GridCellSpec>(contentSpecs)
+    {
+        GridCellSpec.CreateButton($"Up_{index}", "▲", 0.08f, onUp),
+        GridCellSpec.CreateButton($"Dn_{index}", "▼", 0.08f, onDown),
+        GridCellSpec.CreateButton($"Del_{index}", "X", 0.08f, onDelete)
+    };
+        return new GridRowSpec(cells.ToArray());
+    }
+
+    // --- REFACTORED ROW BUILDERS ---
+    private void BuildSideDefinitionRow(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveState, Action onUp, Action onDown, Action onDelete)
+    {
+        layout.Add(BuildControlRow(new[] {
+        GridCellSpec.CreateLabel("Target Side:", 0.25f),
+        CreateTargetDropdownSpec(index, entry, 0.51f, saveState)
+    }, index, onUp, onDown, onDelete));
+    }
+    private void BuildBaseOrRitemRows(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveState, Action saveAndRebuild, Action onUp, Action onDown, Action onDelete)
     {
         string[] currentOptions = GetOptionArray(entry.Type);
 
-        // Row 1: Core Identity & Deletion
         GridCellSpec itemSpec = (entry.Type == BasePackEntryType.BaseItem)
-            ? GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.66f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); })
-            : GridCellSpec.CreateInput($"Item_{index}", entry.ItemName, 0.66f, (val) => { entry.ItemName = val; saveState(); });
+            ? GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.46f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); })
+            : GridCellSpec.CreateInput($"Item_{index}", entry.ItemName, 0.46f, (val) => { entry.ItemName = val; saveState(); });
 
+        // Row 1: Target Side, Item Dropdown/Input, and Action Buttons (Up/Down/Del)
+        layout.Add(BuildControlRow(new[] {
+        CreateTargetDropdownSpec(index, entry, 0.30f, saveState),
+        itemSpec
+    }, index, onUp, onDown, onDelete));
+
+        // Row 2: Unpack, Per-Tier, and Part
         layout.Add(new GridRowSpec(
-            GridCellSpec.CreateToggle($"Unpack_{index}", "Unpack", 0.22f, (val) => { entry.Unpack = val; saveState(); }),
-            itemSpec,
-            GridCellSpec.CreateButton($"Del_{index}", "X", btnDelW, onDelete)
+            GridCellSpec.CreateToggle($"Unpack_{index}", "Unpack", 0.25f, (val) => { entry.Unpack = val; saveState(); }),
+            GridCellSpec.CreateToggle($"Tier_{index}", "Per-Tier", 0.25f, (val) => OnTierToggleChanged(val, entry, saveState, saveAndRebuild)),
+            GridCellSpec.CreateLabel("Part:", 0.15f),
+            GridCellSpec.CreateInput($"Part_{index}", entry.Part, 0.35f, (val) => { entry.Part = val; saveState(); })
         ));
 
-        // Row 2: Advanced Modifiers (Part, Repeats, Multipliers, Tier)
+        // Row 3: Repeat and Multiplier
         layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Part:", 0.12f),
-            GridCellSpec.CreateInput($"Part_{index}", entry.Part, 0.14f, (val) => { entry.Part = val; saveState(); }),
-
-            GridCellSpec.CreateLabel("Repeat:", 0.14f),
-            GridCellSpec.CreateInput($"Rep_{index}", entry.Repeats.ToString(), 0.14f, (val) => OnRepeatsChanged(val, entry, saveState, saveAndRebuild)),
-
-            GridCellSpec.CreateLabel("M# Multi:", 0.12f),
-            GridCellSpec.CreateInput($"Mult_{index}", entry.Multiplier.ToString(), 0.14f, (val) => { if (int.TryParse(val, out int v)) { entry.Multiplier = v; saveState(); } }),
-
-            GridCellSpec.CreateToggle($"Tier_{index}", "Tier", 0.20f, (val) => OnTierToggleChanged(val, entry, saveState, saveAndRebuild))
+            GridCellSpec.CreateLabel("Repeat (xN):", 0.20f),
+            GridCellSpec.CreateInput($"Rep_{index}", entry.Repeats.ToString(), 0.30f, (val) => OnRepeatsChanged(val, entry, saveState, saveAndRebuild)),
+            GridCellSpec.CreateLabel("Multiplier (.m):", 0.20f),
+            GridCellSpec.CreateInput($"Mult_{index}", entry.Multiplier.ToString(), 0.30f, (val) => { if (int.TryParse(val, out int v)) { entry.Multiplier = v; saveState(); } })
         ));
     }
-
-    private void BuildKeywordRow(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveState, Action onDelete, float btnDelW)
+    private void BuildKeywordRow(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveState, Action onUp, Action onDown, Action onDelete)
     {
         string[] currentOptions = GetOptionArray(entry.Type);
 
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateFilteredDropdown($"Target_{index}", entry.Target, 0.35f, GetTargetOptions(), (val) => { entry.Target = GetTargetOptions()[val]; saveState(); }),
-            GridCellSpec.CreateLabel("k.", 0.08f),
-            GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.45f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); }),
-            GridCellSpec.CreateButton($"Del_{index}", "X", btnDelW, onDelete)
-        ));
+        layout.Add(BuildControlRow(new[] {
+        CreateTargetDropdownSpec(index, entry, 0.25f, saveState),
+        GridCellSpec.CreateLabel("k.", 0.06f),
+        GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.45f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); })
+    }, index, onUp, onDown, onDelete));
     }
-
-    private void BuildTogItemRow(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveState, Action onDelete, float btnDelW)
+    private void BuildTogItemRow(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveState, Action onUp, Action onDown, Action onDelete)
     {
         string[] currentOptions = GetOptionArray(entry.Type);
 
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateFilteredDropdown($"Target_{index}", entry.Target, 0.35f, GetTargetOptions(), (val) => { entry.Target = GetTargetOptions()[val]; saveState(); }),
-            GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.53f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); }),
-            GridCellSpec.CreateButton($"Del_{index}", "X", btnDelW, onDelete)
-        ));
+        layout.Add(BuildControlRow(new[] {
+        CreateTargetDropdownSpec(index, entry, 0.25f, saveState),
+        GridCellSpec.CreateFilteredDropdown($"Item_{index}", entry.ItemName, 0.51f, currentOptions, (val) => { entry.ItemName = currentOptions[val]; saveState(); })
+    }, index, onUp, onDown, onDelete));
     }
-
     private void BuildOperatorRow(List<GridRowSpec> layout, int index, BaseItemEntry entry, Action saveAndRebuild)
     {
         string opLabel = NodeOperatorUtility.GetLabel(entry.NextOp);
@@ -2215,7 +2290,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
             GridCellSpec.CreateLabel("", 0.38f)
         ));
     }
-
     private void OnRepeatsChanged(string val, BaseItemEntry entry, Action saveState, Action saveAndRebuild)
     {
         if (int.TryParse(val, out int v))
@@ -2232,7 +2306,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
             }
         }
     }
-
     private void OnTierToggleChanged(bool val, BaseItemEntry entry, Action saveState, Action saveAndRebuild)
     {
         entry.PerTier = val;
@@ -2246,7 +2319,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
             saveState();
         }
     }
-
     private void PopulateEntryValues(GridReferences refs, int i, BaseItemEntry entry)
     {
         if (refs.Toggles.TryGetValue($"Unpack_{i}", out var tglU)) tglU.SetIsOnWithoutNotify(entry.Unpack);
@@ -2280,7 +2352,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
     // ==========================================
     // BACKEND PARSING & SAVING
     // ==========================================
-    /*
     private void SaveState(EntityCard card, List<BaseItemEntry> entries, ItemUI ui, bool forceInspectorRebuild)
     {
         List<string> parts = new List<string>();
@@ -2296,11 +2367,13 @@ public class BaseItemNodeDef : AuthoringNodeDef
                 case BasePackEntryType.Ritemx:
                 case BasePackEntryType.Ritem:
                     string prefix = "";
+                    string targetPrefix = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
+
                     if (e.PerTier) prefix += "pertier.";
                     else if (e.Repeats != 1 && e.Repeats != 0) prefix += $"x{e.Repeats}.";
                     if (e.Unpack) prefix += "unpack.";
 
-                    s = prefix + e.ItemName;
+                    s = targetPrefix + prefix + e.ItemName;
                     if (!string.IsNullOrWhiteSpace(e.Part)) s += $".part.{e.Part}";
                     if (e.Multiplier != 1) s += $".m.{e.Multiplier}";
                     break;
@@ -2316,17 +2389,19 @@ public class BaseItemNodeDef : AuthoringNodeDef
                     break;
             }
 
-            // SMART WRAPPING: Only wrap in brackets if the item contains sub-properties or complex modifiers
-            // Simple atomic items like 'togtarg' or 'ritemx.0' stay bracket-free!
-            bool needsBrackets = s.Contains(".part.") || s.Contains(".m.") || s.Contains("pertier.") || s.Contains("unpack.");
-            if (needsBrackets && !s.StartsWith("("))
+            if (!string.IsNullOrEmpty(s))
             {
-                s = $"({s})";
+                bool needsBrackets = s.Contains(".part.") || s.Contains(".m.") || s.Contains("pertier.") || s.Contains("unpack.");
+                bool hasExplicitTarget = !string.IsNullOrEmpty(e.Target) && e.Target != "none";
+
+                if ((needsBrackets || hasExplicitTarget) && !s.StartsWith("("))
+                {
+                    s = $"({s})";
+                }
+
+                if (i < entries.Count - 1) s += e.NextOp;
+                parts.Add(s);
             }
-
-            if (i < entries.Count - 1) s += e.NextOp;
-
-            parts.Add(s);
         }
 
         card.MechanicData.PayloadString = string.Join("", parts);
@@ -2338,68 +2413,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
             ui.RefreshSidebar();
         }
     }
-    */
-
-    private void SaveState(EntityCard card, List<BaseItemEntry> entries, ItemUI ui, bool forceInspectorRebuild)
-    {
-        List<string> parts = new List<string>();
-
-        for (int i = 0; i < entries.Count; i++)
-        {
-            var e = entries[i];
-            string s = "";
-
-            switch (e.Type)
-            {
-                case BasePackEntryType.BaseItem:
-                case BasePackEntryType.Ritemx:
-                case BasePackEntryType.Ritem:
-                    string prefix = "";
-                    if (e.PerTier) prefix += "pertier.";
-                    else if (e.Repeats != 1 && e.Repeats != 0) prefix += $"x{e.Repeats}.";
-                    if (e.Unpack) prefix += "unpack.";
-
-                    s = prefix + e.ItemName;
-                    if (!string.IsNullOrWhiteSpace(e.Part)) s += $".part.{e.Part}";
-                    if (e.Multiplier != 1) s += $".m.{e.Multiplier}";
-                    break;
-
-                case BasePackEntryType.Keyword:
-                    string kwTarget = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
-                    s = $"{kwTarget}k.{e.ItemName}";
-                    break;
-
-                case BasePackEntryType.TogItem:
-                    string togTarget = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
-                    s = $"{togTarget}{e.ItemName}";
-                    break;
-            }
-
-            bool needsBrackets = s.Contains(".part.") || s.Contains(".m.") || s.Contains("pertier.") || s.Contains("unpack.");
-
-            // NEW: Safely scope explicitly targeted items to prevent # target bleeding
-            bool hasExplicitTarget = !string.IsNullOrEmpty(e.Target) && e.Target != "none";
-
-            if ((needsBrackets || hasExplicitTarget) && !s.StartsWith("("))
-            {
-                s = $"({s})";
-            }
-
-            if (i < entries.Count - 1) s += e.NextOp;
-
-            parts.Add(s);
-        }
-
-        card.MechanicData.PayloadString = string.Join("", parts);
-        ui.AutoCompile();
-
-        if (forceInspectorRebuild)
-        {
-            ui.SelectCard(card);
-            ui.RefreshSidebar();
-        }
-    }
-
     private List<BaseItemEntry> ParsePayload(string payload)
     {
         var entries = new List<BaseItemEntry>();
@@ -2456,7 +2469,6 @@ public class BaseItemNodeDef : AuthoringNodeDef
         }
         return entries;
     }
-
     private void ParseBaseOrRitemx(BaseItemEntry entry, string segment)
     {
         string cleanSeg = segment;
@@ -2677,5 +2689,91 @@ public static class NodeOperatorUtility
         if (op == ".splice.") return "[ SPLICE ]";
         if (op == ".i.") return "[ NEW ITEM .i. ]";
         return "[ AND # ]"; // Fallback/Default for "#"
+    }
+}
+
+public class LearnAbilityNodeDef : AuthoringNodeDef
+{
+    public override string NodeNiceName => "Learn Ability";
+    public override ItemNodeType NodeType => ItemNodeType.LearnAbility;
+    public override bool IsOperator => false;
+    public override bool IsEntity => true;
+    public override bool HasDeleteButton => true;
+    public override bool HasPayloadPort => false;
+
+    public override string GetTitle(EntityCard card)
+    {
+        string payload = card.MechanicData.PayloadString ?? "";
+        string name = "Unknown Ability";
+
+        // Try to match the exact string to a custom ability in the package
+        var matchingAbility = ModPackage.Instance?.CustomAbilities?.FirstOrDefault(a =>
+            a.Export() == payload ||
+            $"({a.Export()})" == payload ||
+            a.Export() == payload.Trim('(', ')')
+        );
+
+        if (matchingAbility != null)
+        {
+            name = matchingAbility.entityName;
+        }
+        else
+        {
+            // Fallback: extract the name from the inline .n. tag using Regex
+            var match = System.Text.RegularExpressions.Regex.Match(payload, @"\.n\.([^\.\#\)]+)");
+            if (match.Success) name = match.Groups[1].Value;
+        }
+
+        return string.IsNullOrEmpty(payload) ? "Learn Ability" : $"Learn: {name}";
+    }
+
+    public override Color GetColor() => new Color(0.6f, 0.2f, 0.8f); // Distinct purple
+
+    public override void DrawInspector(ItemUI ui, EntityCard card)
+    {
+        string currentName = "";
+        string payload = card.MechanicData.PayloadString ?? "";
+
+        var matchingAbility = ModPackage.Instance?.CustomAbilities?.FirstOrDefault(a =>
+            a.Export() == payload ||
+            $"({a.Export()})" == payload ||
+            a.Export() == payload.Trim('(', ')')
+        );
+
+        if (matchingAbility != null) currentName = matchingAbility.entityName;
+        else
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(payload, @"\.n\.([^\.\#\)]+)");
+            if (match.Success) currentName = match.Groups[1].Value;
+        }
+
+        ui.CreateInspectorAbilityDropdown("Ability:", currentName, (selected) => {
+            var targetAbility = ModPackage.Instance?.CustomAbilities?.FirstOrDefault(a => a.entityName == selected);
+
+            if (targetAbility != null)
+            {
+                // Route to the correct prefix based on the underlying ModPackage type
+                if (targetAbility is OrbData) card.MechanicData.Prefix = "t.orb";
+                else if (targetAbility is TriggerHPData) card.MechanicData.Prefix = "triggerhpdata";
+                else if (targetAbility is OnHitData) card.MechanicData.Prefix = "onhitdata";
+                else card.MechanicData.Prefix = "abilitydata";
+
+                // Generate the FULL inline export string
+                string exportStr = targetAbility.Export();
+
+                // S&D Engine Requirement: Inline abilities must be bracketed
+                if (!exportStr.StartsWith("(")) exportStr = $"({exportStr})";
+
+                card.MechanicData.PayloadString = exportStr;
+            }
+            else
+            {
+                card.MechanicData.Prefix = "abilitydata";
+                card.MechanicData.PayloadString = "";
+            }
+
+            ui.RefreshSidebar();
+            ui.AutoCompile();
+        });
     }
 }
