@@ -563,8 +563,8 @@ public class ItemData : SDData
             string nextTokenLower = stream.Peek().ToLower();
             if (nextTokenLower == "part") { stream.Consume(); mech.PartIndex = int.Parse(stream.Consume()); }
             else if (nextTokenLower == "m") { stream.Consume(); mech.Multiplier = int.Parse(stream.Consume()); }
-            else if (nextTokenLower == "mrg") { stream.Consume(); mech.MergedItem = stream.Consume(); }
-            else if (nextTokenLower == "splice") { stream.Consume(); mech.SplicedItem = stream.Consume(); }
+            else if (nextTokenLower == "mrg") { stream.Consume(); mech.MergedItem = BuildSuffixPayloadString(stream); }
+            else if (nextTokenLower == "splice") { stream.Consume(); mech.SplicedItem = BuildSuffixPayloadString(stream); }
             else break;
         }
 
@@ -577,13 +577,40 @@ public class ItemData : SDData
         while (!stream.IsEOF)
         {
             string peek = stream.Peek().ToLower();
-            if (peek == "part" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
+            if (peek == "part" || peek == "m" || (peek.StartsWith("m") && int.TryParse(peek.Substring(1), out _)) || peek == "mrg" || peek == "splice")
                 break;
             if (ItemDomainRules.IsMechanicBoundary(peek))
                 break;
-
             payloadTokens.Add(stream.Consume());
         }
+        return string.Join(".", payloadTokens);
+    }
+
+    private string BuildSuffixPayloadString(TokenStream stream)
+    {
+        List<string> payloadTokens = new List<string>();
+        bool isFirst = true;
+
+        while (!stream.IsEOF)
+        {
+            string peek = stream.Peek().ToLower();
+
+            // Never swallow root metadata properties (like img, tier, n, etc.)
+            if (ItemDomainRules.RootMetadataProperties.Contains(peek))
+                break;
+
+            // Unless it's the very first token in the splice (e.g. splice.hat), 
+            // break if we hit a hard context shift, or chained mrg/splice suffixes.
+            if (!isFirst)
+            {
+                if (ItemDomainRules.IsMechanicBoundary(peek) || peek == "mrg" || peek == "splice")
+                    break;
+            }
+
+            payloadTokens.Add(stream.Consume());
+            isFirst = false;
+        }
+
         return string.Join(".", payloadTokens);
     }
     public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)

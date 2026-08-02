@@ -1440,52 +1440,13 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         }
         if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
 
-        if (CurrentEntity.visuals != null)
-        {
-            for (int i = 0; i < CurrentEntity.visuals.Count; i++)
-            {
-                var vis = CurrentEntity.visuals[i];
-                if (vis.Type == VisualType.P)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisPhueRange_{i}", out var sRange))
-                        sRange.SetValueWithoutNotify(vis.p?.colorRange ?? 0);
-                }
-                else if (vis.Type == VisualType.THue)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisThueRange_{i}", out var tRange))
-                        tRange.SetValueWithoutNotify(vis.thue?.colorRange ?? 0);
-                    if (statsUI.Sliders.TryGetValue($"VisThueOffset_{i}", out var tOff))
-                        tOff.SetValueWithoutNotify(vis.thue?.colorOffset ?? 0);
-                }
-                else if (vis.Type == VisualType.HSV)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisHsvH_{i}", out var sH)) sH.SetValueWithoutNotify(vis.h);
-                    if (statsUI.Sliders.TryGetValue($"VisHsvS_{i}", out var sS)) sS.SetValueWithoutNotify(vis.s);
-                    if (statsUI.Sliders.TryGetValue($"VisHsvV_{i}", out var sV)) sV.SetValueWithoutNotify(vis.v);
-                    if (statsUI.Inputs.TryGetValue($"VisHsvHIn_{i}", out var iH)) iH.SetTextWithoutNotify(vis.h.ToString());
-                    if (statsUI.Inputs.TryGetValue($"VisHsvSIn_{i}", out var iS)) iS.SetTextWithoutNotify(vis.s.ToString());
-                    if (statsUI.Inputs.TryGetValue($"VisHsvVIn_{i}", out var iV)) iV.SetTextWithoutNotify(vis.v.ToString());
-                }
-                else if (vis.Type == VisualType.Hue)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisHue_{i}", out var sHue)) sHue.SetValueWithoutNotify(vis.hue);
-                    if (statsUI.Inputs.TryGetValue($"VisHueIn_{i}", out var iHue)) iHue.SetTextWithoutNotify(vis.hue.ToString());
-                }
-                else if (vis.Type == VisualType.Draw)
-                {
-                    if (statsUI.Inputs.TryGetValue($"VisDrawName_{i}", out var iName)) iName.SetTextWithoutNotify(vis.RawValue);
-                    if (statsUI.Inputs.TryGetValue($"VisDrawX_{i}", out var iX)) iX.SetTextWithoutNotify(vis.x.ToString());
-                    if (statsUI.Inputs.TryGetValue($"VisDrawY_{i}", out var iY)) iY.SetTextWithoutNotify(vis.y.ToString());
-                }
-            }
-        }
-
         UpdateSpecificUIFromData();
         diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
 
         isDrawingUI = false;
         UpdateVisualsOnly();
     }
+
     protected virtual void UpdateVisualsOnly()
     {
         if (portraitPreview != null)
@@ -1498,31 +1459,70 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             portraitPreview.SetPortraitVisualModifiers(CurrentEntity.visuals);
         }
 
-        // Dynamically update preview button backgrounds/icons by index
-        if (statsUI != null && statsUI.Buttons != null && CurrentEntity.visuals != null)
+        // Dynamically update preview button backgrounds, icons, sliders, and inputs by index
+        if (statsUI != null && CurrentEntity.visuals != null)
         {
             for (int i = 0; i < CurrentEntity.visuals.Count; i++)
             {
                 var vis = CurrentEntity.visuals[i];
                 if (vis.Type == VisualType.P)
                 {
-                    if (statsUI.Buttons.TryGetValue($"VisPhueStartBtn_{i}", out var startBtn))
-                        SetButtonColorPreview(startBtn, vis.p != null ? vis.p.colorStart : Color.white);
-                    if (statsUI.Buttons.TryGetValue($"VisPhueDestBtn_{i}", out var destBtn))
-                        SetButtonColorPreview(destBtn, vis.p != null ? vis.p.colorDestination : Color.white);
+                    if (statsUI.Buttons != null)
+                    {
+                        if (statsUI.Buttons.TryGetValue($"VisPhueStartBtn_{i}", out var startBtn))
+                            SetButtonColorPreview(startBtn, vis.p != null ? vis.p.colorStart : Color.white);
+                        if (statsUI.Buttons.TryGetValue($"VisPhueDestBtn_{i}", out var destBtn))
+                            SetButtonColorPreview(destBtn, vis.p != null ? vis.p.colorDestination : Color.white);
+                    }
+                    if (statsUI.Sliders != null && statsUI.Sliders.TryGetValue($"VisPhueRange_{i}", out var sRange))
+                        sRange.SetValueWithoutNotify(vis.p?.colorRange ?? 0);
                 }
                 else if (vis.Type == VisualType.THue)
                 {
-                    if (statsUI.Buttons.TryGetValue($"VisThueColorBtn_{i}", out var thueColorBtn))
+                    if (statsUI.Buttons != null && statsUI.Buttons.TryGetValue($"VisThueColorBtn_{i}", out var thueColorBtn))
                         SetButtonColorPreview(thueColorBtn, vis.thue != null ? vis.thue.colorHex : Color.white);
+
+                    if (statsUI.Sliders != null)
+                    {
+                        if (statsUI.Sliders.TryGetValue($"VisThueRange_{i}", out var tRange))
+                            tRange.SetValueWithoutNotify(vis.thue?.colorRange ?? 0);
+                        if (statsUI.Sliders.TryGetValue($"VisThueOffset_{i}", out var tOff))
+                            tOff.SetValueWithoutNotify(vis.thue?.colorOffset ?? 0);
+                    }
+                }
+                else if (vis.Type == VisualType.HSV)
+                {
+                    if (statsUI.Sliders != null)
+                    {
+                        if (statsUI.Sliders.TryGetValue($"VisHsvH_{i}", out var sH)) sH.SetValueWithoutNotify(vis.h);
+                        if (statsUI.Sliders.TryGetValue($"VisHsvS_{i}", out var sS)) sS.SetValueWithoutNotify(vis.s);
+                        if (statsUI.Sliders.TryGetValue($"VisHsvV_{i}", out var sV)) sV.SetValueWithoutNotify(vis.v);
+                    }
+                    if (statsUI.Inputs != null)
+                    {
+                        if (statsUI.Inputs.TryGetValue($"VisHsvHIn_{i}", out var iH)) iH.SetTextWithoutNotify(vis.h.ToString());
+                        if (statsUI.Inputs.TryGetValue($"VisHsvSIn_{i}", out var iS)) iS.SetTextWithoutNotify(vis.s.ToString());
+                        if (statsUI.Inputs.TryGetValue($"VisHsvVIn_{i}", out var iV)) iV.SetTextWithoutNotify(vis.v.ToString());
+                    }
+                }
+                else if (vis.Type == VisualType.Hue)
+                {
+                    if (statsUI.Sliders != null && statsUI.Sliders.TryGetValue($"VisHue_{i}", out var sHue)) sHue.SetValueWithoutNotify(vis.hue);
+                    if (statsUI.Inputs != null && statsUI.Inputs.TryGetValue($"VisHueIn_{i}", out var iHue)) iHue.SetTextWithoutNotify(vis.hue.ToString());
                 }
                 else if (vis.Type == VisualType.Draw)
                 {
-                    if (statsUI.Buttons.TryGetValue($"VisDrawBtn_{i}", out var drawBtn))
+                    if (statsUI.Buttons != null && statsUI.Buttons.TryGetValue($"VisDrawBtn_{i}", out var drawBtn))
                     {
                         Sprite s = EntityUIHelpers.GetFacadeSprite(vis.RawValue);
                         if (s == null) s = EntityUIHelpers.GetSpriteForPortrait(vis.RawValue);
                         SetButtonIcon(drawBtn, s);
+                    }
+                    if (statsUI.Inputs != null)
+                    {
+                        if (statsUI.Inputs.TryGetValue($"VisDrawName_{i}", out var iName)) iName.SetTextWithoutNotify(vis.RawValue);
+                        if (statsUI.Inputs.TryGetValue($"VisDrawX_{i}", out var iX)) iX.SetTextWithoutNotify(vis.x.ToString());
+                        if (statsUI.Inputs.TryGetValue($"VisDrawY_{i}", out var iY)) iY.SetTextWithoutNotify(vis.y.ToString());
                     }
                 }
             }
@@ -1540,222 +1540,4 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         }
     }
 
-    /*
-    protected void AppendColorModifiersLayout(List<GridRowSpec> layout)
-    {
-        // Dropdown to select and add a new visual modifier to the list
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Color Modifier:", 0.40f),
-            GridCellSpec.CreateFilteredDropdown("AddVisualDrop", "Select...", 0.60f,
-                new string[] { "Select...", "P-Hue Swap", "T-Hue Color", "Global HSV", "Global Hue" },
-                (idx) => {
-                    if (idx == 1) AddVisualModifier(VisualType.P);
-                    else if (idx == 2) AddVisualModifier(VisualType.THue);
-                    else if (idx == 3) AddVisualModifier(VisualType.HSV);
-                    else if (idx == 4) AddVisualModifier(VisualType.Hue);
-                })
-        ));
-
-        if (CurrentEntity.visuals == null || CurrentEntity.visuals.Count == 0) return;
-
-        // Render visual modifiers strictly in array order
-        for (int i = 0; i < CurrentEntity.visuals.Count; i++)
-        {
-            int index = i;
-            var vis = CurrentEntity.visuals[index];
-
-            if (vis.Type == VisualType.B || vis.Type == VisualType.Draw || vis.Type == VisualType.Rect)
-                continue;
-
-            AppendVisualHeader(layout, GetNiceVisualName(vis.Type), index);
-
-            if (vis.Type == VisualType.P)
-            {
-                if (vis.p == null) vis.p = new Phue();
-
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Colors:", 0.30f),
-                    GridCellSpec.CreateButton($"VisPhueStartBtn_{index}", "Target", 0.35f, () => {
-                        if (uiGenerator.colorPicker == null) return;
-                        OpenColorPicker(vis.p.colorStart, (color) => {
-                            vis.p.colorStart = color;
-                            NotifyStateChanged();
-                        });
-                    }),
-                    GridCellSpec.CreateButton($"VisPhueDestBtn_{index}", "Replace", 0.35f, () => {
-                        if (uiGenerator.colorPicker == null) return;
-                        OpenColorPicker(vis.p.colorDestination, (color) => {
-                            vis.p.colorDestination = color;
-                            NotifyStateChanged();
-                        });
-                    })
-                ));
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Range:", 0.30f),
-                    GridCellSpec.CreateSlider($"VisPhueRange_{index}", 0, 99, true, 0.70f, (val) => {
-                        vis.p.colorRange = Mathf.RoundToInt(val);
-                        NotifyStateChanged();
-                    })
-                ));
-            }
-            else if (vis.Type == VisualType.THue)
-            {
-                if (vis.thue == null) vis.thue = new Thue();
-
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Target Color:", 0.35f),
-                    GridCellSpec.CreateButton($"VisThueColorBtn_{index}", "Pick Color", 0.65f, () => {
-                        if (uiGenerator.colorPicker == null) return;
-                        OpenColorPicker(vis.thue.colorHex, (color) => {
-                            vis.thue.colorHex = color;
-                            NotifyStateChanged();
-                        });
-                    })
-                ));
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Range:", 0.20f),
-                    GridCellSpec.CreateSlider($"VisThueRange_{index}", 0, 99, true, 0.30f, (val) => {
-                        vis.thue.colorRange = Mathf.RoundToInt(val);
-                        NotifyStateChanged();
-                    }),
-                    GridCellSpec.CreateLabel("Shift:", 0.20f),
-                    GridCellSpec.CreateSlider($"VisThueOffset_{index}", -99, 99, true, 0.30f, (val) => {
-                        vis.thue.colorOffset = Mathf.RoundToInt(val);
-                        NotifyStateChanged();
-                    })
-                ));
-            }
-            else if (vis.Type == VisualType.HSV)
-            {
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Hue:", 0.30f),
-                    GridCellSpec.CreateSlider($"VisHsvH_{index}", -99, 99, true, 0.50f, (val) => { vis.h = Mathf.RoundToInt(val); NotifyStateChanged(); }),
-                    GridCellSpec.CreateInput($"VisHsvHIn_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) { vis.h = h; NotifyStateChanged(); } })
-                ));
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Sat:", 0.30f),
-                    GridCellSpec.CreateSlider($"VisHsvS_{index}", -99, 99, true, 0.50f, (val) => { vis.s = Mathf.RoundToInt(val); NotifyStateChanged(); }),
-                    GridCellSpec.CreateInput($"VisHsvSIn_{index}", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) { vis.s = s; NotifyStateChanged(); } })
-                ));
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Val:", 0.30f),
-                    GridCellSpec.CreateSlider($"VisHsvV_{index}", -99, 99, true, 0.50f, (val) => { vis.v = Mathf.RoundToInt(val); NotifyStateChanged(); }),
-                    GridCellSpec.CreateInput($"VisHsvVIn_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) { vis.v = v; NotifyStateChanged(); } })
-                ));
-            }
-            else if (vis.Type == VisualType.Hue)
-            {
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel("Hue:", 0.30f),
-                    GridCellSpec.CreateSlider($"VisHue_{index}", -99, 99, true, 0.50f, (val) => { vis.hue = Mathf.RoundToInt(val); NotifyStateChanged(); }),
-                    GridCellSpec.CreateInput($"VisHueIn_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int hue)) { vis.hue = hue; NotifyStateChanged(); } })
-                ));
-            }
-        }
-    }
-    */
-    /*
-    protected virtual void UpdateUIFromData()
-    {
-        if (statsUI == null || diceUI == null) return;
-        isDrawingUI = true;
-
-        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentEntity.entityName);
-        if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
-            hpIn.SetTextWithoutNotify(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
-
-        if (statsUI.Inputs.TryGetValue("Doc", out var docIn)) docIn.SetTextWithoutNotify(CurrentEntity.doc);
-        if (statsUI.Inputs.TryGetValue("AppendedDoc", out var AppendeddocIn)) AppendeddocIn.SetTextWithoutNotify(CurrentEntity.appendedDoc);
-
-        if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
-
-        // CHANGED: Dynamic loop reads controls by index instead of hardcoded keys
-        if (CurrentEntity.visuals != null)
-        {
-            for (int i = 0; i < CurrentEntity.visuals.Count; i++)
-            {
-                var vis = CurrentEntity.visuals[i];
-                if (vis.Type == VisualType.P)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisPhueRange_{i}", out var sRange))
-                        sRange.SetValueWithoutNotify(vis.p?.colorRange ?? 0);
-                }
-                else if (vis.Type == VisualType.THue)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisThueRange_{i}", out var tRange))
-                        tRange.SetValueWithoutNotify(vis.thue?.colorRange ?? 0);
-                    if (statsUI.Sliders.TryGetValue($"VisThueOffset_{i}", out var tOff))
-                        tOff.SetValueWithoutNotify(vis.thue?.colorOffset ?? 0);
-                }
-                else if (vis.Type == VisualType.HSV)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisHsvH_{i}", out var sH)) sH.SetValueWithoutNotify(vis.h);
-                    if (statsUI.Sliders.TryGetValue($"VisHsvS_{i}", out var sS)) sS.SetValueWithoutNotify(vis.s);
-                    if (statsUI.Sliders.TryGetValue($"VisHsvV_{i}", out var sV)) sV.SetValueWithoutNotify(vis.v);
-
-                    if (statsUI.Inputs.TryGetValue($"VisHsvHIn_{i}", out var iH)) iH.SetTextWithoutNotify(vis.h.ToString());
-                    if (statsUI.Inputs.TryGetValue($"VisHsvSIn_{i}", out var iS)) iS.SetTextWithoutNotify(vis.s.ToString());
-                    if (statsUI.Inputs.TryGetValue($"VisHsvVIn_{i}", out var iV)) iV.SetTextWithoutNotify(vis.v.ToString());
-                }
-                else if (vis.Type == VisualType.Hue)
-                {
-                    if (statsUI.Sliders.TryGetValue($"VisHue_{i}", out var sHue)) sHue.SetValueWithoutNotify(vis.hue);
-                    if (statsUI.Inputs.TryGetValue($"VisHueIn_{i}", out var iHue)) iHue.SetTextWithoutNotify(vis.hue.ToString());
-                }
-            }
-        }
-
-        UpdateSpecificUIFromData();
-        diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
-
-        isDrawingUI = false;
-        UpdateVisualsOnly();
-    }
-    protected virtual void UpdateVisualsOnly()
-    {
-        if (portraitPreview != null)
-        {
-            portraitPreview.SetNameText(CurrentEntity.entityName);
-            portraitPreview.SetHPText(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
-
-            UpdateSpecificVisuals();
-
-            // Pass full dynamic visuals array directly to Portrait Preview
-            portraitPreview.SetPortraitVisualModifiers(CurrentEntity.visuals);
-        }
-
-        // CHANGED: Dynamically update preview button background colors by index
-        if (statsUI != null && statsUI.Buttons != null && CurrentEntity.visuals != null)
-        {
-            for (int i = 0; i < CurrentEntity.visuals.Count; i++)
-            {
-                var vis = CurrentEntity.visuals[i];
-                if (vis.Type == VisualType.P)
-                {
-                    if (statsUI.Buttons.TryGetValue($"VisPhueStartBtn_{i}", out var startBtn))
-                        SetButtonColorPreview(startBtn, vis.p != null ? vis.p.colorStart : Color.white);
-                    if (statsUI.Buttons.TryGetValue($"VisPhueDestBtn_{i}", out var destBtn))
-                        SetButtonColorPreview(destBtn, vis.p != null ? vis.p.colorDestination : Color.white);
-                }
-                else if (vis.Type == VisualType.THue)
-                {
-                    if (statsUI.Buttons.TryGetValue($"VisThueColorBtn_{i}", out var thueColorBtn))
-                        SetButtonColorPreview(thueColorBtn, vis.thue != null ? vis.thue.colorHex : Color.white);
-                }
-            }
-        }
-
-        for (int i = 0; i < 6; i++) UpdateIcon(i);
-        diceBuilderWidget?.UpdateVisuals(currentDiceTab);
-
-        if (rawTextOutput != null)
-        {
-            string exportedString = ExportEntity(CurrentEntity);
-            rawTextOutput.SetTextWithoutNotify(exportedString);
-
-            if (syntaxHighlighterText != null)
-                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
-        }
-    }
-    */
 }

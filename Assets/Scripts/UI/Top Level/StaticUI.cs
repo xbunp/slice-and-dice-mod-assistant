@@ -141,6 +141,55 @@ public class DiceFaceBuilderWidget
         }
     }
 
+    private List<string> ParseStickerKeywords(string payload)
+    {
+        var list = new List<string>();
+        if (string.IsNullOrWhiteSpace(payload)) return list;
+
+        // Legacy fallback for any broken comma-separated data currently saved
+        if (payload.Contains(","))
+        {
+            return payload.Split(',').Select(s => s.Trim().ToLower()).Where(s => !string.IsNullOrEmpty(s)).ToList();
+        }
+
+        string temp = payload.Trim();
+        // Strip out the bracketing
+        if (temp.StartsWith("(") && temp.EndsWith(")"))
+        {
+            temp = temp.Substring(1, temp.Length - 2);
+        }
+
+        var parts = temp.Split('#');
+        foreach (var p in parts)
+        {
+            string clean = p.Trim().ToLower();
+            if (clean.StartsWith("k."))
+            {
+                list.Add(clean.Substring(2));
+            }
+            else if (!string.IsNullOrEmpty(clean))
+            {
+                // Accept as is (fallback for raw input crossovers)
+                list.Add(clean);
+            }
+        }
+        return list;
+    }
+    private string SerializeStickerKeywords(List<string> kws)
+    {
+        if (kws == null || kws.Count == 0) return "";
+
+        // Convert to game-engine syntax: k.keyword1#k.keyword2
+        string serialized = string.Join("#", kws.Select(k => $"k.{k}"));
+
+        // If there are multiple mechanics, bracket them so they stay self-contained inside the sticker payload
+        if (kws.Count > 1)
+        {
+            serialized = $"({serialized})";
+        }
+        return serialized;
+    }
+
     private void RemoveKeywordFromFace(int faceIndex, string keyword)
     {
         var sides = _getDiceSides?.Invoke();
@@ -944,12 +993,14 @@ public class DiceFaceBuilderWidget
                     (val) => {
                         if (val <= 0) return;
                         string targetKeyword = rawOptions[val - 1].ToLower();
-                        var currentKws = string.IsNullOrWhiteSpace(currentPayload) ? new List<string>() : currentPayload.Split(',').ToList();
 
-                        if (!currentKws.Contains(targetKeyword))
+                        // Statelessly read current payload from source
+                        var freshKws = ParseStickerKeywords(GetFacePayload(face));
+
+                        if (!freshKws.Contains(targetKeyword))
                         {
-                            currentKws.Add(targetKeyword);
-                            SetFacePayload(face, faceType.Id, string.Join(",", currentKws));
+                            freshKws.Add(targetKeyword);
+                            SetFacePayload(face, faceType.Id, SerializeStickerKeywords(freshKws));
                             _onStateChanged?.Invoke();
                             _onRebuildRequested?.Invoke();
                         }
@@ -959,18 +1010,20 @@ public class DiceFaceBuilderWidget
 
             if (hasPayload)
             {
-                var activeKws = currentPayload.Split(',').ToList();
+                var activeKws = ParseStickerKeywords(currentPayload);
                 foreach (var kw in activeKws)
                 {
-                    string keywordString = kw;
+                    string keywordString = kw; // Local capture for lambda
                     string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
                     if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = keywordString;
 
                     rows.Add(new GridRowSpec(
                         GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
                         GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => {
-                            activeKws.Remove(keywordString);
-                            SetFacePayload(face, faceType.Id, string.Join(",", activeKws));
+                            // Statelessly read to prevent closure bugs if clicked rapidly
+                            var freshKws = ParseStickerKeywords(GetFacePayload(face));
+                            freshKws.Remove(keywordString);
+                            SetFacePayload(face, faceType.Id, SerializeStickerKeywords(freshKws));
                             _onStateChanged?.Invoke();
                             _onRebuildRequested?.Invoke();
                         })
