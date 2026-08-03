@@ -1374,7 +1374,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         if (item == null) return false;
 
-        // Check raw item string against the registry
         if (item.Mechanics.Count == 0 && !string.IsNullOrEmpty(item.entityName))
         {
             if (BaseItemMetadataRegistry.RawDiceAffectingItems.Contains(item.entityName)) return true;
@@ -1384,20 +1383,18 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
 
-            // Core modifiers that fundamentally alter faces
-            if (pfx == "hat" || pfx == "facade" || pfx == "sticker" || pfx == "k" || pfx == "enchant" || pfx == "cast" || pfx == "sd")
+            if (pfx == "hat" || pfx == "facade" || pfx == "sticker" || pfx == "k" || pfx == "enchant" || pfx == "cast" || pfx == "sd" || pfx == "sidesc")
                 return true;
 
-            // Check direct items acting natively (like Tog items or specific vanilla equipment)
             if (pfx == "")
             {
                 if (ItemDomainRules.TogItems.Contains(mech.PayloadString)) return true;
                 if (!string.IsNullOrEmpty(mech.PayloadString) && BaseItemMetadataRegistry.RawDiceAffectingItems.Contains(mech.PayloadString)) return true;
             }
         }
-
         return false;
     }
+
     private void SyncMonsterContainerBaseIdentifier(MonsterData monster)
     {
         if (monster == null || monster.payloadData == null) return;

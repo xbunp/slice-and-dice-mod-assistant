@@ -662,22 +662,27 @@ public class ItemData : SDData
             string pfx = mech.Prefix?.ToLower() ?? "";
 
             // Reject raw Modifiers (like 'self' or 'jinx' given as items), but allow targeted 'enchant' payloads
-            if (mech.PayloadData is ModifierData && pfx != "enchant") return false;
+            if (mech.PayloadData is ModifierData && pfx != "enchant")
+                return false;
 
-            // ALLOW facade, sticker, cast, enchant to map natively so the UI can read them!
-            // hat remains excluded because it's a massive structure that breaks face-grouping logic.
-            if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" &&
-                pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "sidesc" && pfx != "cast" && pfx != "enchant" && pfx != "")
+            bool isFaceModifier = pfx == "k" || pfx == "facade" || pfx == "sidesc" ||
+                                 pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "";
+
+            bool isEntityCollection = pfx == "t" || pfx == "gift" || pfx == "learn" || pfx == "abilitydata";
+
+            // 1. If it's neither a collection item nor a face modifier, we can't absorb it natively
+            if (!isEntityCollection && !isFaceModifier)
             {
                 return false;
             }
 
-            if ((pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "") && mech.Targets.Count == 0)
+            // 2. Face modifiers MUST have target faces to be applied to entity dice sides
+            if (isFaceModifier && mech.Targets.Count == 0)
             {
                 return false;
             }
 
-            // Protect existing face overrides from being flattened by combined target stickers/casts/enchants
+            // Protect existing face overrides from being overwritten
             if (pfx == "sticker" || pfx == "cast" || pfx == "enchant")
             {
                 List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
@@ -742,12 +747,13 @@ public class ItemData : SDData
             {
                 if (!entity.baseAbilityData.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase)) entity.baseAbilityData.Add(mech.PayloadString);
             }
-            else if (pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "") // ADDED MISSING PREFIXES
+            else if (pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "")
             {
                 List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
-                if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid")) targetFaces.Remove(1);
-                string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
+                if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid"))
+                    targetFaces.Remove(1);
 
+                string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
                 if (keyword == "blindfold")
                 {
                     foreach (int faceIdx in targetFaces)
