@@ -481,7 +481,7 @@ public class ItemData : SDData
             switch (tokenLower)
             {
                 case "tier": item.Tier = int.Parse(stream.ConsumeNext()); continue;
-                case "sidesc": item.doc = stream.ConsumeNext(); continue;
+                //case "sidesc": item.doc = stream.ConsumeNext(); continue; // this was wrong - sidesc is not doc, it goes on dice faces. 
                 case "learn": item.LearnedAbilities.Add(stream.ConsumeNext()); continue;
                 case "cleardesc": item.ClearDescription = true; stream.Consume(); continue;
                 case "clearicon": item.ClearIcon = true; stream.Consume(); continue;
@@ -667,12 +667,12 @@ public class ItemData : SDData
             // ALLOW facade, sticker, cast, enchant to map natively so the UI can read them!
             // hat remains excluded because it's a massive structure that breaks face-grouping logic.
             if (pfx != "t" && pfx != "gift" && pfx != "learn" && pfx != "abilitydata" &&
-                pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "cast" && pfx != "enchant" && pfx != "")
+                pfx != "k" && pfx != "facade" && pfx != "sticker" && pfx != "sidesc" && pfx != "cast" && pfx != "enchant" && pfx != "")
             {
                 return false;
             }
 
-            if ((pfx == "k" || pfx == "facade" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "") && mech.Targets.Count == 0)
+            if ((pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "") && mech.Targets.Count == 0)
             {
                 return false;
             }

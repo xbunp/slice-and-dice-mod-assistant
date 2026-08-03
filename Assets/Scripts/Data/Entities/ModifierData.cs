@@ -403,6 +403,8 @@ public class ModifierData : SDData
     }
     private void ParseSingleModifier(string data)
     {
+        data = StaticBranchTracing.StripOuterParens(data); // might be a mistake?
+
         List<string> tokens = StaticBranchTracing.TopLevelSplit(data, '.');
         if (tokens.Count == 0) return;
 
@@ -646,6 +648,7 @@ public class ModifierData : SDData
     {
         return ExportInternal(isRoot: true);
     }
+
     public string ExportInternal(bool isRoot)
     {
         Validate(isRoot);
@@ -745,7 +748,7 @@ public class ModifierData : SDData
 
         string blockString = string.Join(".", parts.Where(p => !string.IsNullOrEmpty(p)));
 
-        // 9. Process Combinators (Splices first, then Chains, with strict bracketing)
+        // 9. Process Combinators (Splices first, then Chains)
         if (SplicedModifier != null)
         {
             blockString = $"{blockString}.splice.{SplicedModifier.ExportInternal(false)}";
@@ -753,19 +756,33 @@ public class ModifierData : SDData
 
         if (ChainedModifier != null)
         {
-            // By wrapping both sides of the ampersand in parenthesis, we protect prefixes from leaking
-            // and prevent the parser from dropping trailing elements.
             blockString = $"{blockString}&{ChainedModifier.ExportInternal(false)}";
         }
 
+        // 10. Handle Suffixes & Nested Bracketing
+        bool hasSuffixes = !string.IsNullOrEmpty(ModName) || !string.IsNullOrEmpty(DocDescription);
+
         if (isRoot)
         {
-            // Root level appends names/docs and is NEVER bracketed
+            // Root level: Append suffixes directly to the end without outer wrapping
             if (!string.IsNullOrEmpty(ModName)) blockString += $".mn.{ModName}";
             if (!string.IsNullOrEmpty(DocDescription)) blockString += $".doc.{DocDescription}";
             return blockString;
         }
 
+        // Non-root (nested) level:
+        if (hasSuffixes)
+        {
+            // Bracket the core payload first, attach suffixes, then wrap the entire unit:
+            // Output format: ((<stuff>).mn.<name>.doc.<desc>)
+            string suffixedBlock = $"({blockString})";
+            if (!string.IsNullOrEmpty(ModName)) suffixedBlock += $".mn.{ModName}";
+            if (!string.IsNullOrEmpty(DocDescription)) suffixedBlock += $".doc.{DocDescription}";
+
+            return $"({suffixedBlock})";
+        }
+
+        // Standard nested modifier without suffixes
         return $"({blockString})";
     }
     public void DebugContentsToConsole(string indent = "")

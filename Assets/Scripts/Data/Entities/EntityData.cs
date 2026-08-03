@@ -714,7 +714,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 string cleanPayload = payload;
                 int firstColon = payload.IndexOf(':');
                 if (firstColon != -1 && payload.IndexOf('.', firstColon) != -1) cleanPayload = payload.Substring(0, payload.IndexOf('.', firstColon));
-
                 string[] facadeParts = cleanPayload.Split(':');
                 diceSides[faceIdx].facadeID = facadeParts[0];
                 if (facadeParts.Length > 1)
@@ -723,6 +722,10 @@ public abstract class EntityData : SDData, IPayloadContainer
                     while (colorParts.Count < 3) colorParts.Add("0");
                     diceSides[faceIdx].facadeColor = $"{colorParts[0]}:{colorParts[1]}:{colorParts[2]}";
                 }
+            }
+            else if (lowerPrefix == "sidesc")
+            {
+                diceSides[faceIdx].sidesc = payload;
             }
             else if (lowerPrefix == "sticker" || lowerPrefix == "cast" || lowerPrefix == "enchant" || lowerPrefix == "hat")
             {
