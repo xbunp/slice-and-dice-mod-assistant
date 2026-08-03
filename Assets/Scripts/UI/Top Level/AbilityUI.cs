@@ -87,10 +87,8 @@ public class AbilityUI : RootUI
             getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
             getFacadeSprite: (id) => null,
             onStateChanged: () => NotifyStateChanged(),
-            onRebuildRequested: () => RebuildAbilityScrollView(),
-            getKeywordOptions: () => Enum.GetNames(typeof(AbilityEffectKeyword))
+            onRebuildRequested: () => RebuildAbilityScrollView()
         );
-
         _secondaryFaceBuilder = new DiceFaceBuilderWidget(
             getDiceSides: () => CurrentAbility?.diceSides,
             allowFacades: () => false,
@@ -99,8 +97,7 @@ public class AbilityUI : RootUI
             getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
             getFacadeSprite: (id) => null,
             onStateChanged: () => NotifyStateChanged(),
-            onRebuildRequested: () => RebuildAbilityScrollView(),
-            getKeywordOptions: () => Enum.GetNames(typeof(AbilityEffectKeyword))
+            onRebuildRequested: () => RebuildAbilityScrollView()
         );
     }
 
@@ -221,24 +218,35 @@ public class AbilityUI : RootUI
             return;
         }
 
-        if (sender != null) return;
-
         if (!gameObject.activeInHierarchy)
         {
             _needsRebuild = true;
             return;
         }
-
         RebuildStatsUI();
+        RebuildAbilityScrollView();
     }
+
     private void OnEnable()
     {
         if (_needsRebuild)
         {
             _needsRebuild = false;
             RebuildStatsUI();
+            RebuildAbilityScrollView();
         }
     }
+
+    private void Update()
+    {
+        if (_needsRebuild && gameObject.activeInHierarchy)
+        {
+            _needsRebuild = false;
+            RebuildStatsUI();
+            RebuildAbilityScrollView();
+        }
+    }
+
     private void UpdateUIFromData()
     {
         if (statsUI == null || abilityDataUI == null) return;
@@ -827,8 +835,10 @@ public class AbilityUI : RootUI
     private void RebuildAbilityScrollView()
     {
         if (abilityScrollRect == null) return;
-        abilityDataUI = uiGenerator.RebuildGrid(abilityScrollRect.content, GenerateAbilityLayout());
+        bool wasDrawing = isDrawingUI;
+        isDrawingUI = true;
 
+        abilityDataUI = uiGenerator.RebuildGrid(abilityScrollRect.content, GenerateAbilityLayout());
         float extraHeight = 0f;
         var layoutGroup = abilityScrollRect.content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
         if (layoutGroup != null)
@@ -837,8 +847,9 @@ public class AbilityUI : RootUI
             if (childCount > 1) extraHeight += layoutGroup.spacing * (childCount - 1);
             extraHeight += layoutGroup.padding.top + layoutGroup.padding.bottom;
         }
-
         abilityScrollRect.content.sizeDelta = new Vector2(0, abilityDataUI.TotalHeight + extraHeight);
+
+        isDrawingUI = wasDrawing;
         Canvas.ForceUpdateCanvases();
         UpdateUIFromData();
     }
