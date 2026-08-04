@@ -81,11 +81,12 @@ public class HatNodeDef : AuthoringNodeDef
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null) return;
 
-        // --- Safely retrieve EntityData (HeroData or MonsterData) instead of forcing HeroData ---
+        // --- Safely retrieve EntityData (HeroData or MonsterData) ---
         if (!(card.MechanicData.PayloadData is EntityData entityData))
         {
             var defaultHero = new HeroData();
             defaultHero.InitializeAsBlank();
+            defaultHero.baseReplica = "Fey";
             defaultHero.InitializeDiceFaces();
             card.MechanicData.PayloadData = defaultHero;
             entityData = defaultHero;
@@ -115,8 +116,8 @@ public class HatNodeDef : AuthoringNodeDef
         _currentDiceTab = 0; // Reset tab view to "All" when switching hat cards
         // -----------------------------------------------------------------------------------------
 
-        // 1. Hat Type Selector (Hero Hat vs Monster Egg)
-        ui.CreateInspectorDropdown("Hat Type", new List<string> { "Hero (Hat)", "Monster (Egg)" }, isMonster ? 1 : 0, (idx) => {
+        // 1. Hat Type Selector (Hero Hat vs Monster Hat)
+        ui.CreateInspectorDropdown("Hat Type", new List<string> { "Hero (Hat)", "Monster (Hat)" }, isMonster ? 1 : 0, (idx) => {
             bool wantsMonster = idx == 1;
             if (isMonster != wantsMonster)
             {
@@ -128,34 +129,15 @@ public class HatNodeDef : AuthoringNodeDef
         if (isMonster)
         {
             var md = entityData as MonsterData;
-            ui.CreateInspectorInputField("Summon Entity Name", md.baseMonster ?? "egg.Wolf", (val) => {
+            ui.CreateInspectorInputField("Monster Name", md.baseMonster ?? "Wolf", (val) => {
                 md.baseMonster = val;
-                ui.AutoCompile();
-            });
-            ui.CreateInspectorInputField("Multiplier / Bonus HP", md.xMultiplier >= 2 ? md.xMultiplier.ToString() : md.hp.ToString(), (val) => {
-                if (int.TryParse(val, out int num))
-                {
-                    if (num >= 2 && num <= 9) md.xMultiplier = num;
-                    else md.hp = num;
-                }
                 ui.AutoCompile();
             });
         }
         else
         {
             var hd = entityData as HeroData;
-            ui.CreateInspectorInputField("Base Replica", hd.baseReplica ?? "Fey", (val) => {
-                hd.baseReplica = val;
-                ui.AutoCompile();
-            });
-            ui.CreateInspectorInputField("Color Class", hd.colorClass ?? "", (val) => {
-                hd.colorClass = val;
-                ui.AutoCompile();
-            });
-            ui.CreateInspectorInputField("Tier", hd.tier.ToString(), (val) => {
-                if (int.TryParse(val, out int t)) hd.tier = t;
-                ui.AutoCompile();
-            });
+            hd.baseReplica = "Fey";
         }
 
         // Initialize the generic dice widget using base EntityData
@@ -233,7 +215,7 @@ public class HatNodeDef : AuthoringNodeDef
         {
             MonsterData monster = new MonsterData();
             monster.InitializeAsBlank();
-            monster.baseMonster = "egg.Wolf";
+            monster.baseMonster = "Wolf";
             if (oldData != null && oldData.diceSides != null) monster.diceSides = oldData.diceSides;
             else monster.InitializeDiceFaces();
             card.MechanicData.PayloadData = monster;
@@ -251,7 +233,7 @@ public class HatNodeDef : AuthoringNodeDef
         if (entityData is HeroData hd)
             baseName = string.IsNullOrEmpty(hd.baseReplica) ? "Fey" : hd.baseReplica;
         else if (entityData is MonsterData md)
-            baseName = string.IsNullOrEmpty(md.baseMonster) ? "egg.Wolf" : md.baseMonster;
+            baseName = string.IsNullOrEmpty(md.baseMonster) ? "Wolf" : md.baseMonster;
         sb.Append(baseName);
 
         // 1. Append the .sd. block

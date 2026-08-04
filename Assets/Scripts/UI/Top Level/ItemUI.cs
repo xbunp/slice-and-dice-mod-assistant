@@ -1043,10 +1043,7 @@ public class ItemUI : RootUI
     public void ConvertHatPayloadType(EntityCard card)
     {
         if (card == null || card.MechanicData == null) return;
-
         EntityData oldData = card.MechanicData.PayloadData as EntityData;
-
-        // Swap between MonsterData and HeroData, preserving the dice sides
         if (oldData is MonsterData)
         {
             HeroData hero = new HeroData();
@@ -1060,13 +1057,12 @@ public class ItemUI : RootUI
         {
             MonsterData monster = new MonsterData();
             monster.InitializeAsBlank();
-            monster.baseMonster = "egg.Wolf";
+            monster.baseMonster = "Wolf";
             if (oldData != null) monster.diceSides = oldData.diceSides;
             else monster.InitializeDiceFaces();
             card.MechanicData.PayloadData = monster;
         }
-
-        SelectCard(card); // Re-draw the inspector immediately
+        SelectCard(card);
         AutoCompile();
     }
     public static string CompileZone(IEnumerable<EntityCard> cards)
@@ -1336,30 +1332,6 @@ public class ItemUI : RootUI
 
         entityCard.PayloadPort = zone;
     }
-
-    public void CreateInspectorFilteredDropdown(string label, List<string> options, int currentIndex, UnityEngine.Events.UnityAction<int> onValueChanged)
-    {
-        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
-        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
-        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
-
-        RectTransform labelRect = CreateRect("Label", container);
-        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
-        labelText.text = label;
-        labelText.fontSize = 14;
-        labelText.color = Color.grey;
-        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
-
-        if (uiGenerator.filteredDropdown != null)
-        {
-            GameObject ddObj = Instantiate(uiGenerator.filteredDropdown, container);
-            var dropdown = ddObj.GetComponent<FilteredDropdown>();
-            dropdown.ClearOptions();
-            dropdown.AddOptions(options);
-            dropdown.value = currentIndex;
-            dropdown.onValueChanged.AddListener(onValueChanged);
-        }
-    }
     public void CreateInspectorAbilityDropdown(string label, string currentAbilityName, UnityEngine.Events.UnityAction<string> onAbilitySelected)
     {
         var abilityNames = new List<string> { "-- Select Custom Ability --" };
@@ -1386,7 +1358,6 @@ public class ItemUI : RootUI
             onAbilitySelected?.Invoke(abilityNames[idx]);
         });
     }
-
     private void ProcessMechanicsList(List<ItemMechanic> mechanics, ReorderableZone targetZone)
     {
         for (int i = 0; i < mechanics.Count; i++)
@@ -1459,6 +1430,85 @@ public class ItemUI : RootUI
                 LoadMechanicIntoUI(mech, payloadPort, 1);
             }
             entity.traits.Clear();
+        }
+    }
+
+    public void CreateInspectorFilteredDropdown(string label, List<string> options, int currentIndex, UnityEngine.Events.UnityAction<int> onValueChanged)
+    {
+        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
+        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
+        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
+
+        RectTransform labelRect = CreateRect("Label", container);
+        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        labelText.text = label;
+        labelText.fontSize = 14;
+        labelText.color = Color.grey;
+        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
+
+        GameObject prefabToUse = (uiGenerator != null && uiGenerator.filteredDropdown != null) ? uiGenerator.filteredDropdown : dropdownPrefab;
+        if (prefabToUse != null)
+        {
+            GameObject ddObj = Instantiate(prefabToUse, container);
+            var filteredDrop = ddObj.GetComponent<FilteredDropdown>();
+            if (filteredDrop != null)
+            {
+                filteredDrop.ClearOptions();
+                filteredDrop.AddOptions(options ?? new List<string>());
+                filteredDrop.SetValueWithoutNotify(currentIndex);
+                if (onValueChanged != null) filteredDrop.onValueChanged.AddListener(onValueChanged);
+            }
+            else
+            {
+                var tmpDrop = ddObj.GetComponent<TMPro.TMP_Dropdown>();
+                if (tmpDrop != null)
+                {
+                    tmpDrop.ClearOptions();
+                    tmpDrop.AddOptions(options ?? new List<string>());
+                    tmpDrop.SetValueWithoutNotify(currentIndex);
+                    if (onValueChanged != null) tmpDrop.onValueChanged.AddListener(onValueChanged);
+                }
+            }
+        }
+    }
+    public void CreateInspectorDropdown(string label, List<string> options, int currentIndex, UnityEngine.Events.UnityAction<int> onValueChanged)
+    {
+        CreateInspectorFilteredDropdown(label, options, currentIndex, onValueChanged);
+    }
+    public void CreateInspectorDropdown(string label, string[] options, int currentIndex, UnityEngine.Events.UnityAction<int> onValueChanged)
+    {
+        CreateInspectorFilteredDropdown(label, options != null ? options.ToList() : new List<string>(), currentIndex, onValueChanged);
+    }
+    public void CreateInspectorInputField(string label, string initialValue, UnityEngine.Events.UnityAction<string> onValueChanged)
+    {
+        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
+        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
+        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
+
+        RectTransform labelRect = CreateRect("Label", container);
+        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+        labelText.text = label;
+        labelText.fontSize = 14;
+        labelText.color = Color.grey;
+        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
+
+        if (inputFieldPrefab != null)
+        {
+            GameObject inputObj = Instantiate(inputFieldPrefab, container);
+            var inputField = inputObj.GetComponent<TMPro.TMP_InputField>();
+            if (inputField != null)
+            {
+                inputField.lineType = TMPro.TMP_InputField.LineType.SingleLine;
+                var inputLayout = inputObj.GetComponent<LayoutElement>() ?? inputObj.AddComponent<LayoutElement>();
+                inputLayout.preferredHeight = 30f;
+                inputLayout.flexibleWidth = 1f;
+                inputField.text = initialValue ?? "";
+                inputField.onValueChanged.RemoveAllListeners();
+                if (onValueChanged != null)
+                {
+                    inputField.onValueChanged.AddListener(onValueChanged);
+                }
+            }
         }
     }
 }
