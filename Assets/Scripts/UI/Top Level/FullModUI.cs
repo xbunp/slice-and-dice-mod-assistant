@@ -10,8 +10,8 @@ public class FullModUI : RootUI
     private TMP_Dropdown directiveDropdown;
     private ScrollRect directiveScrollView;
     private List<BlockUIPanel> blockUIs = new List<BlockUIPanel>();
+    private bool _needsRebuild = false;
 
-    // No registry. Just hardcoded templates that instantiate TextModBlocks.
     private readonly Dictionary<string, TextModBlock> blockTemplates = new Dictionary<string, TextModBlock>
     {
         { "Hero Pool", new TextModBlock { Title = "Hero Pool", Type = BlockType.PoolList, Prefix = "heropool" } },
@@ -30,6 +30,38 @@ public class FullModUI : RootUI
         { "Run End Phase (ph.e)", new TextModBlock { Title = "Run End Phase", Type = BlockType.Raw, P1 = "ph.e" } },
         { "Custom / Raw Code", new TextModBlock { Title = "Raw Textmod Code", Type = BlockType.Raw } }
     };
+
+    private bool IsTabVisible()
+    {
+        RectTransform rootWrapper = GetRootWrapper();
+        return rootWrapper != null && rootWrapper.gameObject.activeInHierarchy;
+    }
+
+    private void OnEnable()
+    {
+        if (_needsRebuild && IsTabVisible())
+        {
+            _needsRebuild = false;
+            OnStateChanged(null);
+        }
+    }
+
+    private void Update()
+    {
+        if (_needsRebuild && IsTabVisible())
+        {
+            _needsRebuild = false;
+            OnStateChanged(null);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (ModPackage.Instance != null)
+        {
+            ModPackage.Instance.OnModDataChanged -= OnStateChanged;
+        }
+    }
 
     protected override void BuildUIAndBind()
     {
@@ -67,11 +99,18 @@ public class FullModUI : RootUI
     private void OnStateChanged(object sender)
     {
         if (object.ReferenceEquals(sender, this)) return;
+        if (sender != null) return; // Ignore entity-level tweaking events from other active tabs
+
+        if (!IsTabVisible())
+        {
+            _needsRebuild = true;
+            return;
+        }
 
         IReadOnlyList<TextModBlock> blocks = ModPackage.Instance.loadedMod.GetDirectives();
         Dictionary<TextModBlock, BlockUIPanel> existingUIs = blockUIs.ToDictionary(ui => ui.Block);
-        blockUIs.Clear();
 
+        blockUIs.Clear();
         foreach (var block in blocks)
         {
             if (existingUIs.TryGetValue(block, out var existingUI))
@@ -85,7 +124,6 @@ public class FullModUI : RootUI
                     () => RebuildScrollView(),
                     () => ModPackage.Instance.DeleteDirective(block)
                 );
-
                 newUI.onMoveRequested = (dir) => ModPackage.Instance.MoveDirective(block, dir);
                 blockUIs.Add(newUI);
             }
@@ -96,7 +134,6 @@ public class FullModUI : RootUI
     private void RebuildScrollView()
     {
         if (directiveScrollView == null || directiveScrollView.content == null) return;
-
         List<GridRowSpec> masterRows = new List<GridRowSpec>();
         foreach (var ui in blockUIs) masterRows.AddRange(ui.GetRowSpecs());
 
@@ -114,7 +151,6 @@ public class FullModUI : RootUI
 
         if (blockTemplates.TryGetValue(option, out var template))
         {
-            // Clone the template parameters to create a fresh block
             var newBlock = new TextModBlock
             {
                 Title = template.Title,
@@ -124,7 +160,6 @@ public class FullModUI : RootUI
                 P1 = template.P1,
                 P2 = template.P2
             };
-
             ModPackage.Instance.loadedMod.SaveDirective(null, newBlock);
             ModPackage.Instance.NotifyDirectiveSessionChanged(this);
         }
@@ -133,8 +168,8 @@ public class FullModUI : RootUI
     private void OnCopyModClicked()
     {
         foreach (var ui in blockUIs) ModPackage.Instance.SaveDirective(ui.Block);
-
         string output = ModPackage.Instance.ExportModToTextModString();
+
         if (!string.IsNullOrEmpty(output))
         {
             GUIUtility.systemCopyBuffer = output;

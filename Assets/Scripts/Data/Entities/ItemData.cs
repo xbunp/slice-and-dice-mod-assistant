@@ -423,18 +423,32 @@ public class ItemData : SDData
 
         List<string> chains = StaticBranchTracing.TopLevelSplit(itemCore, '#');
         List<string> lastTargets = null;
-
         foreach (var chain in chains)
         {
             if (string.IsNullOrWhiteSpace(chain)) continue;
+            int mechCountBefore = Mechanics.Count;
             var stream = new TokenStream(StaticBranchTracing.TopLevelSplit(chain, '.'));
             ExtractKnowledge(stream, this, lastTargets);
 
-            if (Mechanics.Count > 0)
+            if (Mechanics.Count > mechCountBefore)
             {
-                var lastMechTargets = Mechanics.Last().Targets;
-                if (lastMechTargets != null && lastMechTargets.Count > 0)
-                    lastTargets = new List<string>(lastMechTargets);
+                string trimmedChain = chain.Trim();
+                bool isScopedBlock = trimmedChain.StartsWith("(") && trimmedChain.EndsWith(")");
+
+                if (isScopedBlock)
+                {
+                    // A scoped block firmly isolates its context. It does not leak targets to siblings.
+                    lastTargets = null;
+                }
+                else
+                {
+                    // Standard propagation: Update context if explicitly targeted. Otherwise, retain running context.
+                    var lastMechTargets = Mechanics.Last().Targets;
+                    if (lastMechTargets != null && lastMechTargets.Count > 0)
+                    {
+                        lastTargets = new List<string>(lastMechTargets);
+                    }
+                }
             }
         }
     }
@@ -451,26 +465,34 @@ public class ItemData : SDData
             {
                 stream.Consume();
                 string inner = originalToken.Substring(1, originalToken.Length - 2);
-
                 // Replicate top-level chaining rules for nested scopes
                 List<string> chains = StaticBranchTracing.TopLevelSplit(inner, '#');
-
-                // We pass down inherited targets to the first element in the parens if this is the first mechanic
                 List<string> currentLastTargets = isFirstMechanic ? inheritedTargets : null;
-
                 foreach (var chain in chains)
                 {
+                    int innerMechCountBefore = item.Mechanics.Count;
                     var innerStream = new TokenStream(StaticBranchTracing.TopLevelSplit(chain, '.'));
                     ExtractKnowledge(innerStream, item, currentLastTargets);
 
-                    if (item.Mechanics.Count > 0)
+                    if (item.Mechanics.Count > innerMechCountBefore)
                     {
-                        var lastMechTargets = item.Mechanics.Last().Targets;
-                        if (lastMechTargets != null && lastMechTargets.Count > 0)
-                            currentLastTargets = new List<string>(lastMechTargets);
+                        string trimmedChain = chain.Trim();
+                        bool isScopedBlock = trimmedChain.StartsWith("(") && trimmedChain.EndsWith(")");
+
+                        if (isScopedBlock)
+                        {
+                            currentLastTargets = null;
+                        }
+                        else
+                        {
+                            var lastMechTargets = item.Mechanics.Last().Targets;
+                            if (lastMechTargets != null && lastMechTargets.Count > 0)
+                            {
+                                currentLastTargets = new List<string>(lastMechTargets);
+                            }
+                        }
                     }
                 }
-
                 isFirstMechanic = false; // The evaluated parens safely terminate the prior context
                 continue;
             }

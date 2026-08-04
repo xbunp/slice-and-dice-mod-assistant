@@ -7,11 +7,11 @@ using UnityEngine;
 
 public class HeroUI : EntityUI<HeroData>
 {
-    private Sprite _customImageCachedSprite;
-
     // =====================================================================
     // SPECIFIC OVERRIDES
     // =====================================================================
+    private Sprite _customImageCachedSprite;
+    private Dictionary<string, string> _resolvedFacadeCache = new Dictionary<string, string>();
     protected override bool AllowFacades() => true;
 
     protected override string ExportEntity(HeroData entity) => entity.Export();
@@ -158,8 +158,13 @@ public class HeroUI : EntityUI<HeroData>
     private string ResolveFacadeName(string facadeID)
     {
         if (string.IsNullOrEmpty(facadeID)) return facadeID;
+        if (_resolvedFacadeCache.TryGetValue(facadeID, out string cachedName)) return cachedName;
 
-        if (EntityUIHelpers.GetFacadeSprite(facadeID) != null) return facadeID;
+        if (EntityUIHelpers.GetFacadeSprite(facadeID) != null)
+        {
+            _resolvedFacadeCache[facadeID] = facadeID;
+            return facadeID;
+        }
 
         var match = Regex.Match(facadeID, @"^([a-zA-Z]+)(\d+)$");
         if (match.Success)
@@ -167,18 +172,21 @@ public class HeroUI : EntityUI<HeroData>
             string prefix = match.Groups[1].Value;
             string id = match.Groups[2].Value;
             string searchPrefix = $"{prefix}_{id}_";
-
             if (prefix.ToLower() == "bas" && int.TryParse(id, out int basId))
             {
                 if (basId >= 188 && basId <= 219) searchPrefix = $"big_{basId - 188}_";
                 else if (basId >= 220 && basId <= 247) searchPrefix = $"hug_{basId - 220}_";
                 else if (basId >= 248 && basId <= 265) searchPrefix = $"tin_{basId - 248}_";
             }
-
             var sprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && sp.name.StartsWith(searchPrefix, StringComparison.OrdinalIgnoreCase));
-            if (sprite != null) return sprite.name;
+            if (sprite != null)
+            {
+                _resolvedFacadeCache[facadeID] = sprite.name;
+                return sprite.name;
+            }
         }
 
+        _resolvedFacadeCache[facadeID] = facadeID;
         return facadeID;
     }
 

@@ -348,7 +348,6 @@ public static class ItemSyntaxCompiler
     private static string BuildBracket(EntityCard card, string childrenCompiled)
     {
         if (string.IsNullOrWhiteSpace(childrenCompiled)) return string.Empty;
-
         // Perfectly reconstruct the wrapper node matching Engine Export logic
         List<string> parts = new List<string>();
         if (card.MechanicData.Targets != null && card.MechanicData.Targets.Count > 0) parts.AddRange(card.MechanicData.Targets);
@@ -357,14 +356,16 @@ public static class ItemSyntaxCompiler
         if (card.MechanicData.Unpack) parts.Add("unpack");
         if (!string.IsNullOrEmpty(card.MechanicData.Prefix)) parts.Add(card.MechanicData.Prefix);
 
-        parts.Add($"({childrenCompiled})");
+        // Do NOT use WrapIfNeeded here. The Bracket node wraps its ENTIRE output scope.
+        parts.Add(childrenCompiled);
 
         if (card.MechanicData.PartIndex.HasValue) parts.Add($"part.{card.MechanicData.PartIndex.Value}");
         if (card.MechanicData.Multiplier != 1) parts.Add($"m{card.MechanicData.Multiplier}");
         if (!string.IsNullOrEmpty(card.MechanicData.MergedItem)) parts.Add($"mrg.{card.MechanicData.MergedItem}");
         if (!string.IsNullOrEmpty(card.MechanicData.SplicedItem)) parts.Add($"splice.{card.MechanicData.SplicedItem}");
 
-        return string.Join(".", parts);
+        string payload = string.Join(".", parts);
+        return $"({payload})";
     }
 
     // --- UTILITIES & SANITIZATION ---

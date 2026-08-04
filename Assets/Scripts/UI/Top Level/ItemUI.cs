@@ -128,8 +128,9 @@ public class ItemUI : RootUI
     private EntityCard _selectedCard;
     private TextMeshProUGUI _syntaxHighlighterText;
     public static bool IsCompilingRichText = false;
-
     private bool _needsRebuild = false;
+    private bool _pendingCompile = false;
+    private float _compileTimer = 0f;
 
     private void Awake()
     {
@@ -159,11 +160,20 @@ public class ItemUI : RootUI
         {
             _needsRebuild = false;
             PopulateLoadDropdown();
-
-            // Force the inspector to redraw its dropdowns with the fresh data
             if (_selectedCard != null)
             {
                 SelectCard(_selectedCard);
+            }
+        }
+
+        if (_pendingCompile)
+        {
+            _compileTimer += Time.deltaTime;
+            if (_compileTimer >= 0.1f)
+            {
+                _pendingCompile = false;
+                _compileTimer = 0f;
+                ExecuteAutoCompile();
             }
         }
     }
@@ -1278,18 +1288,18 @@ public class ItemUI : RootUI
 
     public void AutoCompile()
     {
+        _pendingCompile = true;
+        _compileTimer = 0f;
+    }
+
+    private void ExecuteAutoCompile()
+    {
         if (_compiledOutputField == null || MainCanvasContent == null) return;
         ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
-
         if (rootZone == null) return;
-
         var cards = rootZone.Entrants.Cast<EntityCard>();
-
-        // 1. Compile plain text
         IsCompilingRichText = false;
         _compiledOutputField.text = ItemSyntaxCompiler.CompileZone(cards);
-
-        // 2. Compile rich text
         if (_syntaxHighlighterText != null)
         {
             IsCompilingRichText = true;

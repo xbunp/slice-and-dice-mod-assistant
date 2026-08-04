@@ -40,6 +40,9 @@ public class AbilityUI : RootUI
     private DiceFaceBuilderWidget _primaryFaceBuilder;
     private DiceFaceBuilderWidget _secondaryFaceBuilder;
 
+    private bool _pendingTextUpdate = false;
+    private float _textUpdateTimer = 0f;
+
     // Tactic Cost Definition Array
     private readonly string[] TacticCostOptions = new string[]
     {
@@ -245,6 +248,17 @@ public class AbilityUI : RootUI
             RebuildStatsUI();
             RebuildAbilityScrollView();
         }
+
+        if (_pendingTextUpdate)
+        {
+            _textUpdateTimer += Time.deltaTime;
+            if (_textUpdateTimer >= 0.1f)
+            {
+                _pendingTextUpdate = false;
+                _textUpdateTimer = 0f;
+                UpdateExportText();
+            }
+        }
     }
 
     private void UpdateUIFromData()
@@ -339,6 +353,9 @@ public class AbilityUI : RootUI
 
         isDrawingUI = false;
         UpdateVisualsOnly();
+
+        _pendingTextUpdate = false;
+        UpdateExportText();
     }
     private void UpdateVisualsOnly()
     {
@@ -382,12 +399,16 @@ public class AbilityUI : RootUI
             _secondaryFaceBuilder?.UpdateVisuals(1);
         }
 
-        if (rawTextOutput != null)
+        _pendingTextUpdate = true;
+        _textUpdateTimer = 0f;
+    }
+
+    private void UpdateExportText()
+    {
+        if (rawTextOutput != null && CurrentAbility != null)
         {
-            // CHANGED: Outputs dynamic syntax prefix depending on custom type
             string exportedString = AbilityData.GetFormattedExportString(CurrentAbility);
             rawTextOutput.SetTextWithoutNotify(exportedString);
-
             if (syntaxHighlighterText != null)
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
         }

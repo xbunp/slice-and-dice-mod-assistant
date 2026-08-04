@@ -28,7 +28,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     protected bool isDrawingUI = false;
     protected bool _needsRebuild = false;
 
-    //protected DiceSideData diceClipboard = null;
+    protected bool _pendingTextUpdate = false;
+    protected float _textUpdateTimer = 0f;
     protected DiceFaceBuilderWidget diceBuilderWidget;
 
     protected bool showCustomImagePanel = false;
@@ -108,6 +109,17 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             _needsRebuild = false;
             RebuildStatsUI();
             RebuildDiceScrollView();
+        }
+
+        if (_pendingTextUpdate)
+        {
+            _textUpdateTimer += Time.deltaTime;
+            if (_textUpdateTimer >= 0.1f)
+            {
+                _pendingTextUpdate = false;
+                _textUpdateTimer = 0f;
+                UpdateExportText();
+            }
         }
     }
     protected virtual void OnEnable()
@@ -1411,11 +1423,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     {
         if (statsUI == null || diceUI == null) return;
         isDrawingUI = true;
-
         if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentEntity.entityName);
         if (statsUI.Inputs.TryGetValue("HP", out var hpIn))
             hpIn.SetTextWithoutNotify(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
-
         // Apply richText=false and toggle .enabled to safely inject raw bracketed text without TMP lag/truncation
         if (statsUI.Inputs.TryGetValue("Doc", out var docIn))
         {
@@ -1439,14 +1449,14 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             appendedDocIn.enabled = true;
         }
         if (statsUI.Dropdowns.TryGetValue("PoolDropdown", out var poolDrop)) poolDrop.SetValueWithoutNotify(_currentPoolIndex);
-
         UpdateSpecificUIFromData();
         diceBuilderWidget?.UpdateUIFromData(currentDiceTab);
-
         isDrawingUI = false;
         UpdateVisualsOnly();
-    }
 
+        _pendingTextUpdate = false;
+        UpdateExportText();
+    }
     protected virtual void UpdateVisualsOnly()
     {
         if (portraitPreview != null)
@@ -1531,7 +1541,12 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         for (int i = 0; i < 6; i++) UpdateIcon(i);
         diceBuilderWidget?.UpdateVisuals(currentDiceTab);
 
-        if (rawTextOutput != null)
+        _pendingTextUpdate = true;
+        _textUpdateTimer = 0f;
+    }
+    protected void UpdateExportText()
+    {
+        if (rawTextOutput != null && CurrentEntity != null)
         {
             string exportedString = ExportEntity(CurrentEntity);
             rawTextOutput.SetTextWithoutNotify(exportedString);
@@ -1539,5 +1554,4 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
         }
     }
-
 }

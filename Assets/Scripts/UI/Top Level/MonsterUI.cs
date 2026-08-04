@@ -11,6 +11,8 @@ using UnityEngine.UI;
 // =====================================================================
 public class MonsterUI : EntityUI<MonsterData>
 {
+    private Dictionary<string, Sprite> _monsterBaseSpriteCache = new Dictionary<string, Sprite>();
+
     // Helper to get the correct string prefix for a size, matching our AtlasProcessor setup
     private string GetPrefixForSize(MonsterSize size)
     {
@@ -457,17 +459,24 @@ public class MonsterUI : EntityUI<MonsterData>
     protected override Sprite GetBaseDiceSprite(int effectID)
     {
         if (EntityUIHelpers.AllActionSprites == null) return null;
-
         string expectedPrefix = GetPrefixForSize(CurrentEntity.size);
         string searchString = $"{expectedPrefix}_{effectID}_";
+
+        if (_monsterBaseSpriteCache.TryGetValue(searchString, out Sprite cachedSprite))
+        {
+            return cachedSprite;
+        }
 
         foreach (var sprite in EntityUIHelpers.AllActionSprites)
         {
             if (sprite != null && sprite.name.StartsWith(searchString, StringComparison.OrdinalIgnoreCase))
             {
+                _monsterBaseSpriteCache[searchString] = sprite;
                 return sprite;
             }
         }
+
+        _monsterBaseSpriteCache[searchString] = null;
         return null;
     }
 
