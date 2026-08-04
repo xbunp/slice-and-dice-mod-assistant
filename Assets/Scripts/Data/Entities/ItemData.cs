@@ -1048,6 +1048,7 @@ public class ItemData : SDData
     }
 
     // Current item export
+    // Current item export
     private void OptimizeAndExportMechanics(List<string> chainParts)
     {
         List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();
@@ -1056,18 +1057,20 @@ public class ItemData : SDData
             // Clone to prevent mutating original memory references during export operations
             ItemMechanic clonedMech = CloneMechanic(mech);
 
-            // Case 1: Direct loose Tog Items
+            // Case 1: Direct loose Tog Items (only merge if explicit targets match)
             if (string.IsNullOrEmpty(clonedMech.Prefix) && ItemDomainRules.TogItems.Contains(clonedMech.PayloadString))
             {
-                var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == clonedMech.Targets.Count && m.Targets.All(t => clonedMech.Targets.Contains(t)));
-                if (prev != null)
+                if (clonedMech.Targets.Count > 0)
                 {
-                    prev.ChainedKeywords.Add(clonedMech.PayloadString);
-                    continue;
+                    var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count > 0 && m.Targets.Count == clonedMech.Targets.Count && m.Targets.All(t => clonedMech.Targets.Contains(t)));
+                    if (prev != null)
+                    {
+                        prev.ChainedKeywords.Add(clonedMech.PayloadString);
+                        continue;
+                    }
                 }
             }
 
-            /*
             // Case 2: Tog Items wrapped inside of an inherent (i) Item Pack tuple
             if (clonedMech.Prefix == "i" && clonedMech.PayloadData is ItemData nestedItem)
             {
@@ -1077,76 +1080,46 @@ public class ItemData : SDData
                     bool allMerged = true;
                     foreach (var innerMech in nestedItem.Mechanics)
                     {
-                        var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
-                        if (prev != null)
-                        {
-                            prev.ChainedKeywords.Add(innerMech.PayloadString);
-                        }
-                        else
+                        if (innerMech.Targets.Count == 0)
                         {
                             allMerged = false;
+                            break;
                         }
-                    }
-
-                    // Skip appending this '.i' node if we successfully merged all its contents natively
-                    if (allMerged) continue;
-                }
-            }
-            */
-
-            // Case 2: Tog Items wrapped inside of an inherent (i) Item Pack tuple
-            if (clonedMech.Prefix == "i" && clonedMech.PayloadData is ItemData nestedItem)
-            {
-                bool onlyTog = nestedItem.Mechanics.Count > 0 && nestedItem.Mechanics.All(m => string.IsNullOrEmpty(m.Prefix) && ItemDomainRules.TogItems.Contains(m.PayloadString));
-                if (onlyTog)
-                {
-                    bool allMerged = true;
-
-                    // PASS 1: Validation. Ensure EVERY item can merge before we mutate anything.
-                    foreach (var innerMech in nestedItem.Mechanics)
-                    {
-                        var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
+                        var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count > 0 && m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
                         if (prev == null)
                         {
                             allMerged = false;
                             break;
                         }
                     }
-
-                    // PASS 2: Mutation. Only apply if the entire block successfully mapped.
                     if (allMerged)
                     {
                         foreach (var innerMech in nestedItem.Mechanics)
                         {
-                            var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
+                            var prev = optimizedMechanics.LastOrDefault(m => m.Targets.Count > 0 && m.Targets.Count == innerMech.Targets.Count && m.Targets.All(t => innerMech.Targets.Contains(t)));
                             if (prev != null)
                             {
                                 prev.ChainedKeywords.Add(innerMech.PayloadString);
                             }
                         }
-                        // Skip appending this '.i' node because we successfully merged all its contents natively
                         continue;
                     }
                 }
             }
-
             optimizedMechanics.Add(clonedMech);
         }
 
-        // --- EXPORT & CHAINING LOGIC ---
         if (optimizedMechanics.Count > 0)
         {
             StringBuilder mechsSb = new StringBuilder();
             List<string> lastTargets = null;
             bool lastPerTier = false;
             bool lastUnpack = false;
-
             for (int i = 0; i < optimizedMechanics.Count; i++)
             {
                 var mech = optimizedMechanics[i];
                 bool targetsMatch = false;
-
-                if (lastTargets != null && mech.Targets.Count == lastTargets.Count)
+                if (lastTargets != null && lastTargets.Count > 0 && mech.Targets.Count == lastTargets.Count)
                 {
                     targetsMatch = true;
                     foreach (var t in mech.Targets)
@@ -1158,21 +1131,16 @@ public class ItemData : SDData
                         }
                     }
                 }
-
                 bool safeToChain = targetsMatch;
                 if (safeToChain)
                 {
-                    // Do not falsely propagate scaling rules down the chain 
                     if (lastPerTier && !mech.PerTier) safeToChain = false;
                     if (lastUnpack && !mech.Unpack) safeToChain = false;
                 }
-
                 List<string> currentTargets = new List<string>(mech.Targets);
                 bool currentPerTier = mech.PerTier;
                 bool currentUnpack = mech.Unpack;
-
                 string exportedMech = mech.Export();
-
                 if (i == 0)
                 {
                     mechsSb.Append(exportedMech);
@@ -1181,32 +1149,23 @@ public class ItemData : SDData
                 {
                     if (safeToChain)
                     {
-                        // Inherit targets via '#', clear explicit targets from export to prevent redeclaring side words
                         mech.Targets.Clear();
-
-                        // PREVENT silent Prefix drops if the chain inherits an inherently prefixed mechanic (like facade)
                         string chainedExport = mech.Export();
                         if (!string.IsNullOrEmpty(mech.Prefix) && !chainedExport.StartsWith(mech.Prefix, StringComparison.OrdinalIgnoreCase))
                         {
                             chainedExport = $"{mech.Prefix}.{chainedExport}";
                         }
-
                         mechsSb.Append("#").Append(chainedExport);
                     }
                     else
                     {
-                        // Context shift requires a clean boundary delimiter
                         mechsSb.Append(".i.").Append(exportedMech);
                     }
                 }
-
                 lastTargets = currentTargets;
                 lastPerTier = currentPerTier;
                 lastUnpack = currentUnpack;
             }
-
-            // NEW: Directly append the raw item syntax. 
-            // DO NOT inject "i." here. The parent/caller decides the modifier!
             chainParts.Add(mechsSb.ToString());
         }
     }
