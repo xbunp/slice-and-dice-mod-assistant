@@ -22,18 +22,6 @@ public enum ItemNodeType
     Hat,
     Bracket,
     RawString
-
-    // old shit, temporarily removed until needed
-    /*
-    Equippable, Sticker, Splice, Merge, Unpack, ItemPart,
-    Hero, Monster, Modifier, Ability,
-
-    ItemRoot,
-    FaceModifier,
-    TriggeredAbility,
-    EntityPayload,
-    RawString
-    */
 }
 
 // 1. The refined EntityCard retains strong typing.
@@ -50,13 +38,11 @@ public class EntityCard : ReorderableItem, IPointerClickHandler
     public ReorderableZone PayloadPort { get; set; }
 
     public string CardName => NodeRegistry.Get(NodeType).GetTitle(this);
-
     public void OnPointerClick(UnityEngine.EventSystems.PointerEventData eventData)
     {
         if (eventData.dragging) return;
         ItemUI.Instance?.SelectCard(this);
     }
-
     public string Compile()
     {
         // Simply hand this card to the global compiler
@@ -74,8 +60,6 @@ public class EntityCard : ReorderableItem, IPointerClickHandler
 
         return rawStr;
     }
-
-    // Safely extracts compiled strings from children
     public IEnumerable<string> GetChildCompilations()
     {
         if (PayloadPort == null || PayloadPort.Entrants.Count == 0) yield break;
@@ -136,6 +120,22 @@ public class ItemUI : RootUI
     {
         Instance = this;
     }
+    public void Start()
+    {
+        // 1. Ensure we have an event system for drag logic
+        if (FindObjectOfType<EventSystem>() == null)
+        {
+            var es = new GameObject("EventSystem");
+            es.AddComponent<EventSystem>();
+            es.AddComponent<StandaloneInputModule>();
+        }
+
+        // 2. Build the visual workspace structure immediately (safe, purely layout)
+        //BuildWorkspace();
+
+        // 3. Defer database connections until ModPackage is awake and loaded
+        StartCoroutine(WaitForModPackage());
+    }
     private void OnDestroy()
     {
         if (ModPackage.Instance != null)
@@ -148,19 +148,6 @@ public class ItemUI : RootUI
             _rootZone.OnZoneChanged -= RefreshSidebar;
         }
     }
-
-    private bool IsTabVisible()
-    {
-        return _rootCanvasRect != null && _rootCanvasRect.gameObject.activeInHierarchy;
-    }
-
-    public void AutoCompile()
-    {
-        if (_compiledOutputField == null || MainCanvasContent == null) return;
-        _pendingCompile = true;
-        _compileTimer = 0f;
-    }
-
     private void Update()
     {
         if (_needsRebuild && IsTabVisible())
@@ -203,23 +190,31 @@ public class ItemUI : RootUI
             }
         }
     }
-    public void Start()
+    private bool IsTabVisible()
     {
-        // 1. Ensure we have an event system for drag logic
-        if (FindObjectOfType<EventSystem>() == null)
-        {
-            var es = new GameObject("EventSystem");
-            es.AddComponent<EventSystem>();
-            es.AddComponent<StandaloneInputModule>();
-        }
-
-        // 2. Build the visual workspace structure immediately (safe, purely layout)
-        //BuildWorkspace();
-
-        // 3. Defer database connections until ModPackage is awake and loaded
-        StartCoroutine(WaitForModPackage());
+        return _rootCanvasRect != null && _rootCanvasRect.gameObject.activeInHierarchy;
     }
-
+    public void AutoCompile()
+    {
+        if (_compiledOutputField == null || MainCanvasContent == null) return;
+        _pendingCompile = true;
+        _compileTimer = 0f;
+    }
+    private void ExecuteAutoCompile()
+    {
+        if (_compiledOutputField == null || MainCanvasContent == null) return;
+        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
+        if (rootZone == null) return;
+        var cards = rootZone.Entrants.Cast<EntityCard>();
+        IsCompilingRichText = false;
+        _compiledOutputField.text = ItemSyntaxCompiler.CompileZone(cards);
+        if (_syntaxHighlighterText != null)
+        {
+            IsCompilingRichText = true;
+            _syntaxHighlighterText.text = ItemSyntaxCompiler.CompileZone(cards);
+            IsCompilingRichText = false;
+        }
+    }
     protected override void BuildUIAndBind()
     {
         // 1. Generate standard screen mapping to supply the root wrapper to RootUI
@@ -658,312 +653,18 @@ public class ItemUI : RootUI
         }
         return item.Mechanics;
     }
-    private void ProcessMechanicsList(List<ItemMechanic> mechanics, ReorderableZone targetZone)
-    {
-        for (int i = 0; i < mechanics.Count; i++)
-        {
-            var mechanic = mechanics[i];
-            string prefix = mechanic.Prefix?.ToLower() ?? "";
-
-            if (prefix.EndsWith("hat"))
-            {
-                i = ProcessHatNode(mechanics, i, targetZone);
-            }
-            else
-            {
-                LoadMechanicIntoUI(mechanic, targetZone, 0);
-            }
-        }
-    }
-    private int ProcessHatNode(List<ItemMechanic> mechanics, int currentIndex, ReorderableZone targetZone)
-    {
-        var mechanic = mechanics[currentIndex];
-        EntityCard hatCard = CreateEntityCard(ItemNodeType.Hat) as EntityCard;
-        hatCard.MechanicData = mechanic;
-        targetZone.AddEntrant(hatCard);
-
-        HeroData heroData = new HeroData();
-        heroData.InitializeDiceFaces();
-        hatCard.MechanicData.PayloadData = heroData;
-
-        string rawPayload = mechanic.PayloadString ?? "";
-        if (rawPayload.StartsWith("(") && rawPayload.EndsWith(")"))
-        {
-            rawPayload = rawPayload.Substring(1, rawPayload.Length - 2);
-        }
-
-        string hatCore = rawPayload;
-        string nestedPackStr = "";
-
-        // SAFE TOP-LEVEL DELIMITER SEARCH: Ignores .i. found inside nested entities (like Eggs)
-        int iIndex = -1;
-        int pDepth = 0;
-        for (int i = 0; i <= rawPayload.Length - 3; i++)
-        {
-            if (rawPayload[i] == '(') pDepth++;
-            else if (rawPayload[i] == ')') pDepth--;
-            else if (pDepth == 0 && rawPayload[i] == '.' && (rawPayload[i + 1] == 'i' || rawPayload[i + 1] == 'I') && rawPayload[i + 2] == '.')
-            {
-                iIndex = i;
-                break;
-            }
-        }
-
-        if (iIndex >= 0)
-        {
-            hatCore = rawPayload.Substring(0, iIndex);
-            nestedPackStr = rawPayload.Substring(iIndex + 3);
-        }
-
-        // Clean native entity parse without data-wiping hacks
-        heroData.Parse(hatCore);
-
-        int iter = currentIndex;
-        while (iter + 1 < mechanics.Count)
-        {
-            var nextMech = mechanics[iter + 1];
-            string nextPrefix = nextMech.Prefix?.ToLower() ?? "";
-            string nextPayload = nextMech.PayloadString ?? "";
-            if (nextPrefix == "facade" || (nextPrefix == "i" && nextPayload.Contains("facade")))
-            {
-                string targetStr = nextMech.Targets.Count > 0 ? nextMech.Targets[0] : "all";
-                string facadeStr = nextPrefix == "facade" ? $"{targetStr}.facade.{nextPayload}" : nextPayload;
-                ApplyFacadeToHeroData(heroData, facadeStr);
-                iter++;
-            }
-            else if (nextPrefix == "sidesc" || nextPrefix == "img" || (nextPrefix == "i" && (nextPayload.Contains("sidesc") || nextPayload.Contains("img"))))
-            {
-                ApplyFacadeToHeroData(heroData, nextPayload);
-                iter++;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(nestedPackStr))
-        {
-            ProcessNestedHatPack(nestedPackStr, heroData, hatCard.PayloadPort);
-        }
-
-        return iter;
-    }
-
-    private void ProcessNestedHatPack(string nestedPackStr, HeroData heroData, ReorderableZone payloadPort)
-    {
-        ItemData nestedPack = new ItemData();
-        nestedPack.Parse(nestedPackStr);
-        List<ItemMechanic> looseBaseItems = new List<ItemMechanic>();
-        foreach (var childMech in nestedPack.Mechanics)
-        {
-            string prefix = childMech.Prefix?.ToLower() ?? "";
-            if (prefix == "k")
-            {
-                ApplyKeywordToHeroData(heroData, childMech);
-            }
-            else if (prefix == "sticker")
-            {
-                ApplyStickerToHeroData(heroData, childMech);
-            }
-            else if (prefix == "hat")
-            {
-                LoadMechanicIntoUI(childMech, payloadPort, 1);
-            }
-            else
-            {
-                // Pure BaseItems / TogItems / Operators collect for the BaseItem Pack
-                looseBaseItems.Add(childMech);
-            }
-        }
-        if (looseBaseItems.Count > 0)
-        {
-            List<ItemMechanic> currentGroup = new List<ItemMechanic>();
-            for (int i = 0; i < looseBaseItems.Count; i++)
-            {
-                if (currentGroup.Count == 0)
-                {
-                    currentGroup.Add(looseBaseItems[i]);
-                }
-                else
-                {
-                    if (MechanicModifiersMatch(currentGroup[0], looseBaseItems[i]))
-                    {
-                        currentGroup.Add(looseBaseItems[i]);
-                    }
-                    else
-                    {
-                        ExportGroupToUI(currentGroup, payloadPort);
-                        currentGroup.Clear();
-                        currentGroup.Add(looseBaseItems[i]);
-                    }
-                }
-            }
-            if (currentGroup.Count > 0)
-            {
-                ExportGroupToUI(currentGroup, payloadPort);
-            }
-        }
-    }
-
-    private bool MechanicModifiersMatch(ItemMechanic a, ItemMechanic b)
-    {
-        if (a.Prefix != b.Prefix) return false;
-        if (a.Targets.Count != b.Targets.Count) return false;
-        for (int i = 0; i < a.Targets.Count; i++) if (a.Targets[i] != b.Targets[i]) return false;
-        if (a.RepeatTimes != b.RepeatTimes) return false;
-        if (a.Multiplier != b.Multiplier) return false;
-        if (a.PerTier != b.PerTier) return false;
-        if (a.Unpack != b.Unpack) return false;
-        if (a.PartIndex != b.PartIndex) return false;
-        if (a.MergedItem != b.MergedItem) return false;
-        if (a.SplicedItem != b.SplicedItem) return false;
-        return true;
-    }
-
-    private void ExportGroupToUI(List<ItemMechanic> group, ReorderableZone payloadPort)
-    {
-        ItemMechanic packMech = new ItemMechanic
-        {
-            Prefix = group[0].Prefix,
-            Targets = new List<string>(group[0].Targets),
-            RepeatTimes = group[0].RepeatTimes,
-            Multiplier = group[0].Multiplier,
-            PerTier = group[0].PerTier,
-            Unpack = group[0].Unpack,
-            PartIndex = group[0].PartIndex,
-            MergedItem = group[0].MergedItem,
-            SplicedItem = group[0].SplicedItem
-        };
-
-        List<string> pureStrings = new List<string>();
-        foreach (var m in group)
-        {
-            string s = m.PayloadString ?? "";
-            if (m.ChainedKeywords.Count > 0)
-            {
-                if (s.Length > 0) s += "#";
-                s += string.Join("#", m.ChainedKeywords);
-            }
-            if (!string.IsNullOrEmpty(s)) pureStrings.Add(s);
-        }
-        packMech.PayloadString = string.Join("#", pureStrings);
-
-        LoadMechanicIntoUI(packMech, payloadPort, 1);
-    }
-
-    private void ApplyKeywordToHeroData(HeroData heroData, ItemMechanic mech)
-    {
-        int mask = GetMaskFromTargets(mech.Targets);
-
-        List<string> kws = new List<string>();
-        if (!string.IsNullOrEmpty(mech.PayloadString)) kws.Add(mech.PayloadString);
-
-        // Ensure chained keywords are caught if they were grouped
-        foreach (var chain in mech.ChainedKeywords)
-        {
-            kws.Add(chain.StartsWith("k.", StringComparison.OrdinalIgnoreCase) ? chain.Substring(2) : chain);
-        }
-
-        for (int i = 0; i < 6; i++)
-        {
-            if ((mask & (1 << i)) != 0)
-            {
-                if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
-                foreach (var kw in kws)
-                {
-                    string cleanKw = kw.ToLower().Trim();
-                    if (!heroData.diceSides[i].keywords.Contains(cleanKw))
-                        heroData.diceSides[i].keywords.Add(cleanKw);
-                }
-            }
-        }
-    }
-    private void ApplyStickerToHeroData(HeroData heroData, ItemMechanic mech)
-    {
-        int mask = GetMaskFromTargets(mech.Targets);
-        for (int i = 0; i < 6; i++)
-        {
-            if ((mask & (1 << i)) != 0)
-            {
-                if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
-                heroData.diceSides[i].faceType = DiceSideData.DiceFaceType.Sticker;
-                heroData.diceSides[i].payload = mech.PayloadString;
-            }
-        }
-    }
-    private int GetMaskFromTargets(List<string> targets)
-    {
-        if (targets == null || targets.Count == 0 || targets.Contains("all", StringComparer.OrdinalIgnoreCase))
-            return 63; // Defaults to All Faces
-
-        int combinedMask = 0;
-        foreach (var t in targets)
-        {
-            var alias = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.name != null && a.name.Equals(t, StringComparison.OrdinalIgnoreCase));
-            if (alias.name != null) combinedMask |= alias.mask;
-        }
-        return combinedMask == 0 ? 63 : combinedMask;
-    }
-    private void ApplyFacadeToHeroData(HeroData heroData, string facadePayload)
-    {
-        string[] tokens = facadePayload.Split('.');
-        string targetFace = "all";
-        string rawFacadeToken = "";
-
-        for (int j = 0; j < tokens.Length; j++)
-        {
-            string tokenLower = tokens[j].ToLower();
-            if (DiceTargetHelper.FaceNames.Contains(tokenLower) || tokenLower == "all")
-            {
-                targetFace = tokenLower;
-            }
-            if (tokenLower == "facade" && j + 1 < tokens.Length)
-            {
-                rawFacadeToken = tokens[j + 1];
-            }
-        }
-
-        if (!string.IsNullOrEmpty(rawFacadeToken))
-        {
-            // Split the facade ID and the color argument
-            string finalId = rawFacadeToken;
-            string finalColor = "0";
-
-            int colonIndex = rawFacadeToken.IndexOf(':');
-            if (colonIndex >= 0)
-            {
-                finalId = rawFacadeToken.Substring(0, colonIndex);
-                finalColor = rawFacadeToken.Substring(colonIndex + 1);
-            }
-
-            if (targetFace == "all")
-            {
-                for (int i = 0; i < 6; i++)
-                {
-                    if (heroData.diceSides[i] == null) heroData.diceSides[i] = new DiceSideData();
-                    heroData.diceSides[i].facadeID = finalId;
-                    heroData.diceSides[i].facadeColor = finalColor;
-                }
-            }
-            else
-            {
-                int faceIndex = Array.IndexOf(DiceTargetHelper.FaceNames, targetFace);
-                if (faceIndex >= 0 && faceIndex < 6)
-                {
-                    if (heroData.diceSides[faceIndex] == null) heroData.diceSides[faceIndex] = new DiceSideData();
-                    heroData.diceSides[faceIndex].facadeID = finalId;
-                    heroData.diceSides[faceIndex].facadeColor = finalColor;
-                }
-            }
-        }
-    }
     private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
     {
         string prefix = mechanic.Prefix?.ToLower() ?? "";
+
+        if (prefix == "hat")
+        {
+            ProcessHatNode(mechanic, targetZone);
+            return;
+        }
+
         ItemNodeType type = ItemNodeType.BaseItem;
-        if (prefix == "hat") type = ItemNodeType.Hat;
-        else if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.Appearance;
+        if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.Appearance;
         else if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
         else if (AbilityDomainRules.AbilityStartTokens.Contains(prefix) || prefix == "abilitydata") type = ItemNodeType.LearnAbility;
 
@@ -1038,7 +739,6 @@ public class ItemUI : RootUI
         }
     }
 
-
     /// <summary>
     /// Evaluates the metadata and flags on a mechanic instance, spawns its card UI representation, 
     /// and proceeds to identify and pass on its sub-payload elements.
@@ -1058,27 +758,6 @@ public class ItemUI : RootUI
         var mainLayout = MainCanvasContent.gameObject.GetComponent<VerticalLayoutGroup>();
         mainLayout.padding = new RectOffset(40, 40, 40, 40);
         mainLayout.spacing = 20;
-    }
-    // --- KEEP AND ENSURE THIS IS THE ONLY OVERLOAD ---
-
-    private void LoadDataPayloadIntoUI(object payloadData, string prefix, ReorderableZone targetZone, int depth = 0)
-    {
-        if (payloadData == null) return;
-
-        if (payloadData is ItemData nestedItem)
-        {
-            // Removed the IsPurelyCosmetic check. If there's an ItemData wrapper, it gets a node!
-            EntityCard nestedEquip = CreateEntityCard(ItemNodeType.Equippable) as EntityCard;
-            nestedEquip.RootData = nestedItem;
-            nestedEquip.CustomPrefix = prefix;
-            targetZone.AddEntrant(nestedEquip);
-
-            foreach (var childMech in nestedItem.Mechanics)
-            {
-                LoadMechanicIntoUI(childMech, nestedEquip.PayloadPort, depth + 1);
-            }
-        }
-        // ... (rest of method remains the same)
     }
     private void BuildInspector()
     {
@@ -1100,36 +779,6 @@ public class ItemUI : RootUI
         _rootZone = MainCanvasContent.gameObject.AddComponent<ReorderableZone>();
         _rootZone.SetCanvas(_cachedCanvas);
         _rootZone.OnZoneChanged += RefreshSidebar;
-    }
-    public void CreateInspectorInputField(string label, string initialValue, UnityEngine.Events.UnityAction<string> onValueChanged)
-    {
-        // Container
-        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
-        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
-        layout.childControlHeight = true; layout.childControlWidth = true;
-        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
-
-        // Label
-        RectTransform labelRect = CreateRect("Label", container);
-        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
-        labelText.text = label;
-        labelText.fontSize = 14;
-        labelText.color = Color.grey;
-        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
-
-        // Clean Input Field Initialization
-        if (inputFieldPrefab != null)
-        {
-            GameObject inputObj = Instantiate(inputFieldPrefab, container);
-            var inputField = inputObj.GetComponent<TMPro.TMP_InputField>();
-
-            var inputLayout = inputObj.GetComponent<LayoutElement>() ?? inputObj.AddComponent<LayoutElement>();
-            inputLayout.flexibleWidth = 1f;
-
-            inputField.text = initialValue;
-            inputField.onValueChanged.RemoveAllListeners();
-            inputField.onValueChanged.AddListener(onValueChanged);
-        }
     }
     public void ImportFromClipboard()
     {
@@ -1303,23 +952,6 @@ public class ItemUI : RootUI
             }
         }
     }
-
-    private void ExecuteAutoCompile()
-    {
-        if (_compiledOutputField == null || MainCanvasContent == null) return;
-        ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
-        if (rootZone == null) return;
-        var cards = rootZone.Entrants.Cast<EntityCard>();
-        IsCompilingRichText = false;
-        _compiledOutputField.text = ItemSyntaxCompiler.CompileZone(cards);
-        if (_syntaxHighlighterText != null)
-        {
-            IsCompilingRichText = true;
-            _syntaxHighlighterText.text = ItemSyntaxCompiler.CompileZone(cards);
-            IsCompilingRichText = false;
-        }
-    }
-
     private void OnAddNodeSelected(int index, TMPro.TMP_Dropdown dropdown)
     {
         // Safety checks: skip if placeholder is selected or workspace zone is missing
@@ -1341,27 +973,6 @@ public class ItemUI : RootUI
         // Reset the dropdown visually so it can be used again
         dropdown.SetValueWithoutNotify(0);
         RefreshSidebar();
-    }
-    public void CreateInspectorDropdown(string label, List<string> options, int currentIndex, UnityEngine.Events.UnityAction<int> onValueChanged)
-    {
-        RectTransform container = CreateRect($"Field_{label}", InspectorContent);
-        var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>();
-        container.gameObject.AddComponent<LayoutElement>().minHeight = 35f;
-
-        RectTransform labelRect = CreateRect("Label", container);
-        var labelText = labelRect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
-        labelText.text = label; labelText.fontSize = 14; labelText.color = Color.grey;
-        labelRect.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
-
-        if (dropdownPrefab != null)
-        {
-            GameObject ddObj = Instantiate(dropdownPrefab, container);
-            var dropdown = ddObj.GetComponent<TMPro.TMP_Dropdown>();
-            dropdown.ClearOptions();
-            dropdown.AddOptions(options);
-            dropdown.value = currentIndex;
-            dropdown.onValueChanged.AddListener(onValueChanged);
-        }
     }
     public void CreateInspectorTextArea(string label, string initialValue, UnityEngine.Events.UnityAction<string> onValueChanged)
     {
@@ -1427,6 +1038,35 @@ public class ItemUI : RootUI
 
         // 4. Update workspace layout and auto-compile
         RefreshSidebar();
+        AutoCompile();
+    }
+    public void ConvertHatPayloadType(EntityCard card)
+    {
+        if (card == null || card.MechanicData == null) return;
+
+        EntityData oldData = card.MechanicData.PayloadData as EntityData;
+
+        // Swap between MonsterData and HeroData, preserving the dice sides
+        if (oldData is MonsterData)
+        {
+            HeroData hero = new HeroData();
+            hero.InitializeAsBlank();
+            hero.baseReplica = "Fey";
+            if (oldData != null) hero.diceSides = oldData.diceSides;
+            else hero.InitializeDiceFaces();
+            card.MechanicData.PayloadData = hero;
+        }
+        else
+        {
+            MonsterData monster = new MonsterData();
+            monster.InitializeAsBlank();
+            monster.baseMonster = "egg.Wolf";
+            if (oldData != null) monster.diceSides = oldData.diceSides;
+            else monster.InitializeDiceFaces();
+            card.MechanicData.PayloadData = monster;
+        }
+
+        SelectCard(card); // Re-draw the inspector immediately
         AutoCompile();
     }
     public static string CompileZone(IEnumerable<EntityCard> cards)
@@ -1556,9 +1196,12 @@ public class ItemUI : RootUI
 
         if (nodeType == ItemNodeType.Hat)
         {
-            entityCard.MechanicData.PayloadData = new HeroData();
-            (entityCard.MechanicData.PayloadData as HeroData).InitializeDiceFaces();
-            entityCard.MechanicData.Prefix = "hat"; // Ensure the prefix is correct
+            HeroData defaultHero = new HeroData();
+            defaultHero.InitializeAsBlank();
+            defaultHero.baseReplica = "Fey";
+            defaultHero.InitializeDiceFaces();
+            entityCard.MechanicData.PayloadData = defaultHero;
+            entityCard.MechanicData.Prefix = "hat";
         }
 
         if (def.HasDeleteButton)
@@ -1717,7 +1360,6 @@ public class ItemUI : RootUI
             dropdown.onValueChanged.AddListener(onValueChanged);
         }
     }
-
     public void CreateInspectorAbilityDropdown(string label, string currentAbilityName, UnityEngine.Events.UnityAction<string> onAbilitySelected)
     {
         var abilityNames = new List<string> { "-- Select Custom Ability --" };
@@ -1743,5 +1385,80 @@ public class ItemUI : RootUI
             if (idx <= 0 || idx >= abilityNames.Count) return;
             onAbilitySelected?.Invoke(abilityNames[idx]);
         });
+    }
+
+    private void ProcessMechanicsList(List<ItemMechanic> mechanics, ReorderableZone targetZone)
+    {
+        for (int i = 0; i < mechanics.Count; i++)
+        {
+            LoadMechanicIntoUI(mechanics[i], targetZone, 0);
+        }
+    }
+    private void ProcessHatNode(ItemMechanic mechanic, ReorderableZone targetZone)
+    {
+        EntityCard hatCard = CreateEntityCard(ItemNodeType.Hat) as EntityCard;
+        hatCard.MechanicData = mechanic;
+        targetZone.AddEntrant(hatCard);
+
+        if (mechanic.PayloadData == null)
+        {
+            HeroData fallbackHero = new HeroData();
+            fallbackHero.InitializeDiceFaces();
+            mechanic.PayloadData = fallbackHero;
+        }
+
+        if (mechanic.PayloadData is EntityData ed)
+        {
+            // Extract the child nodes that are not face-modifiers so they can be edited as UI cards.
+            PopulatePayloadPortFromEntity(ed, hatCard.PayloadPort);
+        }
+    }
+    private void PopulatePayloadPortFromEntity(EntityData entity, ReorderableZone payloadPort)
+    {
+        if (payloadPort == null) return;
+
+        // 1. Base items (e.g. string names like "Sword")
+        if (entity.items != null)
+        {
+            foreach (var itemName in entity.items)
+            {
+                if (string.IsNullOrEmpty(itemName)) continue;
+                ItemMechanic mech = new ItemMechanic { PayloadString = itemName };
+                LoadMechanicIntoUI(mech, payloadPort, 1);
+            }
+            // Remove from backend data so the UI takes full ownership. 
+            // This prevents double-compilation when the user saves.
+            entity.items.Clear();
+        }
+
+        // 2. Custom Payloads (Complex items nested via .i.(...))
+        if (entity.customPayloads != null)
+        {
+            var itemsToRemove = new List<CustomPayload>();
+            foreach (var cp in entity.customPayloads)
+            {
+                if (cp.Type == PayloadType.Item && cp.Data is ItemData nestedItem)
+                {
+                    foreach (var childMech in nestedItem.Mechanics)
+                    {
+                        LoadMechanicIntoUI(childMech, payloadPort, 1);
+                    }
+                    itemsToRemove.Add(cp);
+                }
+            }
+            foreach (var cp in itemsToRemove) entity.customPayloads.Remove(cp);
+        }
+
+        // 3. Traits (Items functioning as properties, e.g. t.jinx)
+        if (entity.traits != null)
+        {
+            foreach (var trait in entity.traits)
+            {
+                if (string.IsNullOrEmpty(trait)) continue;
+                ItemMechanic mech = new ItemMechanic { Prefix = "t", PayloadString = trait };
+                LoadMechanicIntoUI(mech, payloadPort, 1);
+            }
+            entity.traits.Clear();
+        }
     }
 }

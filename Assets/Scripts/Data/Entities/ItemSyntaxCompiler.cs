@@ -209,125 +209,84 @@ public static class ItemSyntaxCompiler
     /// </summary>
     private static string BuildHat(EntityCard card, string childrenCompiled)
     {
-        if (!(card.MechanicData.PayloadData is HeroData heroData)) return "";
+        if (!(card.MechanicData.PayloadData is EntityData ed)) return "";
         var validTargets = card.MechanicData.Targets?.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
         string targets = (validTargets != null && validTargets.Count > 0) ? string.Join(".", validTargets) : "left";
         string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
-        string hatDice = HatNodeDef.GetHatDiceString(heroData);
 
-        // 1. Calculate the target mask of the Hat itself
-        int hatMask = 63; // Defaults to 'all'
-        if (validTargets != null && validTargets.Count > 0 && !validTargets.Contains("all", StringComparer.OrdinalIgnoreCase))
-        {
-            hatMask = 0;
-            foreach (var t in validTargets)
-            {
-                var alias = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.name != null && a.name.Equals(t, StringComparison.OrdinalIgnoreCase));
-                if (alias.name != null) hatMask |= alias.mask;
-            }
-        }
+        // Let the backend format the core hat completely natively
+        string hatCoreStr = ed.ExportAsHat();
+        string strippedCore = StaticBranchTracing.StripOuterParens(hatCoreStr);
 
-        // 2. Identify which faces have Facades and build their combined mask
-        int facadeMask = 0;
-        string sharedFacade = null;
-        bool multipleDistinctFacades = false;
-        for (int i = 0; i < 6; i++)
-        {
-            string fac = GetFacadeOutput(heroData.diceSides[i]);
-            if (!string.IsNullOrEmpty(fac))
-            {
-                facadeMask |= (1 << i);
-                if (sharedFacade == null) sharedFacade = fac;
-                else if (sharedFacade != fac) multipleDistinctFacades = true;
-            }
-        }
-
-        // 3. Intelligently format the Facade string based on mask alignment
-        string facadeMods = "";
-        if (facadeMask != 0)
-        {
-            if (facadeMask == hatMask && !multipleDistinctFacades)
-            {
-                facadeMods = $"#facade.{sharedFacade}";
-            }
-            else if (facadeMask == 63 && !multipleDistinctFacades)
-            {
-                facadeMods = $"#facade.{sharedFacade}";
-            }
-            else
-            {
-                List<string> fMods = new List<string>();
-                for (int i = 0; i < 6; i++)
-                {
-                    string fac = GetFacadeOutput(heroData.diceSides[i]);
-                    if (!string.IsNullOrEmpty(fac))
-                    {
-                        fMods.Add($"{DiceTargetHelper.FaceNames[i]}.facade.{fac}");
-                    }
-                }
-                facadeMods = "#" + string.Join("#", fMods);
-            }
-        }
-
-        string hatCore = "";
         if (!string.IsNullOrWhiteSpace(childrenCompiled))
         {
             string inner = childrenCompiled.Trim();
             if (inner.StartsWith(".")) inner = inner.Substring(1);
 
-            string rawInner = inner;
-            if (rawInner.StartsWith("(") && rawInner.EndsWith(")"))
-            {
-                rawInner = rawInner.Substring(1, rawInner.Length - 2);
-            }
-
+            // Fast-path merge for stickers on specific faces (like left.sticker)
+            bool mergedSuccessfully = false;
             string firstTarget = null;
             foreach (var face in DiceTargetHelper.FaceNames)
             {
-                if (rawInner.StartsWith($"{face}.", StringComparison.OrdinalIgnoreCase))
+                if (inner.StartsWith($"{face}.", StringComparison.OrdinalIgnoreCase))
                 {
                     firstTarget = face;
                     break;
                 }
             }
 
-            bool mergedSuccessfully = false;
             if (!string.IsNullOrEmpty(firstTarget))
             {
                 string expectedStickerPrefix = $".i.{firstTarget}.sticker.";
-                int stickerIdx = hatDice.LastIndexOf(expectedStickerPrefix, StringComparison.OrdinalIgnoreCase);
-                if (stickerIdx >= 0 && !hatDice.Substring(stickerIdx + expectedStickerPrefix.Length).Contains(".i."))
+                int stickerIdx = strippedCore.LastIndexOf(expectedStickerPrefix, StringComparison.OrdinalIgnoreCase);
+
+                if (stickerIdx >= 0)
                 {
-                    // SAFE SPLIT: Ignore delimiters inside parentheses!
-                    string[] innerChains = StaticBranchTracing.TopLevelSplit(rawInner, '#').ToArray();
-                    for (int c = 0; c < innerChains.Length; c++)
+                    // Safe verification without naive splits
+                    string tail = strippedCore.Substring(stickerIdx + expectedStickerPrefix.Length);
+                    int pDepth = 0; bool hasInnerI = false;
+                    for (int i = 0; i < tail.Length - 2; i++)
                     {
-                        if (innerChains[c].StartsWith($"{firstTarget}.", StringComparison.OrdinalIgnoreCase))
+                        if (tail[i] == '(') pDepth++;
+                        else if (tail[i] == ')') pDepth--;
+                        else if (pDepth == 0 && tail[i] == '.' && (tail[i + 1] == 'i' || tail[i + 1] == 'I') && tail[i + 2] == '.')
                         {
-                            innerChains[c] = innerChains[c].Substring(firstTarget.Length + 1);
+                            hasInnerI = true; break;
                         }
                     }
-                    string optimizedInner = string.Join("#", innerChains);
-                    hatCore = $"{prefix}hat.({hatDice}#{optimizedInner})";
-                    mergedSuccessfully = true;
+
+                    if (!hasInnerI)
+                    {
+                        string[] innerChains = StaticBranchTracing.TopLevelSplit(inner, '#').ToArray();
+                        for (int c = 0; c < innerChains.Length; c++)
+                        {
+                            if (innerChains[c].StartsWith($"{firstTarget}.", StringComparison.OrdinalIgnoreCase))
+                            {
+                                innerChains[c] = innerChains[c].Substring(firstTarget.Length + 1);
+                            }
+                        }
+                        string optimizedInner = string.Join("#", innerChains);
+                        strippedCore = $"{strippedCore}#{optimizedInner}";
+                        mergedSuccessfully = true;
+                    }
                 }
             }
+
             if (!mergedSuccessfully)
             {
-                hatCore = $"{prefix}hat.({hatDice}.i.{inner})";
+                if (inner.Contains("#") || inner.Contains(".i."))
+                    strippedCore = $"{strippedCore}.i.({inner})";
+                else
+                    strippedCore = $"{strippedCore}.i.{inner}";
             }
         }
-        else
-        {
-            hatCore = $"{prefix}hat.({hatDice})";
-        }
 
+        string finalHat = $"{prefix}hat.({strippedCore})";
         if (!string.IsNullOrEmpty(prefix))
         {
-            hatCore = $"({hatCore})";
+            finalHat = $"({finalHat})";
         }
-
-        return $"{hatCore}{facadeMods}";
+        return finalHat;
     }
     private static string GetFacadeOutput(DiceSideData side)
     {

@@ -58,10 +58,12 @@ public abstract class AuthoringNodeDef
 
 public class HatNodeDef : AuthoringNodeDef
 {
-    public override string NodeNiceName => "(Hat) Set Dice Faces";
-    public override Color GetColor() => new Color(0.3f, 0.5f, 0.85f); // Greenish
     public override ItemNodeType NodeType => ItemNodeType.Hat;
     public override bool IsEntity => true;
+    public override bool HasPayloadPort => true;
+    public override bool HasDeleteButton => true;
+    public override string NodeNiceName => "(Hat) Set Dice Faces";
+    public override Color GetColor() => new Color(0.8f, 0.4f, 0.7f);
 
     private GridReferences _diceUI;
     private RectTransform _diceGridTarget;
@@ -74,198 +76,189 @@ public class HatNodeDef : AuthoringNodeDef
 
     private DiceFaceBuilderWidget _diceWidget;
 
-    // ============================================================================================
-    // CRITICAL AI DEVELOPER GUIDELINE - READ BEFORE WRITING ANY CODE
-    // ============================================================================================
-    // NEVER WRITE MANUAL SWITCH STATEMENTS OR HARDCODED ARRAYS TO TRANSLATE DICE FACE INDICES.
-    // THE ENGINE'S DICE LAYOUT IS NON-STANDARD AND HIGHLY SPECIFIC. 
-    // 
-    // IF YOU ASSUME INDEX 1 IS "RIGHT" AND INDEX 4 IS "MID", YOU WILL CORRUPT THE GAME DATA.
-    //
-    // STRICT LAYOUT:
-    //   [0] = left       (Mask: 1)
-    //   [1] = mid        (Mask: 2)
-    //   [2] = top        (Mask: 4)
-    //   [3] = bot        (Mask: 8)
-    //   [4] = right      (Mask: 16)
-    //   [5] = rightmost  (Mask: 32)
-    //
-    // RULES FOR AI:
-    // 1. To get an Index from a String: ALWAYS use DiceTargetHelper.GetIndicesForTarget(string)
-    // 2. To get a String from an Index: ALWAYS use DiceTargetHelper.FaceNames[i]
-    // 3. To get a String from a Bitmask: ALWAYS use DiceTargetHelper.GetBestAliasCombination(mask)
-    // 
-    // DO NOT ATTEMPT TO RECREATE THIS LOGIC IN OTHER FILES. ALWAYS CALL THE HELPER.
-    // ============================================================================================
-
-    /*
-    public static string GetHatDiceString(HeroData heroData)
+    public override void DrawInspector(ItemUI ui, EntityCard card)
     {
-        StringBuilder sb = new StringBuilder();
+        var fsg = FullScreenUIGenerator.Instance;
+        if (fsg == null) return;
 
-        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Fey" : heroData.baseReplica;
+        // --- Safely retrieve EntityData (HeroData or MonsterData) instead of forcing HeroData ---
+        if (!(card.MechanicData.PayloadData is EntityData entityData))
+        {
+            var defaultHero = new HeroData();
+            defaultHero.InitializeAsBlank();
+            defaultHero.InitializeDiceFaces();
+            card.MechanicData.PayloadData = defaultHero;
+            entityData = defaultHero;
+        }
+
+        bool isMonster = entityData is MonsterData;
+
+        // --- Strictly force re-initialization of mask & tab for THIS specific card instance ---
+        if (card.MechanicData.Targets == null || card.MechanicData.Targets.Count == 0)
+        {
+            card.MechanicData.Targets = new List<string> { "left" };
+        }
+
+        string currentTargetStr = card.MechanicData.Targets[0];
+        var foundAlias = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.name != null && a.name.Equals(currentTargetStr, StringComparison.OrdinalIgnoreCase));
+
+        if (foundAlias.name != null)
+        {
+            _currentMask = foundAlias.mask;
+        }
+        else
+        {
+            _currentMask = 1; // Default to "left" mask (1)
+            card.MechanicData.Targets[0] = "left";
+        }
+
+        _currentDiceTab = 0; // Reset tab view to "All" when switching hat cards
+        // -----------------------------------------------------------------------------------------
+
+        // 1. Hat Type Selector (Hero Hat vs Monster Egg)
+        ui.CreateInspectorDropdown("Hat Type", new List<string> { "Hero (Hat)", "Monster (Egg)" }, isMonster ? 1 : 0, (idx) => {
+            bool wantsMonster = idx == 1;
+            if (isMonster != wantsMonster)
+            {
+                ConvertHatPayloadType(ui, card);
+            }
+        });
+
+        // 2. Entity Fields (Hero vs Monster)
+        if (isMonster)
+        {
+            var md = entityData as MonsterData;
+            ui.CreateInspectorInputField("Summon Entity Name", md.baseMonster ?? "egg.Wolf", (val) => {
+                md.baseMonster = val;
+                ui.AutoCompile();
+            });
+            ui.CreateInspectorInputField("Multiplier / Bonus HP", md.xMultiplier >= 2 ? md.xMultiplier.ToString() : md.hp.ToString(), (val) => {
+                if (int.TryParse(val, out int num))
+                {
+                    if (num >= 2 && num <= 9) md.xMultiplier = num;
+                    else md.hp = num;
+                }
+                ui.AutoCompile();
+            });
+        }
+        else
+        {
+            var hd = entityData as HeroData;
+            ui.CreateInspectorInputField("Base Replica", hd.baseReplica ?? "Fey", (val) => {
+                hd.baseReplica = val;
+                ui.AutoCompile();
+            });
+            ui.CreateInspectorInputField("Color Class", hd.colorClass ?? "", (val) => {
+                hd.colorClass = val;
+                ui.AutoCompile();
+            });
+            ui.CreateInspectorInputField("Tier", hd.tier.ToString(), (val) => {
+                if (int.TryParse(val, out int t)) hd.tier = t;
+                ui.AutoCompile();
+            });
+        }
+
+        // Initialize the generic dice widget using base EntityData
+        _diceWidget = new DiceFaceBuilderWidget(
+            getDiceSides: () => entityData.diceSides,
+            allowFacades: () => true,
+            openBaseModal: (idx) => OpenBaseModal(idx, entityData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, entityData); }),
+            openFacadeModal: (idx) => OpenFacadeModal(idx, entityData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, entityData); }),
+            getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
+            getFacadeSprite: (facId) => EntityUIHelpers.GetFacadeSprite(facId),
+            onStateChanged: () => { ui.AutoCompile(); UpdateHatDiceUIFromData(entityData); },
+            onRebuildRequested: () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, entityData); }
+        );
+
+        // Master Container
+        GameObject containerObj = new GameObject("HatDiceContainer", typeof(RectTransform), typeof(LayoutElement));
+        containerObj.transform.SetParent(ui.InspectorContent, false);
+        _mainContainerLayoutElement = containerObj.GetComponent<LayoutElement>();
+
+        var containerLayout = containerObj.AddComponent<VerticalLayoutGroup>();
+        containerLayout.spacing = 10f;
+        containerLayout.childControlHeight = true;
+        containerLayout.childControlWidth = true;
+        containerLayout.childForceExpandHeight = false;
+
+        // Create dropdown filter initialized strictly from card data
+        CreateTargetDropdowns(containerObj.transform, ui, card);
+
+        // Dice Face Preview UI Instantiation
+        if (fsg.dicePreviewAlonePrefab != null)
+        {
+            GameObject dicePreviewObj = UnityEngine.Object.Instantiate(fsg.dicePreviewAlonePrefab, containerObj.transform, false);
+
+            LayoutElement previewLayout = dicePreviewObj.GetComponent<LayoutElement>() ?? dicePreviewObj.AddComponent<LayoutElement>();
+            previewLayout.minHeight = 110f;
+            previewLayout.preferredHeight = 120f;
+            previewLayout.flexibleHeight = 0f;
+
+            _previewUI = dicePreviewObj.GetComponent<DiceFacesPreviewUI>();
+
+            if (_previewUI != null)
+            {
+                _previewUI.OnFaceSelected += (faceIndex) =>
+                {
+                    _currentDiceTab = faceIndex + 1;
+                    RebuildHatDiceGrid(ui, card, entityData);
+                };
+            }
+        }
+
+        // Grid Container Setup
+        GameObject gridTargetObj = new GameObject("DiceGridTarget", typeof(RectTransform), typeof(LayoutElement));
+        gridTargetObj.transform.SetParent(containerObj.transform, false);
+        _diceGridTarget = gridTargetObj.GetComponent<RectTransform>();
+        _diceGridLayoutElement = gridTargetObj.GetComponent<LayoutElement>();
+
+        RebuildHatDiceGrid(ui, card, entityData);
+    }
+
+    private void ConvertHatPayloadType(ItemUI ui, EntityCard card)
+    {
+        if (card == null || card.MechanicData == null) return;
+
+        EntityData oldData = card.MechanicData.PayloadData as EntityData;
+        if (oldData is MonsterData)
+        {
+            HeroData hero = new HeroData();
+            hero.InitializeAsBlank();
+            hero.baseReplica = "Fey";
+            if (oldData != null && oldData.diceSides != null) hero.diceSides = oldData.diceSides;
+            else hero.InitializeDiceFaces();
+            card.MechanicData.PayloadData = hero;
+        }
+        else
+        {
+            MonsterData monster = new MonsterData();
+            monster.InitializeAsBlank();
+            monster.baseMonster = "egg.Wolf";
+            if (oldData != null && oldData.diceSides != null) monster.diceSides = oldData.diceSides;
+            else monster.InitializeDiceFaces();
+            card.MechanicData.PayloadData = monster;
+        }
+
+        ui.SelectCard(card);
+        ui.AutoCompile();
+    }
+
+    public static string GetHatDiceString(EntityData entityData)
+    {
+        if (entityData == null) return "Fey";
+        StringBuilder sb = new StringBuilder();
+        string baseName = "Fey";
+        if (entityData is HeroData hd)
+            baseName = string.IsNullOrEmpty(hd.baseReplica) ? "Fey" : hd.baseReplica;
+        else if (entityData is MonsterData md)
+            baseName = string.IsNullOrEmpty(md.baseMonster) ? "egg.Wolf" : md.baseMonster;
         sb.Append(baseName);
 
         // 1. Append the .sd. block
         int lastActiveIndex = -1;
         for (int i = 0; i < 6; i++)
         {
-            if (heroData.diceSides[i] != null && (heroData.diceSides[i].effectID != 0 || heroData.diceSides[i].pips != 0))
-            {
-                lastActiveIndex = i;
-            }
-        }
-
-        if (lastActiveIndex != -1)
-        {
-            sb.Append(".sd.");
-            for (int i = 0; i <= lastActiveIndex; i++)
-            {
-                var side = heroData.diceSides[i];
-                if (side == null || (side.effectID == 0 && side.pips == 0))
-                {
-                    sb.Append("0");
-                }
-                else
-                {
-                    if (side.pips == 0) sb.Append(side.effectID);
-                    else sb.Append($"{side.effectID}-{side.pips}");
-                }
-
-                if (i < lastActiveIndex) sb.Append(":");
-            }
-        }
-
-        // 2. Append standard Facades, HSV, and Keywords
-        string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
-        if (!string.IsNullOrEmpty(faceModifiers))
-        {
-            sb.Append(faceModifiers);
-        }
-
-        // 3. NATIVE STICKER APPENDING: Automatically output sticker modifiers per side
-        for (int i = 0; i < 6; i++)
-        {
-            DiceSideData side = heroData.diceSides[i];
-            if (side != null && side.faceType == DiceSideData.DiceFaceType.Sticker && !string.IsNullOrWhiteSpace(side.payload))
-            {
-                string cleanSticker = side.payload.Trim();
-
-                // FIX: Strip outer parens first to prevent ((sticker)) double-wrapping
-                while (cleanSticker.StartsWith("(") && cleanSticker.EndsWith(")"))
-                {
-                    cleanSticker = cleanSticker.Substring(1, cleanSticker.Length - 2).Trim();
-                }
-
-                // Wrap in brackets if it's a complex item syntax
-                if (cleanSticker.Contains(".") || cleanSticker.Contains("#") || cleanSticker.Contains(":"))
-                {
-                    cleanSticker = $"({cleanSticker})";
-                }
-
-                string targetName = DiceTargetHelper.FaceNames[i];
-                sb.Append($".i.{targetName}.sticker.{cleanSticker}");
-            }
-        }
-
-        return sb.ToString();
-    }
-    */
-    /*
-    public static string GetHatDiceString(HeroData heroData)
-    {
-        StringBuilder sb = new StringBuilder();
-
-        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Fey" : heroData.baseReplica;
-        sb.Append(baseName);
-
-        int lastActiveIndex = -1;
-        for (int i = 0; i < 6; i++)
-        {
-            if (heroData.diceSides[i] != null && (heroData.diceSides[i].effectID != 0 || heroData.diceSides[i].pips != 0))
-            {
-                lastActiveIndex = i;
-            }
-        }
-
-        if (lastActiveIndex != -1)
-        {
-            sb.Append(".sd.");
-            for (int i = 0; i <= lastActiveIndex; i++)
-            {
-                var side = heroData.diceSides[i];
-                if (side == null || (side.effectID == 0 && side.pips == 0))
-                {
-                    sb.Append("0");
-                }
-                else
-                {
-                    if (side.pips == 0) sb.Append(side.effectID);
-                    else sb.Append($"{side.effectID}-{side.pips}");
-                }
-
-                if (i < lastActiveIndex) sb.Append(":");
-            }
-        }
-
-        // Output naturally tracked modifiers (keywords, traits)
-        string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
-        if (!string.IsNullOrEmpty(faceModifiers))
-        {
-            sb.Append(faceModifiers);
-        }
-
-        // Output UI-Authoritative Face Payloads
-        for (int i = 0; i < 6; i++)
-        {
-            DiceSideData side = heroData.diceSides[i];
-
-            if (side != null &&
-               (side.faceType == DiceSideData.DiceFaceType.Sticker ||
-                side.faceType == DiceSideData.DiceFaceType.Cast ||
-                side.faceType == DiceSideData.DiceFaceType.Enchant ||
-                side.faceType == DiceSideData.DiceFaceType.Egg)
-                && !string.IsNullOrWhiteSpace(side.payload))
-            {
-                string cleanPayload = side.payload.Trim();
-
-                // Strip all outer parens to establish a clean baseline
-                while (cleanPayload.StartsWith("(") && cleanPayload.EndsWith(")"))
-                {
-                    cleanPayload = cleanPayload.Substring(1, cleanPayload.Length - 2).Trim();
-                }
-
-                string prefixTag = "sticker";
-                if (side.faceType == DiceSideData.DiceFaceType.Cast) prefixTag = "cast";
-                else if (side.faceType == DiceSideData.DiceFaceType.Enchant) prefixTag = "enchant";
-                else if (side.faceType == DiceSideData.DiceFaceType.Egg) prefixTag = "egg";
-
-                // Re-wrap securely if the payload contains complex delimiters
-                if (cleanPayload.Contains(".") || cleanPayload.Contains("#") || cleanPayload.Contains(":"))
-                {
-                    cleanPayload = $"({cleanPayload})";
-                }
-
-                string targetName = DiceTargetHelper.FaceNames[i];
-                sb.Append($".i.{targetName}.{prefixTag}.{cleanPayload}");
-            }
-        }
-
-        return sb.ToString();
-    }
-    */
-    /*
-    public static string GetHatDiceString(HeroData heroData)
-    {
-        StringBuilder sb = new StringBuilder();
-        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Fey" : heroData.baseReplica;
-        sb.Append(baseName);
-
-        // 1. Append the .sd. block
-        int lastActiveIndex = -1;
-        for (int i = 0; i < 6; i++)
-        {
-            if (heroData.diceSides[i] != null && (heroData.diceSides[i].effectID != 0 || heroData.diceSides[i].pips != 0))
+            if (entityData.diceSides != null && entityData.diceSides[i] != null && (entityData.diceSides[i].effectID != 0 || entityData.diceSides[i].pips != 0))
             {
                 lastActiveIndex = i;
             }
@@ -275,7 +268,7 @@ public class HatNodeDef : AuthoringNodeDef
             sb.Append(".sd.");
             for (int i = 0; i <= lastActiveIndex; i++)
             {
-                var side = heroData.diceSides[i];
+                var side = entityData.diceSides[i];
                 if (side == null || (side.effectID == 0 && side.pips == 0))
                 {
                     sb.Append("0");
@@ -289,82 +282,8 @@ public class HatNodeDef : AuthoringNodeDef
             }
         }
 
-        // 2. Output naturally tracked modifiers (keywords, traits)
-        string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
-        if (!string.IsNullOrEmpty(faceModifiers))
-        {
-            sb.Append(faceModifiers);
-        }
-
-        // 3. NATIVE STICKER/PAYLOAD APPENDING: Automatically output sticker/cast/enchant/egg modifiers per side
-        for (int i = 0; i < 6; i++)
-        {
-            DiceSideData side = heroData.diceSides[i];
-            if (side != null &&
-               (side.faceType == DiceSideData.DiceFaceType.Sticker ||
-                side.faceType == DiceSideData.DiceFaceType.Cast ||
-                side.faceType == DiceSideData.DiceFaceType.Enchant ||
-                side.faceType == DiceSideData.DiceFaceType.Egg)
-                && !string.IsNullOrWhiteSpace(side.payload))
-            {
-                string cleanPayload = side.payload.Trim();
-                while (cleanPayload.StartsWith("(") && cleanPayload.EndsWith(")"))
-                {
-                    cleanPayload = cleanPayload.Substring(1, cleanPayload.Length - 2).Trim();
-                }
-                string prefixTag = "sticker";
-                if (side.faceType == DiceSideData.DiceFaceType.Cast) prefixTag = "cast";
-                else if (side.faceType == DiceSideData.DiceFaceType.Enchant) prefixTag = "enchant";
-                else if (side.faceType == DiceSideData.DiceFaceType.Egg) prefixTag = "egg";
-
-                if (cleanPayload.Contains(".") || cleanPayload.Contains("#") || cleanPayload.Contains(":"))
-                {
-                    cleanPayload = $"({cleanPayload})";
-                }
-                string targetName = DiceTargetHelper.FaceNames[i];
-                sb.Append($".i.{targetName}.{prefixTag}.{cleanPayload}");
-            }
-        }
-        return sb.ToString();
-    }
-    */
-
-    public static string GetHatDiceString(HeroData heroData)
-    {
-        StringBuilder sb = new StringBuilder();
-        string baseName = string.IsNullOrEmpty(heroData.baseReplica) ? "Fey" : heroData.baseReplica;
-        sb.Append(baseName);
-
-        // 1. Append the .sd. block
-        int lastActiveIndex = -1;
-        for (int i = 0; i < 6; i++)
-        {
-            if (heroData.diceSides[i] != null && (heroData.diceSides[i].effectID != 0 || heroData.diceSides[i].pips != 0))
-            {
-                lastActiveIndex = i;
-            }
-        }
-        if (lastActiveIndex != -1)
-        {
-            sb.Append(".sd.");
-            for (int i = 0; i <= lastActiveIndex; i++)
-            {
-                var side = heroData.diceSides[i];
-                if (side == null || (side.effectID == 0 && side.pips == 0))
-                {
-                    sb.Append("0");
-                }
-                else
-                {
-                    if (side.pips == 0) sb.Append(side.effectID);
-                    else sb.Append($"{side.effectID}-{side.pips}");
-                }
-                if (i < lastActiveIndex) sb.Append(":");
-            }
-        }
-
-        // 2. Output authoritatively tracked modifiers & payloads (keywords, traits, cast, stickers, enchants, egg)
-        string faceModifiers = heroData.BuildFaceModifiers(includeInlineFacades: false);
+        // 2. Output authoritatively tracked modifiers & payloads
+        string faceModifiers = entityData.BuildFaceModifiers(includeInlineFacades: false);
         if (!string.IsNullOrEmpty(faceModifiers))
         {
             sb.Append(faceModifiers);
@@ -372,38 +291,37 @@ public class HatNodeDef : AuthoringNodeDef
 
         return sb.ToString();
     }
+
     public override string GetTitle(EntityCard card)
     {
         string targets = card.MechanicData.Targets.Count > 0 ? string.Join(".", card.MechanicData.Targets) : "mid";
 
         if (card.MechanicData.PayloadData is HeroData heroData && !string.IsNullOrEmpty(heroData.baseReplica))
             return $"[{targets}] Hat: {heroData.baseReplica}";
+        if (card.MechanicData.PayloadData is MonsterData monsterData && !string.IsNullOrEmpty(monsterData.baseMonster))
+            return $"[{targets}] Egg: {monsterData.baseMonster}";
 
         return $"[{targets}] Hat (Empty)";
     }
 
     // --- GRID GENERATOR & DATA SYNCHRONIZATION ---
-    private void RebuildHatDiceGrid(ItemUI ui, EntityCard card, HeroData heroData)
+    private void RebuildHatDiceGrid(ItemUI ui, EntityCard card, EntityData entityData)
     {
         if (_diceGridTarget == null || _diceWidget == null) return;
 
-        List<GridRowSpec> diceLayout = GenerateHatDiceLayout(ui, card, heroData, _currentDiceTab);
+        List<GridRowSpec> diceLayout = GenerateHatDiceLayout(ui, card, entityData, _currentDiceTab);
 
-        // Build directly into the raw transform, false disables margin padding
         _diceUI = FullScreenUIGenerator.Instance.RebuildGrid(_diceGridTarget, diceLayout, false);
         _diceWidget.SetGridReferences(_diceUI);
 
-        // Size the internal grid target
         _diceGridLayoutElement.minHeight = _diceUI.TotalHeight;
-
-        // Size the master container (Tabs Height + Layout Spacing + Grid Height)
-        //_mainContainerLayoutElement.minHeight = 35f + 150f + 35f + 10f + _diceUI.TotalHeight;
         _mainContainerLayoutElement.minHeight = 70f + 150f + 35f + 10f + _diceUI.TotalHeight;
 
         Canvas.ForceUpdateCanvases();
-        UpdateHatDiceUIFromData(heroData);
+        UpdateHatDiceUIFromData(entityData);
     }
-    private List<GridRowSpec> GenerateHatDiceLayout(ItemUI ui, EntityCard card, HeroData heroData, int tabIndex)
+
+    private List<GridRowSpec> GenerateHatDiceLayout(ItemUI ui, EntityCard card, EntityData entityData, int tabIndex)
     {
         var layout = new List<GridRowSpec>();
 
@@ -412,7 +330,6 @@ public class HatNodeDef : AuthoringNodeDef
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            // Add this check to exclude inactive faces:
             if (tabIndex == 0 && (_currentMask & (1 << i)) == 0) continue;
 
             layout.AddRange(_diceWidget.GenerateLayout(i));
@@ -425,36 +342,38 @@ public class HatNodeDef : AuthoringNodeDef
 
         return layout;
     }
-    private void UpdateHatDiceUIFromData(HeroData heroData)
+
+    private void UpdateHatDiceUIFromData(EntityData entityData)
     {
-        // 1. Update Preview UI state and data
-        if (_previewUI != null)
+        if (_previewUI != null && entityData != null && entityData.diceSides != null)
         {
             int activeFaceIndex = _currentDiceTab == 0 ? -1 : _currentDiceTab - 1;
             _previewUI.UpdateFaceStates(_currentMask, activeFaceIndex);
 
             for (int i = 0; i < 6; i++)
             {
-                var f = heroData.diceSides[i];
-                _previewUI.SetSlotIcon(i, f.facadeID, f.effectID, f.facadeColor, f.pips);
+                var f = entityData.diceSides[i];
+                if (f != null)
+                {
+                    _previewUI.SetSlotIcon(i, f.facadeID, f.effectID, f.facadeColor, f.pips);
+                }
             }
         }
 
         if (_diceWidget == null) return;
 
-        // 2. Loop adjustments for input fields
         int startIndex = (_currentDiceTab == 0) ? 0 : _currentDiceTab - 1;
         int endIndex = (_currentDiceTab == 0) ? 6 : _currentDiceTab;
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            // Skip updating fields for inactive faces if in "All" mode
             if (_currentDiceTab == 0 && (_currentMask & (1 << i)) == 0) continue;
 
             _diceWidget.UpdateUIFromData(i);
             _diceWidget.UpdateVisuals(i);
         }
     }
+
     private GameObject CreateDropdownRow(Transform parent, string labelText, List<string> options, int initialIndex, System.Action<int> onValueChanged)
     {
         var fsg = FullScreenUIGenerator.Instance;
@@ -479,7 +398,7 @@ public class HatNodeDef : AuthoringNodeDef
         labelObj.transform.SetParent(rowObj.transform, false);
 
         var labelLE = labelObj.AddComponent<LayoutElement>();
-        labelLE.minWidth = 120f; // Sized to fit "Hat Source Side:"
+        labelLE.minWidth = 120f;
         labelLE.preferredWidth = 120f;
         labelLE.flexibleWidth = 0f;
 
@@ -510,10 +429,11 @@ public class HatNodeDef : AuthoringNodeDef
     {
         return IconPickerModal.Instance;
     }
-    private void OpenBaseModal(int faceIndex, HeroData heroData, System.Action onComplete)
+
+    private void OpenBaseModal(int faceIndex, EntityData entityData, System.Action onComplete)
     {
         var iconPicker = GetIconPicker();
-        if (iconPicker == null) return;
+        if (iconPicker == null || entityData == null || entityData.diceSides == null) return;
 
         IconPickerConfig config = new IconPickerConfig
         {
@@ -540,7 +460,7 @@ public class HatNodeDef : AuthoringNodeDef
                     string[] parts = sprite.name.Split('_');
                     if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
                     {
-                        heroData.diceSides[faceIndex].effectID = parsedId;
+                        entityData.diceSides[faceIndex].effectID = parsedId;
                         onComplete?.Invoke();
                     }
                 }
@@ -548,10 +468,11 @@ public class HatNodeDef : AuthoringNodeDef
         };
         iconPicker.OpenModal(config);
     }
-    private void OpenFacadeModal(int faceIndex, HeroData heroData, System.Action onComplete)
+
+    private void OpenFacadeModal(int faceIndex, EntityData entityData, System.Action onComplete)
     {
         var iconPicker = GetIconPicker();
-        if (iconPicker == null) return;
+        if (iconPicker == null || entityData == null || entityData.diceSides == null) return;
 
         IconPickerConfig config = new IconPickerConfig
         {
@@ -598,11 +519,11 @@ public class HatNodeDef : AuthoringNodeDef
                         else if (prefix == "tin" && parsedId >= 0 && parsedId <= 17) facadeStr = $"bas{248 + parsedId}";
                         else facadeStr = $"{parts[0]}{parts[1]}";
 
-                        heroData.diceSides[faceIndex].facadeID = facadeStr;
+                        entityData.diceSides[faceIndex].facadeID = facadeStr;
                     }
                     else
                     {
-                        heroData.diceSides[faceIndex].facadeID = filename;
+                        entityData.diceSides[faceIndex].facadeID = filename;
                     }
                     onComplete?.Invoke();
                 }
@@ -611,102 +532,11 @@ public class HatNodeDef : AuthoringNodeDef
         iconPicker.OpenModal(config);
     }
 
-    public override void DrawInspector(ItemUI ui, EntityCard card)
-    {
-        var fsg = FullScreenUIGenerator.Instance;
-        if (fsg == null) return;
-
-        if (!(card.MechanicData.PayloadData is HeroData heroData))
-        {
-            heroData = new HeroData();
-            heroData.InitializeDiceFaces();
-            card.MechanicData.PayloadData = heroData;
-        }
-
-        // --- FIX: Strictly force re-initialization of mask & tab for THIS specific card instance ---
-        if (card.MechanicData.Targets == null || card.MechanicData.Targets.Count == 0)
-        {
-            card.MechanicData.Targets = new List<string> { "left" };
-        }
-
-        string currentTargetStr = card.MechanicData.Targets[0];
-        var foundAlias = DiceTargetHelper.TargetAliases.FirstOrDefault(a => a.name != null && a.name.Equals(currentTargetStr, StringComparison.OrdinalIgnoreCase));
-
-        if (foundAlias.name != null)
-        {
-            _currentMask = foundAlias.mask;
-        }
-        else
-        {
-            _currentMask = 1; // Default to "left" mask (1)
-            card.MechanicData.Targets[0] = "left";
-        }
-
-        _currentDiceTab = 0; // Reset tab view to "All" when switching hat cards
-        // -----------------------------------------------------------------------------------------
-
-        // Initialize the generic dice widget
-        _diceWidget = new DiceFaceBuilderWidget(
-            getDiceSides: () => heroData.diceSides,
-            allowFacades: () => true,
-            openBaseModal: (idx) => OpenBaseModal(idx, heroData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); }),
-            openFacadeModal: (idx) => OpenFacadeModal(idx, heroData, () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); }),
-            getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
-            getFacadeSprite: (facId) => EntityUIHelpers.GetFacadeSprite(facId),
-            onStateChanged: () => { ui.AutoCompile(); UpdateHatDiceUIFromData(heroData); },
-            onRebuildRequested: () => { ui.AutoCompile(); RebuildHatDiceGrid(ui, card, heroData); }
-        );
-
-        // Master Container
-        GameObject containerObj = new GameObject("HatDiceContainer", typeof(RectTransform), typeof(LayoutElement));
-        containerObj.transform.SetParent(ui.InspectorContent, false);
-        _mainContainerLayoutElement = containerObj.GetComponent<LayoutElement>();
-
-        var containerLayout = containerObj.AddComponent<VerticalLayoutGroup>();
-        containerLayout.spacing = 10f;
-        containerLayout.childControlHeight = true;
-        containerLayout.childControlWidth = true;
-        containerLayout.childForceExpandHeight = false;
-
-        // Create dropdown filter initialized strictly from card data
-        CreateTargetDropdowns(containerObj.transform, ui, card);
-
-        // Dice Face Preview UI Instantiation
-        if (fsg.dicePreviewAlonePrefab != null)
-        {
-            GameObject dicePreviewObj = UnityEngine.Object.Instantiate(fsg.dicePreviewAlonePrefab, containerObj.transform, false);
-
-            LayoutElement previewLayout = dicePreviewObj.GetComponent<LayoutElement>() ?? dicePreviewObj.AddComponent<LayoutElement>();
-            previewLayout.minHeight = 110f;
-            previewLayout.preferredHeight = 120f;
-            previewLayout.flexibleHeight = 0f;
-
-            _previewUI = dicePreviewObj.GetComponent<DiceFacesPreviewUI>();
-
-            if (_previewUI != null)
-            {
-                _previewUI.OnFaceSelected += (faceIndex) =>
-                {
-                    _currentDiceTab = faceIndex + 1;
-                    RebuildHatDiceGrid(ui, card, heroData);
-                };
-            }
-        }
-
-        // Grid Container Setup
-        GameObject gridTargetObj = new GameObject("DiceGridTarget", typeof(RectTransform), typeof(LayoutElement));
-        gridTargetObj.transform.SetParent(containerObj.transform, false);
-        _diceGridTarget = gridTargetObj.GetComponent<RectTransform>();
-        _diceGridLayoutElement = gridTargetObj.GetComponent<LayoutElement>();
-
-        RebuildHatDiceGrid(ui, card, heroData);
-    }
     private void CreateTargetDropdowns(Transform parent, ItemUI ui, EntityCard card)
     {
         var fsg = FullScreenUIGenerator.Instance;
         if (fsg == null || fsg.dropdownPrefab == null) return;
 
-        // 1. Setup collections for both dropdowns
         var reversedAliases = DiceTargetHelper.TargetAliases.Reverse().ToList();
         List<string> mySideOptions = reversedAliases.Select(a => DiceTargetHelper.FormatAliasName(a.name)).ToList();
 
@@ -725,20 +555,19 @@ public class HatNodeDef : AuthoringNodeDef
         List<string> hatSideOptions = new List<string> { "(Same Face)" };
         hatSideOptions.AddRange(singleFaceAliases.Select(a => DiceTargetHelper.FormatAliasName(a.name)));
 
-        // --- FIX: Derive dropdown indices strictly from card targets ---
         string currentMySide = card.MechanicData.Targets.Count > 0 ? card.MechanicData.Targets[0] : "left";
         string currentHatSide = card.MechanicData.Targets.Count > 1 ? card.MechanicData.Targets[1] : null;
 
         int initialMyIndex = reversedAliases.FindIndex(a => a.name != null && a.name.Equals(currentMySide, StringComparison.OrdinalIgnoreCase));
         initialMyIndex = Mathf.Max(0, initialMyIndex);
 
-        int initialHatIndex = 0; // Default index matches "(Same Face)"
+        int initialHatIndex = 0;
         if (!string.IsNullOrEmpty(currentHatSide))
         {
             int foundIdx = singleFaceAliases.FindIndex(a => a.name != null && a.name.Equals(currentHatSide, StringComparison.OrdinalIgnoreCase));
             if (foundIdx != -1)
             {
-                initialHatIndex = foundIdx + 1; // Offset due to "(Same Face)" placement
+                initialHatIndex = foundIdx + 1;
             }
         }
 
@@ -747,13 +576,12 @@ public class HatNodeDef : AuthoringNodeDef
             ui.AutoCompile();
             ui.RefreshSidebar();
 
-            if (card.MechanicData.PayloadData is HeroData hero)
+            if (card.MechanicData.PayloadData is EntityData entityData)
             {
-                RebuildHatDiceGrid(ui, card, hero);
+                RebuildHatDiceGrid(ui, card, entityData);
             }
         };
 
-        // Dropdown 1: Target Side(s)
         CreateDropdownRow(parent, "Target Side(s):", mySideOptions, initialMyIndex, (val) =>
         {
             var selectedAlias = reversedAliases[val];
@@ -784,7 +612,6 @@ public class HatNodeDef : AuthoringNodeDef
             updateState();
         });
 
-        // Dropdown 2: Hat Source Side
         CreateDropdownRow(parent, "Hat Source Side:", hatSideOptions, initialHatIndex, (val) =>
         {
             if (val == 0)
