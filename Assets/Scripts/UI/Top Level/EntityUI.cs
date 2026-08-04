@@ -102,26 +102,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             ModPackage.Instance.OnModDataChanged -= OnStateChanged;
         }
     }
-    protected virtual void Update()
-    {
-        if (_needsRebuild && IsTabVisible())
-        {
-            _needsRebuild = false;
-            RebuildStatsUI();
-            RebuildDiceScrollView();
-        }
-
-        if (_pendingTextUpdate)
-        {
-            _textUpdateTimer += Time.deltaTime;
-            if (_textUpdateTimer >= 0.1f)
-            {
-                _pendingTextUpdate = false;
-                _textUpdateTimer = 0f;
-                UpdateExportText();
-            }
-        }
-    }
     protected virtual void OnEnable()
     {
         if (_needsRebuild)
@@ -1457,6 +1437,40 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         _pendingTextUpdate = false;
         UpdateExportText();
     }
+    protected void UpdateExportText()
+    {
+        if (rawTextOutput != null && CurrentEntity != null)
+        {
+            string exportedString = ExportEntity(CurrentEntity);
+            rawTextOutput.SetTextWithoutNotify(exportedString);
+            if (syntaxHighlighterText != null)
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
+        }
+    }
+    protected void TriggerTextUpdate()
+    {
+        _pendingTextUpdate = true;
+        _textUpdateTimer = 0f; // Resets timer so updates only run after slider/input manipulation stops
+    }
+    protected virtual void Update()
+    {
+        if (_needsRebuild && IsTabVisible())
+        {
+            _needsRebuild = false;
+            RebuildStatsUI();
+            RebuildDiceScrollView();
+        }
+        if (_pendingTextUpdate)
+        {
+            _textUpdateTimer += Time.deltaTime;
+            if (_textUpdateTimer >= 0.15f)
+            {
+                _pendingTextUpdate = false;
+                _textUpdateTimer = 0f;
+                UpdateExportText();
+            }
+        }
+    }
     protected virtual void UpdateVisualsOnly()
     {
         if (portraitPreview != null)
@@ -1464,12 +1478,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             portraitPreview.SetNameText(CurrentEntity.entityName);
             portraitPreview.SetHPText(CurrentEntity.hp > 0 ? CurrentEntity.hp.ToString() : "");
             UpdateSpecificVisuals();
-
-            // Pass full dynamic visuals array directly to Portrait Preview
             portraitPreview.SetPortraitVisualModifiers(CurrentEntity.visuals);
         }
 
-        // Dynamically update preview button backgrounds, icons, sliders, and inputs by index
         if (statsUI != null && CurrentEntity.visuals != null)
         {
             for (int i = 0; i < CurrentEntity.visuals.Count; i++)
@@ -1491,7 +1502,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 {
                     if (statsUI.Buttons != null && statsUI.Buttons.TryGetValue($"VisThueColorBtn_{i}", out var thueColorBtn))
                         SetButtonColorPreview(thueColorBtn, vis.thue != null ? vis.thue.colorHex : Color.white);
-
                     if (statsUI.Sliders != null)
                     {
                         if (statsUI.Sliders.TryGetValue($"VisThueRange_{i}", out var tRange))
@@ -1524,8 +1534,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 {
                     if (statsUI.Buttons != null && statsUI.Buttons.TryGetValue($"VisDrawBtn_{i}", out var drawBtn))
                     {
-                        Sprite s = EntityUIHelpers.GetFacadeSprite(vis.RawValue);
-                        if (s == null) s = EntityUIHelpers.GetSpriteForPortrait(vis.RawValue);
+                        Sprite s = SpriteCacheHelper.GetFacadeSprite(vis.RawValue);
+                        if (s == null) s = SpriteCacheHelper.GetSpriteForPortrait(vis.RawValue);
                         SetButtonIcon(drawBtn, s);
                     }
                     if (statsUI.Inputs != null)
@@ -1537,28 +1547,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 }
             }
         }
-
         for (int i = 0; i < 6; i++) UpdateIcon(i);
         diceBuilderWidget?.UpdateVisuals(currentDiceTab);
 
-        Debounce("TextExportUpdate", 0.15f, () => {
-            if (rawTextOutput != null && CurrentEntity != null)
-            {
-                string exportedString = ExportEntity(CurrentEntity);
-                rawTextOutput.SetTextWithoutNotify(exportedString);
-                if (syntaxHighlighterText != null)
-                    syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
-            }
-        });
-    }
-    protected void UpdateExportText()
-    {
-        if (rawTextOutput != null && CurrentEntity != null)
-        {
-            string exportedString = ExportEntity(CurrentEntity);
-            rawTextOutput.SetTextWithoutNotify(exportedString);
-            if (syntaxHighlighterText != null)
-                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
-        }
+        TriggerTextUpdate();
     }
 }

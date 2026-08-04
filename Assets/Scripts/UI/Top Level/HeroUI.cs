@@ -162,8 +162,7 @@ public class HeroUI : EntityUI<HeroData>
     {
         if (string.IsNullOrEmpty(facadeID)) return facadeID;
         if (_facadeResolutionCache.TryGetValue(facadeID, out string cachedName)) return cachedName;
-
-        if (EntityUIHelpers.GetFacadeSprite(facadeID) != null)
+        if (SpriteCacheHelper.GetFacadeSprite(facadeID) != null)
         {
             _facadeResolutionCache[facadeID] = facadeID;
             return facadeID;
@@ -214,17 +213,14 @@ public class HeroUI : EntityUI<HeroData>
     private void OpenModPoolModal()
     {
         if (iconPicker == null) return;
-
         var heroes = ModPackage.Instance.loadedMod.GetAll<HeroData>();
         Sprite[] heroSprites = new Sprite[heroes.Count + 1];
-
-        heroSprites[0] = EntityUIHelpers.GetSpriteForPortrait("Statue");
-
+        heroSprites[0] = SpriteCacheHelper.GetSpriteForPortrait("Statue");
         for (int i = 0; i < heroes.Count; i++)
         {
             var h = heroes[i];
             string imgStr = string.IsNullOrEmpty(h.imageOverride) || h.imageOverride == "None" ? h.baseReplica : h.imageOverride;
-            heroSprites[i + 1] = EntityUIHelpers.GetSpriteForPortrait(imgStr);
+            heroSprites[i + 1] = SpriteCacheHelper.GetSpriteForPortrait(imgStr);
         }
 
         IconPickerConfig config = new IconPickerConfig
@@ -285,10 +281,8 @@ public class HeroUI : EntityUI<HeroData>
         if (portraitPreview != null)
         {
             portraitPreview.SetTierText(CurrentEntity.GetEffectiveTier().ToString());
-
             HeroColorOption colOpt = EntityUIHelpers.ReverseLookupColor(CurrentEntity.colorClass);
             portraitPreview.SetHeroColor(SDColors.GetColor(colOpt));
-
             bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentEntity.imageOverride == _customImageString;
             if (isUsingCustomImage && _customImageTexture != null && portraitPreview.portrait != null)
             {
@@ -296,24 +290,23 @@ public class HeroUI : EntityUI<HeroData>
             }
             else
             {
-                Sprite targetSprite = EntityUIHelpers.GetSpriteForPortrait(string.IsNullOrEmpty(CurrentEntity.imageOverride) || CurrentEntity.imageOverride == "None" ? CurrentEntity.baseReplica : CurrentEntity.imageOverride);
+                Sprite targetSprite = SpriteCacheHelper.GetSpriteForPortrait(string.IsNullOrEmpty(CurrentEntity.imageOverride) || CurrentEntity.imageOverride == "None" ? CurrentEntity.baseReplica : CurrentEntity.imageOverride);
                 if (targetSprite != null && portraitPreview.portrait != null)
                 {
                     portraitPreview.portrait.sprite = targetSprite;
                 }
             }
         }
-
         if (statsUI != null && statsUI.Buttons != null)
         {
             if (statsUI.Buttons.TryGetValue("ReplicaBtn", out var replicaBtn))
             {
-                Sprite s = EntityUIHelpers.GetSpriteForPortrait(CurrentEntity.baseReplica);
+                Sprite s = SpriteCacheHelper.GetSpriteForPortrait(CurrentEntity.baseReplica);
                 SetButtonIcon(replicaBtn, s);
             }
             if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
             {
-                Sprite s = EntityUIHelpers.GetSpriteForPortrait(CurrentEntity.imageOverride);
+                Sprite s = SpriteCacheHelper.GetSpriteForPortrait(CurrentEntity.imageOverride);
                 SetButtonIcon(overrideBtn, s);
             }
         }

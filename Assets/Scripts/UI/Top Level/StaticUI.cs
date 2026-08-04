@@ -4,6 +4,30 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
+public static class SpriteCacheHelper
+{
+    private static Dictionary<string, Sprite> _facadeCache = new Dictionary<string, Sprite>();
+    private static Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>();
+
+    public static Sprite GetFacadeSprite(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        if (_facadeCache.TryGetValue(name, out Sprite s)) return s;
+        s = EntityUIHelpers.GetFacadeSprite(name);
+        _facadeCache[name] = s;
+        return s;
+    }
+
+    public static Sprite GetSpriteForPortrait(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        if (_portraitCache.TryGetValue(name, out Sprite s)) return s;
+        s = EntityUIHelpers.GetSpriteForPortrait(name);
+        _portraitCache[name] = s;
+        return s;
+    }
+}
+
 public static class StaticUI
 {
     public static void SetButtonIcon(Button btn, Sprite sprite)

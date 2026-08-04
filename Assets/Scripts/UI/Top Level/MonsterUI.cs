@@ -31,7 +31,7 @@ public class MonsterUI : EntityUI<MonsterData>
     // Helper to extract the ID from the normalized sprite name (e.g. "big_10_bats_22x22" -> 10)
     // Dynamically fetch the correct sprite based on the monster's size
 
-    protected override Sprite GetFacadeDiceSprite(string facadeID) => EntityUIHelpers.GetFacadeSprite(facadeID);
+    protected override Sprite GetFacadeDiceSprite(string facadeID) => SpriteCacheHelper.GetFacadeSprite(facadeID);
     protected override bool AllowFacades() => true;
     protected override string ExportEntity(MonsterData entity) => entity.Export();
 
@@ -269,13 +269,11 @@ public class MonsterUI : EntityUI<MonsterData>
             return null;
         if (EntityUIHelpers.AllActionSprites == null)
             return null;
-
         string targetLeaf = baseMonsterName.ToLower();
         if (_monsterPortraitCache.TryGetValue(targetLeaf, out Sprite cachedSprite))
         {
             return cachedSprite;
         }
-
         foreach (var sprite in EntityUIHelpers.AllActionSprites)
         {
             if (sprite != null && sprite.name.StartsWith("prt_"))
@@ -288,8 +286,7 @@ public class MonsterUI : EntityUI<MonsterData>
                 }
             }
         }
-
-        Sprite fallback = EntityUIHelpers.GetSpriteForPortrait(baseMonsterName);
+        Sprite fallback = SpriteCacheHelper.GetSpriteForPortrait(baseMonsterName);
         _monsterPortraitCache[targetLeaf] = fallback;
         return fallback;
     }

@@ -154,6 +154,13 @@ public class ItemUI : RootUI
         return _rootCanvasRect != null && _rootCanvasRect.gameObject.activeInHierarchy;
     }
 
+    public void AutoCompile()
+    {
+        if (_compiledOutputField == null || MainCanvasContent == null) return;
+        _pendingCompile = true;
+        _compileTimer = 0f;
+    }
+
     private void Update()
     {
         if (_needsRebuild && IsTabVisible())
@@ -165,11 +172,10 @@ public class ItemUI : RootUI
                 SelectCard(_selectedCard);
             }
         }
-
         if (_pendingCompile)
         {
             _compileTimer += Time.deltaTime;
-            if (_compileTimer >= 0.1f)
+            if (_compileTimer >= 0.15f)
             {
                 _pendingCompile = false;
                 _compileTimer = 0f;
@@ -1284,25 +1290,6 @@ public class ItemUI : RootUI
                 }
             }
         }
-    }
-
-    public void AutoCompile()
-    {
-        if (_compiledOutputField == null || MainCanvasContent == null) return;
-
-        Debounce("ItemAutoCompile", 0.15f, () => {
-            ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
-            if (rootZone == null) return;
-            var cards = rootZone.Entrants.Cast<EntityCard>();
-            IsCompilingRichText = false;
-            _compiledOutputField.text = ItemSyntaxCompiler.CompileZone(cards);
-            if (_syntaxHighlighterText != null)
-            {
-                IsCompilingRichText = true;
-                _syntaxHighlighterText.text = ItemSyntaxCompiler.CompileZone(cards);
-                IsCompilingRichText = false;
-            }
-        });
     }
 
     private void ExecuteAutoCompile()

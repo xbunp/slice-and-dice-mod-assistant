@@ -1291,7 +1291,7 @@ public class EquippableNodeDef : AuthoringNodeDef
                 if (currentRefs.Inputs.TryGetValue($"VisDrawStr_{i}", out var ds)) ds.SetTextWithoutNotify(vis.RawValue);
                 if (currentRefs.Inputs.TryGetValue($"VisDrawX_{i}", out var dx)) dx.SetTextWithoutNotify(vis.x.ToString());
                 if (currentRefs.Inputs.TryGetValue($"VisDrawY_{i}", out var dy)) dy.SetTextWithoutNotify(vis.y.ToString());
-                if (currentRefs.Buttons.TryGetValue($"VisDrawBtn_{i}", out var btn)) SetButtonIcon(btn, EntityUIHelpers.GetFacadeSprite(vis.RawValue), data);
+                if (currentRefs.Buttons.TryGetValue($"VisDrawBtn_{i}", out var btn)) SetButtonIcon(btn, SpriteCacheHelper.GetFacadeSprite(vis.RawValue), data);
             }
             if (vis.Type == VisualType.Rect && currentRefs.Inputs.TryGetValue($"VisStr_{i}", out var sIn))
             {
@@ -1647,21 +1647,15 @@ public class EquippableNodeDef : AuthoringNodeDef
     public void UpdatePreviewVisuals(Image preview, ItemData data)
     {
         if (preview == null || data == null) return;
-
-        // 1. Resolve Base Sprite or Fallback to the first Draw Overlay sprite
         string baseRef = data.imageOverride;
         bool isBaseEmpty = string.IsNullOrWhiteSpace(baseRef) ||
                            baseRef.Equals("none", StringComparison.OrdinalIgnoreCase) ||
                            baseRef.Equals("blank", StringComparison.OrdinalIgnoreCase);
-
         Sprite resolvedSprite = null;
-
         if (!isBaseEmpty)
         {
-            resolvedSprite = EntityUIHelpers.GetFacadeSprite(baseRef);
+            resolvedSprite = SpriteCacheHelper.GetFacadeSprite(baseRef);
         }
-
-        // Fallback: If base image is empty or invalid, try using the first Draw Overlay sprite
         if (resolvedSprite == null && data.visuals != null)
         {
             var firstDraw = data.visuals.FirstOrDefault(v =>
@@ -1669,19 +1663,15 @@ public class EquippableNodeDef : AuthoringNodeDef
                 !string.IsNullOrWhiteSpace(v.RawValue) &&
                 !v.RawValue.Equals("none", StringComparison.OrdinalIgnoreCase) &&
                 !v.RawValue.Equals("blank", StringComparison.OrdinalIgnoreCase));
-
             if (firstDraw != null)
             {
-                resolvedSprite = EntityUIHelpers.GetFacadeSprite(firstDraw.RawValue);
+                resolvedSprite = SpriteCacheHelper.GetFacadeSprite(firstDraw.RawValue);
             }
         }
-
-        // Ultimate Fallback
         if (resolvedSprite == null)
         {
-            resolvedSprite = EntityUIHelpers.GetFacadeSprite("SpellPlaceholder");
+            resolvedSprite = SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
         }
-
         preview.sprite = resolvedSprite;
         preview.color = Color.white; // Ensure base tint isn't interfering with the shader
 

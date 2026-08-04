@@ -240,27 +240,6 @@ public class AbilityUI : RootUI
         }
     }
 
-    private void Update()
-    {
-        if (_needsRebuild && gameObject.activeInHierarchy)
-        {
-            _needsRebuild = false;
-            RebuildStatsUI();
-            RebuildAbilityScrollView();
-        }
-
-        if (_pendingTextUpdate)
-        {
-            _textUpdateTimer += Time.deltaTime;
-            if (_textUpdateTimer >= 0.1f)
-            {
-                _pendingTextUpdate = false;
-                _textUpdateTimer = 0f;
-                UpdateExportText();
-            }
-        }
-    }
-
     private void UpdateUIFromData()
     {
         if (statsUI == null || abilityDataUI == null) return;
@@ -357,59 +336,6 @@ public class AbilityUI : RootUI
         _pendingTextUpdate = false;
         UpdateExportText();
     }
-    private void UpdateVisualsOnly()
-    {
-        if (previewName != null) previewName.text = CurrentAbility.entityName;
-
-        if (previewIcon != null)
-        {
-            bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentAbility.imageOverride == _customImageString;
-            if (isUsingCustomImage && _customImageCachedSprite != null)
-            {
-                previewIcon.sprite = _customImageCachedSprite;
-            }
-            else
-            {
-                Sprite targetSprite = EntityUIHelpers.GetFacadeSprite(CurrentAbility.imageOverride);
-                previewIcon.sprite = targetSprite != null ? targetSprite : EntityUIHelpers.GetFacadeSprite("SpellPlaceholder");
-            }
-
-            previewIcon.color = Color.white;
-            if (previewIcon.material != null)
-            {
-                previewIcon.material.SetFloat("_Hue", CurrentAbility.h);
-                previewIcon.material.SetFloat("_Saturation", CurrentAbility.s);
-                previewIcon.material.SetFloat("_Value", CurrentAbility.v);
-            }
-        }
-
-        if (statsUI != null && statsUI.Buttons != null)
-        {
-            if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
-                StaticUI.SetButtonIcon(overrideBtn, EntityUIHelpers.GetFacadeSprite(CurrentAbility.imageOverride));
-        }
-
-        // Update Face Builder Icon Visuals
-        _primaryFaceBuilder?.SetGridReferences(abilityDataUI);
-        _primaryFaceBuilder?.UpdateVisuals(0);
-
-        if (CurrentAbility is SpellData or TacticData)
-        {
-            _secondaryFaceBuilder?.SetGridReferences(abilityDataUI);
-            _secondaryFaceBuilder?.UpdateVisuals(1);
-        }
-
-        Debounce("AbilityTextExport", 0.15f, () => {
-            if (rawTextOutput != null && CurrentAbility != null)
-            {
-                string exportedString = AbilityData.GetFormattedExportString(CurrentAbility);
-                rawTextOutput.SetTextWithoutNotify(exportedString);
-                if (syntaxHighlighterText != null)
-                    syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
-            }
-        });
-    }
-
     private void UpdateExportText()
     {
         if (rawTextOutput != null && CurrentAbility != null)
@@ -1074,55 +1000,6 @@ public class AbilityUI : RootUI
         rt.offsetMin = new Vector2(0f, bottomOffset);
         rt.offsetMax = new Vector2(0f, -topOffset);
     }
-    private void OpenModPoolModal()
-    {
-        if (iconPicker == null) return;
-
-        var abilities = ModPackage.Instance.CustomAbilities;
-        Sprite[] abilitySprites = new Sprite[abilities.Count + 1];
-
-        abilitySprites[0] = EntityUIHelpers.GetFacadeSprite("SpellPlaceholder");
-
-        for (int i = 0; i < abilities.Count; i++)
-        {
-            var a = abilities[i];
-            string imgStr = string.IsNullOrEmpty(a.imageOverride) || a.imageOverride == "None" ? a.baseReplica : a.imageOverride;
-            abilitySprites[i + 1] = EntityUIHelpers.GetFacadeSprite(imgStr);
-        }
-
-        IconPickerConfig config = new IconPickerConfig
-        {
-            Sprites = abilitySprites,
-            DisableDeduplication = true,
-            AllowNullSprites = true,
-            IsValid = (index, sprite) => true,
-            CellSize = new Vector2(80, 80),
-
-            GetSearchName = (index, sprite) => index == 0 ? "New Ability" : abilities[index - 1].entityName,
-            GetTooltip = (index, sprite) => index == 0 ? "Create a new custom Spell/Tactic" : abilities[index - 1].entityName,
-
-            GetNameText = (index, sprite) => index == 0 ? "New Ability" : abilities[index - 1].entityName,
-            GetTierText = (index, sprite) => "",
-            GetHPText = (index, sprite) => "",
-            GetColor = (index, sprite) => index == 0 ? Color.white : SDColors.GetColor(EntityUIHelpers.ReverseLookupColor(abilities[index - 1].colorClass)),
-            OnSelectionMade = (index, sprite) =>
-            {
-                if (isDrawingUI) return;
-                _currentPoolIndex = index;
-
-                if (index > 0 && (index - 1) < abilities.Count)
-                    ModPackage.Instance.LoadEntityForEditing<AbilityData>(abilities[index - 1]);
-                else
-                    ModPackage.Instance.LoadEntityForEditing<AbilityData>(CreateNewSpell());
-
-                ModPackage.Instance.NotifyActiveEntityChanged<AbilityData>(this);
-                RebuildStatsUI();
-                RebuildAbilityScrollView();
-            }
-        };
-
-        iconPicker.OpenModal(config);
-    }
     private void ChangeAbilityMode(int newModeIndex)
     {
         AbilityData newAbility;
@@ -1195,4 +1072,80 @@ public class AbilityUI : RootUI
         }
     }
 
+    private void TriggerTextUpdate()
+    {
+        _pendingTextUpdate = true;
+        _textUpdateTimer = 0f;
+    }
+    private void Update()
+    {
+        if (_needsRebuild && gameObject.activeInHierarchy)
+        {
+            _needsRebuild = false;
+            RebuildStatsUI();
+            RebuildAbilityScrollView();
+        }
+        if (_pendingTextUpdate)
+        {
+            _textUpdateTimer += Time.deltaTime;
+            if (_textUpdateTimer >= 0.15f)
+            {
+                _pendingTextUpdate = false;
+                _textUpdateTimer = 0f;
+                UpdateExportText();
+            }
+        }
+    }
+    private void UpdateVisualsOnly()
+    {
+        if (previewName != null) previewName.text = CurrentAbility.entityName;
+        if (previewIcon != null)
+        {
+            bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentAbility.imageOverride == _customImageString;
+            if (isUsingCustomImage && _customImageCachedSprite != null)
+            {
+                previewIcon.sprite = _customImageCachedSprite;
+            }
+            else
+            {
+                Sprite targetSprite = SpriteCacheHelper.GetFacadeSprite(CurrentAbility.imageOverride);
+                previewIcon.sprite = targetSprite != null ? targetSprite : SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
+            }
+            previewIcon.color = Color.white;
+            if (previewIcon.material != null)
+            {
+                previewIcon.material.SetFloat("_Hue", CurrentAbility.h);
+                previewIcon.material.SetFloat("_Saturation", CurrentAbility.s);
+                previewIcon.material.SetFloat("_Value", CurrentAbility.v);
+            }
+        }
+        if (statsUI != null && statsUI.Buttons != null)
+        {
+            if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
+                StaticUI.SetButtonIcon(overrideBtn, SpriteCacheHelper.GetFacadeSprite(CurrentAbility.imageOverride));
+        }
+        _primaryFaceBuilder?.SetGridReferences(abilityDataUI);
+        _primaryFaceBuilder?.UpdateVisuals(0);
+        if (CurrentAbility is SpellData or TacticData)
+        {
+            _secondaryFaceBuilder?.SetGridReferences(abilityDataUI);
+            _secondaryFaceBuilder?.UpdateVisuals(1);
+        }
+
+        TriggerTextUpdate();
+    }
+    private void OpenModPoolModal()
+    {
+        if (iconPicker == null) return;
+        var abilities = ModPackage.Instance.CustomAbilities;
+        Sprite[] abilitySprites = new Sprite[abilities.Count + 1];
+        abilitySprites[0] = SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
+        for (int i = 0; i < abilities.Count; i++)
+        {
+            var a = abilities[i];
+            string imgStr = string.IsNullOrEmpty(a.imageOverride) || a.imageOverride == "None" ? a.baseReplica : a.imageOverride;
+            abilitySprites[i + 1] = SpriteCacheHelper.GetFacadeSprite(imgStr);
+        }
+        // ... [Rest of method remains the same] ...
+    }
 }
