@@ -113,12 +113,24 @@ public class MonsterData : EntityData
                             MonsterData nestedMonster = new MonsterData();
                             nestedMonster.Parse(corePayload);
                             payloadData = nestedMonster;
+
+                            // Collapse named eggs so they export cleanly
+                            if (!string.IsNullOrEmpty(nestedMonster.entityName))
+                                baseMonster = $"egg.{nestedMonster.entityName}";
+                            else
+                                baseMonster = $"egg.{rawPayload}";
                         }
                         else
                         {
                             HeroData nestedHero = new HeroData();
                             nestedHero.Parse(corePayload);
                             payloadData = nestedHero;
+
+                            // Collapse named eggs so they export cleanly
+                            if (!string.IsNullOrEmpty(nestedHero.entityName))
+                                baseMonster = $"egg.{nestedHero.entityName}";
+                            else
+                                baseMonster = $"egg.{rawPayload}";
                         }
                     }
                 }

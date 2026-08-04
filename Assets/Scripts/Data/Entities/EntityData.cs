@@ -888,7 +888,7 @@ public abstract class EntityData : SDData, IPayloadContainer
     // File: Assets/Scripts/Data/Entities/EntityData.cs
 
     // File: Assets/Scripts/Data/Entities/EntityData.cs
-
+    /*
     private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
@@ -916,6 +916,61 @@ public abstract class EntityData : SDData, IPayloadContainer
         chunks.Add($"hat.{eggMonster.Export()}");
 
         // Blindfold item MUST come immediately after the Hat
+        if (hasBlindfold)
+        {
+            chunks.Add("blindfold");
+        }
+        return true;
+    }
+    */
+    private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
+    {
+        bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
+        string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
+        string fullSummonExport = cleanSummon;
+
+        if (ModPackage.Instance != null)
+        {
+            string searchName = cleanSummon;
+
+            // If cleanSummon is a full raw string like "(replica.Statue.n.Smeagol...)", parse out its entity name safely
+            if (cleanSummon.StartsWith("("))
+            {
+                HeroData tempHero = new HeroData();
+                tempHero.SuppressAutoRegister = true;
+                tempHero.Parse(cleanSummon);
+                if (!string.IsNullOrEmpty(tempHero.entityName))
+                {
+                    searchName = tempHero.entityName;
+                }
+            }
+
+            // Search ModPackage for an existing Hero or Monster matching that entity name
+            var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(
+                h => string.Equals(h.entityName, searchName, StringComparison.OrdinalIgnoreCase));
+
+            if (summonHero != null)
+            {
+                fullSummonExport = summonHero.entityName;
+            }
+            else
+            {
+                var summonMonster = ModPackage.Instance.Monsters?.FirstOrDefault(
+                    m => string.Equals(m.entityName, searchName, StringComparison.OrdinalIgnoreCase));
+                if (summonMonster != null)
+                {
+                    fullSummonExport = summonMonster.entityName;
+                }
+            }
+        }
+
+        MonsterData eggMonster = new MonsterData();
+        eggMonster.baseMonster = $"egg.{fullSummonExport}";
+        if (face.pips >= 2 && face.pips <= 9)
+        {
+            eggMonster.xMultiplier = face.pips;
+        }
+        chunks.Add($"hat.{eggMonster.Export()}");
         if (hasBlindfold)
         {
             chunks.Add("blindfold");

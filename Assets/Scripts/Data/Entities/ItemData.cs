@@ -929,12 +929,12 @@ public class ItemData : SDData
     {
         if (string.IsNullOrEmpty(mech.PayloadString)) return;
         string core = StaticBranchTracing.StripOuterParens(mech.PayloadString);
+
         if (mech.Prefix == "hat")
         {
             if (StaticBranchTracing.IsMonsterEntity(core))
             {
                 MonsterData monster = new MonsterData();
-                // Only suppress if it is a Hat structure. We WANT Eggs in the UI!
                 if (!core.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) monster.SuppressAutoRegister = true;
                 monster.Parse(core);
                 mech.PayloadData = monster;
@@ -945,6 +945,14 @@ public class ItemData : SDData
                 if (!core.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) hero.SuppressAutoRegister = true;
                 hero.Parse(core);
                 mech.PayloadData = hero;
+            }
+
+            // NEW: Immediately normalize the payload string so the UI receives a safe 
+            // compressed reference (e.g. egg.Smeagol) instead of the giant inline string.
+            if (mech.PayloadData is EntityData ed)
+            {
+                string safeHat = ed.ExportAsHat();
+                mech.PayloadString = safeHat.StartsWith("(") ? safeHat : $"({safeHat})";
             }
         }
         else if (mech.Prefix == "onhitdata") { OnHitData ohd = new OnHitData(); ohd.Parse(core); mech.PayloadData = ohd; }
