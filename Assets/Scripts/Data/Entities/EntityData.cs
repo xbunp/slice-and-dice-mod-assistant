@@ -1041,7 +1041,7 @@ public abstract class EntityData : SDData, IPayloadContainer
     // ====================================================================
     // EXPORT PIPELINE DEDICATED HELPER METHODS
     // ====================================================================
-        protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
+    protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
     {
         var stream = new TokenStream(tokens);
         while (!stream.IsEOF)
