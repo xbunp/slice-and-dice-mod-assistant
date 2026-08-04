@@ -296,10 +296,10 @@ public static class ItemSyntaxCompiler
             {
                 string expectedStickerPrefix = $".i.{firstTarget}.sticker.";
                 int stickerIdx = hatDice.LastIndexOf(expectedStickerPrefix, StringComparison.OrdinalIgnoreCase);
-
                 if (stickerIdx >= 0 && !hatDice.Substring(stickerIdx + expectedStickerPrefix.Length).Contains(".i."))
                 {
-                    string[] innerChains = rawInner.Split('#');
+                    // SAFE SPLIT: Ignore delimiters inside parentheses!
+                    string[] innerChains = StaticBranchTracing.TopLevelSplit(rawInner, '#').ToArray();
                     for (int c = 0; c < innerChains.Length; c++)
                     {
                         if (innerChains[c].StartsWith($"{firstTarget}.", StringComparison.OrdinalIgnoreCase))

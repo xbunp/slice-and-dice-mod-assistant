@@ -678,7 +678,6 @@ public class ItemUI : RootUI
     private int ProcessHatNode(List<ItemMechanic> mechanics, int currentIndex, ReorderableZone targetZone)
     {
         var mechanic = mechanics[currentIndex];
-
         EntityCard hatCard = CreateEntityCard(ItemNodeType.Hat) as EntityCard;
         hatCard.MechanicData = mechanic;
         targetZone.AddEntrant(hatCard);
@@ -695,7 +694,20 @@ public class ItemUI : RootUI
 
         string hatCore = rawPayload;
         string nestedPackStr = "";
-        int iIndex = rawPayload.IndexOf(".i.");
+
+        // SAFE TOP-LEVEL DELIMITER SEARCH: Ignores .i. found inside nested entities (like Eggs)
+        int iIndex = -1;
+        int pDepth = 0;
+        for (int i = 0; i <= rawPayload.Length - 3; i++)
+        {
+            if (rawPayload[i] == '(') pDepth++;
+            else if (rawPayload[i] == ')') pDepth--;
+            else if (pDepth == 0 && rawPayload[i] == '.' && (rawPayload[i + 1] == 'i' || rawPayload[i + 1] == 'I') && rawPayload[i + 2] == '.')
+            {
+                iIndex = i;
+                break;
+            }
+        }
 
         if (iIndex >= 0)
         {
@@ -712,7 +724,6 @@ public class ItemUI : RootUI
             var nextMech = mechanics[iter + 1];
             string nextPrefix = nextMech.Prefix?.ToLower() ?? "";
             string nextPayload = nextMech.PayloadString ?? "";
-
             if (nextPrefix == "facade" || (nextPrefix == "i" && nextPayload.Contains("facade")))
             {
                 string targetStr = nextMech.Targets.Count > 0 ? nextMech.Targets[0] : "all";
@@ -735,6 +746,7 @@ public class ItemUI : RootUI
         {
             ProcessNestedHatPack(nestedPackStr, heroData, hatCard.PayloadPort);
         }
+
         return iter;
     }
 
