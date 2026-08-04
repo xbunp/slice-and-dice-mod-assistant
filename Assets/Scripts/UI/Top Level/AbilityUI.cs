@@ -399,8 +399,15 @@ public class AbilityUI : RootUI
             _secondaryFaceBuilder?.UpdateVisuals(1);
         }
 
-        _pendingTextUpdate = true;
-        _textUpdateTimer = 0f;
+        Debounce("AbilityTextExport", 0.15f, () => {
+            if (rawTextOutput != null && CurrentAbility != null)
+            {
+                string exportedString = AbilityData.GetFormattedExportString(CurrentAbility);
+                rawTextOutput.SetTextWithoutNotify(exportedString);
+                if (syntaxHighlighterText != null)
+                    syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
+            }
+        });
     }
 
     private void UpdateExportText()

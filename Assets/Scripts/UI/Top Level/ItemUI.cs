@@ -1288,8 +1288,21 @@ public class ItemUI : RootUI
 
     public void AutoCompile()
     {
-        _pendingCompile = true;
-        _compileTimer = 0f;
+        if (_compiledOutputField == null || MainCanvasContent == null) return;
+
+        Debounce("ItemAutoCompile", 0.15f, () => {
+            ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
+            if (rootZone == null) return;
+            var cards = rootZone.Entrants.Cast<EntityCard>();
+            IsCompilingRichText = false;
+            _compiledOutputField.text = ItemSyntaxCompiler.CompileZone(cards);
+            if (_syntaxHighlighterText != null)
+            {
+                IsCompilingRichText = true;
+                _syntaxHighlighterText.text = ItemSyntaxCompiler.CompileZone(cards);
+                IsCompilingRichText = false;
+            }
+        });
     }
 
     private void ExecuteAutoCompile()

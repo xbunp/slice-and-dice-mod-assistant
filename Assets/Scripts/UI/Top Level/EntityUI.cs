@@ -1541,8 +1541,15 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         for (int i = 0; i < 6; i++) UpdateIcon(i);
         diceBuilderWidget?.UpdateVisuals(currentDiceTab);
 
-        _pendingTextUpdate = true;
-        _textUpdateTimer = 0f;
+        Debounce("TextExportUpdate", 0.15f, () => {
+            if (rawTextOutput != null && CurrentEntity != null)
+            {
+                string exportedString = ExportEntity(CurrentEntity);
+                rawTextOutput.SetTextWithoutNotify(exportedString);
+                if (syntaxHighlighterText != null)
+                    syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
+            }
+        });
     }
     protected void UpdateExportText()
     {

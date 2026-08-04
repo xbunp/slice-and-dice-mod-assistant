@@ -12,6 +12,9 @@ public class HeroUI : EntityUI<HeroData>
     // =====================================================================
     private Sprite _customImageCachedSprite;
     private Dictionary<string, string> _resolvedFacadeCache = new Dictionary<string, string>();
+
+    private static Dictionary<string, string> _facadeResolutionCache = new Dictionary<string, string>();
+
     protected override bool AllowFacades() => true;
 
     protected override string ExportEntity(HeroData entity) => entity.Export();
@@ -158,11 +161,11 @@ public class HeroUI : EntityUI<HeroData>
     private string ResolveFacadeName(string facadeID)
     {
         if (string.IsNullOrEmpty(facadeID)) return facadeID;
-        if (_resolvedFacadeCache.TryGetValue(facadeID, out string cachedName)) return cachedName;
+        if (_facadeResolutionCache.TryGetValue(facadeID, out string cachedName)) return cachedName;
 
         if (EntityUIHelpers.GetFacadeSprite(facadeID) != null)
         {
-            _resolvedFacadeCache[facadeID] = facadeID;
+            _facadeResolutionCache[facadeID] = facadeID;
             return facadeID;
         }
 
@@ -181,12 +184,12 @@ public class HeroUI : EntityUI<HeroData>
             var sprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && sp.name.StartsWith(searchPrefix, StringComparison.OrdinalIgnoreCase));
             if (sprite != null)
             {
-                _resolvedFacadeCache[facadeID] = sprite.name;
+                _facadeResolutionCache[facadeID] = sprite.name;
                 return sprite.name;
             }
         }
 
-        _resolvedFacadeCache[facadeID] = facadeID;
+        _facadeResolutionCache[facadeID] = facadeID;
         return facadeID;
     }
 

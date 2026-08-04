@@ -12,6 +12,8 @@ using UnityEngine.UI;
 public class MonsterUI : EntityUI<MonsterData>
 {
     private Dictionary<string, Sprite> _monsterBaseSpriteCache = new Dictionary<string, Sprite>();
+    private static Dictionary<string, Sprite> _monsterSpriteCache = new Dictionary<string, Sprite>();
+    private static Dictionary<string, Sprite> _monsterPortraitCache = new Dictionary<string, Sprite>();
 
     // Helper to get the correct string prefix for a size, matching our AtlasProcessor setup
     private string GetPrefixForSize(MonsterSize size)
@@ -265,13 +267,15 @@ public class MonsterUI : EntityUI<MonsterData>
     {
         if (string.IsNullOrEmpty(baseMonsterName) || baseMonsterName.Equals("None", StringComparison.OrdinalIgnoreCase))
             return null;
-
         if (EntityUIHelpers.AllActionSprites == null)
             return null;
 
         string targetLeaf = baseMonsterName.ToLower();
+        if (_monsterPortraitCache.TryGetValue(targetLeaf, out Sprite cachedSprite))
+        {
+            return cachedSprite;
+        }
 
-        // Search action sprites for our custom "prt_" prefix matching this monster leaf name
         foreach (var sprite in EntityUIHelpers.AllActionSprites)
         {
             if (sprite != null && sprite.name.StartsWith("prt_"))
@@ -279,13 +283,15 @@ public class MonsterUI : EntityUI<MonsterData>
                 string leafName = IconPickerModal.GetCleanLeafName(sprite.name);
                 if (leafName == targetLeaf)
                 {
+                    _monsterPortraitCache[targetLeaf] = sprite;
                     return sprite;
                 }
             }
         }
 
-        // Standard lookup fallback
-        return EntityUIHelpers.GetSpriteForPortrait(baseMonsterName);
+        Sprite fallback = EntityUIHelpers.GetSpriteForPortrait(baseMonsterName);
+        _monsterPortraitCache[targetLeaf] = fallback;
+        return fallback;
     }
 
     ///////////////////////////////////////////////
@@ -456,13 +462,14 @@ public class MonsterUI : EntityUI<MonsterData>
         };
         iconPicker.OpenModal(config);
     }
+
     protected override Sprite GetBaseDiceSprite(int effectID)
     {
         if (EntityUIHelpers.AllActionSprites == null) return null;
         string expectedPrefix = GetPrefixForSize(CurrentEntity.size);
         string searchString = $"{expectedPrefix}_{effectID}_";
 
-        if (_monsterBaseSpriteCache.TryGetValue(searchString, out Sprite cachedSprite))
+        if (_monsterSpriteCache.TryGetValue(searchString, out Sprite cachedSprite))
         {
             return cachedSprite;
         }
@@ -471,12 +478,12 @@ public class MonsterUI : EntityUI<MonsterData>
         {
             if (sprite != null && sprite.name.StartsWith(searchString, StringComparison.OrdinalIgnoreCase))
             {
-                _monsterBaseSpriteCache[searchString] = sprite;
+                _monsterSpriteCache[searchString] = sprite;
                 return sprite;
             }
         }
 
-        _monsterBaseSpriteCache[searchString] = null;
+        _monsterSpriteCache[searchString] = null;
         return null;
     }
 

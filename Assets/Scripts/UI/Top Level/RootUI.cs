@@ -10,6 +10,24 @@ public class RootUI : MonoBehaviour
     protected GeneratedScreen generatedScreen;
     public FullScreenUIGenerator uiGenerator { get; protected set; }
 
+    private Dictionary<string, Coroutine> _debouncedRoutines = new Dictionary<string, Coroutine>();
+
+    protected void Debounce(string key, float delay, Action action)
+    {
+        if (_debouncedRoutines.TryGetValue(key, out Coroutine routine) && routine != null)
+        {
+            StopCoroutine(routine);
+        }
+        _debouncedRoutines[key] = StartCoroutine(DebounceRoutine(key, delay, action));
+    }
+
+    private IEnumerator DebounceRoutine(string key, float delay, Action action)
+    {
+        yield return new WaitForSeconds(delay);
+        action?.Invoke();
+        _debouncedRoutines.Remove(key);
+    }
+
     public virtual void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
         if (uiGeneratorRef == null)
