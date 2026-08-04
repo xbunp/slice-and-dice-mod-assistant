@@ -175,6 +175,8 @@ MonoBehaviour:
     entityName: 
     imageOverride: 
     doc: 
+    doc2: 
+    _xMultiplier: 1
     visuals: []
     customPayloads: []
     unityName: New Item
@@ -185,6 +187,8 @@ MonoBehaviour:
     entityName: 
     imageOverride: None
     doc: 
+    doc2: 
+    _xMultiplier: 1
     visuals: []
     customPayloads: []
     hp: 0

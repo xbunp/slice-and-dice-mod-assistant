@@ -32,6 +32,21 @@ public class ModData
     private List<AbilityData> _cachedAbilities;
     private bool _abilitiesDirty = true;
 
+    public System.Collections.IList GetRawList(Type type)
+    {
+        if (type == null) return null;
+        if (typeof(SpellData).IsAssignableFrom(type)) return _spells;
+        if (typeof(TacticData).IsAssignableFrom(type)) return _tactics;
+        if (typeof(OnHitData).IsAssignableFrom(type)) return _onHits;
+        if (typeof(TriggerHPData).IsAssignableFrom(type)) return _triggerHPs;
+        if (typeof(OrbData).IsAssignableFrom(type)) return _orbs;
+        if (typeof(HeroData).IsAssignableFrom(type)) return _heroes;
+        if (typeof(MonsterData).IsAssignableFrom(type)) return _monsters;
+        if (typeof(ItemData).IsAssignableFrom(type)) return _customItems;
+        if (typeof(ModifierData).IsAssignableFrom(type)) return _customModifiers;
+        return null;
+    }
+
     public bool SuppressNotifications
     {
         get => _suppressNotifications;
@@ -89,6 +104,7 @@ public class ModData
         OnDataChanged?.Invoke();
     }
 
+    /*
     private System.Collections.IList GetRawList(Type type)
     {
         if (type == null) return null;
@@ -108,6 +124,7 @@ public class ModData
 
         return null;
     }
+    */
 
     private List<T> GetList<T>() where T : SDData => GetRawList(typeof(T)) as List<T>;
 

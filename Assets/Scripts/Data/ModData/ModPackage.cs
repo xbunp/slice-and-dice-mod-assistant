@@ -1,8 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 
 public class ModPackage : MonoBehaviour
@@ -256,6 +257,150 @@ public class ModPackage : MonoBehaviour
             session.Clone = newClone;
             OnActiveEntityChanged?.Invoke(type, newClone);
         }
+    }
+    /*
+    public void TryAutoRegisterParsedEntity(SDData entity)
+    {
+        if (entity == null || !IsModLoaded || loadedMod == null) return;
+
+        string exportStr;
+        try
+        {
+            exportStr = entity.Export();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Auto-Register] Failed to export entity for deduplication check: {ex.Message}");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(exportStr) || exportStr == "()") return;
+
+        // 1. Filter out pure base / unmodified / basic inline entities so we don't clutter the UI
+        if (entity is ItemData item)
+        {
+            string cleanName = item.entityName?.Trim() ?? "";
+            bool isVanillaName = ItemDomainRules.TogItems.Contains(cleanName) || ExternalGameRegistry.IsValidItemName(cleanName);
+            bool hasExplicitCustomName = !string.IsNullOrEmpty(cleanName) && !isVanillaName;
+
+            bool isComplex = item.Mechanics.Count > 1 || item.visuals.Count > 0 || item.Tier.HasValue ||
+                             !string.IsNullOrEmpty(item.doc) || !string.IsNullOrEmpty(item.imageOverride) ||
+                             item.LearnedAbilities.Count > 0 || item.Containers.Count > 0;
+
+            if (!hasExplicitCustomName && !isComplex) return;
+        }
+        else if (entity is OrbData orb)
+        {
+            if (orb.isHardcoded) return;
+        }
+        else if (entity is AbilityData ad)
+        {
+            if (exportStr.Equals(ad.baseReplica, StringComparison.OrdinalIgnoreCase) ||
+                exportStr.Equals($"({ad.baseReplica})", StringComparison.OrdinalIgnoreCase)) return;
+        }
+        else if (entity is HeroData hd)
+        {
+            if (exportStr.Equals(hd.baseReplica, StringComparison.OrdinalIgnoreCase) ||
+                exportStr.Equals($"({hd.baseReplica})", StringComparison.OrdinalIgnoreCase)) return;
+        }
+        else if (entity is MonsterData md)
+        {
+            if (exportStr.Equals(md.baseMonster, StringComparison.OrdinalIgnoreCase) ||
+                exportStr.Equals($"({md.baseMonster})", StringComparison.OrdinalIgnoreCase)) return;
+        }
+
+        // 2. Prevent duplicating entities that have already been extracted or made
+        System.Collections.IList list = loadedMod.GetRawList(entity.GetType());
+        if (list == null) return;
+
+        foreach (SDData existing in list)
+        {
+            if (existing == entity) return; // Exact instance already injected
+            try
+            {
+                if (existing.Export() == exportStr) return; // Signature match already exists
+            }
+            catch { /* Ignore faulty existing items  }
+        }
+
+        // 3. Save into the active Mod Data for UI visibility
+        loadedMod.SaveEntity(null, entity);
+    }
+*/
+
+    // Assets/Scripts/Data/ModData/ModPackage.cs
+
+    public void TryAutoRegisterParsedEntity(SDData entity)
+    {
+        if (entity == null || !IsModLoaded || loadedMod == null) return;
+        if (entity.SuppressAutoRegister) return;
+
+        string exportStr;
+        try
+        {
+            exportStr = entity.Export();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Auto-Register] Failed to export entity for deduplication check: {ex.Message}");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(exportStr) || exportStr == "()") return;
+
+        // 1. Strict Filter: Discard vanilla items and inline atomic modifiers (like 'left.k.cantrip')
+        if (entity is ItemData item)
+        {
+            string cleanName = item.entityName?.Trim() ?? "";
+            bool isVanillaName = ItemDomainRules.TogItems.Contains(cleanName) || ExternalGameRegistry.IsValidItemName(cleanName);
+            bool hasExplicitCustomName = !string.IsNullOrEmpty(cleanName) && !isVanillaName;
+
+            // Only register unnamed items if they contain major custom architecture (Hats, Spells, OnHits)
+            bool hasHat = item.Mechanics.Any(m => m.Prefix != null && m.Prefix.Equals("hat", StringComparison.OrdinalIgnoreCase));
+            bool hasCustomAbilities = item.Mechanics.Any(m => m.Prefix != null && (
+                m.Prefix.Equals("onhitdata", StringComparison.OrdinalIgnoreCase) ||
+                m.Prefix.Equals("triggerhpdata", StringComparison.OrdinalIgnoreCase) ||
+                m.Prefix.Equals("cast", StringComparison.OrdinalIgnoreCase) ||
+                m.Prefix.Equals("abilitydata", StringComparison.OrdinalIgnoreCase)));
+
+            if (!hasExplicitCustomName && !hasHat && !hasCustomAbilities) return;
+        }
+        else if (entity is OrbData orb)
+        {
+            if (orb.isHardcoded) return;
+        }
+        else if (entity is AbilityData ad)
+        {
+            if (exportStr.Equals(ad.baseReplica, StringComparison.OrdinalIgnoreCase) ||
+                exportStr.Equals($"({ad.baseReplica})", StringComparison.OrdinalIgnoreCase)) return;
+        }
+        else if (entity is HeroData hd)
+        {
+            if (exportStr.Equals(hd.baseReplica, StringComparison.OrdinalIgnoreCase) ||
+                exportStr.Equals($"({hd.baseReplica})", StringComparison.OrdinalIgnoreCase)) return;
+        }
+        else if (entity is MonsterData md)
+        {
+            if (exportStr.Equals(md.baseMonster, StringComparison.OrdinalIgnoreCase) ||
+                exportStr.Equals($"({md.baseMonster})", StringComparison.OrdinalIgnoreCase)) return;
+        }
+
+        // 2. Prevent duplicating entities that have already been extracted or made
+        System.Collections.IList list = loadedMod.GetRawList(entity.GetType());
+        if (list == null) return;
+
+        foreach (SDData existing in list)
+        {
+            if (existing == entity) return;
+            try
+            {
+                if (existing.Export() == exportStr) return; // Signature match already exists
+            }
+            catch { /* Ignore faulty existing items */ }
+        }
+
+        // 3. Save into the active Mod Data for UI visibility
+        loadedMod.SaveEntity(null, entity);
     }
 
     public class UnityStructResolver : DefaultContractResolver

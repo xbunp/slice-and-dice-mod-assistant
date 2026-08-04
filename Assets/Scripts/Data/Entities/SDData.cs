@@ -257,6 +257,9 @@ public abstract class SDData
     }
     #endregion
 
+    [System.NonSerialized]
+    public bool SuppressAutoRegister = false;
+
     private VisualModifier GetVisual(VisualType type) => visuals.FirstOrDefault(x => x.Type == type);
     private VisualModifier GetOrAddVisual(VisualType type)
     {
@@ -297,13 +300,10 @@ public abstract class SDData
     public virtual void Parse(string data)
     {
         _hasClearedVisualsForParse = false;
-        xMultiplier = 1; // Reset to default
+        xMultiplier = 1;
         if (string.IsNullOrWhiteSpace(data)) return;
-
         string clean = data.Trim();
         clean = StaticBranchTracing.StripOuterParens(clean);
-
-        // 1. UNIVERSAL MULTIPLIER EXTRACTION (x2 to x9)
         if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
         {
             int dotIdx = clean.IndexOf('.');
@@ -313,11 +313,10 @@ public abstract class SDData
                 if (int.TryParse(multStr, out int mult))
                 {
                     xMultiplier = mult;
-                    clean = clean.Substring(dotIdx + 1).Trim(); // Strip "xN." centrally
+                    clean = clean.Substring(dotIdx + 1).Trim();
                 }
             }
         }
-
         if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
         {
             int dotIdx = clean.IndexOf('.');
@@ -327,13 +326,17 @@ public abstract class SDData
                 if (int.TryParse(multStr, out int mult) && mult >= 2 && mult <= 9)
                 {
                     xMultiplier = mult;
-                    clean = clean.Substring(dotIdx + 1).Trim(); // Strip "xN." centrally
+                    clean = clean.Substring(dotIdx + 1).Trim();
                 }
             }
         }
-
-        // 2. Delegate cleaned payload to derived class
         ParseCore(clean);
+
+        // --- NEW CODE: Automatically bubble valid top-level custom data to the Mod Editor ---
+        if (!SuppressAutoRegister && ModPackage.Instance != null && ModPackage.Instance.IsModLoaded)
+        {
+            ModPackage.Instance.TryAutoRegisterParsedEntity(this);
+        }
     }
     protected abstract void ParseCore(string cleanData);
 

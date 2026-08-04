@@ -129,6 +129,8 @@ public class ItemUI : RootUI
     private TextMeshProUGUI _syntaxHighlighterText;
     public static bool IsCompilingRichText = false;
 
+    private bool _needsRebuild = false;
+
     private void Awake()
     {
         Instance = this;
@@ -138,10 +140,51 @@ public class ItemUI : RootUI
         if (ModPackage.Instance != null)
         {
             ModPackage.Instance.OnModLoaded -= PopulateLoadDropdown;
+            ModPackage.Instance.OnModDataChanged -= OnModDataChangedHandler;
         }
         if (_rootZone != null)
         {
             _rootZone.OnZoneChanged -= RefreshSidebar;
+        }
+    }
+
+    private bool IsTabVisible()
+    {
+        return _rootCanvasRect != null && _rootCanvasRect.gameObject.activeInHierarchy;
+    }
+
+    private void Update()
+    {
+        if (_needsRebuild && IsTabVisible())
+        {
+            _needsRebuild = false;
+            PopulateLoadDropdown();
+
+            // Force the inspector to redraw its dropdowns with the fresh data
+            if (_selectedCard != null)
+            {
+                SelectCard(_selectedCard);
+            }
+        }
+    }
+
+    private void OnModDataChangedHandler(object sender)
+    {
+        // Suppress dropdown refreshes if we caused the update to prevent recursive looping / GUI jumpiness
+        if (!object.ReferenceEquals(sender, this))
+        {
+            if (IsTabVisible())
+            {
+                PopulateLoadDropdown();
+                if (_selectedCard != null)
+                {
+                    SelectCard(_selectedCard);
+                }
+            }
+            else
+            {
+                _needsRebuild = true; // Wait until we switch back to this tab
+            }
         }
     }
     public void Start()
@@ -197,13 +240,9 @@ public class ItemUI : RootUI
     }
     private void InitializeDataOnStart()
     {
-        // Populate dropdown from loaded mod items
         PopulateLoadDropdown();
-
-        // Subscribe to global mod loaded events
         ModPackage.Instance.OnModLoaded += PopulateLoadDropdown;
-
-        // Initialize the workspace with a blank item to start authoring right away
+        ModPackage.Instance.OnModDataChanged += OnModDataChangedHandler;
         CreateNewItem();
     }
     private void BuildTopBar()
@@ -680,7 +719,6 @@ public class ItemUI : RootUI
         {
             ProcessNestedHatPack(nestedPackStr, heroData, hatCard.PayloadPort);
         }
-
         return iter;
     }
 
@@ -688,13 +726,10 @@ public class ItemUI : RootUI
     {
         ItemData nestedPack = new ItemData();
         nestedPack.Parse(nestedPackStr);
-
         List<ItemMechanic> looseBaseItems = new List<ItemMechanic>();
-
         foreach (var childMech in nestedPack.Mechanics)
         {
             string prefix = childMech.Prefix?.ToLower() ?? "";
-
             if (prefix == "k")
             {
                 ApplyKeywordToHeroData(heroData, childMech);
@@ -713,13 +748,80 @@ public class ItemUI : RootUI
                 looseBaseItems.Add(childMech);
             }
         }
-
         if (looseBaseItems.Count > 0)
         {
-            string packedString = string.Join("#", looseBaseItems.Select(m => m.Export()));
-            ItemMechanic packMech = new ItemMechanic { PayloadString = packedString };
-            LoadMechanicIntoUI(packMech, payloadPort, 1);
+            List<ItemMechanic> currentGroup = new List<ItemMechanic>();
+            for (int i = 0; i < looseBaseItems.Count; i++)
+            {
+                if (currentGroup.Count == 0)
+                {
+                    currentGroup.Add(looseBaseItems[i]);
+                }
+                else
+                {
+                    if (MechanicModifiersMatch(currentGroup[0], looseBaseItems[i]))
+                    {
+                        currentGroup.Add(looseBaseItems[i]);
+                    }
+                    else
+                    {
+                        ExportGroupToUI(currentGroup, payloadPort);
+                        currentGroup.Clear();
+                        currentGroup.Add(looseBaseItems[i]);
+                    }
+                }
+            }
+            if (currentGroup.Count > 0)
+            {
+                ExportGroupToUI(currentGroup, payloadPort);
+            }
         }
+    }
+
+    private bool MechanicModifiersMatch(ItemMechanic a, ItemMechanic b)
+    {
+        if (a.Prefix != b.Prefix) return false;
+        if (a.Targets.Count != b.Targets.Count) return false;
+        for (int i = 0; i < a.Targets.Count; i++) if (a.Targets[i] != b.Targets[i]) return false;
+        if (a.RepeatTimes != b.RepeatTimes) return false;
+        if (a.Multiplier != b.Multiplier) return false;
+        if (a.PerTier != b.PerTier) return false;
+        if (a.Unpack != b.Unpack) return false;
+        if (a.PartIndex != b.PartIndex) return false;
+        if (a.MergedItem != b.MergedItem) return false;
+        if (a.SplicedItem != b.SplicedItem) return false;
+        return true;
+    }
+
+    private void ExportGroupToUI(List<ItemMechanic> group, ReorderableZone payloadPort)
+    {
+        ItemMechanic packMech = new ItemMechanic
+        {
+            Prefix = group[0].Prefix,
+            Targets = new List<string>(group[0].Targets),
+            RepeatTimes = group[0].RepeatTimes,
+            Multiplier = group[0].Multiplier,
+            PerTier = group[0].PerTier,
+            Unpack = group[0].Unpack,
+            PartIndex = group[0].PartIndex,
+            MergedItem = group[0].MergedItem,
+            SplicedItem = group[0].SplicedItem
+        };
+
+        List<string> pureStrings = new List<string>();
+        foreach (var m in group)
+        {
+            string s = m.PayloadString ?? "";
+            if (m.ChainedKeywords.Count > 0)
+            {
+                if (s.Length > 0) s += "#";
+                s += string.Join("#", m.ChainedKeywords);
+            }
+            if (!string.IsNullOrEmpty(s)) pureStrings.Add(s);
+        }
+        packMech.PayloadString = string.Join("#", pureStrings);
+
+        LoadMechanicIntoUI(packMech, payloadPort, 1);
     }
 
     private void ApplyKeywordToHeroData(HeroData heroData, ItemMechanic mech)
@@ -832,34 +934,70 @@ public class ItemUI : RootUI
     {
         string prefix = mechanic.Prefix?.ToLower() ?? "";
         ItemNodeType type = ItemNodeType.BaseItem;
-
         if (prefix == "hat") type = ItemNodeType.Hat;
         else if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.Appearance;
         else if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
         else if (AbilityDomainRules.AbilityStartTokens.Contains(prefix) || prefix == "abilitydata") type = ItemNodeType.LearnAbility;
 
-        EntityCard mechCard = CreateEntityCard(type) as EntityCard;
-
         if (type == ItemNodeType.BaseItem)
         {
-            ItemMechanic flatMech = new ItemMechanic();
-            string rawExport = mechanic.Export();
+            bool needsBracket = mechanic.Targets.Count > 0 ||
+                                mechanic.RepeatTimes != 1 ||
+                                mechanic.Multiplier != 1 ||
+                                mechanic.PerTier ||
+                                mechanic.Unpack ||
+                                mechanic.PartIndex.HasValue ||
+                                !string.IsNullOrEmpty(mechanic.MergedItem) ||
+                                !string.IsNullOrEmpty(mechanic.SplicedItem) ||
+                                !string.IsNullOrEmpty(mechanic.Prefix);
 
-            // Strip structural 'i.' from root so BaseItemNodeDef regex doesn't choke on it.
-            // The compiler will automatically restore the 'i.' prefix at the root zone on export.
-            if (rawExport.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+            string purePayload = mechanic.PayloadString ?? "";
+            if (mechanic.ChainedKeywords.Count > 0)
             {
-                rawExport = rawExport.Substring(2);
+                if (purePayload.Length > 0) purePayload += "#";
+                purePayload += string.Join("#", mechanic.ChainedKeywords);
             }
-            flatMech.PayloadString = rawExport;
-            mechCard.MechanicData = flatMech;
-        }
-        else
-        {
-            mechCard.MechanicData = mechanic;
+
+            if (needsBracket)
+            {
+                EntityCard bracketCard = CreateEntityCard(ItemNodeType.Bracket) as EntityCard;
+                bracketCard.MechanicData = new ItemMechanic
+                {
+                    Prefix = mechanic.Prefix,
+                    Targets = new List<string>(mechanic.Targets),
+                    RepeatTimes = mechanic.RepeatTimes,
+                    Multiplier = mechanic.Multiplier,
+                    PerTier = mechanic.PerTier,
+                    Unpack = mechanic.Unpack,
+                    PartIndex = mechanic.PartIndex,
+                    MergedItem = mechanic.MergedItem,
+                    SplicedItem = mechanic.SplicedItem
+                };
+                targetZone.AddEntrant(bracketCard);
+
+                EntityCard pureBaseCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
+                ItemMechanic pureMech = new ItemMechanic { PayloadString = purePayload };
+                pureBaseCard.MechanicData = pureMech;
+
+                if (bracketCard.PayloadPort != null)
+                {
+                    bracketCard.PayloadPort.AddEntrant(pureBaseCard);
+                }
+                return;
+            }
+            else
+            {
+                EntityCard mechCard = CreateEntityCard(type) as EntityCard;
+                ItemMechanic flatMech = new ItemMechanic { PayloadString = purePayload };
+                mechCard.MechanicData = flatMech;
+                targetZone.AddEntrant(mechCard);
+                return;
+            }
         }
 
-        targetZone.AddEntrant(mechCard);
+        EntityCard mechCardObj = CreateEntityCard(type) as EntityCard;
+        mechCardObj.MechanicData = mechanic;
+        targetZone.AddEntrant(mechCardObj);
 
         // CRITICAL FIX: Only recurse and spawn children for non-BaseItem nodes.
         // Pure BaseItem packs are handled natively inside the single BaseItem node.
@@ -867,7 +1005,7 @@ public class ItemUI : RootUI
         {
             foreach (var childMech in nestedItem.Mechanics)
             {
-                LoadMechanicIntoUI(childMech, mechCard.PayloadPort, depth + 1);
+                LoadMechanicIntoUI(childMech, mechCardObj.PayloadPort, depth + 1);
             }
         }
     }

@@ -821,14 +821,109 @@ public class ItemData : SDData
                ItemDomainRules.ValidTargets.Contains(token) || ItemDomainRules.IsItemIdentifier(token) ||
                ItemDomainRules.IsRepeatPrefix(token, out _);
     }
+
+    /*
     private void AssignDomainPayload(ItemMechanic mech)
     {
         if (string.IsNullOrEmpty(mech.PayloadString)) return;
         string core = StaticBranchTracing.StripOuterParens(mech.PayloadString);
         if (mech.Prefix == "hat")
         {
-            if (StaticBranchTracing.IsMonsterEntity(core)) { MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster; }
-            else { HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero; }
+            if (StaticBranchTracing.IsMonsterEntity(core))
+            {
+                MonsterData monster = new MonsterData();
+                monster.SuppressAutoRegister = true; // Prevents hat payloads from polluting the Monster UI
+                monster.Parse(core);
+                mech.PayloadData = monster;
+            }
+            else
+            {
+                HeroData hero = new HeroData();
+                hero.SuppressAutoRegister = true; // Prevents hat payloads from polluting the Hero UI
+                hero.Parse(core);
+                mech.PayloadData = hero;
+            }
+        }
+        else if (mech.Prefix == "onhitdata") { OnHitData ohd = new OnHitData(); ohd.Parse(core); mech.PayloadData = ohd; }
+        else if (mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
+        else if (mech.Prefix == "enchant") { ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod; }
+        else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata") { mech.PayloadData = AbilityData.CreateSpellOrTactic(core); }
+        else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
+        else if (mech.Prefix == "t")
+        {
+            if (StaticBranchTracing.IsMonsterEntity(core))
+            {
+                MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster;
+            }
+            else if (core.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+            {
+                string modifierCore = StaticBranchTracing.StripOuterParens(core.Substring(5).Trim());
+                ModifierData mod = new ModifierData(); mod.Parse(modifierCore); mech.PayloadData = mod;
+            }
+            else
+            {
+                HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero;
+            }
+        }
+
+        /*
+        else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
+        {
+            if (mech.PayloadString.StartsWith("("))
+            {
+                ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item;
+            }
+            else if (mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase))
+            {
+                ModifierData mod = new ModifierData();
+                mod.Parse(core);
+                mech.PayloadData = mod;
+            }
+        }
+        
+
+        else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
+        {
+            if (mech.PayloadString.StartsWith("("))
+            {
+                ItemData item = new ItemData();
+                item.SuppressAutoRegister = true; // <-- PREVENT ITEM UI POLLUTION
+                item.Parse(core);
+                mech.PayloadData = item;
+            }
+            else if (mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase))
+            {
+                ModifierData mod = new ModifierData();
+                mod.Parse(core);
+                mech.PayloadData = mod;
+            }
+        }
+    }
+    */
+
+    // Assets/Scripts/Data/Entities/ItemData.cs
+
+    private void AssignDomainPayload(ItemMechanic mech)
+    {
+        if (string.IsNullOrEmpty(mech.PayloadString)) return;
+        string core = StaticBranchTracing.StripOuterParens(mech.PayloadString);
+        if (mech.Prefix == "hat")
+        {
+            if (StaticBranchTracing.IsMonsterEntity(core))
+            {
+                MonsterData monster = new MonsterData();
+                // Only suppress if it is a Hat structure. We WANT Eggs in the UI!
+                if (!core.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) monster.SuppressAutoRegister = true;
+                monster.Parse(core);
+                mech.PayloadData = monster;
+            }
+            else
+            {
+                HeroData hero = new HeroData();
+                if (!core.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) hero.SuppressAutoRegister = true;
+                hero.Parse(core);
+                mech.PayloadData = hero;
+            }
         }
         else if (mech.Prefix == "onhitdata") { OnHitData ohd = new OnHitData(); ohd.Parse(core); mech.PayloadData = ohd; }
         else if (mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
@@ -859,9 +954,7 @@ public class ItemData : SDData
             }
             else if (mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase))
             {
-                ModifierData mod = new ModifierData();
-                mod.Parse(core);
-                mech.PayloadData = mod;
+                ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
             }
         }
     }
