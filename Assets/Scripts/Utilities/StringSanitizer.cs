@@ -14,11 +14,11 @@ public static class StringExtensions
             .Replace("+", "[plus]")
             .Replace("-", "[minus]")
             .Replace("#", "[hash]")
-            .Replace("pips", "[pips]")
-            .Replace("pipsk", "[pipsk]")
-            .Replace("hp", "[hp]")
-            .Replace("fhp", "[fullHeart]")
-            .Replace("fullHeart", "[fullHeart]")
+            //.Replace("pips", "[pips]")
+            //.Replace("pipsk", "[pipsk]")
+            //.Replace("hp", "[hp]")
+            //.Replace("fhp", "[fullHeart]")
+            //.Replace("fullHeart", "[fullHeart]")
             .Replace("=", "[equals]");
     }
 
