@@ -689,26 +689,21 @@ public class ItemData : SDData
 
             bool isFaceModifier = pfx == "k" || pfx == "facade" || pfx == "sidesc" ||
                                  pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "";
-
             bool isEntityCollection = pfx == "t" || pfx == "gift" || pfx == "learn" || pfx == "abilitydata";
 
-            // 1. If it's neither a collection item nor a face modifier, we can't absorb it natively
             if (!isEntityCollection && !isFaceModifier)
             {
                 return false;
             }
 
-            // 2. Face modifiers MUST have target faces to be applied to entity dice sides
-            if (isFaceModifier && mech.Targets.Count == 0)
-            {
-                return false;
-            }
-
-            // Protect existing face overrides from being overwritten
             if (pfx == "sticker" || pfx == "cast" || pfx == "enchant")
             {
-                List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
-                foreach (int face in targetFaces)
+                // Targetless modifiers map to all faces implicitly
+                List<int> targetFacesCheck = mech.Targets.Count > 0
+                    ? mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList()
+                    : new List<int> { 0, 1, 2, 3, 4, 5 };
+
+                foreach (int face in targetFacesCheck)
                 {
                     if (entity.diceSides != null && face >= 0 && face < 6 && entity.diceSides[face] != null)
                     {
@@ -771,7 +766,11 @@ public class ItemData : SDData
             }
             else if (pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "")
             {
-                List<int> targetFaces = mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
+                // Targetless modifiers map to all faces implicitly
+                List<int> targetFaces = mech.Targets.Count > 0
+                    ? mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList()
+                    : new List<int> { 0, 1, 2, 3, 4, 5 };
+
                 if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid"))
                     targetFaces.Remove(1);
 

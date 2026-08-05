@@ -20,7 +20,6 @@ public static class EntityDomainRules
         "i", "t", "gift", "learn", "abilitydata", "triggerhpdata", "onhitdata", "orb"
     };
 
-
     public static int GetCollectionBlockLength(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
@@ -1429,22 +1428,26 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         if (item == null) return false;
 
+        // 1. Check root entity name
         if (item.Mechanics.Count == 0 && !string.IsNullOrEmpty(item.entityName))
         {
-            if (BaseItemMetadataRegistry.RawDiceAffectingItems.Contains(item.entityName)) return true;
+            if (BaseItemMetadataRegistry.IsDiceFaceAffecting(item.entityName)) return true;
         }
 
+        // 2. Scan mechanics
         foreach (var mech in item.Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
 
+            // Explicit face modifier prefixes
             if (pfx == "hat" || pfx == "facade" || pfx == "sticker" || pfx == "k" || pfx == "enchant" || pfx == "cast" || pfx == "sd" || pfx == "sidesc")
                 return true;
 
+            // Prefixless items (base items, tog items, etc.)
             if (pfx == "")
             {
-                if (ItemDomainRules.TogItems.Contains(mech.PayloadString)) return true;
-                if (!string.IsNullOrEmpty(mech.PayloadString) && BaseItemMetadataRegistry.RawDiceAffectingItems.Contains(mech.PayloadString)) return true;
+                if (!string.IsNullOrEmpty(mech.PayloadString) && BaseItemMetadataRegistry.ExpressionContainsDiceAffectingItem(mech.PayloadString))
+                    return true;
             }
         }
         return false;

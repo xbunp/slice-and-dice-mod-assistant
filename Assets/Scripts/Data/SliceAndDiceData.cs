@@ -1023,7 +1023,21 @@ public static class BaseItemMetadataRegistry
         "Worn Arms",
         "Wrench",
         "Wristblade",
-        "Yearn"
+        "Yearn",
+        "Togkey",
+        "Togpip",
+        "Togtarg",
+        "Togunt",
+        "Togorf",
+        "Togtime",
+        "Togfri",
+        "Togres",
+        "Togresm",
+        "Togresa",
+        "Togreso",
+        "Togresx",
+        "Togress",
+        "Togresn"
     };
     // ====================================================================
 

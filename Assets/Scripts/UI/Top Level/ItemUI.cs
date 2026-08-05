@@ -728,12 +728,11 @@ public class ItemUI : RootUI
         EntityCard standardCard = CreateEntityCard(type) as EntityCard;
         standardCard.MechanicData = mechanic;
         targetZone.AddEntrant(standardCard);
-
         if (mechanic.PayloadData is ItemData nestedItem && type != ItemNodeType.BaseItem)
         {
-            foreach (var childMech in nestedItem.Mechanics)
+            if (standardCard.PayloadPort != null)
             {
-                LoadMechanicIntoUI(childMech, standardCard.PayloadPort, depth + 1);
+                ProcessMechanicsList(nestedItem.Mechanics, standardCard.PayloadPort);
             }
         }
     }
@@ -1359,10 +1358,57 @@ public class ItemUI : RootUI
     }
     private void ProcessMechanicsList(List<ItemMechanic> mechanics, ReorderableZone targetZone)
     {
+        List<ItemMechanic> baseItemBuffer = new List<ItemMechanic>();
+        bool isFirstMech = true;
+
+        void FlushBuffer()
+        {
+            if (baseItemBuffer.Count == 0) return;
+            string combined = string.Join("#", baseItemBuffer.Select(m => m.Export()));
+            ItemMechanic aggregateMech = new ItemMechanic { PayloadString = combined };
+
+            if (!isFirstMech)
+            {
+                EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                innerOpCard.MechanicData.PayloadString = "#";
+                targetZone.AddEntrant(innerOpCard);
+            }
+            isFirstMech = false;
+
+            EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
+            mechCard.MechanicData = aggregateMech;
+            targetZone.AddEntrant(mechCard);
+            baseItemBuffer.Clear();
+        }
+
         for (int i = 0; i < mechanics.Count; i++)
         {
-            LoadMechanicIntoUI(mechanics[i], targetZone, 0);
+            var mech = mechanics[i];
+            string pfx = mech.Prefix?.ToLower() ?? "";
+
+            bool isBaseCompatible = (pfx == "" || pfx == "k" || pfx == "tog" || pfx == "ritem" || pfx == "ritemx")
+                                    && mech.PayloadData == null
+                                    && string.IsNullOrEmpty(mech.MergedItem)
+                                    && string.IsNullOrEmpty(mech.SplicedItem);
+
+            if (isBaseCompatible)
+            {
+                baseItemBuffer.Add(mech);
+            }
+            else
+            {
+                FlushBuffer();
+                if (!isFirstMech)
+                {
+                    EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                    innerOpCard.MechanicData.PayloadString = "#";
+                    targetZone.AddEntrant(innerOpCard);
+                }
+                isFirstMech = false;
+                LoadMechanicIntoUI(mech, targetZone, 0);
+            }
         }
+        FlushBuffer();
     }
     private void ProcessHatNode(ItemMechanic mechanic, ReorderableZone targetZone)
     {
@@ -1477,18 +1523,54 @@ public class ItemUI : RootUI
                         payloadPort.AddEntrant(opCard);
                     }
 
-                    bool isFirstInNested = true;
-                    foreach (var childMech in nestedItem.Mechanics)
+                    List<ItemMechanic> baseItemBuffer = new List<ItemMechanic>();
+                    bool isFirstMechInItem = true;
+
+                    void FlushBuffer()
                     {
-                        if (!isFirstInNested)
+                        if (baseItemBuffer.Count == 0) return;
+                        string combined = string.Join("#", baseItemBuffer.Select(m => m.Export()));
+                        ItemMechanic aggregateMech = new ItemMechanic { PayloadString = combined };
+                        if (!isFirstMechInItem)
                         {
                             EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
                             innerOpCard.MechanicData.PayloadString = "#";
                             payloadPort.AddEntrant(innerOpCard);
                         }
-                        isFirstInNested = false;
-                        LoadMechanicIntoUI(childMech, payloadPort, 1);
+                        isFirstMechInItem = false;
+                        EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
+                        mechCard.MechanicData = aggregateMech;
+                        payloadPort.AddEntrant(mechCard);
+                        baseItemBuffer.Clear();
                     }
+
+                    foreach (var childMech in nestedItem.Mechanics)
+                    {
+                        string pfx = childMech.Prefix?.ToLower() ?? "";
+                        bool isBaseCompatible = (pfx == "" || pfx == "k" || pfx == "tog" || pfx == "ritem" || pfx == "ritemx")
+                                                && childMech.PayloadData == null
+                                                && string.IsNullOrEmpty(childMech.MergedItem)
+                                                && string.IsNullOrEmpty(childMech.SplicedItem);
+
+                        if (isBaseCompatible)
+                        {
+                            baseItemBuffer.Add(childMech);
+                        }
+                        else
+                        {
+                            FlushBuffer();
+                            if (!isFirstMechInItem)
+                            {
+                                EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                                innerOpCard.MechanicData.PayloadString = "#";
+                                payloadPort.AddEntrant(innerOpCard);
+                            }
+                            isFirstMechInItem = false;
+                            LoadMechanicIntoUI(childMech, payloadPort, 1);
+                        }
+                    }
+
+                    FlushBuffer();
                     itemsToRemove.Add(cp);
                 }
             }
