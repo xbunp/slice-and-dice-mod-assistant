@@ -17,7 +17,6 @@ public static class SpriteCacheHelper
         _facadeCache[name] = s;
         return s;
     }
-
     public static Sprite GetSpriteForPortrait(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
@@ -93,7 +92,8 @@ public class DiceFaceBuilderWidget
     public static DiceSideData SharedClipboard = null;
     public static readonly List<string> TabNames = new List<string> { "Left", "Middle", "Top", "Bottom", "Right", "Rightmost" };
 
-    // CHANGED: Strictly use DiceSideData[] array
+    private Dictionary<int, bool> _castIsCustomOverride = new Dictionary<int, bool>();
+
     private Func<DiceSideData[]> _getDiceSides;
     private Func<bool> _allowFacades;
     private Action<int> _openBaseModal;
@@ -102,13 +102,7 @@ public class DiceFaceBuilderWidget
     private Func<string, Sprite> _getFacadeSprite;
     private Action _onStateChanged;
     private Action _onRebuildRequested;
-
     private GridReferences _diceUI;
-    //private Dictionary<int, string> _uiFaceTypeOverrides = new Dictionary<int, string>();
-
-    // ADDED: Track manual toggle state overrides per face index
-    private Dictionary<int, bool> _castIsCustomOverride = new Dictionary<int, bool>();
-
     private Func<string[]> _getKeywordOptions;
 
     public DiceFaceBuilderWidget(
@@ -164,7 +158,6 @@ public class DiceFaceBuilderWidget
             _onRebuildRequested?.Invoke();
         }
     }
-
     private List<string> ParseStickerKeywords(string payload)
     {
         var list = new List<string>();
@@ -213,7 +206,6 @@ public class DiceFaceBuilderWidget
         }
         return serialized;
     }
-
     private void RemoveKeywordFromFace(int faceIndex, string keyword)
     {
         var sides = _getDiceSides?.Invoke();
@@ -286,7 +278,6 @@ public class DiceFaceBuilderWidget
 
         if (facadeAutoAssigned) UpdateUIFromData(faceIndex);
     }
-
     private void IncrementPips(int index)
     {
         var sides = _getDiceSides?.Invoke();
@@ -595,94 +586,6 @@ public class DiceFaceBuilderWidget
             )
         };
     }
-
-    /*
-    private void AddKeywordToFace(int faceIndex, int dropdownValue)
-    {
-        if (dropdownValue <= 0) return;
-        string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
-
-        // Unpolluted return: Retrieves pure keyword name by 1-based index from raw Enum array
-        string targetKeyword = rawOptions[dropdownValue - 1].ToLower();
-
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
-        {
-            var face = sides[faceIndex];
-            if (!face.keywords.Contains(targetKeyword))
-            {
-                face.keywords.Add(targetKeyword);
-                _onStateChanged?.Invoke();
-                _onRebuildRequested?.Invoke();
-            }
-        }
-    }
-    private List<GridRowSpec> BuildKeywords(int index, DiceSideData face)
-    {
-        var keywordRows = new List<GridRowSpec>();
-        string[] rawOptions = Enum.GetNames(typeof(EffectKeyword));
-
-        List<string> displayOptions = new List<string>();
-
-        // FIX: Add placeholder at index 0 to align with AddKeywordToFace's (dropdownValue - 1) logic
-        displayOptions.Add("--- Select Keyword ---");
-
-        foreach (string rawKw in rawOptions)
-        {
-            // 1. Get colored label from EntityUIHelpers
-            string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(rawKw);
-            if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = rawKw;
-
-            // 2. Perform case-insensitive description lookup
-            string desc = null;
-            if (EffectKeywordColors.Descriptions.TryGetValue(rawKw, out string matchedDesc))
-            {
-                desc = matchedDesc;
-            }
-            else
-            {
-                var kvp = EffectKeywordColors.Descriptions.FirstOrDefault(x => string.Equals(x.Key, rawKw, StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(kvp.Value)) desc = kvp.Value;
-            }
-
-            // 3. Align description at horizontal offset <pos=170> in a muted secondary color
-            if (!string.IsNullOrWhiteSpace(desc))
-            {
-                displayOptions.Add($"{coloredLabel}<pos=170><color=#AAAAAA>: {desc}</color>");
-            }
-            else
-            {
-                displayOptions.Add(coloredLabel);
-            }
-        }
-
-        keywordRows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 1.0f)
-        ));
-
-        keywordRows.Add(new GridRowSpec(
-            GridCellSpec.CreateFilteredDropdown(
-                $"KwDrop_{index}",
-                "",
-                1.0f,
-                displayOptions.ToArray(),
-                (val) => AddKeywordToFace(index, val)
-            )
-        ));
-
-        foreach (var kw in face.keywords)
-        {
-            string keywordString = kw;
-            string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
-            keywordRows.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
-                GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => RemoveKeywordFromFace(index, keywordString))
-            ));
-        }
-
-        return keywordRows;
-    }
-    */
     private void AddKeywordToFace(int faceIndex, int dropdownValue)
     {
         if (dropdownValue <= 0) return;
@@ -760,7 +663,6 @@ public class DiceFaceBuilderWidget
         }
         return keywordRows;
     }
-
     private GridRowSpec BuildClipboardButtons(int index)
     {
         return new GridRowSpec(
@@ -858,69 +760,6 @@ public class DiceFaceBuilderWidget
             })
         );
     }
-
-    // Full Face Builders
-    /*
-    private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
-    {
-        var rows = new List<GridRowSpec>();
-
-        var customItems = ModPackage.Instance?.CustomItems;
-        var itemNames = new List<string> { "-- Select Custom Item --" };
-
-        if (customItems != null)
-        {
-            itemNames.AddRange(customItems
-                .Select(i => !string.IsNullOrEmpty(i.unityName) ? i.unityName : (!string.IsNullOrEmpty(i.entityName) ? i.entityName : "Unnamed Item"))
-                .Distinct());
-        }
-
-        string currentPayload = GetFacePayload(face);
-        bool hasPayload = !string.IsNullOrWhiteSpace(currentPayload);
-
-        // 2. Dropdown (Mirrors Collection Selector behavior)
-        rows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Set Item:", 0.30f),
-            GridCellSpec.CreateFilteredDropdown($"StickerItemDrop_{index}", "-- Select Custom Item --", 0.70f, itemNames.ToArray(), (val) => {
-                if (val <= 0 || val >= itemNames.Count) return;
-
-                string selectedName = itemNames[val];
-                var targetItem = ModPackage.Instance?.CustomItems?.FirstOrDefault(i => i.unityName == selectedName || i.entityName == selectedName);
-
-                if (targetItem != null)
-                {
-                    string itemSyntax = targetItem.Export();
-                    if (itemSyntax.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
-                    {
-                        itemSyntax = itemSyntax.Substring(2);
-                    }
-
-                    SetFacePayload(face, faceType.Id, itemSyntax);
-                    _onStateChanged?.Invoke();
-                    _onRebuildRequested?.Invoke();
-                }
-            })
-        ));
-
-        // 3. Active entry with [X] button
-        if (hasPayload)
-        {
-            string displayLabel = currentPayload.Length > 25 ? currentPayload.Substring(0, 22) + "..." : currentPayload;
-
-            rows.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel($"ActiveSticker_{index}", displayLabel, 0.80f),
-                GridCellSpec.CreateButton($"DelSticker_{index}", "[X]", 0.20f, () => {
-                    SetFacePayload(face, faceType.Id, "");
-                    _onStateChanged?.Invoke();
-                    _onRebuildRequested?.Invoke();
-                })
-            ));
-        }
-
-        return rows;
-    }
-    */
-
     private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
@@ -1068,7 +907,6 @@ public class DiceFaceBuilderWidget
 
         return rows;
     }
-
     private List<GridRowSpec> BuildCastPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();

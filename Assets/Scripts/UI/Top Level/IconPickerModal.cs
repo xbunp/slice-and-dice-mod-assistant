@@ -99,6 +99,7 @@ public class IconPickerModal : MonoBehaviour
 
     private CachedIcon[] _cachedIcons;
 
+
     private void Awake()
     {
         // Singleton initialization
@@ -126,6 +127,41 @@ public class IconPickerModal : MonoBehaviour
         InitializeSizeFilters();
     }
 
+    private IEnumerator Start()
+    {
+        // Wait 1 frame after scene load
+        yield return null;
+
+        // Pre-warm the cache silently in the background over several frames
+        if (EntityUIHelpers.AllActionSprites != null)
+        {
+            Sprite[] sprites = EntityUIHelpers.AllActionSprites;
+            int processedCount = 0;
+
+            for (int i = 0; i < sprites.Length; i++)
+            {
+                Sprite sp = sprites[i];
+                if (sp == null) continue;
+
+                string rawName = sp.name;
+                string cleanName = GetCleanLeafName(rawName);
+                string tooltipText = EntityUIHelpers.GetBaseTooltip(sp);
+
+                // Build and cache the search string
+                SpriteSearchAliases.BuildExpandedSearchString(rawName, cleanName, tooltipText);
+
+                processedCount++;
+
+                // Yield every 100 sprites so the frame rate stays at 60+ FPS
+                if (processedCount >= 100)
+                {
+                    processedCount = 0;
+                    yield return null;
+                }
+            }
+        }
+    }
+
     private void InitializeSizeFilters()
     {
         _sizeButtonsMap = new Dictionary<Button, int>
@@ -148,14 +184,12 @@ public class IconPickerModal : MonoBehaviour
             }
         }
     }
-
     private void OnSizeFilterClicked(Button clickedButton, int targetSize)
     {
         _activeSizeFilter = (_activeSizeFilter == targetSize) ? -1 : targetSize;
         UpdateSizeButtonVisuals();
         FilterIcons(searchInputField.text);
     }
-
     private void UpdateSizeButtonVisuals()
     {
         foreach (var kvp in _sizeButtonsMap)
@@ -168,7 +202,6 @@ public class IconPickerModal : MonoBehaviour
                 : (_defaultButtonColors.TryGetValue(btn, out Color defColor) ? defColor : Color.white);
         }
     }
-
     public void OpenModal(IconPickerConfig config)
     {
         _onIconSelectedCallback = config.OnSelectionMade;
@@ -189,7 +222,6 @@ public class IconPickerModal : MonoBehaviour
 
         _populateRoutine = StartCoroutine(PopulateGridRoutine(""));
     }
-
     private void FilterIcons(string searchQuery)
     {
         if (!modalPanel.activeSelf) return;
@@ -197,7 +229,6 @@ public class IconPickerModal : MonoBehaviour
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);
         _populateRoutine = StartCoroutine(PopulateGridRoutine(searchQuery));
     }
-
     private void SpawnIconUI(CachedIcon iconCache)
     {
         IconPickerItem item;
@@ -250,20 +281,17 @@ public class IconPickerModal : MonoBehaviour
 
         _activeIcons.Add(item);
     }
-
     private void OnIconClicked(int effectIndex, Sprite selectedSprite)
     {
         _onIconSelectedCallback?.Invoke(effectIndex, selectedSprite);
         CloseModal();
     }
-
     public void CloseModal()
     {
         if (_populateRoutine != null) StopCoroutine(_populateRoutine);
         ReturnAllToPool();
         modalPanel.SetActive(false);
     }
-
     private void ReturnAllToPool()
     {
         if (_layoutGroup != null) _layoutGroup.enabled = false;
@@ -286,7 +314,6 @@ public class IconPickerModal : MonoBehaviour
         _activeIcons.Clear();
         if (_layoutGroup != null) _layoutGroup.enabled = true;
     }
-
     private MonsterSize GetExpectedMonsterSize(int filterValue)
     {
         switch (filterValue)
@@ -298,21 +325,21 @@ public class IconPickerModal : MonoBehaviour
             default: return MonsterSize.HeroSized;
         }
     }
-
     private IEnumerator PopulateGridRoutine(string searchQuery)
     {
         ReturnAllToPool();
-
         if (_scrollRect != null) _scrollRect.verticalNormalizedPosition = 1f;
         if (_layoutGroup != null) _layoutGroup.enabled = false;
 
         bool isSearchEmpty = string.IsNullOrWhiteSpace(searchQuery);
-        int spawnedThisFrame = 0;
+        string[] searchTerms = isSearchEmpty
+            ? Array.Empty<string>()
+            : searchQuery.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
+        int spawnedThisFrame = 0;
         for (int i = 0; i < _cachedIcons.Length; i++)
         {
             CachedIcon icon = _cachedIcons[i];
-
             if (!icon.IsValid) continue;
 
             if (_activeSizeFilter != -1)
@@ -328,11 +355,23 @@ public class IconPickerModal : MonoBehaviour
                 }
             }
 
-            if (!isSearchEmpty && icon.SearchName.IndexOf(searchQuery, StringComparison.OrdinalIgnoreCase) < 0) continue;
+            // Multi-keyword check: every space-separated word in the search box must match something in the sprite's search index
+            if (!isSearchEmpty)
+            {
+                bool matchesAllTerms = true;
+                for (int t = 0; t < searchTerms.Length; t++)
+                {
+                    if (icon.SearchName.IndexOf(searchTerms[t], StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        matchesAllTerms = false;
+                        break;
+                    }
+                }
+                if (!matchesAllTerms) continue;
+            }
 
             SpawnIconUI(icon);
             spawnedThisFrame++;
-
             if (spawnedThisFrame >= spawnBatchSize)
             {
                 if (_layoutGroup != null) _layoutGroup.enabled = true;
@@ -341,11 +380,9 @@ public class IconPickerModal : MonoBehaviour
                 if (_layoutGroup != null) _layoutGroup.enabled = false;
             }
         }
-
         if (_layoutGroup != null) _layoutGroup.enabled = true;
         _populateRoutine = null;
     }
-
     public static string GetCleanLeafName(string spriteName)
     {
         if (string.IsNullOrEmpty(spriteName)) return string.Empty;
@@ -373,7 +410,6 @@ public class IconPickerModal : MonoBehaviour
 
         return spriteName;
     }
-
     public static bool TryGetMonsterType(string spriteName, out MonsterType monster)
     {
         monster = default;
@@ -394,7 +430,6 @@ public class IconPickerModal : MonoBehaviour
         }
         return false;
     }
-
     public static bool TryGetHeroType(string spriteName, out HeroType hero)
     {
         hero = default;
@@ -415,7 +450,6 @@ public class IconPickerModal : MonoBehaviour
         }
         return false;
     }
-
     private MonsterSize? GetPortraitMonsterSize(Sprite sprite)
     {
         if (sprite == null) return null;
@@ -423,7 +457,7 @@ public class IconPickerModal : MonoBehaviour
         if (TryGetHeroType(sprite.name, out HeroType _)) return MonsterSize.HeroSized;
         return null;
     }
-
+    /*
     private void BuildCache(IconPickerConfig config)
     {
         if (config.Sprites == null) return;
@@ -478,7 +512,62 @@ public class IconPickerModal : MonoBehaviour
 
         _cachedIcons = cachedList.ToArray();
     }
+    */
 
+    private void BuildCache(IconPickerConfig config)
+    {
+        if (config.Sprites == null) return;
+        var cachedList = new List<CachedIcon>(config.Sprites.Length);
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _isPortraitMode = false;
+
+        for (int i = 0; i < config.Sprites.Length; i++)
+        {
+            Sprite sprite = config.Sprites[i];
+            if (sprite == null && !config.AllowNullSprites) continue;
+            if (!config.DisableDeduplication && sprite != null)
+            {
+                if (!seenNames.Add(sprite.name)) continue;
+            }
+
+            bool isValid = config.IsValid?.Invoke(i, sprite) ?? true;
+            if (!isValid) continue;
+
+            int width = sprite != null ? Mathf.RoundToInt(sprite.rect.width) : 0;
+            string rawName = sprite != null ? sprite.name : "Unknown";
+            string cleanName = GetCleanLeafName(rawName);
+            string userSearchName = config.GetSearchName?.Invoke(i, sprite) ?? rawName;
+            string tooltipText = config.GetTooltip?.Invoke(i, sprite) ?? rawName;
+
+            // Combine User Search Name, Tooltip, Clean Name, and Synonym Tags into one master search string
+            string fullSearchableText = SpriteSearchAliases.BuildExpandedSearchString(userSearchName, cleanName, tooltipText);
+
+            MonsterSize? monsterSize = null;
+            if (sprite != null && sprite.name.StartsWith("prt_", StringComparison.OrdinalIgnoreCase))
+            {
+                monsterSize = GetPortraitMonsterSize(sprite);
+                if (monsterSize.HasValue) _isPortraitMode = true;
+            }
+
+            bool hasCustomText = config.GetNameText != null;
+            cachedList.Add(new CachedIcon
+            {
+                OriginalIndex = i,
+                Sprite = sprite,
+                SearchName = fullSearchableText, // <-- Storing expanded search index
+                TooltipText = tooltipText,
+                Width = width,
+                AssociatedMonsterSize = monsterSize,
+                IsValid = true,
+                HasCustomText = hasCustomText,
+                NameText = hasCustomText ? config.GetNameText?.Invoke(i, sprite) : null,
+                TierText = config.GetTierText?.Invoke(i, sprite),
+                HPText = config.GetHPText?.Invoke(i, sprite),
+                BgColor = config.GetColor != null ? config.GetColor(i, sprite) : Color.white
+            });
+        }
+        _cachedIcons = cachedList.ToArray();
+    }
     private void ApplyLayoutConfiguration(IconPickerConfig config)
     {
         if (_layoutGroup is GridLayoutGroup gridLayout)
@@ -487,4 +576,6 @@ public class IconPickerModal : MonoBehaviour
             gridLayout.spacing = config.CellSpacing ?? _defaultCellSpacing;
         }
     }
+
+
 }

@@ -5677,3 +5677,81 @@ public static class MonsterDatabase
         }
     };
 }
+
+
+public static class VisualEffectsData
+{
+    public static readonly Dictionary<string, string> VisualEffects = new Dictionary<string, string>
+    {
+        // Standard / Hero Sides
+        { "Sword", "sd.15" },
+        { "Slice", "sd.137" },
+        { "Punch", "sd.174" },
+        { "Kriss", "sd.30" },
+        { "Fork", "sd.36" },
+        { "Hammer", "sd.39" },
+        { "Sword - Quartz", "sd.40" },
+        { "Poison", "sd.91" },
+        { "Arrow", "sd.46" },
+        { "Shield Bash", "sd.41" },
+        { "Heal", "sd.92" },
+        { "Lightning", "sd.88" },
+        { "Flame", "sd.90" },
+        { "Frost", "sd.95" },
+        { "Big Zap", "sd.101" },
+        { "Undying", "sd.117" },
+        { "Taunt", "sd.118" },
+        { "Heal Basic", "sd.103" },
+        { "Fang", "sd.169" },
+        { "Wolf Bite", "sd.170" },
+        { "Claw", "sd.171" },
+        { "Boost Shield", "sd.146" },
+        { "Boost Heal", "sd.147" },
+        { "Beam", "sd.181" },
+        { "Boost", "sd.150" },
+
+        // Cast Effects
+        { "Anvil", "left.cast.drop" },
+        { "Ellipse", "left.cast.slay" },
+        { "Crush", "left.cast.crush" },
+        { "MultiBlade", "left.cast.blades" },
+        { "Singularity", "left.cast.harvest" },
+        { "Freeze", "left.cast.tick" },
+        { "Cross - Cast", "left.cast.hex" },
+
+        // Enemy Sides
+        { "Gaze - Illusion", "left.top.hat.illusion" },
+        { "Bee Sting", "left.hat.bee" },
+        { "Bone", "left.hat.bones" },
+        { "Rat Bite", "left.hat.rat" },
+        { "Poison Bite", "left.right.hat.imp" },
+        { "Slime - Slimelet", "left.hat.slimelet" },
+        { "Cross - Ghost", "left.hat.ghost" },
+        { "Troll Club", "left.hat.troll" },
+        { "Broom", "left.hat.gytha" },
+        { "Bat Swarm", "left.hat.agnes" },
+        { "Gaze - Gytha", "left.right.hat.gytha" },
+        { "Stomp", "left.hat.ogre" },
+        { "Rocks", "left.right.hat.slate" },
+        { "Spikes", "left.right.hat.spiker" },
+        { "Rock Punch", "left.hat.slate" },
+        { "Spike Punch", "left.hat.spiker" },
+        { "Beak", "left.hat.caw" },
+        { "Curse", "left.hat.magrat" },
+        { "Slime - Slimer", "left.hat.slimer" },
+        { "Big Claw", "left.hat.alpha" },
+        { "Alpha Bite", "left.hat.bramble" },
+        { "CleaveSword", "left.top.hat.ogre" },
+        { "Boar Bite", "left.hat.boar" },
+        { "Boar Tusks", "left.right.hat.boar" },
+        { "Slam", "left.top.hat.troll king" },
+        { "Dragon Bite", "left.hat.rotten" },
+        { "Tarantus Bite", "left.hat.tarantus" },
+        { "Gaze - Lich", "left.right.hat.lich" },
+        { "Fire Breath", "left.hat.dragon" },
+        { "PoisonBreath", "left.right.hat.dragon" },
+        { "Frost Flank", "left.hat.basalt" },
+        { "Red Beam", "left.top.hat.basalt" },
+        { "Slime Queen", "left.mid.hat.slime queen" }
+    };
+}
