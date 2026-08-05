@@ -1049,6 +1049,7 @@ public class ItemData : SDData
 
     // Current item export
     // Current item export
+    // Current item export
     private void OptimizeAndExportMechanics(List<string> chainParts)
     {
         List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();

@@ -656,7 +656,6 @@ public class ItemUI : RootUI
     private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
     {
         string prefix = mechanic.Prefix?.ToLower() ?? "";
-
         if (prefix == "hat")
         {
             ProcessHatNode(mechanic, targetZone);
@@ -664,50 +663,45 @@ public class ItemUI : RootUI
         }
 
         ItemNodeType type = ItemNodeType.BaseItem;
-        if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.Appearance;
-        else if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
+
+        if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
         else if (AbilityDomainRules.AbilityStartTokens.Contains(prefix) || prefix == "abilitydata") type = ItemNodeType.LearnAbility;
+        else if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.RawString;
+        else if (prefix == "sticker" || prefix == "enchant" || prefix == "cast" || (prefix == "i" && mechanic.PayloadData is ItemData)) type = ItemNodeType.Bracket;
 
         if (type == ItemNodeType.BaseItem)
         {
-            bool needsBracket = mechanic.Targets.Count > 0 ||
-                                mechanic.RepeatTimes != 1 ||
-                                mechanic.Multiplier != 1 ||
-                                mechanic.PerTier ||
-                                mechanic.Unpack ||
-                                mechanic.PartIndex.HasValue ||
-                                !string.IsNullOrEmpty(mechanic.MergedItem) ||
-                                !string.IsNullOrEmpty(mechanic.SplicedItem) ||
-                                !string.IsNullOrEmpty(mechanic.Prefix);
-
-            string purePayload = mechanic.PayloadString ?? "";
-            if (mechanic.ChainedKeywords.Count > 0)
-            {
-                if (purePayload.Length > 0) purePayload += "#";
-                purePayload += string.Join("#", mechanic.ChainedKeywords);
-            }
+            // BaseItemNodeDef handles targets, multipliers, unpack, and repeats natively.
+            // We only force a bracket wrapper if the item utilizes the engine-complex .mrg. or .splice. suffixes
+            bool needsBracket = !string.IsNullOrEmpty(mechanic.MergedItem) || !string.IsNullOrEmpty(mechanic.SplicedItem);
+            string fullExport = mechanic.Export();
 
             if (needsBracket)
             {
                 EntityCard bracketCard = CreateEntityCard(ItemNodeType.Bracket) as EntityCard;
                 bracketCard.MechanicData = new ItemMechanic
                 {
-                    Prefix = mechanic.Prefix,
-                    Targets = new List<string>(mechanic.Targets),
-                    RepeatTimes = mechanic.RepeatTimes,
-                    Multiplier = mechanic.Multiplier,
-                    PerTier = mechanic.PerTier,
-                    Unpack = mechanic.Unpack,
-                    PartIndex = mechanic.PartIndex,
                     MergedItem = mechanic.MergedItem,
                     SplicedItem = mechanic.SplicedItem
                 };
                 targetZone.AddEntrant(bracketCard);
 
                 EntityCard pureBaseCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
-                ItemMechanic pureMech = new ItemMechanic { PayloadString = purePayload };
-                pureBaseCard.MechanicData = pureMech;
 
+                // Strip the suffix operators from the inner payload since the bracket handles them
+                string pureStr = fullExport;
+                if (!string.IsNullOrEmpty(mechanic.MergedItem))
+                {
+                    int mrgIdx = pureStr.IndexOf(".mrg.");
+                    if (mrgIdx >= 0) pureStr = pureStr.Substring(0, mrgIdx);
+                }
+                if (!string.IsNullOrEmpty(mechanic.SplicedItem))
+                {
+                    int splIdx = pureStr.IndexOf(".splice.");
+                    if (splIdx >= 0) pureStr = pureStr.Substring(0, splIdx);
+                }
+
+                pureBaseCard.MechanicData = new ItemMechanic { PayloadString = pureStr };
                 if (bracketCard.PayloadPort != null)
                 {
                     bracketCard.PayloadPort.AddEntrant(pureBaseCard);
@@ -716,25 +710,30 @@ public class ItemUI : RootUI
             }
             else
             {
-                EntityCard mechCard = CreateEntityCard(type) as EntityCard;
-                ItemMechanic flatMech = new ItemMechanic { PayloadString = purePayload };
-                mechCard.MechanicData = flatMech;
+                EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
+                mechCard.MechanicData = new ItemMechanic { PayloadString = fullExport };
                 targetZone.AddEntrant(mechCard);
                 return;
             }
         }
+        else if (type == ItemNodeType.RawString)
+        {
+            // Forces unmapped nodes (like free-floating Facades) to retain their target/prefix data
+            EntityCard mechCardObj = CreateEntityCard(type) as EntityCard;
+            mechCardObj.MechanicData = new ItemMechanic { PayloadString = mechanic.Export() };
+            targetZone.AddEntrant(mechCardObj);
+            return;
+        }
 
-        EntityCard mechCardObj = CreateEntityCard(type) as EntityCard;
-        mechCardObj.MechanicData = mechanic;
-        targetZone.AddEntrant(mechCardObj);
+        EntityCard standardCard = CreateEntityCard(type) as EntityCard;
+        standardCard.MechanicData = mechanic;
+        targetZone.AddEntrant(standardCard);
 
-        // CRITICAL FIX: Only recurse and spawn children for non-BaseItem nodes.
-        // Pure BaseItem packs are handled natively inside the single BaseItem node.
         if (mechanic.PayloadData is ItemData nestedItem && type != ItemNodeType.BaseItem)
         {
             foreach (var childMech in nestedItem.Mechanics)
             {
-                LoadMechanicIntoUI(childMech, mechCardObj.PayloadPort, depth + 1);
+                LoadMechanicIntoUI(childMech, standardCard.PayloadPort, depth + 1);
             }
         }
     }
@@ -1388,21 +1387,82 @@ public class ItemUI : RootUI
     {
         if (payloadPort == null) return;
 
-        // 1. Base items (e.g. string names like "Sword")
         if (entity.items != null)
         {
+            bool isFirstItem = true;
             foreach (var itemName in entity.items)
             {
                 if (string.IsNullOrEmpty(itemName)) continue;
-                ItemMechanic mech = new ItemMechanic { PayloadString = itemName };
-                LoadMechanicIntoUI(mech, payloadPort, 1);
+
+                // Elements inside an entity's item array are distinctly separated items. 
+                // We inject .i. explicitly here so ValidateWorkspaceOperators doesn't combine them with #
+                if (!isFirstItem)
+                {
+                    EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                    opCard.MechanicData.PayloadString = ".i.";
+                    payloadPort.AddEntrant(opCard);
+                }
+                isFirstItem = false;
+
+                ItemData parsedItem = new ItemData();
+                parsedItem.Parse(itemName);
+
+                List<ItemMechanic> baseItemBuffer = new List<ItemMechanic>();
+                bool isFirstMechInItem = true;
+
+                void FlushBuffer()
+                {
+                    if (baseItemBuffer.Count == 0) return;
+                    string combined = string.Join("#", baseItemBuffer.Select(m => m.Export()));
+                    ItemMechanic aggregateMech = new ItemMechanic { PayloadString = combined };
+
+                    if (!isFirstMechInItem)
+                    {
+                        EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                        innerOpCard.MechanicData.PayloadString = "#";
+                        payloadPort.AddEntrant(innerOpCard);
+                    }
+                    isFirstMechInItem = false;
+
+                    EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
+                    mechCard.MechanicData = aggregateMech;
+                    payloadPort.AddEntrant(mechCard);
+
+                    baseItemBuffer.Clear();
+                }
+
+                foreach (var mech in parsedItem.Mechanics)
+                {
+                    string pfx = mech.Prefix?.ToLower() ?? "";
+
+                    // Identifies mechanics that can be handled natively by BaseItemNodeDef
+                    bool isBaseCompatible = (pfx == "" || pfx == "k" || pfx == "tog" || pfx == "ritem" || pfx == "ritemx")
+                                            && mech.PayloadData == null
+                                            && string.IsNullOrEmpty(mech.MergedItem)
+                                            && string.IsNullOrEmpty(mech.SplicedItem);
+
+                    if (isBaseCompatible)
+                    {
+                        baseItemBuffer.Add(mech);
+                    }
+                    else
+                    {
+                        FlushBuffer();
+                        if (!isFirstMechInItem)
+                        {
+                            EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                            innerOpCard.MechanicData.PayloadString = "#";
+                            payloadPort.AddEntrant(innerOpCard);
+                        }
+                        isFirstMechInItem = false;
+                        LoadMechanicIntoUI(mech, payloadPort, 1);
+                    }
+                }
+                FlushBuffer();
             }
-            // Remove from backend data so the UI takes full ownership. 
-            // This prevents double-compilation when the user saves.
             entity.items.Clear();
         }
 
-        // 2. Custom Payloads (Complex items nested via .i.(...))
         if (entity.customPayloads != null)
         {
             var itemsToRemove = new List<CustomPayload>();
@@ -1410,8 +1470,23 @@ public class ItemUI : RootUI
             {
                 if (cp.Type == PayloadType.Item && cp.Data is ItemData nestedItem)
                 {
+                    if (payloadPort.Entrants.Count > 0)
+                    {
+                        EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                        opCard.MechanicData.PayloadString = ".i.";
+                        payloadPort.AddEntrant(opCard);
+                    }
+
+                    bool isFirstInNested = true;
                     foreach (var childMech in nestedItem.Mechanics)
                     {
+                        if (!isFirstInNested)
+                        {
+                            EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                            innerOpCard.MechanicData.PayloadString = "#";
+                            payloadPort.AddEntrant(innerOpCard);
+                        }
+                        isFirstInNested = false;
                         LoadMechanicIntoUI(childMech, payloadPort, 1);
                     }
                     itemsToRemove.Add(cp);
@@ -1420,14 +1495,34 @@ public class ItemUI : RootUI
             foreach (var cp in itemsToRemove) entity.customPayloads.Remove(cp);
         }
 
-        // 3. Traits (Items functioning as properties, e.g. t.jinx)
         if (entity.traits != null)
         {
             foreach (var trait in entity.traits)
             {
                 if (string.IsNullOrEmpty(trait)) continue;
-                ItemMechanic mech = new ItemMechanic { Prefix = "t", PayloadString = trait };
-                LoadMechanicIntoUI(mech, payloadPort, 1);
+
+                if (payloadPort.Entrants.Count > 0)
+                {
+                    EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                    opCard.MechanicData.PayloadString = ".i.";
+                    payloadPort.AddEntrant(opCard);
+                }
+
+                ItemData parsedTrait = new ItemData();
+                parsedTrait.Parse($"t.{trait}");
+
+                bool isFirstTraitMech = true;
+                foreach (var mech in parsedTrait.Mechanics)
+                {
+                    if (!isFirstTraitMech)
+                    {
+                        EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                        innerOpCard.MechanicData.PayloadString = "#";
+                        payloadPort.AddEntrant(innerOpCard);
+                    }
+                    isFirstTraitMech = false;
+                    LoadMechanicIntoUI(mech, payloadPort, 1);
+                }
             }
             entity.traits.Clear();
         }

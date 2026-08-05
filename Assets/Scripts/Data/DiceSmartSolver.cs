@@ -32,6 +32,34 @@ namespace SliceAndDice.Compiler
         Egg
     }
 
+    public class UntargetedEffectSpec
+    {
+        public HatPayload SourceEffect { get; set; }
+
+        /// <summary>
+        /// If the source effect is targeted (e.g. Single Damage), this defines the untargeted 
+        /// scope to convert it to before executing 'togunt'. 
+        /// Options: AllEnemies, AllAllies, Everyone, Self.
+        /// </summary>
+        public TargetScope UntargetedConversionScope { get; set; } = TargetScope.AllEnemies;
+
+        /// <summary>
+        /// Set to true for inherently untargeted payloads (Mana, Reroll, Revive, Enchant, Egg).
+        /// Bypasses targeting transformation.
+        /// </summary>
+        public bool IsInherentlyUntargeted { get; set; } = false;
+
+        public UntargetedEffectSpec(
+            HatPayload sourceEffect,
+            TargetScope conversionScope = TargetScope.AllEnemies,
+            bool isInherentlyUntargeted = false)
+        {
+            SourceEffect = sourceEffect;
+            UntargetedConversionScope = conversionScope;
+            IsInherentlyUntargeted = isInherentlyUntargeted;
+        }
+    }
+
     public class SpecialFaceSpec
     {
         public SpecialFaceType Type { get; set; }
@@ -175,6 +203,10 @@ namespace SliceAndDice.Compiler
             new(117, EffectType.Undying, TargetScope.SingleAlly, false),
             new(130, EffectType.Reuse, TargetScope.SingleAlly, false),
 
+            // Self-Damage / Special Base Faces
+            new(12,  EffectType.Damage, TargetScope.Self, true, "cantrip"),
+            new(14,  EffectType.Damage, TargetScope.Self, true, "mandatory"),
+
             // Special Effects (Baked Keywords)
             new(128, EffectType.Damage, TargetScope.Everyone, true, "rampage", "pain"),
             new(160, EffectType.Damage, TargetScope.Everyone, true, "charged", "manacost"),
@@ -238,9 +270,11 @@ namespace SliceAndDice.Compiler
         public HatPayload? PipsSource { get; set; }
         public HatPayload? KeywordsSource { get; set; }
         public HatPayload? OrEffectSource { get; set; }
-        public HatPayload? UntargetedSource { get; set; }
+        public UntargetedEffectSpec? UntargetedEffect { get; set; }
         public string? Facade { get; set; }
         public RestrictionIntent? LogicGates { get; set; }
+        public string? VisualEffectName { get; set; }
+
 
         // NEW PROPERTIES
         public int PipDelta { get; set; } = 0;
@@ -529,8 +563,11 @@ namespace SliceAndDice.Compiler
             if (intent.OrEffectSource != null)
                 EmitHatTog(intent.TargetFace, TogType.OrEffect, intent.OrEffectSource);
 
-            if (intent.UntargetedSource != null)
-                EmitHatTog(intent.TargetFace, TogType.Untargeted, intent.UntargetedSource);
+            if (intent.UntargetedEffect != null)
+            {
+                EmitUntargetedEffect(intent.TargetFace, intent.UntargetedEffect);
+            }
+
 
             if (intent.RawKeywords.Any())
             {
@@ -551,6 +588,12 @@ namespace SliceAndDice.Compiler
             if (intent.LogicGates != null)
             {
                 EmitRestrictions(intent.TargetFace, intent.LogicGates);
+            }
+
+            // 2. Visual Effects (togvis)
+            if (!string.IsNullOrWhiteSpace(intent.VisualEffectName))
+            {
+                EmitVisualEffect(intent.TargetFace, intent.VisualEffectName);
             }
 
             // 4. GENERAL FACADE VISUAL OVERRIDE
@@ -688,6 +731,46 @@ namespace SliceAndDice.Compiler
                 Emit($"{targetSide}.{togOp}");
             }
         }
+
+        #region --- UNTARGETED COMPOSITE PIPELINE (TOGUNT) ---
+
+        private void EmitUntargetedEffect(Face targetFace, UntargetedEffectSpec spec)
+        {
+            string targetSide = targetFace == Face.All ? "" : $"{targetFace.ToString().ToLower()}.";
+            string sourceSide = spec.SourceEffect.SourceFace.ToString().ToLower();
+
+            // 1. Load source payload onto Left face (Accumulator)
+            string leftPayloadInstruction = $"left.{sourceSide}.hat.({spec.SourceEffect.RawPayload})";
+
+            // 2. TARGETING CONVERSION: If the payload is targeted, convert Left face to untargeted first
+            if (!spec.IsInherentlyUntargeted)
+            {
+                // Enforce an untargeted scope (AllEnemies, AllAllies, Everyone, or Self)
+                TargetScope conversionScope = spec.UntargetedConversionScope;
+                if (conversionScope is not (TargetScope.AllEnemies or TargetScope.AllAllies or TargetScope.Everyone or TargetScope.Self))
+                {
+                    conversionScope = TargetScope.AllEnemies; // Default fallback
+                }
+
+                leftPayloadInstruction = TargetingPipeline.ApplyTargetingTransform(
+                    Face.Left,
+                    leftPayloadInstruction,
+                    TargetScope.SingleEnemy, // Baseline assumption for targeted input
+                    conversionScope
+                );
+            }
+
+            // 3. Emit payload to Left register
+            Emit(leftPayloadInstruction);
+
+            // 4. Emit togunt to copy untargeted effect from Left to target face
+            Emit($"{targetSide}togunt");
+
+            // 5. Restore Accumulator baseline
+            RestoreLeftFace();
+        }
+
+        #endregion
 
         #region --- DUAL-MODE REGISTER BUS ENGINE ---
 
@@ -849,6 +932,49 @@ namespace SliceAndDice.Compiler
         private void Emit(string instruction)
         {
             _instructions.Add(instruction);
+        }
+
+        private void EmitVisualEffect(Face targetFace, string visualName)
+        {
+            // 1. Resolve human name from catalog
+            if (!VisualEffectsData.VisualEffects.TryGetValue(visualName, out var visualSource))
+            {
+                throw new KeyNotFoundException($"Visual Effect Compiler Error: '{visualName}' not found in VisualEffectsData catalog.");
+            }
+
+            string targetSide = targetFace == Face.All ? "" : $"{targetFace.ToString().ToLower()}.";
+
+            // 2. OPTIMIZATION: If target IS Left, load directly onto Left without togvis
+            if (targetFace == Face.Left)
+            {
+                if (visualSource.StartsWith("sd.", StringComparison.OrdinalIgnoreCase))
+                {
+                    Emit($"left.mid.hat.(Fey.{visualSource})");
+                }
+                else
+                {
+                    Emit(visualSource);
+                }
+                return;
+            }
+
+            // 3. TARGET IS NOT LEFT: Load onto Left (AX), broadcast via togvis, then clean up Left
+            if (visualSource.StartsWith("sd.", StringComparison.OrdinalIgnoreCase))
+            {
+                // Standard SD visual (e.g. "sd.15"): Load via anonymous Fey hat onto Left
+                Emit($"left.mid.hat.(Fey.{visualSource})");
+            }
+            else
+            {
+                // Cast or Monster Hat visual (e.g. "left.cast.drop", "left.hat.bee")
+                Emit(visualSource);
+            }
+
+            // Push visual from Left to Target
+            Emit($"{targetSide}togvis");
+
+            // Clear Accumulator
+            RestoreLeftFace();
         }
 
         #region --- PIP ALGEBRA ---
@@ -1028,6 +1154,8 @@ namespace SliceAndDice.Compiler
     }
 
     #endregion
+
+
 
 
 }
