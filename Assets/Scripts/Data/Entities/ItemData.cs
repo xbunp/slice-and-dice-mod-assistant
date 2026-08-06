@@ -58,7 +58,8 @@ public static class ItemDomainRules
 
     public static readonly HashSet<string> ValidTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "all", "self", "right5", "right3", "right2", "row", "mid2", "col", "topbot",
+        // removed "self" - code stink?
+        "all", "right5", "right3", "right2", "row", "mid2", "col", "topbot",
         "left2", "rightmost", "right", "bot", "top", "mid", "left", "k", "t"
     };
 
@@ -119,7 +120,7 @@ public static class ItemDomainRules
     /// </summary>
     public static readonly HashSet<string> MechanicPrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "i", "sd", "k", "t",
+        "i", "sd", "k", "t", "self",
         "sticker", "enchant", "cast",
         "hat", "onhitdata", "triggerhpdata",
         "facade", "sidesc"
@@ -1022,13 +1023,17 @@ public class ItemData : SDData
                 HeroData hero = new HeroData(); hero.Parse(core); mech.PayloadData = hero;
             }
         }
-        else if (mech.Prefix == "i" || string.IsNullOrEmpty(mech.Prefix))
+        else if (mech.Prefix == "i" || mech.Prefix == "self" || string.IsNullOrEmpty(mech.Prefix))
         {
             if (mech.PayloadString.StartsWith("("))
             {
                 ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item;
             }
-            else if (mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase))
+            else if (mech.Prefix == "self" ||
+                     mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase) ||
+                     mech.PayloadString.StartsWith("self.", StringComparison.OrdinalIgnoreCase) ||
+                     mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase) ||
+                     mech.PayloadString.StartsWith("vase.", StringComparison.OrdinalIgnoreCase))
             {
                 ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
             }
