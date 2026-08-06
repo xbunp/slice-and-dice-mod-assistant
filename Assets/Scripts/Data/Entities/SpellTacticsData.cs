@@ -57,7 +57,44 @@ public class TacticData : AbilityData
     {
         diceSides[4].effectID = 0;
         diceSides[4].pips = 0;
+        EnsureKeywordCostItems(); // <--- ADDED
         return base.ExportInner();
+    }
+
+    // <--- ADDED METHODS BELOW --->
+    public void EnsureKeywordCostItems()
+    {
+        EnsureCostSideKeywordItem(2, "top");
+        EnsureCostSideKeywordItem(3, "bot");
+        EnsureCostSideKeywordItem(5, "right");
+    }
+
+    private void EnsureCostSideKeywordItem(int faceIndex, string sidePrefix)
+    {
+        if (diceSides == null || faceIndex >= diceSides.Length) return;
+        var face = diceSides[faceIndex];
+
+        if (items == null) items = new List<string>();
+
+        // Strip previous DSVarhest items for this side to prevent duplicates
+        items.RemoveAll(it =>
+            it.Equals($"({sidePrefix}.cast.DSVarhest)", StringComparison.OrdinalIgnoreCase) ||
+            it.Equals($"({sidePrefix}.cast.DSVarhest#Fly)", StringComparison.OrdinalIgnoreCase) ||
+            it.Equals($"{sidePrefix}.cast.DSVarhest", StringComparison.OrdinalIgnoreCase) ||
+            it.Equals($"{sidePrefix}.cast.DSVarhest#Fly", StringComparison.OrdinalIgnoreCase));
+
+        // Inject appropriate keyword modifier item
+        if (face != null && face.effectID == 13)
+        {
+            if (face.pips == 2)
+            {
+                items.Add($"({sidePrefix}.cast.DSVarhest)");
+            }
+            else if (face.pips == 4)
+            {
+                items.Add($"({sidePrefix}.cast.DSVarhest#Fly)");
+            }
+        }
     }
 }
 

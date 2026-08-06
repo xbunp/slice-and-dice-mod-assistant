@@ -399,13 +399,19 @@ public class AbilityUI : RootUI
             case 8: face.effectID = 177; face.pips = 2; break;
             case 9: face.effectID = 177; face.pips = 3; break;
             case 10: face.effectID = 177; face.pips = 4; break;
-            case 11: face.effectID = 13; face.pips = pips; break;
-            case 12: face.effectID = 0; face.pips = pips; break;
-            case 13: face.effectID = 0; face.pips = pips; break;
+            case 11: face.effectID = 13; face.pips = pips > 0 ? pips : 1; break;
+            case 12: face.effectID = 13; face.pips = 2; break; // <--- UPDATED (was setting effectID = 0)
+            case 13: face.effectID = 13; face.pips = 4; break; // <--- UPDATED (was setting effectID = 0)
+        }
+
+        if (CurrentAbility is TacticData tactic)
+        {
+            tactic.EnsureKeywordCostItems(); // <--- ADDED
         }
 
         NotifyStateChanged();
     }
+
     private int GetTacticCostDropdownIndex(DiceSideData face)
     {
         if (face.effectID == 0) return 0;
