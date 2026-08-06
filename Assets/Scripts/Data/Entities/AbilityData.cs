@@ -315,11 +315,22 @@ public abstract class AbilityData : HeroData
         if (ability is OnHitData) return $"i.onhitdata.{ability.Export()}";
         return $"abilitydata.{ability.Export()}";
     }
+    private static bool IsFaceModified(DiceSideData face)
+    {
+        if (face == null) return false;
+        if (face.effectID != 0 || face.pips != 0) return true;
+        if (!string.IsNullOrEmpty(face.facadeID)) return true;
+        if (face.keywords != null && face.keywords.Count > 0) return true;
+        if (!string.IsNullOrEmpty(face.payload)) return true;
+        if (face.faceType != DiceSideData.DiceFaceType.Base) return true;
+        if (!string.IsNullOrEmpty(face.sidesc)) return true;
+        return false;
+    }
+
     public static AbilityData CreateAbility(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
         string trimmed = data.Trim();
-
         if (trimmed.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.onhitdata.", StringComparison.OrdinalIgnoreCase))
         {
@@ -327,7 +338,6 @@ public abstract class AbilityData : HeroData
             onHit.Parse(trimmed);
             return onHit;
         }
-
         if (trimmed.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.triggerhpdata.", StringComparison.OrdinalIgnoreCase))
         {
@@ -335,11 +345,9 @@ public abstract class AbilityData : HeroData
             triggerHP.Parse(trimmed);
             return triggerHP;
         }
-
         string clean = StripPrefix(data);
         ProbeAbilityData probe = new ProbeAbilityData();
         probe.Parse(clean);
-
         if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.t.orb.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("t.orb.", StringComparison.OrdinalIgnoreCase))
@@ -348,7 +356,6 @@ public abstract class AbilityData : HeroData
             orb.Parse(clean);
             return orb;
         }
-
         if (probe.hp != 0)
         {
             TriggerHPData triggerHP = new TriggerHPData();
@@ -362,7 +369,6 @@ public abstract class AbilityData : HeroData
             var face5 = probe.diceSides[4];
             if (face5 != null && face5.effectID == 76 && face5.pips > 0) isSpell = true;
         }
-
         if (isSpell)
         {
             SpellData spell = new SpellData();
@@ -373,18 +379,13 @@ public abstract class AbilityData : HeroData
         bool onlyLeftFace = false;
         if (probe.diceSides != null && probe.diceSides.Length > 0)
         {
-            var face1 = probe.diceSides[0];
-            bool face1Defined = face1 != null && (face1.effectID != 0 || face1.pips != 0);
-
-            if (face1Defined)
+            if (IsFaceModified(probe.diceSides[0]))
             {
                 bool otherFacesDefined = false;
                 for (int i = 1; i < probe.diceSides.Length; i++)
                 {
-                    var face = probe.diceSides[i];
-                    if (face != null && (face.effectID != 0 || face.pips != 0)) { otherFacesDefined = true; break; }
+                    if (IsFaceModified(probe.diceSides[i])) { otherFacesDefined = true; break; }
                 }
-
                 if (!otherFacesDefined)
                 {
                     bool hasExtraData = (probe.items != null && probe.items.Count > 0) ||
@@ -392,7 +393,6 @@ public abstract class AbilityData : HeroData
                                         (probe.blessings != null && probe.blessings.Count > 0) ||
                                         (probe.baseAbilityData != null && probe.baseAbilityData.Count > 0) ||
                                         (probe.customPayloads != null && probe.customPayloads.Count > 0);
-
                     if (!hasExtraData) onlyLeftFace = true;
                 }
             }

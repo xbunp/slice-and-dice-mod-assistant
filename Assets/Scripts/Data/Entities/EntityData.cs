@@ -666,13 +666,34 @@ public abstract class EntityData : SDData, IPayloadContainer
         foreach (var kw in face.keywords)
         {
             if (string.IsNullOrWhiteSpace(kw)) continue;
-            string cleanKw = kw.Trim().ToLower();
+            string rawKw = kw.Trim();
+            string cleanKw = rawKw.ToLower();
+
             if (cleanKw != "permissive" && cleanKw != "stasis")
             {
-                if (cleanKw == "future") chunks.Add("ritemx.dae9");
-                // FIX: Do NOT add 'k.' prefix to Tog items
-                else if (ItemDomainRules.TogItems.Contains(cleanKw)) chunks.Add(cleanKw);
-                else chunks.Add($"k.{cleanKw}");
+                if (cleanKw == "future")
+                {
+                    chunks.Add("ritemx.dae9");
+                }
+                else if (ItemDomainRules.TogItems.Contains(cleanKw))
+                {
+                    chunks.Add(rawKw);
+                }
+                else if (ExternalGameRegistry.IsValidKeyword(rawKw))
+                {
+                    // STRICT RULE: Only attach 'k.' if the game engine actually considers it a keyword
+                    chunks.Add($"k.{cleanKw}"); // Native keywords are traditionally lowercase
+                }
+                else if (ExternalGameRegistry.IsValidItemName(rawKw))
+                {
+                    // STRICT RULE: It is a base item (like Fly). Preserve casing, do not attach 'k.'
+                    chunks.Add(rawKw);
+                }
+                else
+                {
+                    // Fallback to exactly what the user authored without assuming anything
+                    chunks.Add(rawKw);
+                }
             }
         }
 
@@ -697,16 +718,32 @@ public abstract class EntityData : SDData, IPayloadContainer
 
             foreach (string chainKw in mech.ChainedKeywords)
             {
-                string cleanKw = chainKw.Trim().ToLower();
-                if (cleanKw.StartsWith("k.")) cleanKw = cleanKw.Substring(2);
-                if (!diceSides[faceIdx].keywords.Contains(cleanKw)) diceSides[faceIdx].keywords.Add(cleanKw);
+                string rawKw = chainKw.Trim(); // PRESERVE CASING
+                if (rawKw.StartsWith("k.", StringComparison.OrdinalIgnoreCase))
+                {
+                    rawKw = rawKw.Substring(2);
+                }
+
+                // Add if it doesn't already exist (case-insensitive check, but preserve original case)
+                if (!diceSides[faceIdx].keywords.Any(k => string.Equals(k, rawKw, StringComparison.OrdinalIgnoreCase)))
+                {
+                    diceSides[faceIdx].keywords.Add(rawKw);
+                }
             }
 
             if (lowerPrefix == "k" || lowerPrefix == "")
             {
-                string keyword = payload.ToLower();
-                if (keyword == "ritemx.dae9" || keyword == "unpack.ritemx.644f") keyword = "future";
-                if (!string.IsNullOrEmpty(keyword) && !diceSides[faceIdx].keywords.Contains(keyword)) diceSides[faceIdx].keywords.Add(keyword);
+                string rawKw = payload; // PRESERVE CASING
+                if (string.Equals(rawKw, "ritemx.dae9", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(rawKw, "unpack.ritemx.644f", StringComparison.OrdinalIgnoreCase))
+                {
+                    rawKw = "future";
+                }
+
+                if (!string.IsNullOrEmpty(rawKw) && !diceSides[faceIdx].keywords.Any(k => string.Equals(k, rawKw, StringComparison.OrdinalIgnoreCase)))
+                {
+                    diceSides[faceIdx].keywords.Add(rawKw);
+                }
             }
             else if (lowerPrefix == "facade")
             {
@@ -728,7 +765,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
             else if (lowerPrefix == "sticker" || lowerPrefix == "cast" || lowerPrefix == "enchant" || lowerPrefix == "hat")
             {
-                // Assign payload directly. The enum mappings are handled strictly by Export() prefixing
                 if (lowerPrefix == "hat" && mech.PayloadData is HeroData hatHero)
                 {
                     diceSides[faceIdx].faceType = DiceSideData.DiceFaceType.Sticker;

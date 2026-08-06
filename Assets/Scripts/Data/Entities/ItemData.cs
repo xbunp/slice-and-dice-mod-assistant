@@ -712,6 +712,7 @@ public class ItemData : SDData
         foreach (var mech in Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
+
             // Reject raw Modifiers (like 'self' or 'jinx' given as items), but allow targeted 'enchant' payloads
             if (mech.PayloadData is ModifierData && pfx != "enchant")
                 return false;
@@ -723,6 +724,25 @@ public class ItemData : SDData
             if (!isEntityCollection && !isFaceModifier)
             {
                 return false;
+            }
+
+            if (isFaceModifier)
+            {
+                // REJECTION RULE 1: Suffixes cannot be absorbed natively into keywords.
+                // Dice faces only hold raw strings, so metadata like PartIndex or Multipliers would be lost.
+                if (mech.Multiplier != 1 || mech.RepeatTimes != 1 || mech.PerTier || mech.Unpack ||
+                    !string.IsNullOrEmpty(mech.MergedItem) || !string.IsNullOrEmpty(mech.SplicedItem) ||
+                    mech.PartIndex.HasValue)
+                {
+                    return false; // Reject native absorption. Put it in CustomPayloads.
+                }
+
+                // REJECTION RULE 2: Prefixless base items without explicit targets should not map to faces.
+                // They belong at the entity level as intact items. (e.g. i.Golden Cup or i.togkey)
+                if (pfx == "" && mech.Targets.Count == 0)
+                {
+                    return false; // Reject native absorption. Put it in CustomPayloads.
+                }
             }
 
             if (pfx == "sticker" || pfx == "cast" || pfx == "enchant")
@@ -1073,9 +1093,6 @@ public class ItemData : SDData
         return $"({payload})";
     }
 
-    // Current item export
-    // Current item export
-    // Current item export
     private void OptimizeAndExportMechanics(List<string> chainParts)
     {
         List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();
@@ -1084,22 +1101,18 @@ public class ItemData : SDData
             // Clone to prevent mutating original memory references during export operations
             ItemMechanic clonedMech = CloneMechanic(mech);
 
-            // Case 1: Direct loose Tog Items (only merge if explicit targets match and it's not a hat)
+            // Case 1: Direct loose Tog Items 
             if (string.IsNullOrEmpty(clonedMech.Prefix) && ItemDomainRules.TogItems.Contains(clonedMech.PayloadString))
             {
-                if (clonedMech.Targets.Count > 0)
+                // We only merge Tog items upstream if their targets match exactly.
+                var prev = optimizedMechanics.LastOrDefault(m =>
+                    m.Targets.Count == clonedMech.Targets.Count &&
+                    m.Targets.All(t => clonedMech.Targets.Contains(t))
+                );
+                if (prev != null)
                 {
-                    var prev = optimizedMechanics.LastOrDefault(m =>
-                        m.Targets.Count > 0 &&
-                        m.Targets.Count == clonedMech.Targets.Count &&
-                        m.Targets.All(t => clonedMech.Targets.Contains(t)) &&
-                        m.Prefix != "hat" // PREVENT MERGING INTO HAT
-                    );
-                    if (prev != null)
-                    {
-                        prev.ChainedKeywords.Add(clonedMech.PayloadString);
-                        continue;
-                    }
+                    prev.ChainedKeywords.Add(clonedMech.PayloadString);
+                    continue;
                 }
             }
 
@@ -1112,16 +1125,9 @@ public class ItemData : SDData
                     bool allMerged = true;
                     foreach (var innerMech in nestedItem.Mechanics)
                     {
-                        if (innerMech.Targets.Count == 0)
-                        {
-                            allMerged = false;
-                            break;
-                        }
                         var prev = optimizedMechanics.LastOrDefault(m =>
-                            m.Targets.Count > 0 &&
                             m.Targets.Count == innerMech.Targets.Count &&
-                            m.Targets.All(t => innerMech.Targets.Contains(t)) &&
-                            m.Prefix != "hat" // PREVENT MERGING INTO HAT
+                            m.Targets.All(t => innerMech.Targets.Contains(t))
                         );
                         if (prev == null)
                         {
@@ -1134,10 +1140,8 @@ public class ItemData : SDData
                         foreach (var innerMech in nestedItem.Mechanics)
                         {
                             var prev = optimizedMechanics.LastOrDefault(m =>
-                                m.Targets.Count > 0 &&
                                 m.Targets.Count == innerMech.Targets.Count &&
-                                m.Targets.All(t => innerMech.Targets.Contains(t)) &&
-                                m.Prefix != "hat" // PREVENT MERGING INTO HAT
+                                m.Targets.All(t => innerMech.Targets.Contains(t))
                             );
                             if (prev != null)
                             {
@@ -1155,7 +1159,7 @@ public class ItemData : SDData
         if (optimizedMechanics.Count > 0)
         {
             StringBuilder mechsSb = new StringBuilder();
-            List<string> lastTargets = null; // Tracks the explicit targets of the trailing context
+            List<string> lastTargets = null;
             bool lastPerTier = false;
             bool lastUnpack = false;
 
@@ -1164,20 +1168,17 @@ public class ItemData : SDData
                 var mech = optimizedMechanics[i];
                 bool targetsMatch = false;
 
-                // REALIGNMENT: Understand the difference between explicit targets and implicit targets!
-                // Evaluate what target the mechanic is actually attempting to manipulate.
-                List<string> currentEffectiveTargets = mech.Targets.Count > 0 ? mech.Targets : ItemDomainRules.GetImplicitTargets(mech);
-                List<string> lastEffectiveTargets = lastTargets != null && lastTargets.Count > 0
-                    ? lastTargets
-                    : (i > 0 ? ItemDomainRules.GetImplicitTargets(optimizedMechanics[i - 1]) : null);
-
-                // Only allow chaining if the effective target state being passed forward matches what the item inherently wants.
-                if (lastEffectiveTargets != null && currentEffectiveTargets.Count == lastEffectiveTargets.Count)
+                // Match empty target lists (implicit targets) OR identical explicit targets
+                if (lastTargets == null && mech.Targets.Count == 0)
                 {
                     targetsMatch = true;
-                    foreach (var t in currentEffectiveTargets)
+                }
+                else if (lastTargets != null && lastTargets.Count == mech.Targets.Count)
+                {
+                    targetsMatch = true;
+                    foreach (var t in mech.Targets)
                     {
-                        if (!lastEffectiveTargets.Contains(t, StringComparer.OrdinalIgnoreCase))
+                        if (!lastTargets.Contains(t))
                         {
                             targetsMatch = false;
                             break;
@@ -1190,15 +1191,8 @@ public class ItemData : SDData
                 {
                     if (lastPerTier && !mech.PerTier) safeToChain = false;
                     if (lastUnpack && !mech.Unpack) safeToChain = false;
-
-                    // Engine Parser Constraint - Never # chain immediately after a hat 
-                    if (i > 0 && optimizedMechanics[i - 1].Prefix == "hat")
-                    {
-                        safeToChain = false;
-                    }
                 }
 
-                // Cache explicit targets before we potentially clear them for chaining
                 List<string> currentTargets = new List<string>(mech.Targets);
                 bool currentPerTier = mech.PerTier;
                 bool currentUnpack = mech.Unpack;
@@ -1222,12 +1216,11 @@ public class ItemData : SDData
                     }
                     else
                     {
-                        // Clean context reset via .i.
                         mechsSb.Append(".i.").Append(exportedMech);
                     }
                 }
 
-                lastTargets = currentTargets; // Track explicit targets passed forward
+                lastTargets = currentTargets;
                 lastPerTier = currentPerTier;
                 lastUnpack = currentUnpack;
             }

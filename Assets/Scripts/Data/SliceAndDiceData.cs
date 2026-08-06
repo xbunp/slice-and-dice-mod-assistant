@@ -645,9 +645,6 @@ public enum BaseItems
 
 public static class BaseItemMetadataRegistry
 {
-    // ====================================================================
-    // MAINTAIN ONLY THIS SINGLE LIST OF NATURAL NAMES
-    // ====================================================================
     public static readonly HashSet<string> RawDiceAffectingItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "Abacus",
