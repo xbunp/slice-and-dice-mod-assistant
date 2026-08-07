@@ -488,13 +488,11 @@ public static class ItemSyntaxCompiler
     private static string BuildEquippable(EntityCard card, string childrenCompiled)
     {
         if (card.RootData == null) return string.Empty;
-
         string baseExpr = "Void";
         if (!string.IsNullOrWhiteSpace(childrenCompiled))
         {
             baseExpr = WrapIfNeeded(childrenCompiled);
         }
-
         List<string> parts = new List<string> { baseExpr };
 
         // Unified rendering block
@@ -507,11 +505,21 @@ public static class ItemSyntaxCompiler
         // Output structural modifiers safely outside of the payload wrapper
         if (card.RootData.ClearDescription) parts.Add("cleardesc");
         if (card.RootData.ClearIcon) parts.Add("clearicon");
-
         if (card.RootData.Tier.HasValue) parts.Add($"tier.{card.RootData.Tier.Value}");
         if (!string.IsNullOrEmpty(card.RootData.doc)) parts.Add($"doc.{card.RootData.doc}");
         if (!string.IsNullOrEmpty(card.RootData.entityName)) parts.Add($"n.{card.RootData.entityName}");
 
-        return string.Join(".", parts);
+        string payload = string.Join(".", parts);
+
+        if (string.IsNullOrWhiteSpace(payload)) return "";
+
+        // STRICT SELF-BRACKETING DOCTRINE
+        // If the equippable contains metadata (parts > 1) or isn't inherently wrapped, bracket the entire scope
+        if (parts.Count > 1 || !(payload.StartsWith("(") && payload.EndsWith(")") && IsBalanced(payload)))
+        {
+            return $"({payload})";
+        }
+
+        return payload;
     }
 }

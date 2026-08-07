@@ -1206,67 +1206,84 @@ public class ItemData : SDData
             List<string> lastTargets = null;
             bool lastPerTier = false;
             bool lastUnpack = false;
+            int lastRepeat = 1;
 
             for (int i = 0; i < optimizedMechanics.Count; i++)
             {
                 var mech = optimizedMechanics[i];
-                bool targetsMatch = false;
-
-                // Match empty target lists (implicit targets) OR identical explicit targets
-                if (lastTargets == null && mech.Targets.Count == 0)
-                {
-                    targetsMatch = true;
-                }
-                else if (lastTargets != null && lastTargets.Count == mech.Targets.Count)
-                {
-                    targetsMatch = true;
-                    foreach (var t in mech.Targets)
-                    {
-                        if (!lastTargets.Contains(t))
-                        {
-                            targetsMatch = false;
-                            break;
-                        }
-                    }
-                }
-
-                bool safeToChain = targetsMatch;
-                if (safeToChain)
-                {
-                    if (lastPerTier && !mech.PerTier) safeToChain = false;
-                    if (lastUnpack && !mech.Unpack) safeToChain = false;
-                }
-
-                List<string> currentTargets = new List<string>(mech.Targets);
-                bool currentPerTier = mech.PerTier;
-                bool currentUnpack = mech.Unpack;
-                string exportedMech = mech.Export();
 
                 if (i == 0)
                 {
-                    mechsSb.Append(exportedMech);
+                    mechsSb.Append(mech.Export());
+                    lastTargets = new List<string>(mech.Targets);
+                    lastPerTier = mech.PerTier;
+                    lastUnpack = mech.Unpack;
+                    lastRepeat = mech.RepeatTimes;
                 }
                 else
                 {
-                    if (safeToChain)
+                    bool wouldInheritTargets = (lastTargets != null && lastTargets.Count > 0) && (mech.Targets.Count == 0);
+                    bool wouldInheritPerTier = lastPerTier && !mech.PerTier;
+                    bool wouldInheritUnpack = lastUnpack && !mech.Unpack;
+                    bool wouldInheritRepeat = (lastRepeat > 1) && (mech.RepeatTimes == 1);
+
+                    bool safeToChain = !wouldInheritTargets && !wouldInheritPerTier && !wouldInheritUnpack && !wouldInheritRepeat;
+
+                    if (!safeToChain)
+                    {
+                        // Isolate the accumulated context by wrapping in parens to prevent target bleeding
+                        string currentStr = mechsSb.ToString();
+                        mechsSb.Clear();
+                        mechsSb.Append("(").Append(currentStr).Append(")");
+
+                        // Since we wrapped, the running context is safely reset
+                        lastTargets = new List<string>();
+                        lastPerTier = false;
+                        lastUnpack = false;
+                        lastRepeat = 1;
+                    }
+
+                    bool originalPerTier = mech.PerTier;
+                    bool originalUnpack = mech.Unpack;
+                    int originalRepeat = mech.RepeatTimes;
+                    List<string> originalTargets = new List<string>(mech.Targets);
+
+                    // Check if we can omit redundant explicit state that will be inherited natively via '#'
+                    bool targetsIdentical = lastTargets != null && mech.Targets.Count == lastTargets.Count && mech.Targets.All(t => lastTargets.Contains(t));
+                    if (targetsIdentical)
                     {
                         mech.Targets.Clear();
-                        string chainedExport = mech.Export();
-                        if (!string.IsNullOrEmpty(mech.Prefix) && !chainedExport.StartsWith(mech.Prefix, StringComparison.OrdinalIgnoreCase))
-                        {
-                            chainedExport = $"{mech.Prefix}.{chainedExport}";
-                        }
-                        mechsSb.Append("#").Append(chainedExport);
+                    }
+                    if (lastPerTier && mech.PerTier) mech.PerTier = false;
+                    if (lastUnpack && mech.Unpack) mech.Unpack = false;
+                    if (lastRepeat == mech.RepeatTimes) mech.RepeatTimes = 1;
+
+                    string chainedExport = mech.Export();
+                    mechsSb.Append("#").Append(chainedExport);
+
+                    // Update running context chain
+                    if (originalTargets.Count > 0)
+                    {
+                        lastTargets = originalTargets;
+                    }
+                    else if (safeToChain && lastTargets != null)
+                    {
+                        // Safely Inherited, lastTargets stays the same
                     }
                     else
                     {
-                        mechsSb.Append(".i.").Append(exportedMech);
+                        lastTargets = new List<string>();
                     }
-                }
 
-                lastTargets = currentTargets;
-                lastPerTier = currentPerTier;
-                lastUnpack = currentUnpack;
+                    if (originalPerTier) lastPerTier = true;
+                    else if (!safeToChain) lastPerTier = false;
+
+                    if (originalUnpack) lastUnpack = true;
+                    else if (!safeToChain) lastUnpack = false;
+
+                    if (originalRepeat > 1) lastRepeat = originalRepeat;
+                    else if (!safeToChain) lastRepeat = 1;
+                }
             }
             chainParts.Add(mechsSb.ToString());
         }
