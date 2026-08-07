@@ -20,3 +20,18 @@ mergeInto(LibraryManager.library, {
         document.body.removeChild(link);
     }
 });
+
+mergeInto(LibraryManager.library, {
+    DownloadTextFileWebGL: function(fileNamePtr, contentPtr) {
+        var fileName = UTF8ToString(fileNamePtr);
+        var content = UTF8ToString(contentPtr);
+        
+        var blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        var link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+});

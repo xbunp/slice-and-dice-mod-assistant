@@ -6,25 +6,22 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 
 // ============================================================================================
-// CRITICAL ARCHITECTURAL CONSTRAINT & AI DEVELOPER GUIDELINE - DO NOT REMOVE
+// CRITICAL ARCHITECTURAL CONSTRAINT & GUIDELINE
 // ============================================================================================
-// DO NOT SILENTLY ASSUME OR ALTER THE DICE FACE INDEX LAYOUT! 
-// THE CODES, ALIASES, AND BITMASKS ARE RIGIDLY TIED TO THE GAME ENGINE AND MUST NEVER BE ASSUMED.
+// DO NOT SILENTLY ASSUME OR ALTER THE DICE FACE INDEX LAYOUT OR MERGE HAT TARGETS INTO A SINGLE BITMASK!
 //
-// THE INDICES OF THE 6 DICE SIDES ARE DEFINED STRICTLY AS:
-//   Index 0: Left
-//   Index 1: Middle (mid)
-//   Index 2: Top (top)
-//   Index 3: Bottom (bot)
-//   Index 4: Right (right)
-//   Index 5: Rightmost (rightmost)
+// 1. THE INDICES OF THE 6 DICE SIDES ARE DEFINED STRICTLY AS:
+//    Index 0: Left        (Bitmask 1)
+//    Index 1: Middle/Mid  (Bitmask 2)
+//    Index 2: Top         (Bitmask 4)
+//    Index 3: Bottom/Bot  (Bitmask 8)
+//    Index 4: Right       (Bitmask 16)
+//    Index 5: Rightmost   (Bitmask 32)
 //
-// ANY TRANSLATION BETWEEN SIDE NAMES/ALIASES AND INDICES *MUST* USE 'DiceTargetHelper' METHODS:
-//   - DiceTargetHelper.GetIndicesForTarget(target)
-//   - DiceTargetHelper.GetBestAliasCombination(mask)
-//
-// DO NOT hardcode direct translations (e.g. assuming index 4 is 'mid' or index 1 is 'right').
-// Doing so violates engine rules and corrupts hero/item properties on export.
+// 2. TARGET ALIAS BITMASKS:
+//    - "left2" = 3 (Indices 0 and 1: Left + Mid combined onto a single mechanic)
+//    - "left.mid" on a Hat = TWO SEPARATE CONTEXTS (Hero Target = "left", Hat Source = "mid")
+//    NEVER combine Targets[0] and Targets[1] on a Hat into a single face bitmask!
 // ============================================================================================
 
 public static class ItemSyntaxCompiler

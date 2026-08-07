@@ -40,6 +40,27 @@ using UnityEngine;
 /// ============================================================================================
 /// </summary>
 
+// --- ItemSyntaxCompiler.cs Header ---
+
+// ============================================================================================
+// CRITICAL ARCHITECTURAL CONSTRAINT & GUIDELINE
+// ============================================================================================
+// DO NOT SILENTLY ASSUME OR ALTER THE DICE FACE INDEX LAYOUT OR MERGE HAT TARGETS INTO A SINGLE BITMASK!
+//
+// 1. THE INDICES OF THE 6 DICE SIDES ARE DEFINED STRICTLY AS:
+//    Index 0: Left        (Bitmask 1)
+//    Index 1: Middle/Mid  (Bitmask 2)
+//    Index 2: Top         (Bitmask 4)
+//    Index 3: Bottom/Bot  (Bitmask 8)
+//    Index 4: Right       (Bitmask 16)
+//    Index 5: Rightmost   (Bitmask 32)
+//
+// 2. TARGET ALIAS BITMASKS:
+//    - "left2" = 3 (Indices 0 and 1: Left + Mid combined onto a single mechanic)
+//    - "left.mid" on a Hat = TWO SEPARATE CONTEXTS (Hero Target = "left", Hat Source = "mid")
+//    NEVER combine Targets[0] and Targets[1] on a Hat into a single face bitmask!
+// ============================================================================================
+
 // DO NOT FORGET: CRITICAL
 // YOU CANNOT WORK IN THIS CLASS WITHOUT SEEING ItemSyntaxCompiler.CS
 // AND ITEMDATA.CS
@@ -563,23 +584,41 @@ public class ItemData : SDData
     {
         ItemMechanic mech = new ItemMechanic();
         bool hasExplicitTargets = false;
-
         while (!stream.IsEOF)
         {
             string originalToken = stream.Peek();
             string tLower = originalToken.ToLower();
-
             if (tLower == "i")
             {
                 stream.Consume();
                 continue;
             }
 
-            if (ItemDomainRules.MechanicPrefixes.Contains(tLower))
+            // --- NEW: Strip outer parens before prefix lookup so wrapped mechanics (e.g. "(hat.Ace...)") preserve their prefix ---
+            string cleanToken = originalToken;
+            if (cleanToken.StartsWith("(") && cleanToken.EndsWith(")"))
             {
-                mech.Prefix = stream.Consume();
-                mech.PayloadString = BuildPayloadString(stream);
-                break;
+                cleanToken = cleanToken.Substring(1, cleanToken.Length - 2).Trim();
+            }
+            string cleanLower = cleanToken.ToLower();
+            string prefixCandidate = cleanLower.Split('.')[0];
+
+            if (ItemDomainRules.MechanicPrefixes.Contains(prefixCandidate))
+            {
+                if (originalToken.StartsWith("("))
+                {
+                    stream.Consume();
+                    mech.Prefix = prefixCandidate;
+                    int dotIdx = cleanToken.IndexOf('.');
+                    mech.PayloadString = dotIdx >= 0 ? cleanToken.Substring(dotIdx + 1) : "";
+                    break;
+                }
+                else
+                {
+                    mech.Prefix = stream.Consume();
+                    mech.PayloadString = BuildPayloadString(stream);
+                    break;
+                }
             }
             else if (ItemDomainRules.ValidTargets.Contains(tLower))
             {

@@ -2,9 +2,18 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Runtime.InteropServices;
 
 public class ModBuilderUI : RootUI
 {
+    #if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    private static extern void DownloadTextFileWebGL(string filename, string content);
+
+    [DllImport("__Internal")]
+    private static extern void CopyToClipboardWebGL(string text);
+    #endif
+
     private CompiledModData _compiledModData = new CompiledModData();
     private ScrollRect _mainScrollRect;
     private GridReferences _gridUI;
@@ -34,6 +43,10 @@ public class ModBuilderUI : RootUI
             new GridRowSpec(
                 GridCellSpec.CreateInput("HeroImportInput", "", 0.70f, null),
                 GridCellSpec.CreateButton("BtnImportHeroes", "Import Heroes", 0.30f, OnImportHeroesClicked)
+            ),
+            new GridRowSpec(
+                GridCellSpec.CreateButton("BtnCopyMod", "Copy to Clipboard", 0.50f, OnCopyClicked),
+                GridCellSpec.CreateButton("BtnSaveMod", "Save File...", 0.50f, OnSaveClicked)
             )
         };
 
@@ -73,4 +86,44 @@ public class ModBuilderUI : RootUI
             _compiledModData.ImportHeroes(heroString);
         }
     }
+
+    private void OnCopyClicked()
+    {
+        _compiledModData.Compile(); // Ensure text is up to date
+        string textToCopy = _compiledModData.compiledMod;
+
+        // Since you already have a ClipboardManager in your project (seen in ImageReceiver), 
+        // you can just use ClipboardManager.CopyToClipboard(textToCopy); if you prefer.
+        // Otherwise, this uses your .jslib fallback natively:
+        #if UNITY_WEBGL && !UNITY_EDITOR
+        CopyToClipboardWebGL(textToCopy);
+        #else
+        GUIUtility.systemCopyBuffer = textToCopy;
+        #endif
+        Debug.Log("Copied textmod to clipboard!");
+    }
+
+    private void OnSaveClicked()
+    {
+        _compiledModData.Compile(); // Ensure text is up to date
+        string fileName = _compiledModData.modFileName;
+        if (!fileName.EndsWith(".txt")) fileName += ".txt";
+
+        #if UNITY_EDITOR
+        string path = UnityEditor.EditorUtility.SaveFilePanel("Save TextMod", "", fileName, "txt");
+        if (!string.IsNullOrEmpty(path))
+        {
+            System.IO.File.WriteAllText(path, _compiledModData.compiledMod);
+            UnityEditor.AssetDatabase.Refresh();
+            Debug.Log($"[Save] File saved to: {path}");
+        }
+        #elif UNITY_WEBGL
+        // Trigger your new Text-specific JSLIB download function
+        DownloadTextFileWebGL(fileName, _compiledModData.compiledMod);
+        #else
+        // Fallback for Windows/Mac Standalone builds
+        _compiledModData.OutputMod(); 
+        #endif
+    }
+
 }

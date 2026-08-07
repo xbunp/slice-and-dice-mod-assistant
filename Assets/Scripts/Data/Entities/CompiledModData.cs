@@ -29,43 +29,123 @@ public class CompiledModData
     private const string DummyItem = "can";
 
     /// <summary>
-    /// Parses bracketed heroes from a raw text block, updates heroPool, compiles, and outputs to Console.
+    /// Parses bracketed heroes from a raw text block, protecting trailing tags like .i.(...)
+    /// by using depth checking combined with smart lookahead token validation.
     /// </summary>
     public void ImportHeroes(string heroString)
     {
         heroPool.Clear();
+        if (string.IsNullOrWhiteSpace(heroString)) return;
 
         int depth = 0;
-        int startIndex = -1;
+        bool isCapturing = false;
+        StringBuilder currentHero = new StringBuilder();
 
-        // Parse outer bracketed hero objects, ignoring surrounding junk text
         for (int i = 0; i < heroString.Length; i++)
         {
             char c = heroString[i];
 
             if (c == '(')
             {
-                if (depth == 0) startIndex = i; // Mark start of top-level hero
+                if (depth == 0)
+                {
+                    // We are at root level. Look ahead to see if this begins a NEW valid hero block
+                    string nextToken = GetNextToken(heroString, i + 1);
+                    if (IsRootHeroIdentifier(nextToken))
+                    {
+                        // Found a new hero! Flush the previous one if we were capturing
+                        if (isCapturing && currentHero.Length > 0)
+                        {
+                            FlushCurrentHero(currentHero);
+                            currentHero.Clear();
+                        }
+                        isCapturing = true; // Start capturing the new hero
+                    }
+                }
                 depth++;
             }
             else if (c == ')')
             {
-                if (depth > 0)
+                depth--;
+                if (depth < 0) depth = 0; // Guard against malformed unbalanced strings
+            }
+
+            // Only append characters if we have successfully found at least one hero start point.
+            if (isCapturing)
+            {
+                // Strip raw newlines/returns from the string to keep the compiled mod clean
+                if (c != '\n' && c != '\r')
                 {
-                    depth--;
-                    if (depth == 0 && startIndex != -1)
-                    {
-                        // Extracted complete top-level hero string
-                        heroPool.Add(heroString.Substring(startIndex, i - startIndex + 1));
-                        startIndex = -1;
-                    }
+                    currentHero.Append(c);
                 }
             }
+        }
+
+        // Flush whatever is remaining in the buffer at the end of the string
+        if (isCapturing && currentHero.Length > 0)
+        {
+            FlushCurrentHero(currentHero);
         }
 
         // Immediately compile and output
         Compile();
         OutputMod();
+    }
+
+    /// <summary>
+    /// Safely packages the hero string, automatically stripping any unbracketed trailing junk text.
+    /// </summary>
+    private void FlushCurrentHero(StringBuilder sb)
+    {
+        string rawHero = sb.ToString();
+
+        // Find the absolute last closing bracket in our captured string.
+        // This ensures trailing garbage like ", " or "junk text" is severed, 
+        // while perfectly preserving trailing chained tags like ".i.(learn.Mend)"
+        int lastBracket = rawHero.LastIndexOf(')');
+
+        if (lastBracket >= 0)
+        {
+            string cleanHero = rawHero.Substring(0, lastBracket + 1).Trim();
+            if (!string.IsNullOrEmpty(cleanHero))
+            {
+                heroPool.Add(cleanHero);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extracts the word immediately following a bracket to evaluate its identity.
+    /// </summary>
+    private string GetNextToken(string text, int startIndex)
+    {
+        StringBuilder token = new StringBuilder();
+        for (int i = startIndex; i < text.Length; i++)
+        {
+            char c = text[i];
+            // Slice & Dice object headers end at the first period.
+            if (c == '.' || c == ')' || c == '(' || char.IsWhiteSpace(c)) break;
+            token.Append(c);
+        }
+        return token.ToString();
+    }
+
+    /// <summary>
+    /// Evaluates if the token is a valid starting name for a Hero object.
+    /// </summary>
+    private bool IsRootHeroIdentifier(string token)
+    {
+        // Custom crafted heroes always start with 'replica'
+        if (string.Equals(token, "replica", System.StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Otherwise, check against your global list of valid heroes
+        if (System.Enum.TryParse(token, true, out HeroType result))
+        {
+            if (result != HeroType.None) return true;
+        }
+
+        return false;
     }
 
     /// <summary>
