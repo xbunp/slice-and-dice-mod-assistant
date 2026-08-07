@@ -100,7 +100,7 @@ public class HeroData : EntityData
     public void InitializeAsBlank()
     {
         entityName = null; imageOverride = null; baseReplica = null; colorClass = null;
-        hp = 0; h = 0; s = 0; v = 0; tier = 0; hue = 0;
+        hp = 0; h = 0; s = 0; v = 0; tier = -1; hue = 0;
         doc = null; doc2 = null;  speech = null; adj = null;
         appendedDoc = null;
 
@@ -204,7 +204,7 @@ public class HeroData : EntityData
         if (!string.IsNullOrEmpty(displayName)) sb.AppendLine($"{indent}Name: {displayName}");
         if (baseReplica != null && !string.IsNullOrEmpty(baseReplica.ToString())) sb.AppendLine($"{indent}Base Replica: {baseReplica}");
         if (!string.IsNullOrEmpty(colorClass)) sb.AppendLine($"{indent}Color Class: {colorClass}");
-        if (tier != 0) sb.AppendLine($"{indent}Tier: {tier}");
+        if (tier >= 0) sb.AppendLine($"{indent}Tier: {tier}");
         if (hp != 0) sb.AppendLine($"{indent}HP: {hp}");
         if (!string.IsNullOrEmpty(imageOverride))
         {

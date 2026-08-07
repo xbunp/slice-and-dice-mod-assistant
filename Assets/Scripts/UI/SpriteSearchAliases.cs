@@ -59,16 +59,20 @@ public static class SpriteSearchAliases
     // =========================================================================
     private static readonly Dictionary<string, string[]> CategoryMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
-        { "damage",  new[] { "eba_52", "OkN_6", "ric_10", "ric_11", "ric_13", "weapons" } },
+        { "damage",  new[] { "eba_52", "OkN_6", "ric_10", "ric_11", "ric_13", "weapons", "pep_0_1", "pep_3_4", "pep_9_a" } },
         { "exert",  new[] { "eba_48" } },
-        { "shield",  new[] { "eba_71", "eba_32", "eba_36", "eba_60", "eba_44", "OkN_8" } },
-        { "mana",  new[] { "magic", "wand", "eba_35", "eba_32", "eba_74", "eba_75", "eba_79", "eba_80" } },
+        { "shield",  new[] { "eba_71", "eba_32", "eba_36", "eba_60", "eba_44", "OkN_8", "pep_2_3" } },
+        { "mana",  new[] { "magic", "wand", "eba_35", "eba_32", "eba_74", "eba_75", "eba_79", "eba_80", "pep_5_6", "eba_55", "eba_56", "eba_54" } },
         { "heal",  new[] { "eba_37", "eba_38", "eba_58" } },
         { "heavy",  new[] { "eba_42", "damagecriticalguilt" } },
         { "cleave",  new[] { "eba_31", "eba_59", "ric_0", "ric_1", "ric_3", "ric_4", "ric_6" } },
-        { "mace",  new[] { "eba_72" } },
+        { "mace",  new[] { "eba_83" } },
+        { "fire",  new[] { "eba_84", "eba_77" } },
+        { "lighting",  new[] { "eba_72" } },
         { "skull",  new[] { "berserk", "status8", "junjun" } },
-        { "stun",  new[] { "ric_5", "ric_8" } },
+        { "stun",  new[] { "ric_5", "ric_8", "pep_10_b" } },
+        { "music",  new[] { "treble", "note", "sound", "clef", "flat", "natural", "sharp", "bass", "alto", "simile" } },
+        { "animal",  new[] { "cat", "dog", "paw", "bunny", "rabbit", "poodle", "skink", "snake", "rat", "fbom", "snail" } },
         { "bomb",  new[] { "SingleUseAll", "tnt", "kamikaze", "blast", "explosion", "grenade" } },
 
         { "food",  new[] { "cake", "fruit", "nacho", "pizza", "mug", "icecream", "apple", "onigiri", "berry", "steak", "meat", "ite_360", "mushroom"  } },

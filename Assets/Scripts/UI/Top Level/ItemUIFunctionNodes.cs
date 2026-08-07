@@ -2546,23 +2546,44 @@ public class LearnAbilityNodeDef : AuthoringNodeDef
             if (match.Success) currentName = match.Groups[1].Value;
         }
 
+        //MASSIVE CODE STINK - WHY IS THE UI APPENDING PREFIXES? THE ABILITY SHOULD JUST DO THAT ITSELF. NOT ITEMUI RESPONSBILITY, ABILITYDATA RESPONSBILITY.
         ui.CreateInspectorAbilityDropdown("Ability:", currentName, (selected) => {
             var targetAbility = ModPackage.Instance?.CustomAbilities?.FirstOrDefault(a => a.entityName == selected);
-
             if (targetAbility != null)
             {
+                string exportStr;
                 // Route to the correct prefix based on the underlying ModPackage type
-                if (targetAbility is OrbData) card.MechanicData.Prefix = "t.orb";
-                else if (targetAbility is TriggerHPData) card.MechanicData.Prefix = "triggerhpdata";
-                else if (targetAbility is OnHitData) card.MechanicData.Prefix = "onhitdata";
-                else card.MechanicData.Prefix = "abilitydata";
+                if (targetAbility is OrbData orb)
+                {
+                    card.MechanicData.Prefix = "t.orb";
+                    if (orb.isHardcoded)
+                    {
+                        string name = !string.IsNullOrEmpty(orb.hardcodedAbilityName) ? orb.hardcodedAbilityName.ToLower() : (orb.entityName?.ToLower() ?? "slice");
+                        exportStr = name;
+                    }
+                    else
+                    {
+                        string carrier = !string.IsNullOrEmpty(orb.carrierPrefix) ? orb.carrierPrefix : "sthief.abilitydata";
+                        exportStr = $"{carrier}.{targetAbility.Export()}";
+                    }
+                }
+                else if (targetAbility is TriggerHPData)
+                {
+                    card.MechanicData.Prefix = "triggerhpdata";
+                    exportStr = targetAbility.Export();
+                }
+                else if (targetAbility is OnHitData)
+                {
+                    card.MechanicData.Prefix = "onhitdata";
+                    exportStr = targetAbility.Export();
+                }
+                else
+                {
+                    card.MechanicData.Prefix = "abilitydata";
+                    exportStr = targetAbility.Export();
+                }
 
-                // Generate the FULL inline export string
-                string exportStr = targetAbility.Export();
-
-                // S&D Engine Requirement: Inline abilities must be bracketed
                 if (!exportStr.StartsWith("(")) exportStr = $"({exportStr})";
-
                 card.MechanicData.PayloadString = exportStr;
             }
             else
@@ -2570,7 +2591,6 @@ public class LearnAbilityNodeDef : AuthoringNodeDef
                 card.MechanicData.Prefix = "abilitydata";
                 card.MechanicData.PayloadString = "";
             }
-
             ui.RefreshSidebar();
             ui.AutoCompile();
         });
