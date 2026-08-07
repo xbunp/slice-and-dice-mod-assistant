@@ -207,6 +207,8 @@ public static class ItemSyntaxCompiler
     /// Do not use string subtraction/replacement (e.g., fullMods.Replace(innerMods, "")) because 
     /// overlapping multi-face keywords or delimiters will mismatch, causing massive compilation corruption.
     /// </summary>
+
+    /*
     private static string BuildHat(EntityCard card, string childrenCompiled)
     {
         if (!(card.MechanicData.PayloadData is EntityData ed)) return "";
@@ -288,6 +290,85 @@ public static class ItemSyntaxCompiler
         }
         return finalHat;
     }
+    */
+
+    private static string BuildHat(EntityCard card, string childrenCompiled)
+    {
+        if (!(card.MechanicData.PayloadData is EntityData ed)) return "";
+        var validTargets = card.MechanicData.Targets?.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+        string targets = (validTargets != null && validTargets.Count > 0) ? string.Join(".", validTargets) : "left";
+        string prefix = targets.Equals("all", StringComparison.OrdinalIgnoreCase) ? "" : $"{targets}.";
+        // Let the backend format the core hat completely natively
+        string hatCoreStr = ed.ExportAsHat();
+        string strippedCore = StaticBranchTracing.StripOuterParens(hatCoreStr);
+        if (!string.IsNullOrWhiteSpace(childrenCompiled))
+        {
+            string inner = childrenCompiled.Trim();
+            string op = ".i.";
+            if (inner.StartsWith("#")) { op = "#"; inner = inner.Substring(1).Trim(); }
+            else if (inner.StartsWith(".mrg.")) { op = ".mrg."; inner = inner.Substring(5).Trim(); }
+            else if (inner.StartsWith(".splice.")) { op = ".splice."; inner = inner.Substring(8).Trim(); }
+            else if (inner.StartsWith(".i.")) { op = ".i."; inner = inner.Substring(3).Trim(); }
+            else if (inner.StartsWith(".")) { op = "."; inner = inner.Substring(1).Trim(); }
+
+            // Fast-path merge for stickers on specific faces (like left.sticker)
+            bool mergedSuccessfully = false;
+            string firstTarget = null;
+            foreach (var face in DiceTargetHelper.FaceNames)
+            {
+                if (inner.StartsWith($"{face}.", StringComparison.OrdinalIgnoreCase))
+                {
+                    firstTarget = face;
+                    break;
+                }
+            }
+            if (!string.IsNullOrEmpty(firstTarget))
+            {
+                string expectedStickerPrefix = $".i.{firstTarget}.sticker.";
+                int stickerIdx = strippedCore.LastIndexOf(expectedStickerPrefix, StringComparison.OrdinalIgnoreCase);
+                if (stickerIdx >= 0)
+                {
+                    // Safe verification without naive splits
+                    string tail = strippedCore.Substring(stickerIdx + expectedStickerPrefix.Length);
+                    int pDepth = 0; bool hasInnerI = false;
+                    for (int i = 0; i < tail.Length - 2; i++)
+                    {
+                        if (tail[i] == '(') pDepth++;
+                        else if (tail[i] == ')') pDepth--;
+                        else if (pDepth == 0 && tail[i] == '.' && (tail[i + 1] == 'i' || tail[i + 1] == 'I') && tail[i + 2] == '.')
+                        {
+                            hasInnerI = true; break;
+                        }
+                    }
+                    if (!hasInnerI)
+                    {
+                        string[] innerChains = StaticBranchTracing.TopLevelSplit(inner, '#').ToArray();
+                        for (int c = 0; c < innerChains.Length; c++)
+                        {
+                            if (innerChains[c].StartsWith($"{firstTarget}.", StringComparison.OrdinalIgnoreCase))
+                            {
+                                innerChains[c] = innerChains[c].Substring(firstTarget.Length + 1);
+                            }
+                        }
+                        string optimizedInner = string.Join("#", innerChains);
+                        strippedCore = $"{strippedCore}#{optimizedInner}";
+                        mergedSuccessfully = true;
+                    }
+                }
+            }
+            if (!mergedSuccessfully)
+            {
+                strippedCore = $"{strippedCore}{op}{inner}";
+            }
+        }
+        string finalHat = $"{prefix}hat.({strippedCore})";
+        if (!string.IsNullOrEmpty(prefix))
+        {
+            finalHat = $"({finalHat})";
+        }
+        return finalHat;
+    }
+
     private static string GetFacadeOutput(DiceSideData side)
     {
         if (side == null || string.IsNullOrEmpty(side.facadeID)) return null;
