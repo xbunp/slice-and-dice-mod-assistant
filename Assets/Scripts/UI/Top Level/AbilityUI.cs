@@ -269,23 +269,28 @@ public class AbilityUI : RootUI
         if (abilityDataUI.Dropdowns.TryGetValue("ModeDrop", out var modeDrop))
         {
             int modeIdx = 0;
-            if (CurrentAbility is TacticData) modeIdx = 1;
+            if (CurrentAbility is TacticData) modeIdx = 1;  
             else if (CurrentAbility is OnHitData) modeIdx = 2;
             else if (CurrentAbility is TriggerHPData) modeIdx = 3;
             else if (CurrentAbility is OrbData) modeIdx = 4;
             modeDrop.SetValueWithoutNotify(modeIdx);
+            modeDrop.RefreshShownValue(); // <--- ADDED
         }
 
         if (CurrentAbility is OrbData orb)
         {
             if (abilityDataUI.Dropdowns.TryGetValue("OrbTypeDrop", out var orbTypeDrop))
+            {
                 orbTypeDrop.SetValueWithoutNotify(orb.isHardcoded ? 1 : 0);
+                orbTypeDrop.RefreshShownValue(); 
+            }
 
             if (abilityDataUI.Dropdowns.TryGetValue("BaseOrbDrop", out var baseOrbDrop))
             {
                 var baseOrbsList = OrbData.ValidBaseOrbs.ToList();
                 int idx = baseOrbsList.FindIndex(o => string.Equals(o, orb.hardcodedAbilityName, StringComparison.OrdinalIgnoreCase));
                 baseOrbDrop.SetValueWithoutNotify(idx >= 0 ? idx : 0);
+                baseOrbDrop.RefreshShownValue();
             }
 
             if (abilityDataUI.Inputs.TryGetValue("CarrierPrefixInput", out var carrierIn))
@@ -302,9 +307,21 @@ public class AbilityUI : RootUI
             if (abilityDataUI.Inputs.TryGetValue("TacPip_3", out var tPip3)) tPip3.SetTextWithoutNotify(tactic.TacticCostBottom.pips.ToString());
             if (abilityDataUI.Inputs.TryGetValue("TacPip_5", out var tPip5)) tPip5.SetTextWithoutNotify(tactic.TacticCostRightmost.pips.ToString());
 
-            if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_2", out var tDrop2)) tDrop2.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostTop));
-            if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_3", out var tDrop3)) tDrop3.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostBottom));
-            if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_5", out var tDrop5)) tDrop5.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostRightmost));
+            if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_2", out var tDrop2))
+            {
+                tDrop2.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostTop));
+                tDrop2.RefreshShownValue();
+            }
+            if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_3", out var tDrop3))
+            {
+                tDrop3.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostBottom));
+                tDrop3.RefreshShownValue();
+            }
+            if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_5", out var tDrop5))
+            {
+                tDrop5.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostRightmost));
+                tDrop5.RefreshShownValue();
+            }
         }
         else if (CurrentAbility is TriggerHPData triggerHP)
         {
@@ -321,12 +338,14 @@ public class AbilityUI : RootUI
             {
                 HeroColorOption currentOption = SDColors.GetOptionFromColorCode(triggerHP.colorClass ?? "Grey");
                 colorDrop.SetValueWithoutNotify((int)currentOption);
+                colorDrop.RefreshShownValue();
             }
 
             if (abilityDataUI.Dropdowns.TryGetValue("TriggerHPDrop", out var hpDrop))
             {
                 int dpIdx = (triggerHP.hp >= 1 && triggerHP.hp <= 21) ? triggerHP.hp : 0;
                 hpDrop.SetValueWithoutNotify(dpIdx);
+                hpDrop.RefreshShownValue();
             }
         }
 
@@ -665,19 +684,19 @@ public class AbilityUI : RootUI
         layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("LblCost", "TACTIC COSTS (Up to 3)", 1.0f)));
 
         layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDropdown("TacDrop_2", "", 0.45f, TacticCostOptions, (val) => ApplyTacticCost(2, val, tactic.TacticCostTop.pips)),
+            GridCellSpec.CreateDropdown("TacDrop_2", TacticCostOptions[GetTacticCostDropdownIndex(tactic.TacticCostTop)], 0.45f, TacticCostOptions, (val) => ApplyTacticCost(2, val, tactic.TacticCostTop.pips)),
             GridCellSpec.CreateLabel("Pips:", 0.15f),
             GridCellSpec.CreateInput("TacPip_2", tactic.TacticCostTop.pips.ToString(), 0.20f, (val) => { if (int.TryParse(val, out int p)) { ApplyTacticCost(2, GetTacticCostDropdownIndex(tactic.TacticCostTop), p); } })
         ));
 
         layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDropdown("TacDrop_3", "", 0.45f, TacticCostOptions, (val) => ApplyTacticCost(3, val, tactic.TacticCostBottom.pips)),
+            GridCellSpec.CreateDropdown("TacDrop_3", TacticCostOptions[GetTacticCostDropdownIndex(tactic.TacticCostBottom)], 0.45f, TacticCostOptions, (val) => ApplyTacticCost(3, val, tactic.TacticCostBottom.pips)),
             GridCellSpec.CreateLabel("Pips:", 0.15f),
             GridCellSpec.CreateInput("TacPip_3", tactic.TacticCostBottom.pips.ToString(), 0.20f, (val) => { if (int.TryParse(val, out int p)) { ApplyTacticCost(3, GetTacticCostDropdownIndex(tactic.TacticCostBottom), p); } })
         ));
 
         layout.Add(new GridRowSpec(
-            GridCellSpec.CreateDropdown("TacDrop_5", "", 0.45f, TacticCostOptions, (val) => ApplyTacticCost(5, val, tactic.TacticCostRightmost.pips)),
+            GridCellSpec.CreateDropdown("TacDrop_5", TacticCostOptions[GetTacticCostDropdownIndex(tactic.TacticCostRightmost)], 0.45f, TacticCostOptions, (val) => ApplyTacticCost(5, val, tactic.TacticCostRightmost.pips)),
             GridCellSpec.CreateLabel("Pips:", 0.15f),
             GridCellSpec.CreateInput("TacPip_5", tactic.TacticCostRightmost.pips.ToString(), 0.20f, (val) => { if (int.TryParse(val, out int p)) { ApplyTacticCost(5, GetTacticCostDropdownIndex(tactic.TacticCostRightmost), p); } })
         ));

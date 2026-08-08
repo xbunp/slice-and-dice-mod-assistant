@@ -216,6 +216,64 @@ public abstract class EntityData : SDData, IPayloadContainer
     // Unifies lookahead trait parsing (supports both strings and nested custom modifiers)
     // Notice we dropped the Hashset parameter entirely!
 
+    protected void ExecuteItemPipeline()
+    {
+        if (_itemPipeline.Count > 0)
+        {
+            ResolveItemPipeline(_itemPipeline);
+            _itemPipeline.Clear();
+        }
+    }
+    private void ResolveItemPipeline(List<ItemData> pipeline)
+    {
+        var indexedPipeline = pipeline.Select((item, index) => new { Item = item, OriginalIndex = index }).ToList();
+        var sortedPipeline = indexedPipeline.OrderBy(x => GetItemPriority(x.Item)).ToList();
+        int minRupturedOriginalIndex = int.MaxValue;
+
+        foreach (var entry in sortedPipeline)
+        {
+            var item = entry.Item;
+            int origIdx = entry.OriginalIndex;
+
+            bool isDiceAffecting = IsDiceAffectingItem(item);
+            bool forceCustomPayload = (origIdx > minRupturedOriginalIndex) && isDiceAffecting;
+
+            HydrateEntityFromItem(item, forceCustomPayload);
+
+            if (isDiceAffecting && customPayloads.Count > 0 && customPayloads.Last().Data == item)
+            {
+                if (origIdx < minRupturedOriginalIndex)
+                {
+                    minRupturedOriginalIndex = origIdx;
+                }
+            }
+        }
+    }
+    private void HydrateEntityFromItem(ItemData item, bool forceCustomPayload = false)
+    {
+        bool canMapNatively = false;
+        if (!forceCustomPayload)
+        {
+            canMapNatively = item.TryAbsorbIntoEntity(this);
+        }
+        if (!canMapNatively)
+        {
+            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
+        }
+    }
+    private int GetItemPriority(ItemData item)
+    {
+        int priority = 50;
+        foreach (var mech in item.Mechanics)
+        {
+            string payloadLower = mech.PayloadString?.ToLower() ?? "";
+            if (mech.Prefix == "k" && payloadLower == "permissive") return 0;
+            if (mech.Prefix == "k" && payloadLower == "stasis") priority = 99;
+            else if (mech.Prefix == "facade") priority = 100;
+        }
+        return priority;
+    }
+
     public void InitializeDiceFaces()
     {
         // Ensure the array itself exists
@@ -310,105 +368,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
     }
 
-    // Derived classes MUST define how they identify the end of a block
-    //protected abstract int GetEndOfBlockIndex(List<string> tokens, int startIndex);
-    protected void ExecuteItemPipeline()
-    {
-        if (_itemPipeline.Count > 0)
-        {
-            ResolveItemPipeline(_itemPipeline);
-            _itemPipeline.Clear();
-        }
-    }
-
-    /*
-    private void ResolveItemPipeline(List<ItemData> pipeline)
-    {
-        // 1. Resolve Coupling (Hat + Facade)
-        for (int i = 0; i < pipeline.Count - 1; i++)
-        {
-            var currentItem = pipeline[i];
-            var nextItem = pipeline[i + 1];
-
-            bool hasHat = currentItem.Mechanics.Any(m => m.Prefix == "hat");
-            bool hasFacade = nextItem.Mechanics.Any(m => m.Prefix == "facade");
-
-            if (hasHat && hasFacade)
-            {
-                currentItem.Mechanics.AddRange(nextItem.Mechanics);
-                pipeline.RemoveAt(i + 1);
-                i--;
-            }
-        }
-
-        // 2. Stable Sort by Priority
-        var sortedPipeline = pipeline.OrderBy(item => GetItemPriority(item)).ToList();
-
-        // 3. Hydrate Entity State
-        foreach (var item in sortedPipeline)
-        {
-            HydrateEntityFromItem(item);
-        }
-    }
-    */
-    // TODO: TEMP: Alternate pipeline resolver meant to fix item order mutations on import. Dubious? May incur tech debt down the road? The above is the old version, however it doesn't maintain correct item order. 
-    private void ResolveItemPipeline(List<ItemData> pipeline)
-    {
-        // 1. Stable Sort by Priority
-        // Priority 50 items (standard mechanics) maintain their exact parsed relative order.
-        var sortedPipeline = pipeline.OrderBy(item => GetItemPriority(item)).ToList();
-
-        bool timelineRuptured = false;
-
-        // 2. Hydrate Entity State
-        foreach (var item in sortedPipeline)
-        {
-            bool isDiceAffecting = IsDiceAffectingItem(item);
-
-            // If the sequential timeline was ruptured by an un-absorbable dice item, 
-            // force all subsequent dice-affecting items into the strict custom payload pipeline.
-            bool forceCustomPayload = timelineRuptured && isDiceAffecting;
-
-            HydrateEntityFromItem(item, forceCustomPayload);
-
-            // Detect if a dice-affecting item fell into the custom pipeline.
-            // If so, the static base-state can no longer accurately represent the sequence,
-            // meaning the timeline is now formally ruptured.
-            if (isDiceAffecting && customPayloads.Count > 0 && customPayloads.Last().Data == item)
-            {
-                timelineRuptured = true;
-            }
-        }
-    }
-    private void HydrateEntityFromItem(ItemData item, bool forceCustomPayload = false)
-    {
-        bool canMapNatively = false;
-
-        if (!forceCustomPayload)
-        {
-            canMapNatively = item.TryAbsorbIntoEntity(this);
-        }
-
-        if (!canMapNatively)
-        {
-            // Route non-native or sequentially-forced items to CustomPayloads 
-            // so CustomItemContextHelper can correctly bracket them to the outside!
-            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
-        }
-    }
-
-    private int GetItemPriority(ItemData item)
-    {
-        int priority = 50;
-        foreach (var mech in item.Mechanics)
-        {
-            string payloadLower = mech.PayloadString?.ToLower() ?? "";
-            if (mech.Prefix == "k" && payloadLower == "permissive") return 0;
-            if (mech.Prefix == "k" && payloadLower == "stasis") priority = 99;
-            else if (mech.Prefix == "facade") priority = 100;
-        }
-        return priority;
-    }
     protected string ExtractBaseIdentifier(string token)
     {
         if (string.IsNullOrEmpty(token)) return token;
@@ -1593,4 +1552,70 @@ public abstract class EntityData : SDData, IPayloadContainer
         return false;
     }
 
+    /*
+    private void ResolveItemPipeline(List<ItemData> pipeline)
+    {
+        // 1. Stable Sort by Priority
+        // Priority 50 items (standard mechanics) maintain their exact parsed relative order.
+        var sortedPipeline = pipeline.OrderBy(item => GetItemPriority(item)).ToList();
+
+        bool timelineRuptured = false;
+
+        // 2. Hydrate Entity State
+        foreach (var item in sortedPipeline)
+        {
+            bool isDiceAffecting = IsDiceAffectingItem(item);
+
+            // If the sequential timeline was ruptured by an un-absorbable dice item, 
+            // force all subsequent dice-affecting items into the strict custom payload pipeline.
+            bool forceCustomPayload = timelineRuptured && isDiceAffecting;
+
+            HydrateEntityFromItem(item, forceCustomPayload);
+
+            // Detect if a dice-affecting item fell into the custom pipeline.
+            // If so, the static base-state can no longer accurately represent the sequence,
+            // meaning the timeline is now formally ruptured.
+            if (isDiceAffecting && customPayloads.Count > 0 && customPayloads.Last().Data == item)
+            {
+                timelineRuptured = true;
+            }
+        }
+    }
+    private void HydrateEntityFromItem(ItemData item, bool forceCustomPayload = false)
+    {
+        bool canMapNatively = false;
+
+        if (!forceCustomPayload)
+        {
+            canMapNatively = item.TryAbsorbIntoEntity(this);
+        }
+
+        if (!canMapNatively)
+        {
+            // Route non-native or sequentially-forced items to CustomPayloads 
+            // so CustomItemContextHelper can correctly bracket them to the outside!
+            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
+        }
+    }
+    protected void ExecuteItemPipeline()
+    {
+        if (_itemPipeline.Count > 0)
+        {
+            ResolveItemPipeline(_itemPipeline);
+            _itemPipeline.Clear();
+        }
+    }
+    private int GetItemPriority(ItemData item)
+    {
+        int priority = 50;
+        foreach (var mech in item.Mechanics)
+        {
+            string payloadLower = mech.PayloadString?.ToLower() ?? "";
+            if (mech.Prefix == "k" && payloadLower == "permissive") return 0;
+            if (mech.Prefix == "k" && payloadLower == "stasis") priority = 99;
+            else if (mech.Prefix == "facade") priority = 100;
+        }
+        return priority;
+    }
+    */
 }

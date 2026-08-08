@@ -404,17 +404,23 @@ public class DiceFaceBuilderWidget
             if (_diceUI.Dropdowns.TryGetValue($"FaceTypeDrop_{i}", out var typeDrop))
             {
                 int typeIndex = RegisteredPayloads.IndexOf(faceType);
-                if (typeIndex >= 0) typeDrop.SetValueWithoutNotify(typeIndex);
+                if (typeIndex >= 0)
+                {
+                    typeDrop.SetValueWithoutNotify(typeIndex);
+                    typeDrop.RefreshShownValue(); // <--- ADDED
+                }
             }
 
             if (_diceUI.Dropdowns.TryGetValue($"StickerModeDrop_{i}", out var stickerModeDrop))
             {
                 int mode = _stickerModeState.TryGetValue(i, out int m) ? m : 0;
                 stickerModeDrop.SetValueWithoutNotify(mode);
+                stickerModeDrop.RefreshShownValue(); // <--- ADDED
             }
             if (_diceUI.Dropdowns.TryGetValue($"StickerKwDrop_{i}", out var stickerKwDrop))
             {
                 stickerKwDrop.SetValueWithoutNotify(0);
+                stickerKwDrop.RefreshShownValue(); // <--- ADDED
             }
             if (_diceUI.Inputs.TryGetValue($"StickerRawInput_{i}", out var rawStickerInp))
             {
@@ -425,21 +431,25 @@ public class DiceFaceBuilderWidget
             if (_diceUI.Dropdowns.TryGetValue($"StickerItemDrop_{i}", out var stickerDrop))
             {
                 stickerDrop.SetValueWithoutNotify(0);
+                stickerDrop.RefreshShownValue(); // <--- ADDED
             }
 
             if (_diceUI.Dropdowns.TryGetValue($"EnchantModifierDrop_{i}", out var enchantDrop))
             {
                 enchantDrop.SetValueWithoutNotify(0);
+                enchantDrop.RefreshShownValue(); // <--- ADDED
             }
 
             if (_diceUI.Dropdowns.TryGetValue($"CastAbilityDrop_{i}", out var castDrop))
             {
                 castDrop.SetValueWithoutNotify(0);
+                castDrop.RefreshShownValue(); // <--- ADDED
             }
 
             if (_diceUI.Dropdowns.TryGetValue($"EggSummonDrop_{i}", out var eggDrop))
             {
                 eggDrop.SetValueWithoutNotify(0);
+                eggDrop.RefreshShownValue(); // <--- ADDED
             }
 
             if (faceType.HasBase && faceType.HasPips)
@@ -480,6 +490,7 @@ public class DiceFaceBuilderWidget
             {
                 int displayVal = face.payloadTarget == null ? 0 : (int)face.payloadTarget.Value + 1;
                 targetDrop.SetValueWithoutNotify(displayVal);
+                targetDrop.RefreshShownValue(); // <--- ADDED
             }
         }
     }
@@ -645,7 +656,7 @@ public class DiceFaceBuilderWidget
         keywordRows.Add(new GridRowSpec(
             GridCellSpec.CreateFilteredDropdown(
                 $"KwDrop_{index}",
-                "",
+                "--- Select Keyword ---", // <--- UPDATED (was "")
                 1.0f,
                 displayOptions.ToArray(),
                 (val) => AddKeywordToFace(index, val)
@@ -850,10 +861,10 @@ public class DiceFaceBuilderWidget
                 GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
                 GridCellSpec.CreateFilteredDropdown(
                     $"StickerKwDrop_{index}",
-                    "",
+                    "--- Select Keyword ---", // <--- UPDATED (was "")
                     0.70f,
                     displayOptions.ToArray(),
-                    (val) => {
+                                (val) => {
                         if (val <= 0) return;
                         string targetKeyword = rawOptions[val - 1].ToLower();
 
