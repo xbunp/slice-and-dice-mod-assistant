@@ -257,7 +257,12 @@ public class HeroUI : EntityUI<HeroData>
             tierIn.SetTextWithoutNotify(displayTier > 0 ? displayTier.ToString() : "");
         }
         if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseReplica);
-        if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(CurrentEntity.imageOverride);
+        if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn))
+        {
+            string disp = CurrentEntity.imageOverride;
+            if (disp != null && disp.Length > 50) disp = "<custom image data>";
+            overNameIn.SetTextWithoutNotify(disp);
+        }
         if (statsUI.Inputs.TryGetValue("Speech", out var speechIn)) speechIn.SetTextWithoutNotify(CurrentEntity.speech);
 
         if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))

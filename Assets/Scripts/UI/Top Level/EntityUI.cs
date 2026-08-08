@@ -527,7 +527,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     _persistentCustomImageReceiver = dummyReceiver;
                     _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
                     {
-                        CurrentEntity.GetType().GetProperty("imageOverride")?.SetValue(CurrentEntity, encodedStr);
+                        CurrentEntity.imageOverride = encodedStr;
                         _customImageString = encodedStr;
                         _customImageTexture = tex;
                         NotifyStateChanged();
@@ -712,14 +712,32 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             if (syntaxHighlighterText != null)
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(val);
         });
-
         rawTextOutput.onEndEdit.AddListener((val) =>
         {
             if (string.IsNullOrWhiteSpace(val)) return;
-            if (val == ExportEntity(CurrentEntity)) return;
+
+            string actualExport = ExportEntity(CurrentEntity);
+            string displayExport = actualExport;
+
+            // Reconstruct what the masked display string looks like to check if nothing actually changed
+            if (!string.IsNullOrEmpty(CurrentEntity.imageOverride) && CurrentEntity.imageOverride.Length > 50)
+            {
+                displayExport = displayExport.Replace(CurrentEntity.imageOverride, "<custom image data>");
+            }
+
+            if (val == actualExport || val == displayExport) return;
+
+            string parsedVal = val;
+
+            // If the user manually edited the string while the image data was masked, inject the real image data back in before parsing
+            if (parsedVal.Contains("<custom image data>") && !string.IsNullOrEmpty(CurrentEntity.imageOverride))
+            {
+                parsedVal = parsedVal.Replace("<custom image data>", CurrentEntity.imageOverride);
+            }
+
             try
             {
-                OnPasteEntityString(val);
+                OnPasteEntityString(parsedVal);
             }
             catch (System.Exception ex)
             {
@@ -840,7 +858,11 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 NotifyStateChanged();
                 UpdateUIFromData();
             })),
-            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => { CurrentEntity.imageOverride = val; NotifyStateChanged(); }),
+            GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => {
+                if (val == "<custom image data>") return;
+                CurrentEntity.imageOverride = val;
+                NotifyStateChanged();
+            }),
             GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, ToggleCustomImagePanel)
         ));
 
@@ -1454,9 +1476,17 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (rawTextOutput != null && CurrentEntity != null)
         {
             string exportedString = ExportEntity(CurrentEntity);
-            rawTextOutput.SetTextWithoutNotify(exportedString);
+            string displayString = exportedString;
+
+            // Mask the massive image data in the UI text box so TMP doesn't truncate/lag and trigger a corrupt onEndEdit
+            if (!string.IsNullOrEmpty(CurrentEntity.imageOverride) && CurrentEntity.imageOverride.Length > 50)
+            {
+                displayString = displayString.Replace(CurrentEntity.imageOverride, "<custom image data>");
+            }
+
+            rawTextOutput.SetTextWithoutNotify(displayString);
             if (syntaxHighlighterText != null)
-                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(displayString);
         }
     }
     protected void TriggerTextUpdate()

@@ -91,7 +91,12 @@ public class MonsterUI : EntityUI<MonsterData>
             balDrop.SetValueWithoutNotify(idx >= 0 ? idx : 0);
         }
 
-        if (statsUI.Inputs.TryGetValue("OverrideName", out var overIn)) overIn.SetTextWithoutNotify(CurrentEntity.imageOverride);
+        if (statsUI.Inputs.TryGetValue("OverrideName", out var overIn))
+        {
+            string disp = CurrentEntity.imageOverride;
+            if (disp != null && disp.Length > 50) disp = "<custom image data>";
+            overIn.SetTextWithoutNotify(disp);
+        }
     }
     protected override void UpdateSpecificVisuals()
     {

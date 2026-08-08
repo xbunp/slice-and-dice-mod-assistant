@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -39,11 +40,27 @@ public class ImageReceiver : MonoBehaviour
 
     private void Start()
     {
+        // Fix #2: Disable word wrapping on the output string field to prevent severe UI locking
+        if (outputStringField != null)
+        {
+            outputStringField.lineType = TMP_InputField.LineType.MultiLineNewline;
+            if (outputStringField.textComponent != null)
+            {
+                outputStringField.textComponent.enableWordWrapping = false;
+                outputStringField.textComponent.richText = false;
+            }
+        }
+
         if (compressionDropdown != null)
         {
             compressionDropdown.ClearOptions();
             var enumNames = new System.Collections.Generic.List<string>(Enum.GetNames(typeof(ImageColorExtractor.CompressionFactor)));
             compressionDropdown.AddOptions(enumNames);
+
+            // Fix #1: Default to Moderate (index 3) so large images don't fail immediately
+            int moderateIndex = enumNames.IndexOf(ImageColorExtractor.CompressionFactor.Moderate.ToString());
+            compressionDropdown.value = moderateIndex >= 0 ? moderateIndex : 3;
+
             compressionDropdown.onValueChanged.AddListener(delegate { ProcessCurrentTexture(); });
         }
         else
@@ -156,23 +173,26 @@ public class ImageReceiver : MonoBehaviour
             Debug.Log("No image set to compress.", this);
             return;
         }
-
         if (_generatedPreviewTexture != null)
         {
             Destroy(_generatedPreviewTexture);
             _generatedPreviewTexture = null;
         }
-
         ImageColorExtractor.CompressionFactor selectedCompression =
             (ImageColorExtractor.CompressionFactor)Enum.Parse(typeof(ImageColorExtractor.CompressionFactor), compressionDropdown.options[compressionDropdown.value].text);
 
         string encodedString = ImageColorExtractor.ExtractColors(_uploadedTexture, selectedCompression, out _generatedPreviewTexture);
 
+        // Fix #1: Auto step up compression if the palette is too big
+        if (encodedString == "palette too big" && compressionDropdown.value < compressionDropdown.options.Count - 1)
+        {
+            compressionDropdown.value++; // This triggers onValueChanged which calls ProcessCurrentTexture again
+            return;
+        }
+
         if (reducedImagePreview != null) reducedImagePreview.texture = _generatedPreviewTexture;
         if (outputStringField != null) outputStringField.text = encodedString;
-
         int listenerCount = OnImageGenerated?.GetInvocationList().Length ?? 0;
-
         OnImageGenerated?.Invoke(encodedString, _generatedPreviewTexture);
     }
 
