@@ -54,7 +54,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         }
     }
 
-    // Virtualized to allow HeroUI to call .InitializeAsDefault()
+    // Virtualized to allow
+    // to call .InitializeAsDefault()
     protected virtual T CreateDefaultEntity()
     {
         T entity = new T();
@@ -948,11 +949,10 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
                     if (!alreadyExists)
                     {
-                        string json = JsonUtility.ToJson(templateItem);
-                        ItemData clonedItem = JsonUtility.FromJson<ItemData>(json);
+                        ItemData clonedItem = new ItemData();
+                        clonedItem.Parse(templateItem.Export());
                         clonedItem.entityName = templateItem.entityName;
                         clonedItem.unityName = templateItem.unityName;
-
                         CurrentEntity.customPayloads.Add(new CustomPayload { Type = PayloadType.Item, Data = clonedItem });
                         NotifyStateChanged();
                         RebuildStatsUI();
@@ -990,11 +990,14 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     var template = ModPackage.Instance.CustomAbilities.FirstOrDefault(a => a.entityName == abilityName);
                     if (template != null)
                     {
-                        string json = JsonUtility.ToJson(template);
-                        AbilityData clonedAbility = JsonUtility.FromJson(json, template.GetType()) as AbilityData;
-                        CurrentEntity.AddCustomAbility(clonedAbility);
-                        NotifyStateChanged();
-                        RebuildStatsUI();
+                        AbilityData clonedAbility = AbilityData.CreateAbility(template.Export());
+                        if (clonedAbility != null)
+                        {
+                            clonedAbility.entityName = template.entityName;
+                            CurrentEntity.AddCustomAbility(clonedAbility);
+                            NotifyStateChanged();
+                            RebuildStatsUI();
+                        }
                     }
                 }
             },
@@ -1100,10 +1103,19 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     var template = ModPackage.Instance.CustomAbilities?.FirstOrDefault(a => string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
                     if (template != null)
                     {
-                        string json = JsonUtility.ToJson(template);
-                        OrbData clonedOrb = JsonUtility.FromJson<OrbData>(json);
-                        clonedOrb.isHardcoded = false;
-                        clonedOrb.carrierPrefix = "sthief.abilitydata";
+                        OrbData clonedOrb = new OrbData();
+                        clonedOrb.Parse(template.Export());
+                        clonedOrb.entityName = template.entityName;
+                        if (template is OrbData templateOrb)
+                        {
+                            clonedOrb.isHardcoded = templateOrb.isHardcoded;
+                            clonedOrb.carrierPrefix = templateOrb.carrierPrefix;
+                        }
+                        else
+                        {
+                            clonedOrb.isHardcoded = false;
+                            clonedOrb.carrierPrefix = "sthief.abilitydata";
+                        }
                         CurrentEntity.AddCustomAbility(clonedOrb);
                         NotifyStateChanged();
                         RebuildStatsUI();

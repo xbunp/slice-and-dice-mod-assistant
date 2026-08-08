@@ -506,8 +506,8 @@ public static class ItemSyntaxCompiler
         if (card.RootData.ClearDescription) parts.Add("cleardesc");
         if (card.RootData.ClearIcon) parts.Add("clearicon");
         if (card.RootData.Tier.HasValue) parts.Add($"tier.{card.RootData.Tier.Value}");
-        if (!string.IsNullOrEmpty(card.RootData.doc)) parts.Add($"doc.{card.RootData.doc}");
         if (!string.IsNullOrEmpty(card.RootData.entityName)) parts.Add($"n.{card.RootData.entityName}");
+        if (!string.IsNullOrEmpty(card.RootData.doc)) parts.Add($"doc.{card.RootData.doc}");
 
         string payload = string.Join(".", parts);
 

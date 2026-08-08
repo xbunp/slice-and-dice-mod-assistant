@@ -1369,15 +1369,13 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         // --- BUILD TRAILING ---
         StringBuilder trailingSb = new StringBuilder();
-        if (!string.IsNullOrEmpty(doc)) trailingSb.Append($".doc.{doc}");
-        if (!string.IsNullOrEmpty(doc2)) trailingSb.Append($".doc.{doc2}");
-
         foreach (var outer in outerPayloads) trailingSb.Append($".{outer}");
         if (!isHero && monster != null && !string.IsNullOrEmpty(monster.bal))
         {
             trailingSb.Append($".bal.{FormatName(monster.bal)}");
         }
-
+        if (!string.IsNullOrEmpty(doc)) trailingSb.Append($".doc.{doc}");
+        if (!string.IsNullOrEmpty(doc2)) trailingSb.Append($".doc.{doc2}");
         string combined = $"{coreBody}{trailingSb.ToString()}";
 
         bool forceOuterParens = isOuterWrappedInParens || trailingSb.Length > 0;

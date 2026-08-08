@@ -331,40 +331,27 @@ public class ItemMechanic
     public List<string> Targets = new List<string>();  // e.g., left, topbot, mid
     public string Prefix = "";  // e.g., i, sd, k, t
     public string PayloadString = ""; // Raw nested string (e.g., facade.bas1)
-    public object PayloadData { get; set; } = null;
-
+    public object PayloadData = null;
     /// <summary> (.m#) Numerical effect multiplier. Multiplies the item's numerical output by this value (can be negative). Default is 1. </summary>
-    public int Multiplier { get; set; } = 1;
-    /// <summary> 
-    /// (.mrg.) Merged Item combinations. Combines the effect of two items. 
-    /// Example: If Item A modifies Top/Bot, and Item B modifies Mid, MRG applies B's Mid effect to A's Top/Bot. 
+    public int Multiplier = 1;
+    /// <summary>
+    /// (.mrg.) Merged Item combinations. Combines the effect of two items.
+    /// Example: If Item A modifies Top/Bot, and Item B modifies Mid, MRG applies B's Mid effect to A's Top/Bot.
     /// Note: Results are highly engine-dependent and difficult to predict outside the game environment.
     /// </summary>
-    public string MergedItem { get; set; } = string.Empty;
-    /// <summary> 
-    /// (.splice.) Spliced Item combinations. Similar to MRG, but uses alternative combination logic. 
+    public string MergedItem = string.Empty;
+    /// <summary>
+    /// (.splice.) Spliced Item combinations. Similar to MRG, but uses alternative combination logic.
     /// Creates distinct combined results. Highly engine-dependent.
     /// </summary>
-    public string SplicedItem { get; set; } = string.Empty;
+    public string SplicedItem = string.Empty;
     /// <summary> Supports '#' delimited sub-keywords (e.g., "topbot.k.growth#k.cleave" adds both to top and bottom faces). </summary>
-    public List<string> ChainedKeywords { get; set; } = new List<string>();
-    /// <summary> 
-    /// (xN.) Pre-multiplier. Applies the item's effect N separate times. 
-    /// Example: 'x5.+1 pip' applies +1 pip five distinct times (different from .m.5 which is a flat +5).
-    /// </summary>
-    public int RepeatTimes { get; set; } = 1;
-    /// <summary> (pertier.) Multiplies the item's effect by the equipping hero's Tier level (on average 1-3, can range from -5 to 20). </summary>
-    public bool PerTier { get; set; }
-    /// <summary> 
-    /// (unpack.) Strips conditional activation requirements from a base item. 
-    /// Example: Changes "On 1st turn, can't die" to simply "Can't die".
-    /// </summary>
-    public bool Unpack { get; set; }
-    /// <summary> 
-    /// (.part.#) Isolates a specific substring/sub-effect of a base item's payload. 
-    /// Example: If an item grants "+2hp" (part.0) and "all sides blank" (part.1), targeting part.0 only gives the HP.
-    /// </summary>
-    public int? PartIndex { get; set; }
+    public List<string> ChainedKeywords = new List<string>();
+    public int RepeatTimes = 1;
+    public bool PerTier = false;
+    public bool Unpack = false;
+    public int? PartIndex = null;
+
     public ItemMechanic AddTarget(string target) { Targets.Add(target); return this; }
     public string Export()
     {
@@ -446,13 +433,13 @@ public class ItemData : SDData
 
     public List<string> GlobalTags = new List<string>();
     /// <summary> (.tier) Rarity reward pool index. Valid range: -5 to 20. </summary>
-    public int? Tier { get; set; }
+    public int? Tier = null;
     /// <summary> (.doc) Rich text description of the item's custom mechanics or use. </summary>
-    public List<string> LearnedAbilities { get; set; } = new List<string>();
+    public List<string> LearnedAbilities = new List<string>();
     /// <summary> (cleardesc) item Suppresses the game's auto-generated description of an item's effect. </summary>
-    public bool ClearDescription { get; set; }
+    public bool ClearDescription = false;
     /// <summary> (clearicon) item Suppresses the game's auto-generated item graphics. </summary>
-    public bool ClearIcon { get; set; }
+    public bool ClearIcon = false;
 
     public List<ItemProperty> Containers = new List<ItemProperty>();
     public List<ItemMechanic> Mechanics = new List<ItemMechanic>();
@@ -1123,8 +1110,8 @@ public class ItemData : SDData
         if (ClearDescription) chainParts.Add("cleardesc");
         if (ClearIcon) chainParts.Add("clearicon");
         if (Tier.HasValue) chainParts.Add($"tier.{Tier.Value}");
-        if (!string.IsNullOrEmpty(doc)) chainParts.Add($"doc.{doc}");
         if (!string.IsNullOrEmpty(entityName)) chainParts.Add($"n.{entityName}");
+        if (!string.IsNullOrEmpty(doc)) chainParts.Add($"doc.{doc}");
 
         StringBuilder sb = new StringBuilder(string.Join(".", chainParts));
         foreach (var tag in GlobalTags) sb.Append($"&{tag}");
