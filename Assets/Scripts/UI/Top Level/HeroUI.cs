@@ -252,26 +252,23 @@ public class HeroUI : EntityUI<HeroData>
         if (statsUI.Inputs.TryGetValue("Tier", out var tierIn))
         {
             int displayTier = CurrentEntity.GetEffectiveTier();
-
-            // Populate with the effective tier (either explicit or inherent)
             tierIn.SetTextWithoutNotify(displayTier > 0 ? displayTier.ToString() : "");
         }
         if (statsUI.Inputs.TryGetValue("ReplicaName", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseReplica);
+
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn))
         {
             string disp = CurrentEntity.imageOverride;
-            if (disp != null && disp.Length > 50) disp = "<custom image data>";
+            if (!string.IsNullOrEmpty(disp) && disp.Length > 50) disp = "CUSTOM_IMG_DATA";
             overNameIn.SetTextWithoutNotify(disp);
         }
-        if (statsUI.Inputs.TryGetValue("Speech", out var speechIn)) speechIn.SetTextWithoutNotify(CurrentEntity.speech);
 
+        if (statsUI.Inputs.TryGetValue("Speech", out var speechIn)) speechIn.SetTextWithoutNotify(CurrentEntity.speech);
         if (statsUI.Dropdowns.TryGetValue("Color", out var colDrop))
         {
             HeroColorOption colOpt = EntityUIHelpers.ReverseLookupColor(CurrentEntity.colorClass);
             colDrop.SetValueWithoutNotify((int)colOpt);
         }
-
-        // Cache Custom Image implementation unique to HeroUI
         if (!string.IsNullOrEmpty(_customImageString) && CurrentEntity.imageOverride == _customImageString && _customImageTexture != null)
         {
             if (_customImageCachedSprite == null)

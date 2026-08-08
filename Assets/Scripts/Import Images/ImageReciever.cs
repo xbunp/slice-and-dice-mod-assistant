@@ -33,73 +33,6 @@ public class ImageReceiver : MonoBehaviour
     public Texture2D GeneratedPreviewTexture => _generatedPreviewTexture;
     public Texture2D UploadedTexture => _uploadedTexture;
 
-    private void Awake()
-    {
-
-    }
-
-    private void Start()
-    {
-        // Fix #2: Disable word wrapping on the output string field to prevent severe UI locking
-        if (outputStringField != null)
-        {
-            outputStringField.lineType = TMP_InputField.LineType.MultiLineNewline;
-            if (outputStringField.textComponent != null)
-            {
-                outputStringField.textComponent.enableWordWrapping = false;
-                outputStringField.textComponent.richText = false;
-            }
-        }
-
-        if (compressionDropdown != null)
-        {
-            compressionDropdown.ClearOptions();
-            var enumNames = new System.Collections.Generic.List<string>(Enum.GetNames(typeof(ImageColorExtractor.CompressionFactor)));
-            compressionDropdown.AddOptions(enumNames);
-
-            // Fix #1: Default to Moderate (index 3) so large images don't fail immediately
-            int moderateIndex = enumNames.IndexOf(ImageColorExtractor.CompressionFactor.Moderate.ToString());
-            compressionDropdown.value = moderateIndex >= 0 ? moderateIndex : 3;
-
-            compressionDropdown.onValueChanged.AddListener(delegate { ProcessCurrentTexture(); });
-        }
-        else
-        {
-            Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: Dropdown reference is MISSING in inspector!</color></b>", this);
-        }
-
-        if (copyString != null)
-        {
-            copyString.onClick.AddListener(() => {
-                ClipboardManager.CopyToClipboard(EncodedString);
-            });
-        }
-        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: copyString button is MISSING in inspector!</color></b>", this);
-
-        if (pasteString != null)
-        {
-            pasteString.onClick.AddListener(() =>
-            {
-                ClipboardManager.RequestPaste(null, (clipboardText) => {
-                    ProcessPastedText(clipboardText);
-                });
-            });
-        }
-        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: pasteString button is MISSING in inspector!</color></b>", this);
-
-        if (decodeExport != null)
-        {
-            decodeExport.onClick.AddListener(DecodeCurrentInputString);
-        }
-        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: DECODE button is MISSING in inspector!</color></b>", this);
-
-
-        if (clearString != null)
-        {
-            clearString.onClick.AddListener(ClearData);
-        }
-    }
-
     /// <summary>
     /// Evaluates the clipboard text string and handles image decoding or raw text assignment.
     /// </summary>
@@ -166,6 +99,67 @@ public class ImageReceiver : MonoBehaviour
         }
     }
 
+    private void Start()
+    {
+        // Disables word wrapping on the raw output field to prevent severe UI locking
+        if (outputStringField != null)
+        {
+            outputStringField.lineType = TMPro.TMP_InputField.LineType.MultiLineNewline;
+            if (outputStringField.textComponent != null)
+            {
+                outputStringField.textComponent.enableWordWrapping = false;
+                outputStringField.textComponent.richText = false;
+            }
+        }
+
+        if (compressionDropdown != null)
+        {
+            compressionDropdown.ClearOptions();
+            var enumNames = new System.Collections.Generic.List<string>(Enum.GetNames(typeof(ImageColorExtractor.CompressionFactor)));
+            compressionDropdown.AddOptions(enumNames);
+
+            // Default to Moderate (index 3) so large images don't fail immediately
+            int moderateIndex = enumNames.IndexOf(ImageColorExtractor.CompressionFactor.Moderate.ToString());
+            compressionDropdown.value = moderateIndex >= 0 ? moderateIndex : 3;
+
+            compressionDropdown.onValueChanged.AddListener(delegate { ProcessCurrentTexture(); });
+        }
+        else
+        {
+            Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: Dropdown reference is MISSING in inspector!</color></b>", this);
+        }
+
+        if (copyString != null)
+        {
+            copyString.onClick.AddListener(() => {
+                ClipboardManager.CopyToClipboard(EncodedString);
+            });
+        }
+        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: copyString button is MISSING in inspector!</color></b>", this);
+
+        if (pasteString != null)
+        {
+            pasteString.onClick.AddListener(() =>
+            {
+                ClipboardManager.RequestPaste(null, (clipboardText) => {
+                    ProcessPastedText(clipboardText);
+                });
+            });
+        }
+        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: pasteString button is MISSING in inspector!</color></b>", this);
+
+        if (decodeExport != null)
+        {
+            decodeExport.onClick.AddListener(DecodeCurrentInputString);
+        }
+        else Debug.LogError("<b><color=red>[SCREAM-RECEIVER] ERROR: DECODE button is MISSING in inspector!</color></b>", this);
+
+        if (clearString != null)
+        {
+            clearString.onClick.AddListener(ClearData);
+        }
+    }
+
     private void ProcessCurrentTexture()
     {
         if (_uploadedTexture == null)
@@ -178,12 +172,13 @@ public class ImageReceiver : MonoBehaviour
             Destroy(_generatedPreviewTexture);
             _generatedPreviewTexture = null;
         }
+
         ImageColorExtractor.CompressionFactor selectedCompression =
             (ImageColorExtractor.CompressionFactor)Enum.Parse(typeof(ImageColorExtractor.CompressionFactor), compressionDropdown.options[compressionDropdown.value].text);
 
         string encodedString = ImageColorExtractor.ExtractColors(_uploadedTexture, selectedCompression, out _generatedPreviewTexture);
 
-        // Fix #1: Auto step up compression if the palette is too big
+        // Auto step-up compression if the palette is too big
         if (encodedString == "palette too big" && compressionDropdown.value < compressionDropdown.options.Count - 1)
         {
             compressionDropdown.value++; // This triggers onValueChanged which calls ProcessCurrentTexture again
@@ -192,7 +187,7 @@ public class ImageReceiver : MonoBehaviour
 
         if (reducedImagePreview != null) reducedImagePreview.texture = _generatedPreviewTexture;
         if (outputStringField != null) outputStringField.text = encodedString;
-        int listenerCount = OnImageGenerated?.GetInvocationList().Length ?? 0;
+
         OnImageGenerated?.Invoke(encodedString, _generatedPreviewTexture);
     }
 

@@ -483,82 +483,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         return layout;
     }
 
-    protected void RebuildStatsUI()
-    {
-        if (statsScrollRect == null) return;
-        bool wasDrawing = isDrawingUI;
-        isDrawingUI = true;
-
-        // 1. Save focus state and caret position before destroying the UI
-        string focusedInputKey = null;
-        int savedCaretPosition = 0;
-        if (statsUI != null && statsUI.Inputs != null)
-        {
-            foreach (var kvp in statsUI.Inputs)
-            {
-                if (kvp.Value != null && kvp.Value.isFocused)
-                {
-                    focusedInputKey = kvp.Key;
-                    savedCaretPosition = kvp.Value.caretPosition;
-                    break;
-                }
-            }
-        }
-
-        statsUI = uiGenerator.RebuildGrid(statsScrollRect.content, GenerateStatsLayout());
-
-        float extraHeight = 0f;
-        var layoutGroup = statsScrollRect.content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
-        if (layoutGroup != null)
-        {
-            int childCount = statsScrollRect.content.childCount;
-            if (childCount > 1) extraHeight += layoutGroup.spacing * (childCount - 1);
-            extraHeight += layoutGroup.padding.top + layoutGroup.padding.bottom;
-        }
-        statsScrollRect.content.sizeDelta = new Vector2(0, statsUI.TotalHeight + extraHeight);
-        Canvas.ForceUpdateCanvases();
-
-        if (showCustomImagePanel)
-        {
-            if (statsUI.CustomImgImporter.TryGetValue("CustomImgPanel", out ImageReceiver dummyReceiver))
-            {
-                if (_persistentCustomImageReceiver == null)
-                {
-                    _persistentCustomImageReceiver = dummyReceiver;
-                    _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
-                    {
-                        CurrentEntity.imageOverride = encodedStr;
-                        _customImageString = encodedStr;
-                        _customImageTexture = tex;
-                        NotifyStateChanged();
-                    };
-                }
-                else
-                {
-                    Transform placeholderParent = dummyReceiver.transform.parent;
-                    Destroy(dummyReceiver.gameObject);
-                    _persistentCustomImageReceiver.transform.SetParent(placeholderParent, false);
-                    _persistentCustomImageReceiver.gameObject.SetActive(true);
-                    RectTransform rt = _persistentCustomImageReceiver.GetComponent<RectTransform>();
-                    FullScreenUIGenerator.SetAnchors(rt, 0, 0, 1, 1);
-                }
-            }
-        }
-        else if (_persistentCustomImageReceiver != null)
-        {
-            _persistentCustomImageReceiver.gameObject.SetActive(false);
-        }
-
-        isDrawingUI = wasDrawing;
-        UpdateUIFromData();
-
-        // 2. Safely restore focus and caret position using a coroutine
-        if (focusedInputKey != null && statsUI.Inputs.TryGetValue(focusedInputKey, out var inputToFocus))
-        {
-            StartCoroutine(RestoreFocusRoutine(inputToFocus, savedCaretPosition));
-        }
-    }
-
     private System.Collections.IEnumerator RestoreFocusRoutine(TMPro.TMP_InputField input, int caretPos)
     {
         // Yield 1 frame to guarantee TMP has processed the text mesh generation
@@ -645,18 +569,17 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         RebuildStatsUI();
         RebuildDiceScrollView();
     }
+
     protected void BuildRightPanelContent(RectTransform parent)
     {
         GameObject previewContainer = new GameObject("PreviewContainer", typeof(RectTransform));
         previewContainer.transform.SetParent(parent, false);
         FullScreenUIGenerator.SetAnchors(previewContainer.GetComponent<RectTransform>(), 0.05f, 0.7f, 0.95f, 0.95f);
-
         if (uiGenerator.PortraitPanel != null)
         {
             GameObject portraitObj = Instantiate(uiGenerator.PortraitPanel, previewContainer.transform, false);
             portraitPreview = portraitObj.GetComponentInChildren<PortraitPreviewUI>();
             portraitPreview.OnFaceSelected += (idx) => {
-                // FIXED: Convert 1-based preview clicks (1..6) to 0-based tab indices (0..5)
                 currentDiceTab = Mathf.Clamp(idx - 1, 0, 5);
                 RebuildDiceScrollView();
             };
@@ -665,7 +588,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         GameObject inputObj = Instantiate(uiGenerator.inputFieldPrefab, parent);
         var innerLabel = inputObj.GetComponentInChildren<TextMeshProUGUI>();
         if (innerLabel != null) Destroy(innerLabel.gameObject);
-
         rawTextOutput = inputObj.GetComponentInChildren<TMP_InputField>();
         rawTextOutput.lineType = TMP_InputField.LineType.MultiLineNewline;
         rawTextOutput.interactable = true;
@@ -680,7 +602,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
         highlighterObj.name = "SyntaxHighlighter";
         syntaxHighlighterText = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
-
         var canvasGroup = highlighterObj.GetComponent<CanvasGroup>();
         if (canvasGroup == null) canvasGroup = highlighterObj.AddComponent<CanvasGroup>();
         canvasGroup.blocksRaycasts = false;
@@ -712,6 +633,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             if (syntaxHighlighterText != null)
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(val);
         });
+
         rawTextOutput.onEndEdit.AddListener((val) =>
         {
             if (string.IsNullOrWhiteSpace(val)) return;
@@ -719,37 +641,28 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             string actualExport = ExportEntity(CurrentEntity);
             string displayExport = actualExport;
 
-            // Reconstruct what the masked display string looks like to check if nothing actually changed
             if (!string.IsNullOrEmpty(CurrentEntity.imageOverride) && CurrentEntity.imageOverride.Length > 50)
             {
-                displayExport = displayExport.Replace(CurrentEntity.imageOverride, "<custom image data>");
+                displayExport = displayExport.Replace(CurrentEntity.imageOverride, "CUSTOM_IMG_DATA");
             }
 
             if (val == actualExport || val == displayExport) return;
 
             string parsedVal = val;
-
-            // If the user manually edited the string while the image data was masked, inject the real image data back in before parsing
-            if (parsedVal.Contains("<custom image data>") && !string.IsNullOrEmpty(CurrentEntity.imageOverride))
+            if (parsedVal.Contains("CUSTOM_IMG_DATA") && !string.IsNullOrEmpty(CurrentEntity.imageOverride))
             {
-                parsedVal = parsedVal.Replace("<custom image data>", CurrentEntity.imageOverride);
+                parsedVal = parsedVal.Replace("CUSTOM_IMG_DATA", CurrentEntity.imageOverride);
             }
 
-            try
-            {
-                OnPasteEntityString(parsedVal);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"Could not parse manual edits to string: {ex.Message}");
-            }
+            try { OnPasteEntityString(parsedVal); }
+            catch (Exception ex) { Debug.LogWarning($"Could not parse manual edits to string: {ex.Message}"); }
         });
 
         FullScreenUIGenerator.SetAnchors(inputObj.GetComponent<RectTransform>(), 0.0f, 0.08f, 1.0f, 0.58f);
 
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         copyBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Copy String";
-        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => GUIUtility.systemCopyBuffer = ExportEntity(CurrentEntity));
+        copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => ClipboardManager.CopyToClipboard(ExportEntity(CurrentEntity)));
         FullScreenUIGenerator.SetAnchors(copyBtnObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 0.48f, 0.06f);
 
         GameObject pasteBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
@@ -757,6 +670,98 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         pasteBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() => OnPasteEntityString(GUIUtility.systemCopyBuffer));
         FullScreenUIGenerator.SetAnchors(pasteBtnObj.GetComponent<RectTransform>(), 0.52f, 0.0f, 1.0f, 0.06f);
     }
+    protected void UpdateExportText()
+    {
+        if (rawTextOutput != null && CurrentEntity != null)
+        {
+            string exportedString = ExportEntity(CurrentEntity);
+            string displayString = exportedString;
+
+            // Mask the massive image data in the UI text box so TMP doesn't truncate/lag and trigger a corrupt onEndEdit
+            if (!string.IsNullOrEmpty(CurrentEntity.imageOverride) && CurrentEntity.imageOverride.Length > 50)
+            {
+                displayString = displayString.Replace(CurrentEntity.imageOverride, "CUSTOM_IMG_DATA");
+            }
+
+            rawTextOutput.SetTextWithoutNotify(displayString);
+            if (syntaxHighlighterText != null)
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(displayString);
+        }
+    }
+    protected void RebuildStatsUI()
+    {
+        if (statsScrollRect == null) return;
+        bool wasDrawing = isDrawingUI;
+        isDrawingUI = true;
+
+        string focusedInputKey = null;
+        int savedCaretPosition = 0;
+        if (statsUI != null && statsUI.Inputs != null)
+        {
+            foreach (var kvp in statsUI.Inputs)
+            {
+                if (kvp.Value != null && kvp.Value.isFocused)
+                {
+                    focusedInputKey = kvp.Key;
+                    savedCaretPosition = kvp.Value.caretPosition;
+                    break;
+                }
+            }
+        }
+
+        statsUI = uiGenerator.RebuildGrid(statsScrollRect.content, GenerateStatsLayout());
+
+        float extraHeight = 0f;
+        var layoutGroup = statsScrollRect.content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
+        if (layoutGroup != null)
+        {
+            int childCount = statsScrollRect.content.childCount;
+            if (childCount > 1) extraHeight += layoutGroup.spacing * (childCount - 1);
+            extraHeight += layoutGroup.padding.top + layoutGroup.padding.bottom;
+        }
+        statsScrollRect.content.sizeDelta = new Vector2(0, statsUI.TotalHeight + extraHeight);
+        Canvas.ForceUpdateCanvases();
+
+        if (showCustomImagePanel)
+        {
+            if (statsUI.CustomImgImporter.TryGetValue("CustomImgPanel", out ImageReceiver dummyReceiver))
+            {
+                if (_persistentCustomImageReceiver == null)
+                {
+                    _persistentCustomImageReceiver = dummyReceiver;
+                    _persistentCustomImageReceiver.OnImageGenerated = (encodedStr, tex) =>
+                    {
+                        CurrentEntity.imageOverride = encodedStr; // Fixed property injection
+                        _customImageString = encodedStr;
+                        _customImageTexture = tex;
+                        NotifyStateChanged();
+                    };
+                }
+                else
+                {
+                    Transform placeholderParent = dummyReceiver.transform.parent;
+                    Destroy(dummyReceiver.gameObject);
+                    _persistentCustomImageReceiver.transform.SetParent(placeholderParent, false);
+                    _persistentCustomImageReceiver.gameObject.SetActive(true);
+                    RectTransform rt = _persistentCustomImageReceiver.GetComponent<RectTransform>();
+                    FullScreenUIGenerator.SetAnchors(rt, 0, 0, 1, 1);
+                }
+            }
+        }
+        else if (_persistentCustomImageReceiver != null)
+        {
+            _persistentCustomImageReceiver.gameObject.SetActive(false);
+        }
+
+        isDrawingUI = wasDrawing;
+        UpdateUIFromData();
+
+        if (focusedInputKey != null && statsUI.Inputs.TryGetValue(focusedInputKey, out var inputToFocus))
+        {
+            StartCoroutine(RestoreFocusRoutine(inputToFocus, savedCaretPosition));
+        }
+    }
+
     protected void ApplyDynamicLayoutConstraints()
     {
         if (statsScrollRect != null)
@@ -859,7 +864,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 UpdateUIFromData();
             })),
             GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => {
-                if (val == "<custom image data>") return;
+                if (val == "[CUSTOM_IMAGE_DATA]") return;
                 CurrentEntity.imageOverride = val;
                 NotifyStateChanged();
             }),
@@ -1470,24 +1475,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         _pendingTextUpdate = false;
         UpdateExportText();
-    }
-    protected void UpdateExportText()
-    {
-        if (rawTextOutput != null && CurrentEntity != null)
-        {
-            string exportedString = ExportEntity(CurrentEntity);
-            string displayString = exportedString;
-
-            // Mask the massive image data in the UI text box so TMP doesn't truncate/lag and trigger a corrupt onEndEdit
-            if (!string.IsNullOrEmpty(CurrentEntity.imageOverride) && CurrentEntity.imageOverride.Length > 50)
-            {
-                displayString = displayString.Replace(CurrentEntity.imageOverride, "<custom image data>");
-            }
-
-            rawTextOutput.SetTextWithoutNotify(displayString);
-            if (syntaxHighlighterText != null)
-                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(displayString);
-        }
     }
     protected void TriggerTextUpdate()
     {

@@ -82,10 +82,8 @@ public class MonsterUI : EntityUI<MonsterData>
     {
         if (statsUI.Inputs.TryGetValue("BaseMonster", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseMonster);
 
-        // CHANGED: Bal is now bound as a Dropdown
         if (statsUI.Dropdowns.TryGetValue("Bal", out var balDrop))
         {
-            // Note: Replace 'MonsterDatabase' with whatever class holds your GetMonsterNames() method
             var options = SDColors.GetMonsterNames().ToList();
             int idx = options.IndexOf(CurrentEntity.bal);
             balDrop.SetValueWithoutNotify(idx >= 0 ? idx : 0);
@@ -94,7 +92,7 @@ public class MonsterUI : EntityUI<MonsterData>
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overIn))
         {
             string disp = CurrentEntity.imageOverride;
-            if (disp != null && disp.Length > 50) disp = "<custom image data>";
+            if (!string.IsNullOrEmpty(disp) && disp.Length > 50) disp = "CUSTOM_IMG_DATA";
             overIn.SetTextWithoutNotify(disp);
         }
     }
