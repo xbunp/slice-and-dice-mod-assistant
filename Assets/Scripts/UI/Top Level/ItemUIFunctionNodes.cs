@@ -2154,12 +2154,10 @@ public class BaseItemNodeDef : AuthoringNodeDef
     private void SaveState(EntityCard card, List<BaseItemEntry> entries, ItemUI ui, bool forceInspectorRebuild)
     {
         List<string> parts = new List<string>();
-
         for (int i = 0; i < entries.Count; i++)
         {
             var e = entries[i];
             string s = "";
-
             switch (e.Type)
             {
                 case BasePackEntryType.BaseItem:
@@ -2167,45 +2165,30 @@ public class BaseItemNodeDef : AuthoringNodeDef
                 case BasePackEntryType.Ritem:
                     string prefix = "";
                     string targetPrefix = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
-
                     if (e.PerTier) prefix += "pertier.";
                     else if (e.Repeats != 1 && e.Repeats != 0) prefix += $"x{e.Repeats}.";
                     if (e.Unpack) prefix += "unpack.";
-
                     s = targetPrefix + prefix + e.ItemName;
                     if (!string.IsNullOrWhiteSpace(e.Part)) s += $".part.{e.Part}";
                     if (e.Multiplier != 1) s += $".m.{e.Multiplier}";
                     break;
-
                 case BasePackEntryType.Keyword:
                     string kwTarget = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
                     s = $"{kwTarget}k.{e.ItemName}";
                     break;
-
                 case BasePackEntryType.TogItem:
                     string togTarget = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
                     s = $"{togTarget}{e.ItemName}";
                     break;
             }
-
             if (!string.IsNullOrEmpty(s))
             {
-                bool needsBrackets = s.Contains(".part.") || s.Contains(".m.") || s.Contains("pertier.") || s.Contains("unpack.");
-                bool hasExplicitTarget = !string.IsNullOrEmpty(e.Target) && e.Target != "none";
-
-                if ((needsBrackets || hasExplicitTarget) && !s.StartsWith("("))
-                {
-                    s = $"({s})";
-                }
-
                 if (i < entries.Count - 1) s += e.NextOp;
                 parts.Add(s);
             }
         }
-
         card.MechanicData.PayloadString = string.Join("", parts);
         ui.AutoCompile();
-
         if (forceInspectorRebuild)
         {
             ui.SelectCard(card);
@@ -2217,9 +2200,14 @@ public class BaseItemNodeDef : AuthoringNodeDef
         var entries = new List<BaseItemEntry>();
         if (string.IsNullOrWhiteSpace(payload)) return entries;
 
-        string clean = payload.Replace("(", "").Replace(")", "");
-        string[] tokens = Regex.Split(clean, NodeOperatorUtility.ParseRegexPattern);
+        string clean = payload.Trim();
+        if (clean.StartsWith("(") && clean.EndsWith(")"))
+        {
+            // Safely strip ONLY the outermost parentheses wrapping the entire payload block
+            clean = clean.Substring(1, clean.Length - 2).Trim();
+        }
 
+        string[] tokens = Regex.Split(clean, NodeOperatorUtility.ParseRegexPattern);
         for (int i = 0; i < tokens.Length; i += 2)
         {
             string segment = tokens[i].Trim();

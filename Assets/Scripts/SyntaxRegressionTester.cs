@@ -124,6 +124,12 @@ public static class SyntaxRegressionTester
             "((replica.Statue.n.Precious.col.k.hp.6.tier.3.sd.181-1:143:126-2:126-2:131-1:12-1.i.(left.k.cleave#k.vulnerable#facade.Leo18:-48:70:-8).i.(right.k.cantrip#facade.har82:0).img.Alien.thue.c571da:92:8.hsv.0:-57:-1).i.self.(et2.allitem.(hat.(Statue.sd.177-1:171-3:171-1:171-1:187-1:11-2.i.(left.k.cleave#k.vulnerable#k.mandatory#facade.Leo14:-48:70:-8).i.(right.k.selfheal#k.cantrip#facade.eba13:0)))).doc.Swaps faces each turn)"),
 
 
+        new TestCase("Item - Future Shield", TargetType.Item,
+            "(topbot.mid.hat.(Fey.sd.56-6.i.(left.k.stasis).i.(mid.sticker.(Enchanted Shield).m.6#ritemx.dae9#facade.Mut89:0#sidesc.Shield [pips]).i.(togpip#togkey)))"),
+
+        new TestCase("Item - SelfVitality Claw", TargetType.Item,
+            "(mid.hat.(Fey.sd.0:178-1.i.(left.mid.hat.(Fey.sd.186.i.(mid.sticker.(Peanut Shell.part.1)#togtime#togtarg))).i.(mid.k.damage#k.selfheal#k.quaduse#facade.eba3:0).i.togunt))"),
+
         new TestCase("Hero - Has Tactick", TargetType.Hero,
             "(replica.Statue.n.Aragorn.col.o.hp.12.tier.3.sd.174-1:117:132-2:133-2:105-4.img.Veteran.p.788490:90563d:34.hsv.0:-4:8.abilitydata.(Fey.n.Herbs.sd.111-2:0:56-2.img.spe29.hsv.31:0:0))"),
 

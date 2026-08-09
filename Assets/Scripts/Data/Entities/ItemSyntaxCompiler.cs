@@ -397,7 +397,7 @@ public static class ItemSyntaxCompiler
         parts.Add(childrenCompiled);
 
         if (card.MechanicData.PartIndex.HasValue) parts.Add($"part.{card.MechanicData.PartIndex.Value}");
-        if (card.MechanicData.Multiplier != 1) parts.Add($"m{card.MechanicData.Multiplier}");
+        if (card.MechanicData.Multiplier != 1) parts.Add($"m.{card.MechanicData.Multiplier}");
         if (!string.IsNullOrEmpty(card.MechanicData.MergedItem)) parts.Add($"mrg.{card.MechanicData.MergedItem}");
         if (!string.IsNullOrEmpty(card.MechanicData.SplicedItem)) parts.Add($"splice.{card.MechanicData.SplicedItem}");
 

@@ -12,7 +12,7 @@ public static class SpriteSearchAliases
     // =========================================================================
     private static readonly string[][] SynonymGroups = new string[][]
     {
-        new[] { "heavy", "axe", "hatchet", "mattock", "hammer", "mallet", "cleaver"},
+        new[] { "heavy", "axe", "hatchet", "mattock", "hammer", "mallet"},
         new[] { "damage", "dmg", "sword", "dagger", "knife", "cutlas", "blade", "butcher", "sbane", "backstab" },
         new[] { "ranged", "crossbow", "longbow", "shortbow", "arrow", "phantasm" },
         new[] { "shield", "block", "defense" },
@@ -26,6 +26,7 @@ public static class SpriteSearchAliases
         new[] { "singleuse", "single use", "single-use", "stick", "wand", "staff", "wood" },
         new[] { "spell", "spe" },
         new[] { "ring", "band" },
+        new[] { "spear", "lance", "pole", "javelin", "picky side", "suengage" },
         new[] { "fist", "punch" },
         new[] { "undying", "die" },
         new[] { "rainbow", "keyword-soup" },
@@ -64,7 +65,7 @@ public static class SpriteSearchAliases
         { "shield",  new[] { "eba_71", "eba_32", "eba_36", "eba_60", "eba_44", "OkN_8", "pep_2_3" } },
         { "mana",  new[] { "magic", "wand", "eba_35", "eba_32", "eba_74", "eba_75", "eba_79", "eba_80", "pep_5_6", "eba_55", "eba_56", "eba_54" } },
         { "heal",  new[] { "eba_37", "eba_38", "eba_58" } },
-        { "heavy",  new[] { "eba_42", "damagecriticalguilt" } },
+        { "heavy",  new[] { "eba_42", "damagecriticalguilt", "cleaver" } },
         { "cleave",  new[] { "eba_31", "eba_59", "ric_0", "ric_1", "ric_3", "ric_4", "ric_6" } },
         { "mace",  new[] { "eba_83" } },
         { "fire",  new[] { "eba_84", "eba_77" } },
@@ -83,6 +84,7 @@ public static class SpriteSearchAliases
         { "red",  new[] { "heart", "heal", "pain"  } },
         { "pink",  new[] { "zglam", "vigil", "cantrip" } },
         { "grey",  new[] { "space", "pale" } },
+        { "yellow",  new[] { "engage", "steel", "93_coin", "brimstone", "gold", "heart-of-light", "puzzle-box", "tiara", "twisted-flax", "moxie", "star", "cymbals", "rescue", "tuba", "engine", "alchemyair", "eba_38", "eba_30", "banana", "castzap", "sun", "rampage", "fierce", "holy", "lead" } },
         { "letter",  new[] { "sym" } }
     };
 

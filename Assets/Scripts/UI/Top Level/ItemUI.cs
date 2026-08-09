@@ -1433,177 +1433,64 @@ public class ItemUI : RootUI
     {
         if (payloadPort == null) return;
 
-        if (entity.items != null)
+        bool isFirst = true;
+        void AddMechanicBlock(string payloadStr)
         {
-            bool isFirstItem = true;
-            foreach (var itemName in entity.items)
+            if (string.IsNullOrWhiteSpace(payloadStr)) return;
+
+            if (!isFirst)
             {
-                if (string.IsNullOrEmpty(itemName)) continue;
-
-                // Elements inside an entity's item array are distinctly separated items. 
-                // We inject .i. explicitly here so ValidateWorkspaceOperators doesn't combine them with #
-                if (!isFirstItem)
-                {
-                    EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                    opCard.MechanicData.PayloadString = ".i.";
-                    payloadPort.AddEntrant(opCard);
-                }
-                isFirstItem = false;
-
-                ItemData parsedItem = new ItemData();
-                parsedItem.Parse(itemName);
-
-                List<ItemMechanic> baseItemBuffer = new List<ItemMechanic>();
-                bool isFirstMechInItem = true;
-
-                void FlushBuffer()
-                {
-                    if (baseItemBuffer.Count == 0) return;
-                    string combined = string.Join("#", baseItemBuffer.Select(m => m.Export()));
-                    ItemMechanic aggregateMech = new ItemMechanic { PayloadString = combined };
-
-                    if (!isFirstMechInItem)
-                    {
-                        EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                        innerOpCard.MechanicData.PayloadString = "#";
-                        payloadPort.AddEntrant(innerOpCard);
-                    }
-                    isFirstMechInItem = false;
-
-                    EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
-                    mechCard.MechanicData = aggregateMech;
-                    payloadPort.AddEntrant(mechCard);
-
-                    baseItemBuffer.Clear();
-                }
-
-                foreach (var mech in parsedItem.Mechanics)
-                {
-                    string pfx = mech.Prefix?.ToLower() ?? "";
-
-                    // Identifies mechanics that can be handled natively by BaseItemNodeDef
-                    bool isBaseCompatible = (pfx == "" || pfx == "k" || pfx == "tog" || pfx == "ritem" || pfx == "ritemx")
-                                            && mech.PayloadData == null
-                                            && string.IsNullOrEmpty(mech.MergedItem)
-                                            && string.IsNullOrEmpty(mech.SplicedItem);
-
-                    if (isBaseCompatible)
-                    {
-                        baseItemBuffer.Add(mech);
-                    }
-                    else
-                    {
-                        FlushBuffer();
-                        if (!isFirstMechInItem)
-                        {
-                            EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                            innerOpCard.MechanicData.PayloadString = "#";
-                            payloadPort.AddEntrant(innerOpCard);
-                        }
-                        isFirstMechInItem = false;
-                        LoadMechanicIntoUI(mech, payloadPort, 1);
-                    }
-                }
-                FlushBuffer();
+                EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                opCard.MechanicData.PayloadString = ".i.";
+                payloadPort.AddEntrant(opCard);
             }
-            entity.items.Clear();
+            isFirst = false;
+
+            // Simply hand the unbroken string to the BaseItem node to process the `#` chain natively
+            EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
+            mechCard.MechanicData = new ItemMechanic { PayloadString = payloadStr };
+            payloadPort.AddEntrant(mechCard);
         }
 
+        // 1. Unpack Custom Payloads in reverse to undo entity parsing stack reversal
         if (entity.customPayloads != null)
         {
             var itemsToRemove = new List<CustomPayload>();
-            foreach (var cp in entity.customPayloads)
+            for (int i = entity.customPayloads.Count - 1; i >= 0; i--)
             {
+                var cp = entity.customPayloads[i];
                 if (cp.Type == PayloadType.Item && cp.Data is ItemData nestedItem)
                 {
-                    if (payloadPort.Entrants.Count > 0)
-                    {
-                        EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                        opCard.MechanicData.PayloadString = ".i.";
-                        payloadPort.AddEntrant(opCard);
-                    }
-
-                    List<ItemMechanic> baseItemBuffer = new List<ItemMechanic>();
-                    bool isFirstMechInItem = true;
-
-                    void FlushBuffer()
-                    {
-                        if (baseItemBuffer.Count == 0) return;
-                        string combined = string.Join("#", baseItemBuffer.Select(m => m.Export()));
-                        ItemMechanic aggregateMech = new ItemMechanic { PayloadString = combined };
-                        if (!isFirstMechInItem)
-                        {
-                            EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                            innerOpCard.MechanicData.PayloadString = "#";
-                            payloadPort.AddEntrant(innerOpCard);
-                        }
-                        isFirstMechInItem = false;
-                        EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
-                        mechCard.MechanicData = aggregateMech;
-                        payloadPort.AddEntrant(mechCard);
-                        baseItemBuffer.Clear();
-                    }
-
-                    foreach (var childMech in nestedItem.Mechanics)
-                    {
-                        string pfx = childMech.Prefix?.ToLower() ?? "";
-                        bool isBaseCompatible = (pfx == "" || pfx == "k" || pfx == "tog" || pfx == "ritem" || pfx == "ritemx")
-                                                && childMech.PayloadData == null
-                                                && string.IsNullOrEmpty(childMech.MergedItem)
-                                                && string.IsNullOrEmpty(childMech.SplicedItem);
-
-                        if (isBaseCompatible)
-                        {
-                            baseItemBuffer.Add(childMech);
-                        }
-                        else
-                        {
-                            FlushBuffer();
-                            if (!isFirstMechInItem)
-                            {
-                                EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                                innerOpCard.MechanicData.PayloadString = "#";
-                                payloadPort.AddEntrant(innerOpCard);
-                            }
-                            isFirstMechInItem = false;
-                            LoadMechanicIntoUI(childMech, payloadPort, 1);
-                        }
-                    }
-
-                    FlushBuffer();
+                    AddMechanicBlock(nestedItem.Export());
                     itemsToRemove.Add(cp);
                 }
             }
             foreach (var cp in itemsToRemove) entity.customPayloads.Remove(cp);
         }
 
+        // 2. Unpack loose items in reverse
+        if (entity.items != null)
+        {
+            for (int i = entity.items.Count - 1; i >= 0; i--)
+            {
+                var itemName = entity.items[i];
+                if (!string.IsNullOrEmpty(itemName))
+                {
+                    AddMechanicBlock(itemName);
+                }
+            }
+            entity.items.Clear();
+        }
+
+        // 3. Unpack native Traits in reverse
         if (entity.traits != null)
         {
-            foreach (var trait in entity.traits)
+            for (int i = entity.traits.Count - 1; i >= 0; i--)
             {
-                if (string.IsNullOrEmpty(trait)) continue;
-
-                if (payloadPort.Entrants.Count > 0)
+                var trait = entity.traits[i];
+                if (!string.IsNullOrEmpty(trait))
                 {
-                    EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                    opCard.MechanicData.PayloadString = ".i.";
-                    payloadPort.AddEntrant(opCard);
-                }
-
-                ItemData parsedTrait = new ItemData();
-                parsedTrait.Parse($"t.{trait}");
-
-                bool isFirstTraitMech = true;
-                foreach (var mech in parsedTrait.Mechanics)
-                {
-                    if (!isFirstTraitMech)
-                    {
-                        EntityCard innerOpCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
-                        innerOpCard.MechanicData.PayloadString = "#";
-                        payloadPort.AddEntrant(innerOpCard);
-                    }
-                    isFirstTraitMech = false;
-                    LoadMechanicIntoUI(mech, payloadPort, 1);
+                    AddMechanicBlock($"t.{trait}");
                 }
             }
             entity.traits.Clear();

@@ -696,6 +696,7 @@ public class ItemData : SDData
 
     public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)
     {
+        /*
         bool isPureEntityName = Mechanics.Count == 0 &&
                                 !string.IsNullOrEmpty(entityName) &&
                                 !ItemDomainRules.TogItems.Contains(entityName) &&
@@ -732,6 +733,47 @@ public class ItemData : SDData
         if (isPureBaseItem)
         {
             entity.items.Add(Mechanics[0].PayloadString);
+            return true;
+        }
+        */
+
+        bool isPureEntityName = Mechanics.Count == 0 &&
+                                !string.IsNullOrEmpty(entityName) &&
+                                !ItemDomainRules.TogItems.Contains(entityName) &&
+                                string.IsNullOrEmpty(imageOverride) &&
+                                visuals.Count == 0 &&
+                                !Tier.HasValue &&
+                                string.IsNullOrEmpty(doc) &&
+                                LearnedAbilities.Count == 0 &&
+                                Containers.Count == 0;
+        if (isPureEntityName)
+        {
+            // Route to customPayloads to maintain strict sequential ordering across all entity items
+            entity.customPayloads.Add(new CustomPayload { Data = this, Type = PayloadType.Item });
+            return true;
+        }
+        bool isPureBaseItem = Mechanics.Count == 1 &&
+                              string.IsNullOrEmpty(Mechanics[0].Prefix) &&
+                              !ItemDomainRules.TogItems.Contains(Mechanics[0].PayloadString ?? "") &&
+                              Mechanics[0].Targets.Count == 0 &&
+                              Mechanics[0].ChainedKeywords.Count == 0 &&
+                              Mechanics[0].Multiplier == 1 &&
+                              Mechanics[0].RepeatTimes == 1 &&
+                              !Mechanics[0].PerTier &&
+                              !Mechanics[0].Unpack &&
+                              string.IsNullOrEmpty(Mechanics[0].MergedItem) &&
+                              string.IsNullOrEmpty(Mechanics[0].SplicedItem) &&
+                              !Mechanics[0].PartIndex.HasValue &&
+                              string.IsNullOrEmpty(imageOverride) &&
+                              visuals.Count == 0 &&
+                              !Tier.HasValue &&
+                              string.IsNullOrEmpty(doc) &&
+                              LearnedAbilities.Count == 0 &&
+                              Containers.Count == 0;
+        if (isPureBaseItem)
+        {
+            // Route to customPayloads to maintain strict sequential ordering across all entity items
+            entity.customPayloads.Add(new CustomPayload { Data = this, Type = PayloadType.Item });
             return true;
         }
 
