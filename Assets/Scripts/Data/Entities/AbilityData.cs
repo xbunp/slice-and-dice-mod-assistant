@@ -181,28 +181,18 @@ public abstract class AbilityData : HeroData
         return StaticBranchTracing.SafeBracket(inner);
     }
 
+    // Update ExportInner in Assets/Scripts/Data/Entities/AbilityData.cs
+
     protected virtual string ExportInner()
     {
         StringBuilder sb = new StringBuilder();
         bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica;
-
-        // 1. Base Replica
         if (!string.IsNullOrEmpty(baseReplica)) sb.Append(FormatName(baseReplica));
-
-        // 2. Name
         if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity" && entityName != "Fey")
             sb.Append($".n.{FormatName(entityName)}");
-
-        // 3. Color
         if (!string.IsNullOrEmpty(colorClass)) sb.Append($".col.{colorClass}");
-
-        // 4. HP (if present on TriggerHPData)
         if (hp > 0) sb.Append($".hp.{hp}");
-
-        // 5. Dice Sides
         AppendDiceSides(sb);
-
-        // 6. Items & Base Abilities
         if (items != null) foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
 
         if (baseAbilityData != null && baseAbilityData.Count > 0)
@@ -216,7 +206,30 @@ public abstract class AbilityData : HeroData
             if (formattedAbilities.Count > 0) sb.Append($".abilitydata.{string.Join("#", formattedAbilities)}");
         }
 
-        // 7. Custom Payloads
+        // --- NEW: Fix truncation of nested Carrier Abilities (e.g. sthief.abilitydata) ---
+        if (customAbilityData != null && customAbilityData.Count > 0)
+        {
+            foreach (var cab in customAbilityData)
+            {
+                if (cab == null) continue;
+                if (cab is SpellData || cab is TacticData)
+                {
+                    sb.Append($".{AbilityData.GetFormattedExportString(cab)}");
+                }
+                else if (cab is OrbData orb)
+                {
+                    sb.Append($".{orb.ExportAsTrait(useITPrefix: false)}");
+                }
+                else
+                {
+                    string pfx = cab is TriggerHPData ? "triggerhpdata" :
+                                 cab is OnHitData ? "onhitdata" : "abilitydata";
+                    sb.Append($".{pfx}.{cab.Export()}");
+                }
+            }
+        }
+        // -------------------------------------------------------------------------------
+
         if (customPayloads != null)
         {
             foreach (var cp in customPayloads)
@@ -225,12 +238,9 @@ public abstract class AbilityData : HeroData
                 if (!string.IsNullOrEmpty(e)) sb.Append($".{e}");
             }
         }
-
-        // 8. Face Modifiers
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
 
-        // 9. Image Override & Visual Modifiers (MUST BE LAST)
         if (hasImageOverride)
         {
             sb.Append($".img.{FormatName(imageOverride)}");
@@ -242,11 +252,8 @@ public abstract class AbilityData : HeroData
         }
 
         if (thue != null && thue.colorOffset != 0) sb.Append($".{PackTHue(thue)}");
-
-        // 10. Documentation
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");
         if (!string.IsNullOrEmpty(doc2)) sb.Append($".doc.{doc2}");
-
         return sb.ToString();
     }
     public static string StripPrefix(string data)
@@ -332,6 +339,17 @@ public abstract class AbilityData : HeroData
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
         string trimmed = data.Trim();
+
+        // 1. Explicitly check for AbilityData/Cast to guarantee CreateSpellOrTactic mapping before heuristics
+        if (trimmed.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("i.abilitydata.", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("cast.", StringComparison.OrdinalIgnoreCase))
+        {
+            string cleanStr = StripPrefix(trimmed);
+            return CreateSpellOrTactic(cleanStr);
+        }
+
+        // 2. Explicitly check for OnHit
         if (trimmed.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.onhitdata.", StringComparison.OrdinalIgnoreCase))
         {
@@ -339,6 +357,8 @@ public abstract class AbilityData : HeroData
             onHit.Parse(trimmed);
             return onHit;
         }
+
+        // 3. Explicitly check for TriggerHP
         if (trimmed.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.triggerhpdata.", StringComparison.OrdinalIgnoreCase))
         {
@@ -346,6 +366,8 @@ public abstract class AbilityData : HeroData
             triggerHP.Parse(trimmed);
             return triggerHP;
         }
+
+        // 4. Fallback heuristic for un-prefixed ability strings
         string clean = StripPrefix(data);
         ProbeAbilityData probe = new ProbeAbilityData();
         probe.Parse(clean);

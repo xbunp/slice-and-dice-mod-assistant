@@ -536,7 +536,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             if (isI) stream.Consume();
             stream.Consume();
             if (stream.IsEOF) return true;
-
             int length = EntityDomainRules.GetCollectionBlockLength(stream.GetRawList(), stream.Index);
             if (length > 0)
             {
@@ -544,7 +543,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 if (targetToken == "t") traits.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
                 else if (targetToken == "gift") blessings.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
                 else baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-
                 if (targetToken == "t") traits = traits.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 else if (targetToken == "gift") blessings = blessings.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 else baseAbilityData = baseAbilityData.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -557,12 +555,15 @@ public abstract class EntityData : SDData, IPayloadContainer
             if (isI) stream.Consume();
             stream.Consume();
             if (stream.IsEOF) return true;
-
             int length = AbilityDomainRules.GetAbilityBlockLength(stream.GetRawList(), stream.Index - 1) - 1;
             if (length > 0)
             {
                 string payload = string.Join(".", stream.ConsumeRange(length));
-                if (payload.StartsWith("(")) AddCustomAbility(AbilityData.CreateAbility(payload));
+                if (payload.StartsWith("("))
+                {
+                    // FIX: Pass the prefix context so CreateAbility natively targets the exact type
+                    AddCustomAbility(AbilityData.CreateAbility($"{targetToken}.{payload}"));
+                }
                 else
                 {
                     baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));

@@ -694,6 +694,8 @@ public class ItemData : SDData
         return string.Join(".", payloadTokens);
     }
 
+    // Update TryAbsorbIntoEntity in Assets/Scripts/Data/Entities/ItemData.cs
+
     public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)
     {
         bool isPureEntityName = Mechanics.Count == 0 &&
@@ -737,26 +739,47 @@ public class ItemData : SDData
         }
 
         bool isFaceModifierItem = false;
+        bool hasUnmappedMechanics = false;
         foreach (var mech in Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
 
             // Reject raw Modifiers unless they are enchants
-            if (mech.PayloadData is ModifierData && pfx != "enchant") return false;
+            if (mech.PayloadData is ModifierData && pfx != "enchant")
+            {
+                hasUnmappedMechanics = true;
+                continue;
+            }
 
             bool isFaceModifier = pfx == "k" || pfx == "facade" || pfx == "sidesc" ||
                                  pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "";
             bool isEntityCollection = pfx == "t" || pfx == "gift" || pfx == "learn" || pfx == "abilitydata";
 
-            if (!isEntityCollection && !isFaceModifier) return false;
+            if (!isEntityCollection && !isFaceModifier)
+            {
+                hasUnmappedMechanics = true;
+                continue;
+            }
 
             if (isFaceModifier)
             {
-                // We no longer reject native mapping based on multipliers or repeats. 
-                // We ONLY reject it if it targets nothing and has no prefix.
-                if (pfx == "" && mech.Targets.Count == 0) return false;
-                isFaceModifierItem = true;
+                // Reject it if it targets nothing and has no prefix (unmappable generic payload)
+                if (pfx == "" && mech.Targets.Count == 0)
+                {
+                    hasUnmappedMechanics = true;
+                }
+                else
+                {
+                    isFaceModifierItem = true;
+                }
             }
+        }
+
+        // 🛑 SAFETY NET: If this item contains unmappable syntax or generic containers, 
+        // reject native absorption so it falls safely into CustomPayloads and exports intact!
+        if (Containers.Count > 0 || hasUnmappedMechanics)
+        {
+            return false;
         }
 
         // Shared item metadata mapping
@@ -811,7 +834,6 @@ public class ItemData : SDData
                     }
                 }
             }
-            // Return true (absorbed) so it is NOT pushed to CustomPayloads.
             return true;
         }
 
