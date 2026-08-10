@@ -72,6 +72,7 @@ public class DiceSideData
             facadeID = this.facadeID,
             facadeColor = this.facadeColor,
             keywords = new List<string>(this.keywords),
+            sideItems = new List<ItemData>(this.sideItems),
             faceType = this.faceType,
             payloadTarget = this.payloadTarget,
             payload = this.payload,
