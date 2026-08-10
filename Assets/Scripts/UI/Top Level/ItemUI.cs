@@ -1432,12 +1432,10 @@ public class ItemUI : RootUI
     private void PopulatePayloadPortFromEntity(EntityData entity, ReorderableZone payloadPort)
     {
         if (payloadPort == null) return;
-
         bool isFirst = true;
         void AddMechanicBlock(string payloadStr)
         {
             if (string.IsNullOrWhiteSpace(payloadStr)) return;
-
             if (!isFirst)
             {
                 EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
@@ -1446,32 +1444,40 @@ public class ItemUI : RootUI
             }
             isFirst = false;
 
-            // Simply hand the unbroken string to the BaseItem node to process the `#` chain natively
-            EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
-            mechCard.MechanicData = new ItemMechanic { PayloadString = payloadStr };
-            payloadPort.AddEntrant(mechCard);
+            // Canonical truth: use ItemData to parse it natively, then process its hierarchical mechanics!
+            ItemData tempItem = new ItemData();
+            tempItem.Parse(payloadStr);
+            ProcessMechanicsList(tempItem.Mechanics, payloadPort);
         }
 
-        // 1. Unpack Custom Payloads in reverse to undo entity parsing stack reversal
+        // 1. Unpack Custom Payloads sequentially to strictly preserve formatting scope
         if (entity.customPayloads != null)
         {
             var itemsToRemove = new List<CustomPayload>();
-            for (int i = entity.customPayloads.Count - 1; i >= 0; i--)
+            for (int i = 0; i < entity.customPayloads.Count; i++)
             {
                 var cp = entity.customPayloads[i];
                 if (cp.Type == PayloadType.Item && cp.Data is ItemData nestedItem)
                 {
-                    AddMechanicBlock(nestedItem.Export());
+                    if (!isFirst)
+                    {
+                        EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+                        opCard.MechanicData.PayloadString = ".i.";
+                        payloadPort.AddEntrant(opCard);
+                    }
+                    isFirst = false;
+
+                    ProcessMechanicsList(nestedItem.Mechanics, payloadPort);
                     itemsToRemove.Add(cp);
                 }
             }
             foreach (var cp in itemsToRemove) entity.customPayloads.Remove(cp);
         }
 
-        // 2. Unpack loose items in reverse
+        // 2. Unpack loose items sequentially
         if (entity.items != null)
         {
-            for (int i = entity.items.Count - 1; i >= 0; i--)
+            for (int i = 0; i < entity.items.Count; i++)
             {
                 var itemName = entity.items[i];
                 if (!string.IsNullOrEmpty(itemName))
@@ -1482,10 +1488,10 @@ public class ItemUI : RootUI
             entity.items.Clear();
         }
 
-        // 3. Unpack native Traits in reverse
+        // 3. Unpack native Traits sequentially
         if (entity.traits != null)
         {
-            for (int i = entity.traits.Count - 1; i >= 0; i--)
+            for (int i = 0; i < entity.traits.Count; i++)
             {
                 var trait = entity.traits[i];
                 if (!string.IsNullOrEmpty(trait))

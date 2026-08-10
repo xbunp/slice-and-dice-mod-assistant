@@ -1178,6 +1178,14 @@ public class DiceFaceBuilderWidget
     private void SetFacePayload(DiceSideData face, string typeId, string payloadData)
     {
         face.payload = payloadData ?? "";
+
+        // Safety step: clear any previous structured representations so the engine favors the text edit!
+        if (face.sideItems != null)
+        {
+            face.sideItems.RemoveAll(item => item.Mechanics.Any(m =>
+                m.Prefix == "sticker" || m.Prefix == "cast" || m.Prefix == "enchant" || m.Prefix == "egg"));
+        }
+
         switch (typeId)
         {
             case "standard": face.faceType = DiceSideData.DiceFaceType.Base; break;

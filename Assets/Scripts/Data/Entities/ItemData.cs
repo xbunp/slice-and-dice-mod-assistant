@@ -372,7 +372,17 @@ public class ItemMechanic
             // Both Heroes and Monsters (like Eggs) use ExportAsHat when attached as a Hat mechanic.
             if (Prefix == "hat" && PayloadData is EntityData ed)
             {
-                corePayload = ed.ExportAsHat();
+                // Preserve full bracket envelope to ensure safe encapsulation
+                if (!string.IsNullOrEmpty(PayloadString))
+                {
+                    corePayload = PayloadString.StartsWith("(") && PayloadString.EndsWith(")")
+                        ? PayloadString
+                        : $"({PayloadString})";
+                }
+                else
+                {
+                    corePayload = ed.ExportAsHat();
+                }
             }
             // EVERYTHING ELSE (Abilities, Traits, Triggers, Curses, Modifiers) exports natively
             else if (PayloadData is SDData sdData)
