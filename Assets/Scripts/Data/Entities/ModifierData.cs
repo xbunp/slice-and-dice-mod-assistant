@@ -33,23 +33,36 @@ public static class ModifierDomainRules
 
     public static bool IsModifierStartToken(string token) => ModifierStartTokens.Contains(token);
 
+    // Update GetModifierBlockLength in Assets/Scripts/Data/Entities/ModifierData.cs
+
     public static int GetModifierBlockLength(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
         int depth = 0;
+        int parenDepth = 0; // Track parenthesis depth to prevent premature breaks
 
         while (endIndex < tokens.Count)
         {
             string peek = tokens[endIndex].ToLower();
 
+            parenDepth += peek.Count(c => c == '(') - peek.Count(c => c == ')');
+
             if (ModifierStartTokens.Contains(peek)) depth++;
             else if (ModifierEndTokens.Contains(peek)) depth--;
 
             endIndex++;
+            if (depth == 0) break;
 
-            if (depth == 0) break; // Outer-most modifier scope closed natively
+            // If we are at the top level, and we encounter a token that clearly belongs to the entity
+            if (parenDepth <= 0 && endIndex < tokens.Count)
+            {
+                string next = tokens[endIndex].ToLower();
+                if (next == "i" || next == "t" || next == "doc" || next == "mn" || next == "bal" || EntityDomainRules.CommonMetadataKeys.Contains(next))
+                {
+                    break;
+                }
+            }
         }
-
         return endIndex - startIndex;
     }
 }
@@ -761,29 +774,22 @@ public class ModifierData : SDData
 
         // 10. Handle Suffixes & Nested Bracketing
         bool hasSuffixes = !string.IsNullOrEmpty(ModName) || !string.IsNullOrEmpty(DocDescription);
-
         if (isRoot)
         {
-            // Root level: Append suffixes directly to the end without outer wrapping
             if (!string.IsNullOrEmpty(ModName)) blockString += $".mn.{ModName}";
             if (!string.IsNullOrEmpty(DocDescription)) blockString += $".doc.{DocDescription}";
             return blockString;
         }
 
-        // Non-root (nested) level:
         if (hasSuffixes)
         {
-            // Bracket the core payload first, attach suffixes, then wrap the entire unit:
-            // Output format: ((<stuff>).mn.<name>.doc.<desc>)
-            string suffixedBlock = $"({blockString})";
+            string suffixedBlock = StaticBranchTracing.SafeBracket(blockString);
             if (!string.IsNullOrEmpty(ModName)) suffixedBlock += $".mn.{ModName}";
             if (!string.IsNullOrEmpty(DocDescription)) suffixedBlock += $".doc.{DocDescription}";
-
-            return $"({suffixedBlock})";
+            return StaticBranchTracing.SafeBracket(suffixedBlock);
         }
 
-        // Standard nested modifier without suffixes
-        return $"({blockString})";
+        return StaticBranchTracing.SafeBracket(blockString);
     }
     public void DebugContentsToConsole(string indent = "")
     {
