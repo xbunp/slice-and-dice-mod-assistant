@@ -324,6 +324,7 @@ public abstract class AbilityData : HeroData
         if (!string.IsNullOrEmpty(face.payload)) return true;
         if (face.faceType != DiceSideData.DiceFaceType.Base) return true;
         if (!string.IsNullOrEmpty(face.sidesc)) return true;
+        if (face.sideItems != null && face.sideItems.Count > 0) return true; // <-- ADD THIS
         return false;
     }
 

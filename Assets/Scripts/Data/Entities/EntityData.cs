@@ -751,47 +751,41 @@ public abstract class EntityData : SDData, IPayloadContainer
     /// FACE BUILDING //////////
     ////////////////////////////
 
+    // Update BuildFaceModifiers & ProcessIntrinsicFaceKeywords in Assets/Scripts/Data/Entities/EntityData.cs
+
     public string BuildFaceModifiers(bool includeInlineFacades)
     {
         StringBuilder modSb = new StringBuilder();
         var groupedModifiers = new Dictionary<string, int>();
 
+        // Tracking structure to deduplicate face modifiers that are referenced across multiple sideItems natively
+        HashSet<ItemData> processedSideItems = new HashSet<ItemData>();
+        List<ItemData> itemsToExport = new List<ItemData>();
+
         for (int i = 0; i < 6; i++)
         {
             var face = diceSides[i];
-            if (face == null) continue; // Safety catch
-
+            if (face == null) continue;
             List<string> chunks = new List<string>();
 
-            // 1. Process Payloads (Handles Casts, Stickers, Hats, and Eggs)
             bool hasHatWrapper = ProcessFacePayload(face, chunks);
 
-            // 2. Process Standard Keywords
-            ProcessFaceKeywords(face, chunks);
-
-            // 3. Process Facades
+            // Process native properties, decoupled entirely from sideItems
+            ProcessIntrinsicFaceKeywords(face, chunks);
             ProcessFaceFacades(face, chunks, includeInlineFacades);
-
-            // 4. Process Description
             ProcessFaceDescription(face, chunks);
-
-            // 5. Process Stasis (Must always be last keyword)
             ProcessFaceStasis(face, chunks);
 
-            // 6. Final String Grouping & Left Face Logic
             if (chunks.Count > 0)
             {
                 string templateString = string.Join("#", chunks);
                 bool isLeftFaceHat = i == 0 && hasHatWrapper;
                 bool isEggOnOuterFace = face.faceType == DiceSideData.DiceFaceType.Egg && (i == 2 || i == 3 || i == 5);
 
-                // EXCEPTION: Route via `mid` for general Left face hats OR when mapping Eggs to Top, Bot, or Rightmost
                 if (isLeftFaceHat || isEggOnOuterFace)
                 {
-                    // Only string.Format if "{0}" actually exists to prevent arbitrary curly brace format exceptions
                     string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, "mid") : templateString;
                     string faceAlias = i == 0 ? "left" : (i == 2 ? "top" : (i == 3 ? "bot" : "rightmost"));
-
                     ItemData giveItem = new ItemData();
                     giveItem.Parse($"{faceAlias}.mid.{resolvedMod}");
                     ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giveItem };
@@ -804,8 +798,21 @@ public abstract class EntityData : SDData, IPayloadContainer
                     else groupedModifiers[templateString] = faceMask;
                 }
             }
+
+            // Gather structural intact Side Items from the face
+            if (face.sideItems != null)
+            {
+                foreach (var item in face.sideItems)
+                {
+                    if (item != null && processedSideItems.Add(item))
+                    {
+                        itemsToExport.Add(item);
+                    }
+                }
+            }
         }
-        // Apply best aliases for grouped identical faces
+
+        // 1. Export inherent grouped string properties
         foreach (var kvp in groupedModifiers)
         {
             string templateString = kvp.Key;
@@ -813,7 +820,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             foreach (string alias in optimalAliases)
             {
                 string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, alias) : templateString;
-
                 ItemData giveItem = new ItemData();
                 giveItem.Parse($"{alias}.{resolvedMod}");
                 ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giveItem };
@@ -821,7 +827,52 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
 
+        // 2. Export structural objects. 
+        // We let the ItemData construct its own syntax stream, exactly as it originally parsed. No aliases guessing!
+        foreach (var item in itemsToExport)
+        {
+            ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = item };
+            modSb.Append($".{modifier.Export()}");
+        }
+
         return modSb.ToString();
+    }
+    private void ProcessIntrinsicFaceKeywords(DiceSideData face, List<string> chunks)
+    {
+        if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
+        {
+            chunks.Add("k.permissive");
+        }
+        foreach (var kw in face.keywords)
+        {
+            if (string.IsNullOrWhiteSpace(kw)) continue;
+            string rawKw = kw.Trim();
+            string cleanKw = rawKw.ToLower();
+
+            if (cleanKw != "permissive" && cleanKw != "stasis")
+            {
+                if (cleanKw == "future")
+                {
+                    chunks.Add("ritemx.dae9");
+                }
+                else if (ItemDomainRules.TogItems.Contains(cleanKw))
+                {
+                    chunks.Add(rawKw);
+                }
+                else if (ExternalGameRegistry.IsValidKeyword(rawKw))
+                {
+                    chunks.Add($"k.{cleanKw}");
+                }
+                else if (ExternalGameRegistry.IsValidItemName(rawKw))
+                {
+                    chunks.Add(rawKw);
+                }
+                else
+                {
+                    chunks.Add(rawKw);
+                }
+            }
+        }
     }
     private bool ProcessFacePayload(DiceSideData face, List<string> chunks)
     {
