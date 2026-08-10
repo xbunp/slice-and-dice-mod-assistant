@@ -696,7 +696,6 @@ public class ItemData : SDData
 
     public bool TryAbsorbIntoEntity(EntityData entity, bool isLeftMidException = false)
     {
-        /*
         bool isPureEntityName = Mechanics.Count == 0 &&
                                 !string.IsNullOrEmpty(entityName) &&
                                 !ItemDomainRules.TogItems.Contains(entityName) &&
@@ -708,50 +707,10 @@ public class ItemData : SDData
                                 Containers.Count == 0;
         if (isPureEntityName)
         {
-            entity.items.Add(entityName);
-            return true;
-        }
-
-        bool isPureBaseItem = Mechanics.Count == 1 &&
-                              string.IsNullOrEmpty(Mechanics[0].Prefix) &&
-                              !ItemDomainRules.TogItems.Contains(Mechanics[0].PayloadString ?? "") &&
-                              Mechanics[0].Targets.Count == 0 &&
-                              Mechanics[0].ChainedKeywords.Count == 0 &&
-                              Mechanics[0].Multiplier == 1 &&
-                              Mechanics[0].RepeatTimes == 1 &&
-                              !Mechanics[0].PerTier &&
-                              !Mechanics[0].Unpack &&
-                              string.IsNullOrEmpty(Mechanics[0].MergedItem) &&
-                              string.IsNullOrEmpty(Mechanics[0].SplicedItem) &&
-                              !Mechanics[0].PartIndex.HasValue &&
-                              string.IsNullOrEmpty(imageOverride) &&
-                              visuals.Count == 0 &&
-                              !Tier.HasValue &&
-                              string.IsNullOrEmpty(doc) &&
-                              LearnedAbilities.Count == 0 &&
-                              Containers.Count == 0;
-        if (isPureBaseItem)
-        {
-            entity.items.Add(Mechanics[0].PayloadString);
-            return true;
-        }
-        */
-
-        bool isPureEntityName = Mechanics.Count == 0 &&
-                                !string.IsNullOrEmpty(entityName) &&
-                                !ItemDomainRules.TogItems.Contains(entityName) &&
-                                string.IsNullOrEmpty(imageOverride) &&
-                                visuals.Count == 0 &&
-                                !Tier.HasValue &&
-                                string.IsNullOrEmpty(doc) &&
-                                LearnedAbilities.Count == 0 &&
-                                Containers.Count == 0;
-        if (isPureEntityName)
-        {
-            // Route to customPayloads to maintain strict sequential ordering across all entity items
             entity.customPayloads.Add(new CustomPayload { Data = this, Type = PayloadType.Item });
             return true;
         }
+
         bool isPureBaseItem = Mechanics.Count == 1 &&
                               string.IsNullOrEmpty(Mechanics[0].Prefix) &&
                               !ItemDomainRules.TogItems.Contains(Mechanics[0].PayloadString ?? "") &&
@@ -777,87 +736,91 @@ public class ItemData : SDData
             return true;
         }
 
-        bool canMapNatively = true;
+        bool isFaceModifierItem = false;
         foreach (var mech in Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
 
-            // Reject raw Modifiers (like 'self' or 'jinx' given as items), but allow targeted 'enchant' payloads
-            if (mech.PayloadData is ModifierData && pfx != "enchant")
-                return false;
+            // Reject raw Modifiers unless they are enchants
+            if (mech.PayloadData is ModifierData && pfx != "enchant") return false;
 
             bool isFaceModifier = pfx == "k" || pfx == "facade" || pfx == "sidesc" ||
                                  pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "";
             bool isEntityCollection = pfx == "t" || pfx == "gift" || pfx == "learn" || pfx == "abilitydata";
 
-            if (!isEntityCollection && !isFaceModifier)
-            {
-                return false;
-            }
+            if (!isEntityCollection && !isFaceModifier) return false;
 
             if (isFaceModifier)
             {
-                // REJECTION RULE 1: Suffixes cannot be absorbed natively into keywords.
-                // Dice faces only hold raw strings, so metadata like PartIndex or Multipliers would be lost.
-                if (mech.Multiplier != 1 || mech.RepeatTimes != 1 || mech.PerTier || mech.Unpack ||
-                    !string.IsNullOrEmpty(mech.MergedItem) || !string.IsNullOrEmpty(mech.SplicedItem) ||
-                    mech.PartIndex.HasValue)
-                {
-                    return false; // Reject native absorption. Put it in CustomPayloads.
-                }
-
-                // REJECTION RULE 2: Prefixless base items without explicit targets should not map to faces.
-                // They belong at the entity level as intact items. (e.g. i.Golden Cup or i.togkey)
-                if (pfx == "" && mech.Targets.Count == 0)
-                {
-                    return false; // Reject native absorption. Put it in CustomPayloads.
-                }
-            }
-
-            if (pfx == "sticker" || pfx == "cast" || pfx == "enchant")
-            {
-                // DRY: Use ItemDomainRules helper to resolve target indices
-                List<int> targetFacesCheck = ItemDomainRules.GetTargetIndicesOrDefault(mech);
-                foreach (int face in targetFacesCheck)
-                {
-                    if (entity.diceSides != null && face >= 0 && face < 6 && entity.diceSides[face] != null)
-                    {
-                        if (!string.IsNullOrEmpty(entity.diceSides[face].payload)) return false;
-                    }
-                }
+                // We no longer reject native mapping based on multipliers or repeats. 
+                // We ONLY reject it if it targets nothing and has no prefix.
+                if (pfx == "" && mech.Targets.Count == 0) return false;
+                isFaceModifierItem = true;
             }
         }
 
+        // Shared item metadata mapping
         if (!string.IsNullOrEmpty(imageOverride) && !imageOverride.Equals("None", StringComparison.OrdinalIgnoreCase))
         {
             entity.imageOverride = imageOverride;
             imageOverride = null;
         }
-
         if (visuals != null && visuals.Count > 0)
         {
             entity.visuals.AddRange(visuals);
             visuals.Clear();
         }
-
         if (!string.IsNullOrEmpty(doc))
         {
             entity.doc = doc;
             doc = null;
         }
-
         if (Tier.HasValue && entity is HeroData heroData)
         {
             heroData.tier = Tier.Value;
             Tier = null;
         }
 
+        // SCENARIO 1: The item mutates faces. Place the intact ItemData into sideItems.
+        if (isFaceModifierItem)
+        {
+            HashSet<int> allTargetFaces = new HashSet<int>();
+            foreach (var mech in Mechanics)
+            {
+                string pfx = mech.Prefix?.ToLower() ?? "";
+                if (pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "")
+                {
+                    List<int> targetFaces = ItemDomainRules.GetTargetIndicesOrDefault(mech);
+                    if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid"))
+                        targetFaces.Remove(1);
+
+                    foreach (int faceIdx in targetFaces) allTargetFaces.Add(faceIdx);
+                }
+            }
+
+            foreach (int faceIdx in allTargetFaces)
+            {
+                if (entity.diceSides != null && faceIdx >= 0 && faceIdx < 6)
+                {
+                    if (entity.diceSides[faceIdx] == null) entity.diceSides[faceIdx] = new DiceSideData();
+
+                    // Route the entire object without mutating it!
+                    if (!entity.diceSides[faceIdx].sideItems.Contains(this))
+                    {
+                        entity.diceSides[faceIdx].sideItems.Add(this);
+                    }
+                }
+            }
+            // Return true (absorbed) so it is NOT pushed to CustomPayloads.
+            return true;
+        }
+
+        // SCENARIO 2: Fallback for pure entity-collection items (like t.Cleave with no face modifiers)
         foreach (var ab in LearnedAbilities)
         {
             if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
                 entity.baseAbilityData.Add(ab);
         }
-
         foreach (var mech in Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
@@ -869,7 +832,9 @@ public class ItemData : SDData
                     if (!entity.curses.Contains(curse, StringComparer.OrdinalIgnoreCase)) entity.curses.Add(curse);
                 }
                 else if (!entity.traits.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase))
+                {
                     entity.traits.Add(mech.PayloadString);
+                }
             }
             else if (pfx == "gift")
             {
@@ -879,31 +844,9 @@ public class ItemData : SDData
             {
                 if (!entity.baseAbilityData.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase)) entity.baseAbilityData.Add(mech.PayloadString);
             }
-            else if (pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "")
-            {
-                // DRY: Use ItemDomainRules helper to resolve target indices
-                List<int> targetFaces = ItemDomainRules.GetTargetIndicesOrDefault(mech);
-
-                if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid"))
-                    targetFaces.Remove(1);
-
-                string keyword = mech.PayloadString?.Trim().ToLower() ?? "";
-                if (keyword == "blindfold")
-                {
-                    foreach (int faceIdx in targetFaces)
-                    {
-                        if (entity.diceSides != null && entity.diceSides[faceIdx] != null && entity.diceSides[faceIdx].faceType == DiceSideData.DiceFaceType.Egg)
-                            if (!entity.diceSides[faceIdx].payload.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase))
-                                entity.diceSides[faceIdx].payload += "#blindfold";
-                    }
-                    continue;
-                }
-
-                entity.ApplyMechanicToDiceSides(targetFaces, mech);
-            }
         }
 
-        return canMapNatively;
+        return true;
     }
 
     private void PropertiesClear()
