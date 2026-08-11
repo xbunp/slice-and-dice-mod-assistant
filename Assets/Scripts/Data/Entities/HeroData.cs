@@ -139,40 +139,6 @@ public class HeroData : EntityData
         return true;
     }
 
-    /* // temporarily removed while EntityData tries to take over.
-    public override string ExportAsHat()
-    {
-        StringBuilder heroSb = new StringBuilder();
-        // Hats do not use the "replica." prefix, they just state the name directly.
-        if (!string.IsNullOrEmpty(baseReplica))
-        {
-            heroSb.Append($"{FormatName(FormatSpecialImageName(baseReplica))}");
-        }
-        AppendDiceSides(heroSb);
-        string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
-        if (!string.IsNullOrEmpty(faceModifiers)) heroSb.Append(faceModifiers);
-        // Append internal items/traits
-        ProcessCustomPayloadsForExport(out var innerPayloads, out var outerPayloads, out var wrapperPayloads);
-        StringBuilder innerSb = new StringBuilder();
-        if (items != null) foreach (var i in items) if (!string.IsNullOrEmpty(i)) innerSb.Append($".i.{FormatName(i)}");
-        foreach (var inner in innerPayloads)
-        {
-            innerSb.Append($".{inner}");
-        }
-        foreach (var outer in outerPayloads)
-        {
-            innerSb.Append($".{outer}");
-        }
-        heroSb.Append(innerSb.ToString());
-
-        // Self-bracket safely rather than forcing the caller to bracket
-        //return StaticBranchTracing.SafeBracket(heroSb.ToString());
-        // Temp: Always Bracket.
-        return $"({heroSb.ToString()})";
-
-    }
-    */
-
     public override void AddCustomAbility(AbilityData ability)
     {
         if (ability == null) return;

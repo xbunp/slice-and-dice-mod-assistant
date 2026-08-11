@@ -3431,12 +3431,6 @@ public static class AbilityRelated
     };
 }
 
-public enum AbilityType
-{
-    Spell,
-    Tactic
-}
-
 [Serializable]
 public class BaseAbility
 {

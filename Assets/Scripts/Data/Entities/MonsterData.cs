@@ -395,3 +395,49 @@ public class MonsterData : EntityData
         size = MonsterSize.HeroSized; // Default fallback
     }
 }
+
+// ============================================================================================
+// MONSTER CONTAINER AST NODES
+// ============================================================================================
+
+public enum MonsterContainerType
+{
+    None,
+    Egg,
+    Vase,
+    Jinx,
+    Orb,
+    Rmon
+}
+
+/// <summary>
+/// Represents specialized container prefixes embedded in baseMonster (e.g. egg.(replica.Fey) or jinx.(poison)).
+/// Automatically formats the container prefix around the nested semantic payload export.
+/// </summary>
+[System.Serializable]
+public class MonsterContainerNode : SDNode
+{
+    public MonsterContainerType ContainerType { get; set; } = MonsterContainerType.None;
+    public SDNode Payload { get; set; }
+
+    public MonsterContainerNode(MonsterContainerType type = MonsterContainerType.None, SDNode payload = null)
+    {
+        ContainerType = type;
+        Payload = payload;
+    }
+
+    public override string Export()
+    {
+        if (ContainerType == MonsterContainerType.None || Payload == null)
+            return Payload?.Export() ?? "";
+
+        string prefix = ContainerType.ToString().ToLower();
+        string payloadExport = Payload.Export();
+
+        // Self-bracketing check
+        if (!payloadExport.StartsWith("("))
+            payloadExport = $"({payloadExport})";
+
+        return $"{prefix}.{payloadExport}";
+    }
+}
