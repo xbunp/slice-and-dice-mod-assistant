@@ -759,7 +759,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         StringBuilder modSb = new StringBuilder();
         var groupedModifiers = new Dictionary<string, int>();
 
-        // Tracking structure to deduplicate face modifiers that are referenced across multiple sideItems natively
+        // TRACKING FOR LEGACY ITEMS: Track the ItemData reference to prevent duplicates across multiple faces
         HashSet<ItemData> processedSideItems = new HashSet<ItemData>();
         List<ItemData> itemsToExport = new List<ItemData>();
 
@@ -771,7 +771,7 @@ public abstract class EntityData : SDData, IPayloadContainer
 
             bool hasHatWrapper = ProcessFacePayload(face, chunks);
 
-            // Process native properties, decoupled entirely from sideItems
+            // Process native properties, decoupled entirely from Legacy Side Items
             ProcessIntrinsicFaceKeywords(face, chunks);
             ProcessFaceFacades(face, chunks, includeInlineFacades);
             ProcessFaceDescription(face, chunks);
@@ -800,14 +800,14 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
 
-            // Gather structural intact Side Items from the face
-            if (face.sideItems != null)
+            // GATHER STRUCTURAL INTACT SIDE ITEMS FROM THE AST BRIDGE
+            if (face.sideMechanics != null)
             {
-                foreach (var item in face.sideItems)
+                foreach (var m in face.sideMechanics)
                 {
-                    if (item != null && processedSideItems.Add(item))
+                    if (m.LegacyItemPayload != null && processedSideItems.Add(m.LegacyItemPayload))
                     {
-                        itemsToExport.Add(item);
+                        itemsToExport.Add(m.LegacyItemPayload);
                     }
                 }
             }
@@ -828,8 +828,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
 
-        // 2. Export structural objects. 
-        // We let the ItemData construct its own syntax stream, exactly as it originally parsed. No aliases guessing!
+        // 2. Export bridged structural objects (Legacy Items)
         foreach (var item in itemsToExport)
         {
             ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = item };
@@ -840,13 +839,39 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
     private void ProcessIntrinsicFaceKeywords(DiceSideData face, List<string> chunks)
     {
-        if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
+        var flatKeywords = new List<string>();
+
+        // Manually iterate sideMechanics to STRICTLY IGNORE LegacyItemPayloads
+        foreach (var m in face.sideMechanics)
+        {
+            if (m.LegacyItemPayload != null) continue; // BYPASS LEGACY VEIL
+
+            if (m.Prefix == "k" || (string.IsNullOrEmpty(m.Prefix) && ExternalGameRegistry.IsValidKeyword(m.RawPayloadString)))
+            {
+                if (!string.IsNullOrEmpty(m.RawPayloadString) && !string.Equals(m.RawPayloadString, "togtime", StringComparison.OrdinalIgnoreCase))
+                    flatKeywords.Add(m.RawPayloadString);
+            }
+
+            foreach (var kw in m.ChainedKeywords)
+            {
+                if (!string.Equals(kw, "togtime", StringComparison.OrdinalIgnoreCase))
+                {
+                    string cleanKw = kw.StartsWith("k.", StringComparison.OrdinalIgnoreCase) ? kw.Substring(2) : kw;
+                    flatKeywords.Add(cleanKw);
+                }
+            }
+        }
+
+        // Check permissive safely
+        if (flatKeywords.Any(kw => kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
         {
             chunks.Add("k.permissive");
         }
-        foreach (var kw in face.keywords)
+
+        foreach (var kw in flatKeywords)
         {
             if (string.IsNullOrWhiteSpace(kw)) continue;
+
             string rawKw = kw.Trim();
             string cleanKw = rawKw.ToLower();
 
@@ -856,42 +881,224 @@ public abstract class EntityData : SDData, IPayloadContainer
                 {
                     chunks.Add("ritemx.dae9");
                 }
-                else if (ItemDomainRules.TogItems.Contains(cleanKw))
-                {
-                    chunks.Add(rawKw);
-                }
                 else if (ExternalGameRegistry.IsValidKeyword(rawKw))
                 {
                     chunks.Add($"k.{cleanKw}");
                 }
-                else if (ExternalGameRegistry.IsValidItemName(rawKw))
-                {
-                    chunks.Add(rawKw);
-                }
                 else
                 {
+                    // Fallback to preserve casing for valid base items
                     chunks.Add(rawKw);
                 }
             }
         }
     }
+
+    private void ProcessFaceStasis(DiceSideData face, List<string> chunks)
+    {
+        // Must check only flat mechanics to avoid duplicating stasis from legacy items
+        bool hasFlatStasis = face.sideMechanics.Any(m =>
+            m.LegacyItemPayload == null &&
+            (
+                string.Equals(m.RawPayloadString, "stasis", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(m.RawPayloadString, "k.stasis", StringComparison.OrdinalIgnoreCase) ||
+                m.ChainedKeywords.Any(k => string.Equals(k, "stasis", StringComparison.OrdinalIgnoreCase) || string.Equals(k, "k.stasis", StringComparison.OrdinalIgnoreCase))
+            )
+        );
+
+        // MUST BE LAST: Stasis keyword terminates effects that follow it
+        if (hasFlatStasis)
+        {
+            chunks.Add("k.stasis");
+        }
+    }
     private bool ProcessFacePayload(DiceSideData face, List<string> chunks)
     {
-        if (face.faceType == DiceSideData.DiceFaceType.Base || string.IsNullOrWhiteSpace(face.payload))
+        // Strictly only check flat AST mechanics, ignoring legacy payloads
+        var m = face.sideMechanics.FirstOrDefault(x =>
+            x.Prefix == "sticker" || x.Prefix == "cast" || x.Prefix == "enchant" || x.Prefix == "hat"
+        );
+
+        if (m == null || string.IsNullOrWhiteSpace(m.RawPayloadString))
             return false;
 
-        string payloadStr = face.payload.Trim();
+        string payloadStr = m.RawPayloadString.Trim();
+        DiceSideData.DiceFaceType fType = m.Prefix switch
+        {
+            "hat" => DiceSideData.DiceFaceType.Egg,
+            "cast" => DiceSideData.DiceFaceType.Cast,
+            "enchant" => DiceSideData.DiceFaceType.Enchant,
+            _ => DiceSideData.DiceFaceType.Sticker
+        };
 
         // Branch out for specialized parsing
-        if (face.faceType == DiceSideData.DiceFaceType.Egg)
+        if (fType == DiceSideData.DiceFaceType.Egg)
         {
-            return ProcessEggPayload(face, payloadStr, chunks);
+            // Egg format is "egg.Wolf". Strip the prefix for the processor.
+            string cleanSummon = payloadStr.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)
+                ? payloadStr.Substring(4)
+                : payloadStr;
+            return ProcessEggPayload(face, cleanSummon, chunks);
         }
         else
         {
-            return ProcessStandardPayload(face, payloadStr, chunks);
+            return ProcessStandardPayload(face, payloadStr, fType, m.PayloadTargetOverride, chunks);
         }
     }
+    private bool ProcessStandardPayload(DiceSideData face, string payloadStr, DiceSideData.DiceFaceType faceType, DiceSideData.PayloadTarget? payloadTarget, List<string> chunks)
+    {
+        // If payloadStr is complex, ItemData self-brackets on export.
+        string prefix = faceType.ToString().ToLower();
+        bool applyStickerRules = faceType == DiceSideData.DiceFaceType.Sticker;
+
+        // If the face is an Enchant with a target override, divert it to sticker format
+        if (faceType == DiceSideData.DiceFaceType.Enchant && payloadTarget.HasValue)
+        {
+            prefix = "sticker";
+            payloadStr = $"(self.{payloadStr})";
+            applyStickerRules = true;
+        }
+
+        string innerPayloadStr = $"{prefix}.{payloadStr}";
+        string hatWrapperFmt = null;
+
+        // Use the safe property to check if togtime exists ANYWHERE on this face
+        bool hasTogtime = face.togtime;
+
+        if (applyStickerRules)
+        {
+            if (hasTogtime)
+                innerPayloadStr += "#togtime";
+
+            if (payloadTarget.HasValue)
+            {
+                switch (payloadTarget.Value)
+                {
+                    case DiceSideData.PayloadTarget.Enemy:
+                        innerPayloadStr += "#togfri";
+                        chunks.Add(innerPayloadStr);
+                        break;
+                    case DiceSideData.PayloadTarget.AllAllies:
+                        hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg";
+                        break;
+                    case DiceSideData.PayloadTarget.AllEnemies:
+                        hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg#togfri";
+                        break;
+                    case DiceSideData.PayloadTarget.Everyone:
+                        hatWrapperFmt = "Fey.sd.185.i.{0}." + innerPayloadStr + "#togtarg";
+                        break;
+                    case DiceSideData.PayloadTarget.Self:
+                        hatWrapperFmt = "Fey.sd.186.i.{0}." + innerPayloadStr + "#togtarg";
+                        break;
+                    case DiceSideData.PayloadTarget.Ally:
+                    case DiceSideData.PayloadTarget.None:
+                    default:
+                        chunks.Add(innerPayloadStr);
+                        break;
+                }
+            }
+            else
+            {
+                chunks.Add(innerPayloadStr);
+            }
+        }
+        else
+        {
+            if (hasTogtime && faceType == DiceSideData.DiceFaceType.Enchant)
+                innerPayloadStr += "#togtime";
+
+            chunks.Add(innerPayloadStr);
+        }
+
+        if (hatWrapperFmt != null)
+        {
+            chunks.Add($"hat.({hatWrapperFmt})");
+            return true;
+        }
+
+        return false;
+    }
+    private void ProcessFaceFacades(DiceSideData face, List<string> chunks, bool includeInlineFacades)
+    {
+        if (!includeInlineFacades) return;
+
+        var m = face.sideMechanics.FirstOrDefault(x => x.Prefix == "facade");
+        if (m == null || string.IsNullOrWhiteSpace(m.RawPayloadString)) return;
+
+        string[] parts = m.RawPayloadString.Split(':');
+        string fId = parts[0].Trim();
+
+        string colorStr = parts.Length > 1 ? string.Join(":", parts.Skip(1)) : "";
+        bool hasColor = !string.IsNullOrEmpty(colorStr) && colorStr != "0" && colorStr != "0:0" && colorStr != "0:0:0";
+
+        // DO NOT EXPORT EMPTY FACADES WITH NO ID AND NO COLOR!
+        if (string.IsNullOrEmpty(fId) && !hasColor) return;
+
+        string facStr = $"facade.{fId}";
+
+        if (parts.Length > 1)
+        {
+            List<string> cParts = new List<string>();
+            for (int pIdx = 1; pIdx < parts.Length; pIdx++)
+                cParts.Add(string.IsNullOrWhiteSpace(parts[pIdx]) ? "0" : parts[pIdx].Trim());
+
+            while (cParts.Count < 3) cParts.Add("0");
+
+            if (cParts[0] == "0" && cParts[1] == "0" && cParts[2] == "0")
+                facStr += ":0";
+            else
+                facStr += $":{cParts[0]}:{cParts[1]}:{cParts[2]}";
+        }
+        else
+        {
+            facStr += ":0";
+        }
+
+        chunks.Add(facStr);
+    }
+    private void ProcessFaceDescription(DiceSideData face, List<string> chunks)
+    {
+        var m = face.sideMechanics.FirstOrDefault(x => x.Prefix == "sidesc");
+        if (m != null && !string.IsNullOrEmpty(m.RawPayloadString))
+        {
+            chunks.Add($"sidesc.{m.RawPayloadString}");
+        }
+    }
+
+    /*
+    private void ProcessFaceFacades(DiceSideData face, List<string> chunks, bool includeInlineFacades)
+    {
+        if (!includeInlineFacades || string.IsNullOrWhiteSpace(face.facadeID)) return;
+
+        string facStr = $"facade.{face.facadeID.Trim()}";
+
+        if (!string.IsNullOrWhiteSpace(face.facadeColor))
+        {
+            string[] hsv = face.facadeColor.Split(':');
+            List<string> parts = new List<string>();
+
+            for (int pIdx = 0; pIdx < hsv.Length; pIdx++)
+                parts.Add(string.IsNullOrWhiteSpace(hsv[pIdx]) ? "0" : hsv[pIdx].Trim());
+
+            while (parts.Count < 3) parts.Add("0");
+
+            if (parts[0] == "0" && parts[1] == "0" && parts[2] == "0") facStr += ":0";
+            else facStr += $":{parts[0]}:{parts[1]}:{parts[2]}";
+        }
+        else
+        {
+            facStr += ":0";
+        }
+        chunks.Add(facStr);
+    }
+    private void ProcessFaceDescription(DiceSideData face, List<string> chunks)
+    {
+        if (!string.IsNullOrEmpty(face.sidesc))
+        {
+            chunks.Add($"sidesc.{face.sidesc}");
+        }
+    }
+    */
     /*
     private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
@@ -1023,7 +1230,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return true;
     }
-
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
         // If payloadStr is complex, ItemData self-brackets on export.
@@ -1094,55 +1300,6 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return false;
     }
-    // IN: Assets/Scripts/Data/Entities/EntityData.cs -> ProcessFaceKeywords()
-
-    // IN: ProcessFaceKeywords()
-
-    private void ProcessFaceFacades(DiceSideData face, List<string> chunks, bool includeInlineFacades)
-    {
-        if (!includeInlineFacades || string.IsNullOrWhiteSpace(face.facadeID)) return;
-
-        string facStr = $"facade.{face.facadeID.Trim()}";
-
-        if (!string.IsNullOrWhiteSpace(face.facadeColor))
-        {
-            string[] hsv = face.facadeColor.Split(':');
-            List<string> parts = new List<string>();
-
-            for (int pIdx = 0; pIdx < hsv.Length; pIdx++)
-                parts.Add(string.IsNullOrWhiteSpace(hsv[pIdx]) ? "0" : hsv[pIdx].Trim());
-
-            while (parts.Count < 3) parts.Add("0");
-
-            if (parts[0] == "0" && parts[1] == "0" && parts[2] == "0") facStr += ":0";
-            else facStr += $":{parts[0]}:{parts[1]}:{parts[2]}";
-        }
-        else
-        {
-            facStr += ":0";
-        }
-        chunks.Add(facStr);
-    }
-    private void ProcessFaceDescription(DiceSideData face, List<string> chunks)
-    {
-        if (!string.IsNullOrEmpty(face.sidesc))
-        {
-            chunks.Add($"sidesc.{face.sidesc}");
-        }
-    }
-    private void ProcessFaceStasis(DiceSideData face, List<string> chunks)
-    {
-        // MUST BE LAST: Stasis keyword terminates effects that follow it
-        if (face.keywords.Any(kw => kw != null && kw.Trim().Equals("stasis", StringComparison.OrdinalIgnoreCase)))
-        {
-            chunks.Add("k.stasis");
-        }
-    }
-
-    // ====================================================================
-    // EXPORT PIPELINE DEDICATED HELPER METHODS
-    // ====================================================================
-    // Update ExtractKnowledge in Assets/Scripts/Data/Entities/EntityData.cs
 
     protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
     {

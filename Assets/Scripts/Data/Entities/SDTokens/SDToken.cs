@@ -822,6 +822,41 @@ public class MechanicNode : SDClause
     public string MergedItem { get; set; } = "";
     public string SplicedItem { get; set; } = "";
 
+    public DiceSideData.PayloadTarget? PayloadTargetOverride { get; set; }
+    public ItemData LegacyItemPayload { get; set; }
+
+    public MechanicNode Clone()
+    {
+        var clone = new MechanicNode
+        {
+            TargetEnums = new List<DiceTarget>(this.TargetEnums),
+            TargetStrings = new List<string>(this.TargetStrings),
+            RepeatTimes = this.RepeatTimes,
+            PerTier = this.PerTier,
+            Unpack = this.Unpack,
+            Prefix = this.Prefix,
+            RawPayloadString = this.RawPayloadString,
+            PayloadNode = this.PayloadNode,
+            ChainedKeywords = new List<string>(this.ChainedKeywords),
+            PartIndex = this.PartIndex,
+            Multiplier = this.Multiplier,
+            MergedItem = this.MergedItem,
+            SplicedItem = this.SplicedItem,
+            PayloadTargetOverride = this.PayloadTargetOverride
+        };
+
+        // Deep clone legacy payloads by exporting and parsing a fresh copy
+        if (this.LegacyItemPayload != null)
+        {
+            string exported = this.LegacyItemPayload.Export();
+            var newLeg = new ItemData();
+            newLeg.Parse(exported);
+            clone.LegacyItemPayload = newLeg;
+        }
+
+        return clone;
+    }
+
     public override string Export()
     {
         List<string> parts = new List<string>();
@@ -903,7 +938,6 @@ public class ClearIconClause : SDClause
 // ============================================================================================
 // COMPREHENSIVE ITEM ENTITY AST NODE
 // ============================================================================================
-
 /// <summary>
 /// Fully articulated AST Node representing an ItemData structure.
 /// Enforces self-bracketing doctrine, global tag concatenation (&hidden),
@@ -919,10 +953,12 @@ public class ItemEntityNode : SDRootNode
     public bool ClearIcon { get; set; } = false;
     public string ImageOverride { get; set; } = "";
     public string Doc { get; set; } = "";
-
     public List<string> GlobalTags { get; set; } = new List<string>();
+
     public List<ItemPropertyNode> Containers { get; set; } = new List<ItemPropertyNode>();
-    public List<ItemMechanicNode> Mechanics { get; set; } = new List<ItemMechanicNode>();
+
+    // FIX: Changed from ItemMechanicNode to the unified MechanicNode
+    public List<MechanicNode> Mechanics { get; set; } = new List<MechanicNode>();
 
     public override string Export()
     {
@@ -950,7 +986,6 @@ public class ItemEntityNode : SDRootNode
             string exp = vc?.Export();
             if (!string.IsNullOrEmpty(exp)) chainParts.Add(exp);
         }
-
         if (!string.IsNullOrWhiteSpace(ImageOverride) && !ImageOverride.Equals("None", StringComparison.OrdinalIgnoreCase))
             chainParts.Add($"img.{SDData.FormatSpecialImageName(ImageOverride.Trim())}");
 

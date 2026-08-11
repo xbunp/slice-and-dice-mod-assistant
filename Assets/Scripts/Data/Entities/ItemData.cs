@@ -826,7 +826,6 @@ public class ItemData : SDData
                     List<int> targetFaces = ItemDomainRules.GetTargetIndicesOrDefault(mech);
                     if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid"))
                         targetFaces.Remove(1);
-
                     foreach (int faceIdx in targetFaces) allTargetFaces.Add(faceIdx);
                 }
             }
@@ -837,10 +836,9 @@ public class ItemData : SDData
                 {
                     if (entity.diceSides[faceIdx] == null) entity.diceSides[faceIdx] = new DiceSideData();
 
-                    // Route the entire object without mutating it!
-                    if (!entity.diceSides[faceIdx].sideItems.Contains(this))
+                    if (!entity.diceSides[faceIdx].sideMechanics.Any(m => m.LegacyItemPayload == this))
                     {
-                        entity.diceSides[faceIdx].sideItems.Add(this);
+                        entity.diceSides[faceIdx].sideMechanics.Add(new MechanicNode { LegacyItemPayload = this });
                     }
                 }
             }

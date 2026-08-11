@@ -144,6 +144,21 @@ public class DiceFaceBuilderWidget
         if (sides != null && index >= 0 && index < sides.Length)
         {
             sides[index] = SharedClipboard.Clone();
+
+            // AST flat nodes handle grouping dynamically, but complex Legacy Items must be manually retargeted
+            string targetAlias = DiceTargetHelper.FaceNames[index].ToLower();
+            foreach (var m in sides[index].sideMechanics)
+            {
+                if (m.LegacyItemPayload != null)
+                {
+                    foreach (var lm in m.LegacyItemPayload.Mechanics)
+                    {
+                        lm.Targets.Clear();
+                        lm.Targets.Add(targetAlias);
+                    }
+                }
+            }
+
             _onStateChanged?.Invoke();
             _onRebuildRequested?.Invoke();
         }
@@ -211,22 +226,10 @@ public class DiceFaceBuilderWidget
         var sides = _getDiceSides?.Invoke();
         if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
         {
-            string target = keyword.ToLower();
-            if (sides[faceIndex].keywords.Remove(target))
+            if (sides[faceIndex].RemoveKeyword(keyword)) // <--- UPDATED: Use the new AST helper
             {
                 _onStateChanged?.Invoke();
                 _onRebuildRequested?.Invoke();
-            }
-            else
-            {
-                // Fallback helper in case of legacy mixed-case leftovers in the active session
-                int idx = sides[faceIndex].keywords.FindIndex(k => string.Equals(k, keyword, StringComparison.OrdinalIgnoreCase));
-                if (idx >= 0)
-                {
-                    sides[faceIndex].keywords.RemoveAt(idx);
-                    _onStateChanged?.Invoke();
-                    _onRebuildRequested?.Invoke();
-                }
             }
         }
     }
@@ -607,12 +610,9 @@ public class DiceFaceBuilderWidget
         if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
         {
             var face = sides[faceIndex];
-            if (!face.keywords.Contains(targetKeyword))
-            {
-                face.keywords.Add(targetKeyword);
-                _onStateChanged?.Invoke();
-                _onRebuildRequested?.Invoke();
-            }
+            face.AddKeyword(targetKeyword); // <--- UPDATED: Use the new AST helper
+            _onStateChanged?.Invoke();
+            _onRebuildRequested?.Invoke();
         }
     }
     private List<GridRowSpec> BuildKeywords(int index, DiceSideData face)
@@ -694,10 +694,28 @@ public class DiceFaceBuilderWidget
                 string newTypeId = RegisteredPayloads[val].Id;
                 if (newTypeId != GetFaceType(index, face).Id)
                 {
-                    SetFacePayload(face, newTypeId, GetFacePayload(face));
-                    if (newTypeId == "egg" && !GetFacePayload(face).Contains("#blindfold"))
+                    // 1. Assign faceType directly
+                    DiceSideData.DiceFaceType newFaceType = newTypeId switch
                     {
-                        SetFacePayload(face, newTypeId, GetFacePayload(face) + "#blindfold");
+                        "standard" => DiceSideData.DiceFaceType.Base,
+                        "sticker" => DiceSideData.DiceFaceType.Sticker,
+                        "cast" => DiceSideData.DiceFaceType.Cast,
+                        "enchant" => DiceSideData.DiceFaceType.Enchant,
+                        "egg" => DiceSideData.DiceFaceType.Egg,
+                        _ => DiceSideData.DiceFaceType.Base
+                    };
+
+                    face.faceType = newFaceType;
+
+                    // 2. Manage Egg-specific blindfold tags cleanly
+                    string currentPayload = GetFacePayload(face);
+                    if (newTypeId == "egg" && !currentPayload.Contains("#blindfold"))
+                    {
+                        face.payload = currentPayload + "#blindfold";
+                    }
+                    else if (newTypeId != "egg" && currentPayload.Contains("#blindfold"))
+                    {
+                        face.payload = currentPayload.Replace("#blindfold", "");
                     }
 
                     _onStateChanged?.Invoke();
@@ -705,6 +723,25 @@ public class DiceFaceBuilderWidget
                 }
             })
         );
+    }
+
+    private void SetFacePayload(DiceSideData face, string typeId, string payloadData)
+    {
+        DiceSideData.DiceFaceType newFaceType = typeId switch
+        {
+            "standard" => DiceSideData.DiceFaceType.Base,
+            "sticker" => DiceSideData.DiceFaceType.Sticker,
+            "cast" => DiceSideData.DiceFaceType.Cast,
+            "enchant" => DiceSideData.DiceFaceType.Enchant,
+            "egg" => DiceSideData.DiceFaceType.Egg,
+            _ => DiceSideData.DiceFaceType.Base
+        };
+
+        face.faceType = newFaceType;
+        if (newFaceType != DiceSideData.DiceFaceType.Base)
+        {
+            face.payload = payloadData ?? "";
+        }
     }
     private GridRowSpec BuildTargetSelector(int index, DiceSideData face)
     {
@@ -1174,27 +1211,6 @@ public class DiceFaceBuilderWidget
             case DiceSideData.DiceFaceType.Egg: targetId = "egg"; break;
         }
         return RegisteredPayloads.First(p => p.Id == targetId);
-    }
-    private void SetFacePayload(DiceSideData face, string typeId, string payloadData)
-    {
-        face.payload = payloadData ?? "";
-
-        // Safety step: clear any previous structured representations so the engine favors the text edit!
-        if (face.sideItems != null)
-        {
-            face.sideItems.RemoveAll(item => item.Mechanics.Any(m =>
-                m.Prefix == "sticker" || m.Prefix == "cast" || m.Prefix == "enchant" || m.Prefix == "egg"));
-        }
-
-        switch (typeId)
-        {
-            case "standard": face.faceType = DiceSideData.DiceFaceType.Base; break;
-            case "sticker": face.faceType = DiceSideData.DiceFaceType.Sticker; break;
-            case "cast": face.faceType = DiceSideData.DiceFaceType.Cast; break;
-            case "enchant": face.faceType = DiceSideData.DiceFaceType.Enchant; break;
-            case "egg": face.faceType = DiceSideData.DiceFaceType.Egg; break;
-            default: face.faceType = DiceSideData.DiceFaceType.Base; break;
-        }
     }
     private bool IsCastCustom(int index, DiceSideData face)
     {
