@@ -1142,6 +1142,8 @@ public abstract class EntityData : SDData, IPayloadContainer
     // ====================================================================
     // EXPORT PIPELINE DEDICATED HELPER METHODS
     // ====================================================================
+    // Update ExtractKnowledge in Assets/Scripts/Data/Entities/EntityData.cs
+
     protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
     {
         var stream = new TokenStream(tokens);
@@ -1155,7 +1157,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 ProcessRecursiveParentheses(originalToken, (innerTokens) => ExtractKnowledge(innerTokens, itemPipeline, processTraitsAndCollections));
                 continue;
             }
-
             if (TryProcessCommonMetadata(stream)) continue;
             if (TryProcessEntityMetadata(stream)) continue;
             if (TryProcessSpecificMetadata(stream)) continue;
@@ -1163,49 +1164,46 @@ public abstract class EntityData : SDData, IPayloadContainer
             if (TryProcessTriggerData(stream)) continue;
             if (TryProcessOrbData(stream)) continue;
             if (TryProcessAppendedDoc(stream)) continue;
-
             if (processTraitsAndCollections)
             {
                 if (tokenLower == "t") { ProcessTraitToken(stream); continue; }
                 if (TryProcessCollections(stream)) continue;
             }
 
+            // FIX: Check TryProcessModifierData BEFORE generic item processing ("i")
+            // so outer modifiers (like i.self, i.jinx, i.vase, t.jinx) are captured as ModifierData
+            // instead of being hijacked and fragmented as ItemData!
+            if (TryProcessModifierData(stream)) continue;
+
             if (tokenLower == "i")
             {
                 int startIndex = stream.Index + 1;
                 if (startIndex >= stream.GetRawList().Count) { stream.Consume(); continue; }
                 int length = ItemDomainRules.GetItemBlockLength(stream.GetRawList(), startIndex);
-
-                // FIX: Track depth accurately by counting parentheses 
                 int depth = 0;
                 for (int k = 0; k < length; k++)
                 {
                     string peek = stream.GetRawList()[startIndex + k].ToLower();
                     depth += peek.Count(c => c == '(') - peek.Count(c => c == ')');
-
                     if (depth <= 0 && EntityDomainRules.CommonMetadataKeys.Contains(peek))
                     {
                         length = k;
                         break;
                     }
                 }
-
                 if (length > 0)
                 {
-                    stream.Consume(); // 'i'
+                    stream.Consume();
                     List<string> subTokens = stream.ConsumeRange(length);
                     string itemString = string.Join(".", subTokens);
                     ItemData parsedItem = new ItemData();
                     parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
-
                     bool isItemParsedDataEmpty = string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0 && parsedItem.LearnedAbilities.Count == 0 && parsedItem.Containers.Count == 0 && !parsedItem.Tier.HasValue && string.IsNullOrEmpty(parsedItem.doc) && string.IsNullOrEmpty(parsedItem.imageOverride);
                     if (isItemParsedDataEmpty) parsedItem.entityName = itemString;
-
                     itemPipeline.Add(parsedItem);
                     continue;
                 }
             }
-            if (TryProcessModifierData(stream)) continue;
 
             string droppedToken = stream.Consume();
             UnityEngine.Debug.LogError($"[EntityData Parser ERROR] Unrecognized string chunk discarded! Token '{droppedToken}' did not match any valid property, metadata, item, or modifier. Entity: {entityName ?? "Unknown"}");
