@@ -841,29 +841,34 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         var flatKeywords = new List<string>();
 
-        // Manually iterate sideMechanics to STRICTLY IGNORE LegacyItemPayloads
         foreach (var m in face.sideMechanics)
         {
             if (m.LegacyItemPayload != null) continue; // BYPASS LEGACY VEIL
 
-            if (m.Prefix == "k" || (string.IsNullOrEmpty(m.Prefix) && ExternalGameRegistry.IsValidKeyword(m.RawPayloadString)))
+            // Skip primary payloads and handled properties
+            if (m.Prefix == "facade" || m.Prefix == "sidesc" || m.Prefix == "sticker" || m.Prefix == "cast" || m.Prefix == "enchant" || m.Prefix == "hat")
+                continue;
+
+            // Collect exploded flat nodes
+            if (!string.IsNullOrEmpty(m.RawPayloadString) &&
+                !string.Equals(m.RawPayloadString, "togtime", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(m.RawPayloadString, "stasis", StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrEmpty(m.RawPayloadString) && !string.Equals(m.RawPayloadString, "togtime", StringComparison.OrdinalIgnoreCase))
-                    flatKeywords.Add(m.RawPayloadString);
+                if (m.Prefix == "k") flatKeywords.Add($"k.{m.RawPayloadString}");
+                else flatKeywords.Add(m.RawPayloadString);
             }
 
+            // Just in case any ChainedKeywords remained unexploded
             foreach (var kw in m.ChainedKeywords)
             {
-                if (!string.Equals(kw, "togtime", StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(kw, "togtime", StringComparison.OrdinalIgnoreCase) && !string.Equals(kw, "stasis", StringComparison.OrdinalIgnoreCase))
                 {
-                    string cleanKw = kw.StartsWith("k.", StringComparison.OrdinalIgnoreCase) ? kw.Substring(2) : kw;
-                    flatKeywords.Add(cleanKw);
+                    flatKeywords.Add(kw);
                 }
             }
         }
 
-        // Check permissive safely
-        if (flatKeywords.Any(kw => kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase)))
+        if (flatKeywords.Any(kw => kw.Trim().Equals("permissive", StringComparison.OrdinalIgnoreCase) || kw.Trim().Equals("k.permissive", StringComparison.OrdinalIgnoreCase)))
         {
             chunks.Add("k.permissive");
         }
@@ -875,21 +880,23 @@ public abstract class EntityData : SDData, IPayloadContainer
             string rawKw = kw.Trim();
             string cleanKw = rawKw.ToLower();
 
-            if (cleanKw != "permissive" && cleanKw != "stasis")
+            if (cleanKw == "permissive" || cleanKw == "k.permissive" || cleanKw == "stasis" || cleanKw == "k.stasis") continue;
+
+            if (cleanKw == "future" || cleanKw == "k.future")
             {
-                if (cleanKw == "future")
-                {
-                    chunks.Add("ritemx.dae9");
-                }
-                else if (ExternalGameRegistry.IsValidKeyword(rawKw))
-                {
-                    chunks.Add($"k.{cleanKw}");
-                }
-                else
-                {
-                    // Fallback to preserve casing for valid base items
-                    chunks.Add(rawKw);
-                }
+                chunks.Add("ritemx.dae9");
+            }
+            else if (rawKw.StartsWith("k.", StringComparison.OrdinalIgnoreCase))
+            {
+                chunks.Add(rawKw.ToLower()); // Already formatted
+            }
+            else if (ExternalGameRegistry.IsValidKeyword(rawKw))
+            {
+                chunks.Add($"k.{cleanKw}");
+            }
+            else
+            {
+                chunks.Add(rawKw);
             }
         }
     }
@@ -1204,30 +1211,35 @@ public abstract class EntityData : SDData, IPayloadContainer
 
             if (summonHero != null)
             {
-                fullSummonExport = summonHero.entityName;
+                fullSummonExport = summonHero.Export(); // <-- FIX: Fetch full Export() string instead of just entityName!
             }
             else
             {
                 var summonMonster = ModPackage.Instance.Monsters?.FirstOrDefault(
                     m => string.Equals(m.entityName, searchName, StringComparison.OrdinalIgnoreCase));
+
                 if (summonMonster != null)
                 {
-                    fullSummonExport = summonMonster.entityName;
+                    fullSummonExport = summonMonster.Export(); // <-- FIX: Fetch full Export() string instead of just entityName!
                 }
             }
         }
 
         MonsterData eggMonster = new MonsterData();
         eggMonster.baseMonster = $"egg.{fullSummonExport}";
+
         if (face.pips >= 2 && face.pips <= 9)
         {
             eggMonster.xMultiplier = face.pips;
         }
+
         chunks.Add($"hat.{eggMonster.Export()}");
+
         if (hasBlindfold)
         {
             chunks.Add("blindfold");
         }
+
         return true;
     }
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)

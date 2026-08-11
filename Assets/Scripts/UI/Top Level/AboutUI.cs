@@ -41,7 +41,8 @@ public class AboutUI : RootUI
         "Cancelion",
         "Leonard Is No Curry",
         "hidekideki",
-        "the doc"
+        "the doc",
+        "KIRBY"
     };
 
     private ScrollRect creditsScrollRect;

@@ -814,7 +814,7 @@ public class ItemData : SDData
             Tier = null;
         }
 
-        // SCENARIO 1: The item mutates faces. Place the intact ItemData into sideItems.
+        // SCENARIO 1: The item mutates faces.
         if (isFaceModifierItem)
         {
             HashSet<int> allTargetFaces = new HashSet<int>();

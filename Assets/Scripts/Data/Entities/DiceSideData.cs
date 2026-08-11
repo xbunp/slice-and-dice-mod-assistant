@@ -263,7 +263,7 @@ public class DiceSideData
     public bool togtime
     {
         get => sideMechanics.Any(m => string.IsNullOrEmpty(m.Prefix) && string.Equals(m.RawPayloadString, "togtime", StringComparison.OrdinalIgnoreCase)) ||
-               GetLegacyMechanic(m => string.IsNullOrEmpty(m.Prefix) && string.Equals(m.PayloadString, "togtime", StringComparison.OrdinalIgnoreCase)) != null;
+               sideMechanics.Any(m => m.LegacyItemPayload != null && m.LegacyItemPayload.Mechanics.Any(leg => string.Equals(leg.PayloadString, "togtime", StringComparison.OrdinalIgnoreCase) || leg.ChainedKeywords.Contains("togtime", StringComparer.OrdinalIgnoreCase)));
         set
         {
             FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
