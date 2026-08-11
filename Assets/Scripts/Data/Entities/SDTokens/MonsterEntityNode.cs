@@ -16,7 +16,16 @@ using System.Text;
 public class MonsterEntityNode : SDRootNode
 {
     // Domain Fields
-    public string BaseMonster { get; set; } = "Wolf";
+    private string _baseMonster = "Wolf";
+    public string BaseMonster
+    {
+        get => _baseMonster;
+        set
+        {
+            _baseMonster = value;
+            SyncMonsterSize();
+        }
+    }
     public MonsterContainerNode ContainerPayload { get; set; }
     public string EntityName { get; set; } = "";
     public int Hp { get; set; } = 0;
@@ -35,6 +44,11 @@ public class MonsterEntityNode : SDRootNode
     public List<SDClause> Traits { get; set; } = new List<SDClause>(); // t.<trait>
     public List<SDClause> Curses { get; set; } = new List<SDClause>(); // t.jinx.(curse)
     public List<SDClause> OuterPayloads { get; set; } = new List<SDClause>(); // Non-dice items, custom abilities
+
+    public MonsterEntityNode()
+    {
+        SyncMonsterSize();
+    }
 
     /// <summary>
     /// Synchronizes Monster size constraint based on baseMonster name.

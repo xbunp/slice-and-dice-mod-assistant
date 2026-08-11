@@ -26,7 +26,6 @@ public class SpellEntityNode : HeroEntityNode
 
         if (!isBaseAbility || hasCustomMana)
         {
-            if (DiceSides.Sides[4] == null) DiceSides.Sides[4] = new DiceSideData();
             if (DiceSides.Sides[4].effectID == 0) DiceSides.Sides[4].effectID = 76;
             DiceSides.Sides[4].pips = ManaCost;
         }

@@ -794,26 +794,31 @@ public class ItemPropertyNode : SDNode
 }
 
 /// <summary>
-/// Full AST Node representing an ItemMechanic.
-/// Handles explicit target chains, repeat multipliers (x2), pertier, unpack, prefixes, 
-/// payloads, chained keywords (#), part indices, mrg, and splice suffixes.
+/// Unified AST Node representing a mechanic or item payload.
+/// Handles explicit target chains, repeat multipliers (x2), effect multipliers (m), 
+/// pertier, unpack, prefixes, payloads, chained keywords (#), part indices, mrg, and splice suffixes.
 /// </summary>
 [System.Serializable]
-public class ItemMechanicNode : SDNode
+public class MechanicNode : SDClause
 {
+    public override ClauseCategory Category => ClauseCategory.Mechanics;
+
     public List<DiceTarget> TargetEnums { get; set; } = new List<DiceTarget>();
     public List<string> TargetStrings { get; set; } = new List<string>(); // Supports custom target aliases
-    public int RepeatTimes { get; set; } = 1;
+
+    public int RepeatTimes { get; set; } = 1; // Handled as 'x2', 'x3'
     public bool PerTier { get; set; } = false;
     public bool Unpack { get; set; } = false;
+
     public string Prefix { get; set; } = "";
 
     public SDNode PayloadNode { get; set; }
     public string RawPayloadString { get; set; } = "";
 
     public List<string> ChainedKeywords { get; set; } = new List<string>();
+
     public int? PartIndex { get; set; } = null;
-    public int Multiplier { get; set; } = 1;
+    public int Multiplier { get; set; } = 1; // Handled as 'm.2', 'm.-1'
     public string MergedItem { get; set; } = "";
     public string SplicedItem { get; set; } = "";
 
@@ -842,14 +847,20 @@ public class ItemMechanicNode : SDNode
         string corePayload = RawPayloadString;
         if (PayloadNode != null)
         {
-            if (Prefix == "hat" && PayloadNode is HeroEntityNode hero)
+            // FIX: Allow both Heroes and Monsters to be safely enveloped as hats
+            if (Prefix == "hat" && (PayloadNode is HeroEntityNode || PayloadNode is MonsterEntityNode))
             {
-                string safeHat = hero.Export();
+                string safeHat = PayloadNode.Export();
                 corePayload = safeHat.StartsWith("(") ? safeHat : $"({safeHat})";
             }
             else
             {
                 corePayload = PayloadNode.Export();
+                // Safe boundary for nested item injections natively handled as a string
+                if (PayloadNode is ItemEntityNode && !corePayload.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+                {
+                    corePayload = $"i.{corePayload}";
+                }
             }
         }
 
