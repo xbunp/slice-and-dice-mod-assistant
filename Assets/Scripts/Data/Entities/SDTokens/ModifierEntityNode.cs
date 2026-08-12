@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +18,7 @@ public class ModifierEntityNode : SDRootNode
     public string EveryXFights { get; set; }
     public string EveryXFightsOffset { get; set; }
     public string EveryXTurns { get; set; }
+    public string Phase { get; set; }
 
     // Stacking / Scaling
     public string RepeatTimes { get; set; }
@@ -35,18 +37,17 @@ public class ModifierEntityNode : SDRootNode
     // Action Payload
     public ModifierActionType ActionType { get; set; }
     public string CoreEffectName { get; set; }
-
     public SDNode Payload { get; set; } // Can hold ItemEntityNode, HeroEntityNode, MonsterEntityNode, AbilityEntityNode
-    public string StringPayload { get; set; } // For party strings (hero+hero) or delivery (item+item)
+    public string StringPayload { get; set; } // For party strings (hero+hero), delivery, or phase payloads
 
     // Combinators & Suffixes
     public ModifierEntityNode SplicedModifier { get; set; }
     public ModifierEntityNode ChainedModifier { get; set; }
-
     public int? PartIndex { get; set; }
     public string ModName { get; set; }
     public string DocDescription { get; set; }
     public string ModTier { get; set; }
+    public bool IsSpirit { get; set; }
 
     public override string Export()
     {
@@ -58,7 +59,6 @@ public class ModifierEntityNode : SDRootNode
         List<string> parts = new List<string>();
 
         if (Unpack) parts.Add("unpack");
-
         if (!string.IsNullOrEmpty(FloorLevel)) parts.Add(FloorLevel);
         if (!string.IsNullOrEmpty(EveryXFights))
         {
@@ -67,15 +67,13 @@ public class ModifierEntityNode : SDRootNode
         }
         if (!string.IsNullOrEmpty(EveryXTurns)) parts.Add(EveryXTurns);
         if (!string.IsNullOrEmpty(Turn)) parts.Add(Turn);
-
+        if (!string.IsNullOrEmpty(Phase)) parts.Add(Phase);
         if (!string.IsNullOrEmpty(RepeatTimes)) parts.Add(RepeatTimes);
         if (PerFightStack) parts.Add("pl");
         if (PerBossStack) parts.Add("pb");
         if (PerTurnStack) parts.Add("pt");
-
         if (!string.IsNullOrEmpty(HeroPosition)) { parts.Add("h"); parts.Add(HeroPosition); }
         if (InvertTarget) parts.Add("inv");
-
         if (!string.IsNullOrEmpty(DiceFaceTarget)) parts.Add(DiceFaceTarget);
         if (TargetAllHeroes) parts.Add("hero");
         if (TargetAllMonsters) parts.Add("monster");
@@ -83,6 +81,14 @@ public class ModifierEntityNode : SDRootNode
         // Action Payload Routing
         switch (ActionType)
         {
+            case ModifierActionType.Choosable:
+                parts.Add("ch"); parts.Add(StringPayload); break;
+            case ModifierActionType.Phase:
+                parts.Add("ph"); parts.Add(StringPayload); break;
+            case ModifierActionType.PhaseIndexed:
+                parts.Add("phi"); parts.Add(StringPayload); break;
+            case ModifierActionType.PhaseModPick:
+                parts.Add("phmp"); parts.Add(StringPayload); break;
             case ModifierActionType.AddMonster:
             case ModifierActionType.AddHero:
                 parts.Add("add"); parts.Add(Payload?.Export() ?? ""); break;
@@ -134,24 +140,23 @@ public class ModifierEntityNode : SDRootNode
         if (SplicedModifier != null) blockString = $"{blockString}.splice.{SplicedModifier.ExportInternal(false)}";
         if (ChainedModifier != null) blockString = $"{blockString}&{ChainedModifier.ExportInternal(false)}";
 
-        bool hasSuffixes = !string.IsNullOrEmpty(ModName) || !string.IsNullOrEmpty(DocDescription) || GlobalTags.Count > 0;
-
+        bool hasSuffixes = !string.IsNullOrEmpty(ModName) || !string.IsNullOrEmpty(DocDescription) || (IsSpirit && ActionType != ModifierActionType.MonsterSpirit) || GlobalTags.Count > 0;
         if (isRoot)
         {
             if (!string.IsNullOrEmpty(ModName)) blockString += $".mn.{ModName}";
             if (!string.IsNullOrEmpty(DocDescription)) blockString += $".doc.{DocDescription}";
+            if (IsSpirit && ActionType != ModifierActionType.MonsterSpirit) blockString += ".spirit";
             foreach (var tag in GlobalTags) blockString += $"&{tag.Trim()}";
             return blockString;
         }
-
         if (hasSuffixes)
         {
             string suffixedBlock = StaticBranchTracing.SafeBracket(blockString);
             if (!string.IsNullOrEmpty(ModName)) suffixedBlock += $".mn.{ModName}";
             if (!string.IsNullOrEmpty(DocDescription)) suffixedBlock += $".doc.{DocDescription}";
+            if (IsSpirit && ActionType != ModifierActionType.MonsterSpirit) suffixedBlock += ".spirit";
             return StaticBranchTracing.SafeBracket(suffixedBlock); // GlobalTags intentionally omitted from inner contexts
         }
-
         return StaticBranchTracing.SafeBracket(blockString);
     }
 }

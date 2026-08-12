@@ -1086,31 +1086,6 @@ public class ItemData : SDData
         List<string> chainParts = new List<string>();
         foreach (var cont in Containers) chainParts.Add($"{cont.Key}.({StaticBranchTracing.StripOuterParens(cont.Value)})");
 
-        /* // Old Smart bracketing, temporarily disabled.
-        if (mechanicParts.Count > 0)
-        {
-            string mechs = mechanicParts[0];
-
-            bool needsBrackets = Mechanics.Any(m =>
-                m.PartIndex.HasValue ||
-                m.Multiplier != 1 ||
-                m.PerTier ||
-                m.Unpack ||
-                !string.IsNullOrEmpty(m.MergedItem) ||
-                !string.IsNullOrEmpty(m.SplicedItem));
-
-            if (needsBrackets && !mechs.StartsWith("("))
-            {
-                mechs = $"({mechs})";
-            }
-
-            if (!mechs.StartsWith("i.", StringComparison.OrdinalIgnoreCase) && !mechs.StartsWith("sd.", StringComparison.OrdinalIgnoreCase))
-                chainParts.Add($"i.{mechs}");
-            else
-                chainParts.Add(mechs);
-        }
-        */
-
         List<string> mechanicParts = new List<string>();
         OptimizeAndExportMechanics(mechanicParts);
 
@@ -1138,7 +1113,6 @@ public class ItemData : SDData
         // It brackets its own scope. It never guesses.
         return $"({payload})";
     }
-
     private void OptimizeAndExportMechanics(List<string> chainParts)
     {
         List<ItemMechanic> optimizedMechanics = new List<ItemMechanic>();
@@ -1210,13 +1184,20 @@ public class ItemData : SDData
             bool lastUnpack = false;
             int lastRepeat = 1;
 
+            bool isMultiMechanicChain = optimizedMechanics.Count > 1;
+
             for (int i = 0; i < optimizedMechanics.Count; i++)
             {
                 var mech = optimizedMechanics[i];
+                string exportedMech = mech.Export();
+                if (isMultiMechanicChain && mech.PartIndex.HasValue && !exportedMech.StartsWith("("))
+                {
+                    exportedMech = $"({exportedMech})";
+                }
 
                 if (i == 0)
                 {
-                    mechsSb.Append(mech.Export());
+                    mechsSb.Append(exportedMech);
                     lastTargets = new List<string>(mech.Targets);
                     lastPerTier = mech.PerTier;
                     lastUnpack = mech.Unpack;
@@ -1261,6 +1242,11 @@ public class ItemData : SDData
                     if (lastRepeat == mech.RepeatTimes) mech.RepeatTimes = 1;
 
                     string chainedExport = mech.Export();
+                    if (isMultiMechanicChain && mech.PartIndex.HasValue && !chainedExport.StartsWith("("))
+                    {
+                        chainedExport = $"({chainedExport})";
+                    }
+
                     mechsSb.Append("#").Append(chainedExport);
 
                     // Update running context chain
@@ -1290,6 +1276,7 @@ public class ItemData : SDData
             chainParts.Add(mechsSb.ToString());
         }
     }
+
     private ItemMechanic CloneMechanic(ItemMechanic original)
     {
         return new ItemMechanic

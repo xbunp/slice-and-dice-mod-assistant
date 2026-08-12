@@ -1072,117 +1072,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
     }
 
-    /*
-    private void ProcessFaceFacades(DiceSideData face, List<string> chunks, bool includeInlineFacades)
-    {
-        if (!includeInlineFacades || string.IsNullOrWhiteSpace(face.facadeID)) return;
-
-        string facStr = $"facade.{face.facadeID.Trim()}";
-
-        if (!string.IsNullOrWhiteSpace(face.facadeColor))
-        {
-            string[] hsv = face.facadeColor.Split(':');
-            List<string> parts = new List<string>();
-
-            for (int pIdx = 0; pIdx < hsv.Length; pIdx++)
-                parts.Add(string.IsNullOrWhiteSpace(hsv[pIdx]) ? "0" : hsv[pIdx].Trim());
-
-            while (parts.Count < 3) parts.Add("0");
-
-            if (parts[0] == "0" && parts[1] == "0" && parts[2] == "0") facStr += ":0";
-            else facStr += $":{parts[0]}:{parts[1]}:{parts[2]}";
-        }
-        else
-        {
-            facStr += ":0";
-        }
-        chunks.Add(facStr);
-    }
-    private void ProcessFaceDescription(DiceSideData face, List<string> chunks)
-    {
-        if (!string.IsNullOrEmpty(face.sidesc))
-        {
-            chunks.Add($"sidesc.{face.sidesc}");
-        }
-    }
-    */
-    /*
-    private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
-    {
-        bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
-        string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
-        string fullSummonExport = cleanSummon; // Fallback to raw string if entity lookup fails
-        if (ModPackage.Instance != null)
-        {
-            var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(h => string.Equals(h.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
-            if (summonHero != null) fullSummonExport = summonHero.Export();
-            else
-            {
-                var summonMonster = ModPackage.Instance.Monsters?.FirstOrDefault(m => string.Equals(m.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
-                if (summonMonster != null) fullSummonExport = summonMonster.Export();
-            }
-        }
-        if (!fullSummonExport.StartsWith("("))
-        {
-            fullSummonExport = $"({fullSummonExport})";
-        }
-
-        string repeatPrefix = "";
-        if (face.pips > 1)
-        {
-            repeatPrefix = $"x{face.pips}.";
-        }
-
-        // Place repeat multiplier outside the hat so ItemData can absorb it
-        chunks.Add($"{repeatPrefix}hat.(egg.{fullSummonExport})");
-
-        // Blindfold item MUST come immediately after the Hat
-        if (hasBlindfold)
-        {
-            chunks.Add("blindfold");
-        }
-        return true;
-    }
-    */
-
-    // File: Assets/Scripts/Data/Entities/EntityData.cs
-
-    // File: Assets/Scripts/Data/Entities/EntityData.cs
-    /*
-    private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
-    {
-        bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
-        string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
-        string fullSummonExport = cleanSummon; // Fallback to raw string if entity lookup fails
-        if (ModPackage.Instance != null)
-        {
-            var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(h => string.Equals(h.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
-            if (summonHero != null) fullSummonExport = summonHero.Export();
-            else
-            {
-                var summonMonster = ModPackage.Instance.Monsters?.FirstOrDefault(m => string.Equals(m.entityName, cleanSummon, StringComparison.OrdinalIgnoreCase));
-                if (summonMonster != null) fullSummonExport = summonMonster.Export();
-            }
-        }
-
-        MonsterData eggMonster = new MonsterData();
-        eggMonster.baseMonster = $"egg.{fullSummonExport}";
-        if (face.pips >= 2 && face.pips <= 9)
-        {
-            eggMonster.xMultiplier = face.pips;
-        }
-
-        // EggMonster handles multiplier bracketing itself!
-        chunks.Add($"hat.{eggMonster.Export()}");
-
-        // Blindfold item MUST come immediately after the Hat
-        if (hasBlindfold)
-        {
-            chunks.Add("blindfold");
-        }
-        return true;
-    }
-    */
     private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
     {
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
@@ -1312,7 +1201,6 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return false;
     }
-
     protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
     {
         var stream = new TokenStream(tokens);
@@ -1666,7 +1554,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-
     private void SyncMonsterContainerBaseIdentifier(MonsterData monster)
     {
         if (monster == null || monster.payloadData == null) return;
@@ -1713,7 +1600,6 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return result;
     }
-
     public virtual string ExportAsHat()
     {
         HeroData hero = this as HeroData;
@@ -1755,7 +1641,6 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return rawHat;
     }
-
     protected bool IsDefaultHeroColor(string baseReplica, string colorClass)
     {
         if (string.IsNullOrEmpty(baseReplica) || string.IsNullOrEmpty(colorClass)) return false;
@@ -1770,71 +1655,4 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
         return false;
     }
-
-    /*
-    private void ResolveItemPipeline(List<ItemData> pipeline)
-    {
-        // 1. Stable Sort by Priority
-        // Priority 50 items (standard mechanics) maintain their exact parsed relative order.
-        var sortedPipeline = pipeline.OrderBy(item => GetItemPriority(item)).ToList();
-
-        bool timelineRuptured = false;
-
-        // 2. Hydrate Entity State
-        foreach (var item in sortedPipeline)
-        {
-            bool isDiceAffecting = IsDiceAffectingItem(item);
-
-            // If the sequential timeline was ruptured by an un-absorbable dice item, 
-            // force all subsequent dice-affecting items into the strict custom payload pipeline.
-            bool forceCustomPayload = timelineRuptured && isDiceAffecting;
-
-            HydrateEntityFromItem(item, forceCustomPayload);
-
-            // Detect if a dice-affecting item fell into the custom pipeline.
-            // If so, the static base-state can no longer accurately represent the sequence,
-            // meaning the timeline is now formally ruptured.
-            if (isDiceAffecting && customPayloads.Count > 0 && customPayloads.Last().Data == item)
-            {
-                timelineRuptured = true;
-            }
-        }
-    }
-    private void HydrateEntityFromItem(ItemData item, bool forceCustomPayload = false)
-    {
-        bool canMapNatively = false;
-
-        if (!forceCustomPayload)
-        {
-            canMapNatively = item.TryAbsorbIntoEntity(this);
-        }
-
-        if (!canMapNatively)
-        {
-            // Route non-native or sequentially-forced items to CustomPayloads 
-            // so CustomItemContextHelper can correctly bracket them to the outside!
-            customPayloads.Add(new CustomPayload { Prefix = "i", Data = item, Type = PayloadType.Item });
-        }
-    }
-    protected void ExecuteItemPipeline()
-    {
-        if (_itemPipeline.Count > 0)
-        {
-            ResolveItemPipeline(_itemPipeline);
-            _itemPipeline.Clear();
-        }
-    }
-    private int GetItemPriority(ItemData item)
-    {
-        int priority = 50;
-        foreach (var mech in item.Mechanics)
-        {
-            string payloadLower = mech.PayloadString?.ToLower() ?? "";
-            if (mech.Prefix == "k" && payloadLower == "permissive") return 0;
-            if (mech.Prefix == "k" && payloadLower == "stasis") priority = 99;
-            else if (mech.Prefix == "facade") priority = 100;
-        }
-        return priority;
-    }
-    */
 }
