@@ -317,6 +317,8 @@ public class AbilityUI : RootUI
             return;
         }
 
+        if (sender != null) return; // ADD THIS LINE: Ignore state changes triggered by other tabs
+
         if (!gameObject.activeInHierarchy)
         {
             _needsRebuild = true;

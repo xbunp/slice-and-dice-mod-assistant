@@ -1,7 +1,7 @@
-using UnityEngine;
-using UnityEditor;
 using System.IO;
 using System.Text.RegularExpressions;
+using UnityEditor;
+using UnityEngine;
 
 public static class StringCleanerUtility
 {
@@ -33,15 +33,14 @@ public static class StringCleanerUtility
         {
             string content = File.ReadAllText(absolutePath);
 
-            // Pattern 1: Matches "img." followed by any character that is not a literal dot, 
-            // stopping right before the next dot.
-            string pattern1 = @"img\.[^.]+";
+            // Pattern 1: Matches "img." followed by valid identifier characters (stops at spaces, dots, or brackets)
+            string pattern1 = @"img\.[^\s.\[\]]+";
             string replacement1 = "img.(customImg)";
 
-            // Pattern 2: Matches base64 strings within square brackets [].
-            // To avoid matching rich text formatting tags, we require a minimum length (e.g., 100 characters)
-            // and restrict characters to valid base64 characters, optionally allowing a data URI prefix.
-            string pattern2 = @"\[(?:data:image\/[a-zA-Z]+;base64,)?[A-Za-z0-9+/=]{20,}\]";
+            // Pattern 2: Matches long payload strings inside square brackets [].
+            // Uses [^\]]{20,} to support URL-encoded/percent-encoded characters (like '%'),
+            // while ignoring short rich text formatting tags (e.g., [b], [color=#fff]).
+            string pattern2 = @"\[(?:data:image\/[a-zA-Z]+;base64,)?[^\]]{20,}\]";
             string replacement2 = "[(customImg)]";
 
             // Apply both clean-up patterns

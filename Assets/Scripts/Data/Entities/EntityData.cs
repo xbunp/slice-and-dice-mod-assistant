@@ -1359,9 +1359,12 @@ public abstract class EntityData : SDData, IPayloadContainer
                 if (!string.IsNullOrEmpty(bl))
                 {
                     ModifierData blessMod = new ModifierData(); blessMod.Parse(bl);
-                    ItemData giftItem = new ItemData();
-                    giftItem.Mechanics.Add(new ItemMechanic { Prefix = "gift", PayloadData = blessMod });
-                    RouteItemPayload(giftItem, isHero, innerHeroPayloads, outerPayloads);
+                    string exported = blessMod.ExportInternal(false);
+                    if (!string.IsNullOrEmpty(exported))
+                    {
+                        if (!exported.StartsWith("(")) exported = $"({exported})";
+                        outerPayloads.Add($"gift.{exported}");
+                    }
                 }
             }
         }
@@ -1560,14 +1563,16 @@ public abstract class EntityData : SDData, IPayloadContainer
         string prefix = monster.baseMonster;
 
         int parenIdx = prefix.IndexOf('(');
-        if (parenIdx > 0)
+        int dotIdx = prefix.IndexOf('.');
+
+        // Safely extract the container keyword (e.g. "egg", "vase", "jinx", "orb", "rmon") before the payload begins
+        if (dotIdx > 0 && (parenIdx == -1 || dotIdx < parenIdx))
+        {
+            prefix = prefix.Substring(0, dotIdx);
+        }
+        else if (parenIdx > 0)
         {
             prefix = prefix.Substring(0, parenIdx).TrimEnd('.');
-        }
-        else
-        {
-            int dotIdx = prefix.IndexOf('.');
-            if (dotIdx > 0) prefix = prefix.Substring(0, dotIdx);
         }
 
         if (monster.payloadData is AbilityData abPayload)

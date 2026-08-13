@@ -1050,14 +1050,16 @@ public class ItemData : SDData
         else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         else if (mech.Prefix == "t")
         {
-            if (StaticBranchTracing.IsMonsterEntity(core))
+            if (core.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase) ||
+                core.StartsWith("vase.", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(core, "jinx", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(core, "vase", StringComparison.OrdinalIgnoreCase))
+            {
+                ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
+            }
+            else if (StaticBranchTracing.IsMonsterEntity(core))
             {
                 MonsterData monster = new MonsterData(); monster.Parse(core); mech.PayloadData = monster;
-            }
-            else if (core.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
-            {
-                string modifierCore = StaticBranchTracing.StripOuterParens(core.Substring(5).Trim());
-                ModifierData mod = new ModifierData(); mod.Parse(modifierCore); mech.PayloadData = mod;
             }
             else
             {

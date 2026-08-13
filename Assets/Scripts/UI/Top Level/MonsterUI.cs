@@ -82,12 +82,7 @@ public class MonsterUI : EntityUI<MonsterData>
     {
         if (statsUI.Inputs.TryGetValue("BaseMonster", out var repNameIn)) repNameIn.SetTextWithoutNotify(CurrentEntity.baseMonster);
 
-        if (statsUI.Dropdowns.TryGetValue("Bal", out var balDrop))
-        {
-            var options = SDColors.GetMonsterNames().ToList();
-            int idx = options.IndexOf(CurrentEntity.bal);
-            balDrop.SetValueWithoutNotify(idx >= 0 ? idx : 0);
-        }
+        if (statsUI.Inputs.TryGetValue("Bal", out var balIn)) balIn.SetTextWithoutNotify(CurrentEntity.bal);
 
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overIn))
         {
@@ -191,7 +186,6 @@ public class MonsterUI : EntityUI<MonsterData>
         AppendIconOverrideLayout(layout);
 
         // 5. HP & Balance
-        var balOptions = SDColors.GetMonsterNames().ToList();
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("HP:", 0.2f),
             GridCellSpec.CreateInput("HP", "", 0.3f, (val) => {
@@ -199,12 +193,9 @@ public class MonsterUI : EntityUI<MonsterData>
                 NotifyStateChanged();
             }),
             GridCellSpec.CreateLabel("Bal:", 0.2f),
-            GridCellSpec.CreateFilteredDropdown("Bal", string.IsNullOrEmpty(CurrentEntity.bal) ? "Wolf" : CurrentEntity.bal, 0.3f, balOptions.ToArray(), (val) => {
-                if (val >= 0 && val < balOptions.Count)
-                {
-                    CurrentEntity.bal = balOptions[val];
-                    NotifyStateChanged();
-                }
+            GridCellSpec.CreateInput("Bal", CurrentEntity.bal ?? "", 0.3f, (val) => {
+                CurrentEntity.bal = val;
+                NotifyStateChanged();
             })
         ));
 
