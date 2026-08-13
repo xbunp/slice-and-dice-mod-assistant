@@ -134,7 +134,10 @@ public class ModifierData : SDData
     public ItemData ItemPayload;
     public ModifierData NestedModifierPayload;
     public AbilityData AbilityPayload;
-    public string StringPayload;     // Used for multi-groupings, delivery, or phase payloads
+
+    // For Phase/Choosable, StringPayload stores the entire nested choice/tag block 
+    // e.g. "!iMana Jelly@3s" or "mBone Math"
+    public string StringPayload;
 
     [Header("Suffixes")]
     public int? PartIndex;           // "part.0"
@@ -251,7 +254,11 @@ public class ModifierData : SDData
             if (Regex.IsMatch(lower, @"^\d+(-\d+)?$")) { FloorLevel = token; continue; }
             if (lower.StartsWith("t") && int.TryParse(lower.Substring(1), out _)) { Turn = token; continue; }
             if (lower.StartsWith("et") && int.TryParse(lower.Substring(2), out _)) { EveryXTurns = token; continue; }
-            if (lower == "ch" || lower == "ph" || lower == "phi" || lower == "phmp" || lower == "fh" || lower == "lh") { Phase = token; continue; }
+            if (lower == "fh" || lower == "lh")
+            {
+                Phase = token;
+                continue;
+            }
             if (lower.StartsWith("e") && int.TryParse(lower.Substring(1), out _))
             {
                 EveryXFights = token;
@@ -283,6 +290,7 @@ public class ModifierData : SDData
             // ==== ACTION PAYLOAD ROUTING ==== //
             string remainingPayload = string.Join(".", tokens.Skip(i + 1));
 
+            // CRITICAL: Natively supports grabbing complex SCPhase tags (!iSapphire@3s) safely
             if (lower == "ch" || lower == "ph" || lower == "phi" || lower == "phmp")
             {
                 ActionType = lower switch

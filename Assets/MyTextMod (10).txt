@@ -1,0 +1,45 @@
+=(monsterpool.bee.part.0)&(heropool.fey.part.0)&(itempool.can.part.0)&Hidden.mn.Clear Pools,
+
+monsterpool.
+(Archer.n.Craban.sd.9-3:9-2:9-2:9-2:4-1:4-1.img.bas198)
++
+((Wolf.n.Crebain.sd.170-3:170-3:131-1:131-1:171-1:171-1.img.bas198.hsv.0:0:-15.draw.bas198:-5:-3.hsv.2:8:-15.draw.bas198:6:-4).i.triggerhpdata.(Fey.col.o.sd.15-1.i.(left.mid.hat.(egg.(Archer.n.Creban.sd.9-3:9-2:9-2:9-2:4-1:4-1.img.bas198))#blindfold).img.Spi0.n.Creban.hp.5))
++
+(Ghost.hsv.-33:16:-7.thue.274452:56:-12.n.Dagorlad.sd.2-4:2-4:6-2:6-2:6-1:6-1.i.left2.k.serrated#facade.Eme126:0.i.right2.k.hypnotise#facade.Eme159:0.i.topbot.k.hypnotise#facade.Eme159:0.draw.dan19:6:4.draw.dan19:11:2)
++
+(Grave.n.Barrow.hp.3.sd.0-1.i.(all.mid.hat.(egg.((Bones.hsv.54:-17:2.draw.ite284:-3:11.n.Wight.hp.3.sd.8-3:8-2:8-2:8-2:8-1:8-1.i.(all.k.wither#facade.Eme87:0)).i.(t.(Imp))))#blindfold#facade.bas260:0))
++
+((Bee.hsv.6:58:9.n.Neeker.hp.1.sd.5-4:5-4:9-1:9-1:9-1:10-1).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(egg.(Bee.hsv.-8:36:6.n.Breeker.sd.5-5:5-4:9-2:9-2:5-3:10-2))#blindfold.n.Spawn Breeker))
++
+((Slimelet.n.Orc.hp.3.sd.7-4:7-3:6-3:6-3.t.Caw.img.Bones.hsv.0:0:-70.draw.Goblin:-6:-4.p.6a6e34:5c7688:07).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg)))
++
+(Sniper.p.b09f8d:657c5a:40.draw.Ese77:10:8.n.Tark.draw.Ese77:10:8.sd.6-2:6-4:6-4:6-4:7-4:7-4.i.left.k.cleave#facade.Ese78:0.i.col.k.engage#facade.Ese60:0)
++
+((Wolf.p.705c6a:b43ca5:18.thue.654e51:14:-20.hsv.-80:3:2.n.Warg.hp.5.sd.52-3:52-2:171-1:171-1:52-1:181-1.i.mid2.facade.Ber11:0.i.left.facade.Ber11:0.i.rightmost.k.vulnerable#k.cleave#facade.ite402:0).bal.Wolf)
++
+(rmon.ded.n.Warg Rider.hp.8.sd.26-2:26-1:28-3:28-3:27-4:25-2.i.(left.k.heavy#facade.bas214:10:33:12).i.(topbot.k.halveduel#facade.Ber48:0).i.(rightmost.k.exert).img.Alpha.draw.Wolf:6:11.hsv.0:0:-99.p.70675c:885a3a:14.draw.Wolf:6:11)
++
+(rmon.1c.n.Uruk.hp.7.sd.26-4:26-3:17-4:17-4:30-3:30-2.t.Bandit.img.Ogre.hsv.0:18:5.p.35a163:8a5b36:36.thue.8e8367:14:49)
++
+((rmon.ded.n.Urukhai.hp.10.sd.16-1:28-2:16-1:16-1:28-2:16-1.i.left.k.moxie#facade.bas204:-5:69:14.i.mid2.k.moxie#facade.Eme208:0.img.Ogre.p.35a163:8a5b36:38.thue.8e8367:13:49.hsv.-13:3:5.draw.OkN16:4:-3).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Eye of Horus)#togtarg)))
++
+(rmon.1c.n.Traitor.hp.6.sd.187-1:65-3:69-1:69-1:65-2:56-1.i.left.k.permaboost#k.singleuse#facade.har69:0.i.rightmost.k.descend#facade.eba28:0.t.jinx.alliteme.Quicksilver.img.Militia.thue.73675c:16:29.hsv.5:27:-10)
++
+(Militia.hsv.0:0:-91.draw.Militia:6:0.p.dc881c:7d0cad:31.n.Coward.hp.9.sd.181-2:181-1:180:180:180:180.i.left2.k.poison#facade.Spi81:0.i.top.k.inflictexert#facade.pos27:0.i.bot.k.inflictsingleuse#facade.pos78:0.i.right.k.inflictpain#facade.pos54:0.i.rightmost.sticker.(k.decay)#togfri#facade.pos12:0#sidesc.Target enemy [purple]inflictdecay[cu])
++
+(Troll.p.65623a:687a69:23.thue.d00051:36:20.hsv.-14:12:5.n.Cave Troll.sd.3-3:2-6:16-2:16-2:17-3.i.mid.k.exert#k.serrated#k.growth#facade.Ese105:31:34:2.i.right.k.engage#facade.bas205:42:-20:3.i.rightmost.mid.hat.(x2.egg.((Slimelet.n.Orc.hp.3.sd.7-4:7-3:6-3:6-3.t.Caw.img.Bones.hsv.0:0:-70.draw.Goblin:-6:-4.p.6a6e34:5c7688:07).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg))))#blindfold#facade.bas209:38:0:0)
++
+(Fanatic.n.Southron.sd.159:19-8:19-4:19-4:19-6:187.i.rightmost.k.heal#k.flesh#facade.Yca44:0.img.Berserker.p.b28f7b:5e2b10:19.thue.8a3f21:07:-22.hsv.0:8:-4)
++
+((rmon.1c.n.Haradrim.hp.4.sd.39-5:39-5:23-6:23-6:39-4:39-4.img.Brawler.p.b28f7b:5e2b10:18.thue.e9d583:47:5.hsv.0:19:-3).doc.[plus]1 Shield after taking damage.i.self.shield response)
++
+((Sudul.n.Corsair.sd.15-6:15-4:15-3:15-2:15-1:11-1.i.rightmost.k.boost.img.Dabblest.p.e6c4b8:975e1e:20.thue.71483e:21:-3.hsv.2:9:1.draw.Yca11:12:8).i.t.Mimic)
++
+(rmon.1a.n.Murmak.hp.20.sd.4-3:5-7:4-2:4-2:3-4:26-1.i.topbot.k.exert#k.patient.i.left.k.exert#k.patient.i.mid.k.exert.i.right.k.patient.t.Hydra.t.Cyclops.img.Troll King.p.957a4b:825e6e:26.draw.Boar:10:10)
+&Hidden.mn.Monster Pool.part.1,
+
+=(monsterpool.bee.part.0)&(heropool.fey.part.0)&(itempool.can.part.0)&Hidden.mn.Clear Pools,
+monsterpool.
+(Bandit.n.Hobgoblin.sd.122-2:122-1:49-2:49-2:122:187-1.i.mid2.k.era.i.left.k.era.i.rightmost.k.permaboost#facade.Yca75:0:0:23#k.stasis.img.Goblin.p.3e3a2c:5a0b0b:19.thue.6a6e34:10:-6.hsv.2:21:-1.draw.ite309:-2:9)
+.part.1
+&Hidden.mn.Monster Pool 2,

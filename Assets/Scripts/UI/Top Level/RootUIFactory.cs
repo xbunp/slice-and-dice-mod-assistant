@@ -27,7 +27,8 @@ public class RootUIFactory : MonoBehaviour
     public MonsterUI MonsterUI { get; private set; }
     public ItemUI ItemUI { get; private set; }
     public AbilityUI AbilityUI { get; private set; }
-    public ModifierUI ModifierUI { get; private set; }
+    //public ModifierUI ModifierUI { get; private set; }
+    public PhasesUI PhasesUI { get; private set; }
     public AboutUI AboutUI { get; private set; }
 
     //public SettingsUI SettingsUI { get; private set; }
@@ -97,7 +98,8 @@ public class RootUIFactory : MonoBehaviour
         MonsterUI = CreateTabInstance<MonsterUI>("MonsterUI", "Monsters");
         ItemUI = CreateTabInstance<ItemUI>("ItemUI", "Items");
         AbilityUI = CreateTabInstance<AbilityUI>("AbilityUI", "Abilities");
-        ModifierUI = CreateTabInstance<ModifierUI>("ModifierUI", "Modifiers");
+        //ModifierUI = CreateTabInstance<ModifierUI>("ModifierUI", "Modifiers");
+        PhasesUI = CreateTabInstance<PhasesUI>("PhasesUI", "Modifiers");
         AboutUI = CreateTabInstance<AboutUI>("AboutUI", "About");
 
         uiGenerator.canvas = originalCanvas;

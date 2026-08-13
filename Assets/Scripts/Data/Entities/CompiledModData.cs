@@ -2,145 +2,360 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 public class CompiledModData
 {
-    // Filename
     public string modFileName = "MyTextMod";
+    public bool humanReadable = true;
 
-    // Pool Lists
     public List<string> monsterPool = new();
     public List<string> heroPool = new();
     public List<string> itemPool = new();
 
-    // Clear Flags (On by default)
     public bool clearMonsterPool = true;
     public bool clearHeroPool = true;
     public bool clearItemPool = true;
 
-    // Compiled Output
     public string compiledMod = string.Empty;
 
-    // Limits & Dummies
     private const int MaxChunkLength = 4000;
     private const string DummyMonster = "bee";
     private const string DummyHero = "fey";
     private const string DummyItem = "can";
 
     /// <summary>
-    /// Parses bracketed heroes from a raw text block, protecting trailing tags like .i.(...)
-    /// by using depth checking combined with smart lookahead token validation.
+    /// Imports items by finding each item block, stripping any 'i.' prefix, 
+    /// capturing through the end of the '.n.Item Name' tag, and wrapping in outer brackets.
     /// </summary>
-    public void ImportHeroes(string heroString)
+    public void ImportItems(string itemString)
     {
-        heroPool.Clear();
-        if (string.IsNullOrWhiteSpace(heroString)) return;
+        itemPool.Clear();
+        if (string.IsNullOrWhiteSpace(itemString)) return;
 
-        int depth = 0;
-        bool isCapturing = false;
-        StringBuilder currentHero = new StringBuilder();
+        string cleanText = StripComments(itemString);
+        int i = 0;
 
-        for (int i = 0; i < heroString.Length; i++)
+        while (i < cleanText.Length)
         {
-            char c = heroString[i];
-
-            if (c == '(')
+            // Skip whitespace
+            if (char.IsWhiteSpace(cleanText[i]))
             {
-                if (depth == 0)
+                i++;
+                continue;
+            }
+
+            // Skip leading "i." if present
+            if (cleanText[i] == 'i' && i + 2 < cleanText.Length && cleanText[i + 1] == '.' && cleanText[i + 2] == '(')
+            {
+                i += 2; // Advance to '('
+            }
+
+            // Every item definition begins with a parenthesis
+            if (cleanText[i] == '(')
+            {
+                string itemEntity = ExtractItemEntity(cleanText, ref i);
+                if (!string.IsNullOrEmpty(itemEntity))
                 {
-                    // We are at root level. Look ahead to see if this begins a NEW valid hero block
-                    string nextToken = GetNextToken(heroString, i + 1);
-                    if (IsRootHeroIdentifier(nextToken))
+                    // Clean any residual "i." prefix
+                    if (itemEntity.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Found a new hero! Flush the previous one if we were capturing
-                        if (isCapturing && currentHero.Length > 0)
-                        {
-                            FlushCurrentHero(currentHero);
-                            currentHero.Clear();
-                        }
-                        isCapturing = true; // Start capturing the new hero
+                        itemEntity = itemEntity.Substring(2).TrimStart();
                     }
-                }
-                depth++;
-            }
-            else if (c == ')')
-            {
-                depth--;
-                if (depth < 0) depth = 0; // Guard against malformed unbalanced strings
-            }
 
-            // Only append characters if we have successfully found at least one hero start point.
-            if (isCapturing)
-            {
-                // Strip raw newlines/returns from the string to keep the compiled mod clean
-                if (c != '\n' && c != '\r')
-                {
-                    currentHero.Append(c);
+                    // Ensure fully enclosed in an outer pair of parentheses
+                    if (!IsFullyEnclosed(itemEntity))
+                    {
+                        itemEntity = $"({itemEntity})";
+                    }
+
+                    itemPool.Add(itemEntity);
+                    continue;
                 }
             }
+
+            i++;
         }
 
-        // Flush whatever is remaining in the buffer at the end of the string
-        if (isCapturing && currentHero.Length > 0)
-        {
-            FlushCurrentHero(currentHero);
-        }
-
-        // Immediately compile and output
         Compile();
         OutputMod();
     }
 
     /// <summary>
-    /// Safely packages the hero string, automatically stripping any unbracketed trailing junk text.
+    /// Captures the item expression and reads past all trailing chained tags 
+    /// (.tier.X, .img.X, .n.Name, etc.) until the full item payload completes.
     /// </summary>
-    private void FlushCurrentHero(StringBuilder sb)
+    private string ExtractItemEntity(string text, ref int index)
     {
-        string rawHero = sb.ToString();
+        StringBuilder sb = new StringBuilder();
+        int depth = 0;
 
-        // Find the absolute last closing bracket in our captured string.
-        // This ensures trailing garbage like ", " or "junk text" is severed, 
-        // while perfectly preserving trailing chained tags like ".i.(learn.Mend)"
-        int lastBracket = rawHero.LastIndexOf(')');
-
-        if (lastBracket >= 0)
+        // 1. Capture primary bracketed expression
+        while (index < text.Length)
         {
-            string cleanHero = rawHero.Substring(0, lastBracket + 1).Trim();
-            if (!string.IsNullOrEmpty(cleanHero))
+            char c = text[index];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+
+            if (c != '\r' && c != '\n')
             {
-                heroPool.Add(cleanHero);
+                sb.Append(c);
+            }
+
+            index++;
+
+            if (depth == 0) break;
+        }
+
+        // 2. Capture trailing dot/hash tags (e.g. .img.X.tier.Y.n.Item Name)
+        while (index < text.Length)
+        {
+            int peek = index;
+            while (peek < text.Length && (text[peek] == ' ' || text[peek] == '\t'))
+            {
+                peek++;
+            }
+
+            if (peek >= text.Length || text[peek] == '\r' || text[peek] == '\n') break;
+
+            // Continue while chained with '.' or '#'
+            if (text[peek] == '.' || text[peek] == '#')
+            {
+                index = peek;
+
+                // Read until next newline or end of segment
+                while (index < text.Length && text[index] != '\r' && text[index] != '\n')
+                {
+                    char c = text[index];
+                    if (c == '(') depth++;
+                    else if (c == ')') depth--;
+
+                    sb.Append(c);
+                    index++;
+
+                    // If depth is 0 and we hit a new line / whitespace followed by a non-chain character, abort
+                    if (depth == 0 && index < text.Length && (text[index] == '\r' || text[index] == '\n'))
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                break;
             }
         }
+
+        return sb.ToString().Trim();
     }
 
-    /// <summary>
-    /// Extracts the word immediately following a bracket to evaluate its identity.
-    /// </summary>
-    private string GetNextToken(string text, int startIndex)
+    public void ImportMonsters(string monsterString)
     {
+        ImportPool(monsterString, monsterPool, IsRootMonsterIdentifier, isItemPool: false);
+    }
+
+    public void ImportHeroes(string heroString)
+    {
+        ImportPool(heroString, heroPool, IsRootHeroIdentifier, isItemPool: false);
+    }
+
+    private void ImportPool(string rawText, List<string> targetPool, Func<string, bool> validator, bool isItemPool)
+    {
+        targetPool.Clear();
+        if (string.IsNullOrWhiteSpace(rawText)) return;
+
+        string cleanText = StripComments(rawText);
+        int i = 0;
+
+        while (i < cleanText.Length)
+        {
+            if (char.IsWhiteSpace(cleanText[i]))
+            {
+                i++;
+                continue;
+            }
+
+            // Items can optionally start with "i.("
+            if (isItemPool && cleanText[i] == 'i' && i + 2 < cleanText.Length && cleanText[i + 1] == '.' && cleanText[i + 2] == '(')
+            {
+                i += 2; // Advance to '('
+            }
+
+            if (cleanText[i] == '(')
+            {
+                string rootToken = GetLeadingToken(cleanText, i);
+                if (validator(rootToken))
+                {
+                    string fullEntity = ExtractFullEntity(cleanText, ref i);
+                    if (!string.IsNullOrEmpty(fullEntity))
+                    {
+                        // Clean any residual "i." prefix if present
+                        if (fullEntity.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+                        {
+                            fullEntity = fullEntity.Substring(2).TrimStart();
+                        }
+
+                        // Ensure complete enclosing bracket
+                        if (!IsFullyEnclosed(fullEntity))
+                        {
+                            fullEntity = $"({fullEntity})";
+                        }
+
+                        targetPool.Add(fullEntity);
+                    }
+                    continue;
+                }
+            }
+
+            i++;
+        }
+
+        Compile();
+        OutputMod();
+    }
+
+    private string ExtractFullEntity(string text, ref int index)
+    {
+        StringBuilder sb = new StringBuilder();
+        int depth = 0;
+
+        // 1. Capture primary bracket block
+        while (index < text.Length)
+        {
+            char c = text[index];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+
+            if (c != '\r' && c != '\n')
+            {
+                sb.Append(c);
+            }
+
+            index++;
+
+            if (depth == 0) break;
+        }
+
+        // 2. Capture trailing chained modifiers (.tag, #facade, .(nested), etc.)
+        while (index < text.Length)
+        {
+            int peek = index;
+            while (peek < text.Length && (text[peek] == ' ' || text[peek] == '\t'))
+            {
+                peek++;
+            }
+
+            if (peek >= text.Length) break;
+
+            // Chain continues if next non-whitespace char is '.' or '#'
+            if (text[peek] == '.' || text[peek] == '#')
+            {
+                index = peek;
+                while (index < text.Length)
+                {
+                    char c = text[index];
+                    if (c == '(') depth++;
+                    else if (c == ')') depth--;
+
+                    if (c != '\r' && c != '\n')
+                    {
+                        sb.Append(c);
+                    }
+
+                    index++;
+
+                    if (depth == 0 && index < text.Length && char.IsWhiteSpace(text[index]))
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return sb.ToString().Trim();
+    }
+
+    private string StripComments(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+
+        string noBlock = Regex.Replace(input, @"/\*.*?\*/", "", RegexOptions.Singleline);
+        string[] lines = noBlock.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+        StringBuilder sb = new StringBuilder();
+        foreach (var line in lines)
+        {
+            int commentIdx = line.IndexOf("//", StringComparison.Ordinal);
+            string cleanLine = commentIdx >= 0 ? line.Substring(0, commentIdx) : line;
+            sb.AppendLine(cleanLine);
+        }
+        return sb.ToString();
+    }
+
+    private bool IsFullyEnclosed(string s)
+    {
+        if (string.IsNullOrEmpty(s) || !s.StartsWith("(") || !s.EndsWith(")"))
+            return false;
+
+        int depth = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (s[i] == '(') depth++;
+            else if (s[i] == ')')
+            {
+                depth--;
+                if (depth == 0 && i < s.Length - 1)
+                    return false;
+            }
+        }
+        return depth == 0;
+    }
+
+    private string GetLeadingToken(string text, int startIndex)
+    {
+        while (startIndex < text.Length && (text[startIndex] == '(' || char.IsWhiteSpace(text[startIndex])))
+        {
+            startIndex++;
+        }
+
         StringBuilder token = new StringBuilder();
         for (int i = startIndex; i < text.Length; i++)
         {
             char c = text[i];
-            // Slice & Dice object headers end at the first period.
-            if (c == '.' || c == ')' || c == '(' || char.IsWhiteSpace(c)) break;
+            if (c == '.' || c == ')' || c == '(' || c == ':' || c == '#' || char.IsWhiteSpace(c)) break;
             token.Append(c);
         }
         return token.ToString();
     }
 
-    /// <summary>
-    /// Evaluates if the token is a valid starting name for a Hero object.
-    /// </summary>
+    private bool IsRootMonsterIdentifier(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+
+        if (string.Equals(token, "replica", StringComparison.OrdinalIgnoreCase)) return true;
+        if (token.StartsWith("rmon", StringComparison.OrdinalIgnoreCase)) return true;
+
+        if (Enum.TryParse(token, true, out MonsterType result))
+        {
+            if (result != MonsterType.None) return true;
+        }
+
+        return false;
+    }
+
     private bool IsRootHeroIdentifier(string token)
     {
-        // Custom crafted heroes always start with 'replica'
-        if (string.Equals(token, "replica", System.StringComparison.OrdinalIgnoreCase))
-            return true;
+        if (string.IsNullOrEmpty(token)) return false;
 
-        // Otherwise, check against your global list of valid heroes
-        if (System.Enum.TryParse(token, true, out HeroType result))
+        if (string.Equals(token, "replica", StringComparison.OrdinalIgnoreCase)) return true;
+        if (token.StartsWith("rhero", StringComparison.OrdinalIgnoreCase)) return true;
+
+        if (Enum.TryParse(token, true, out HeroType result))
         {
             if (result != HeroType.None) return true;
         }
@@ -148,14 +363,11 @@ public class CompiledModData
         return false;
     }
 
-    /// <summary>
-    /// Builds the final Slice & Dice textmod string by combining separate modifier objects with line breaks.
-    /// </summary>
     public void Compile()
     {
         List<string> modObjects = new List<string>();
 
-        // 1. Build the Clear Pools Object
+        // 1. Build Pool Clears
         List<string> clearParts = new List<string>();
         if (clearMonsterPool) clearParts.Add($"(monsterpool.{DummyMonster}.part.0)");
         if (clearHeroPool) clearParts.Add($"(heropool.{DummyHero}.part.0)");
@@ -163,19 +375,21 @@ public class CompiledModData
 
         if (clearParts.Count > 0)
         {
-            // Chains the clears together with '&' and adds the Hidden/mn tags
-            modObjects.Add(string.Join("&", clearParts) + "&Hidden.mn.Clear Pools");
+            string clearObject = string.Join("&", clearParts) + "&Hidden.mn.Clear Pools";
+            modObjects.Add(clearObject);
         }
 
-        // 2. Build the Addition (part.1) Objects for each pool
-        modObjects.AddRange(GetPoolChunks("monster", monsterPool, "Monsters"));
-        modObjects.AddRange(GetPoolChunks("hero", heroPool, "Heroes"));
-        modObjects.AddRange(GetPoolChunks("item", itemPool, "Items"));
+        // 2. Build Addition Pool Chunks
+        modObjects.AddRange(GetPoolChunks("monster", monsterPool, "Monster Pool"));
+        modObjects.AddRange(GetPoolChunks("hero", heroPool, "Hero Pool"));
+        modObjects.AddRange(GetPoolChunks("item", itemPool, "Item Pool"));
 
-        // 3. Assemble final string (Separated by comma + newline)
+        // 3. Assemble Output
         if (modObjects.Count > 0)
         {
-            compiledMod = "=" + string.Join(",\n", modObjects) + ",\n";
+            compiledMod = humanReadable
+                ? "=" + string.Join(",\n\n", modObjects) + ",\n"
+                : "=" + string.Join(",\n", modObjects) + ",\n";
         }
         else
         {
@@ -183,100 +397,85 @@ public class CompiledModData
         }
     }
 
-    /// <summary>
-    /// Combines items into chunked modifier objects, respecting the 4000 character limit.
-    /// </summary>
     private List<string> GetPoolChunks(string poolType, List<string> items, string labelPrefix)
     {
         List<string> chunks = new List<string>();
         if (items.Count == 0) return chunks;
 
-        StringBuilder currentChunk = new StringBuilder();
+        StringBuilder currentItemsChunk = new StringBuilder();
         int chunkIndex = 1;
 
         foreach (string item in items)
         {
-            string separator = currentChunk.Length == 0 ? "" : "+";
+            string separator = currentItemsChunk.Length == 0 ? "" : (humanReadable ? "\n+\n" : "+");
 
-            // If adding this exceeds 4k chars, finalize current chunk and start a new one
-            if (currentChunk.Length + separator.Length + item.Length > MaxChunkLength)
+            if (currentItemsChunk.Length + separator.Length + item.Length > MaxChunkLength)
             {
-                chunks.Add($"{poolType}pool.{currentChunk}.mn.{labelPrefix} {chunkIndex}.part.1");
-
-                currentChunk.Clear();
+                chunks.Add(FormatPoolString(poolType, currentItemsChunk.ToString(), labelPrefix, chunkIndex));
+                currentItemsChunk.Clear();
                 chunkIndex++;
-                separator = ""; // Reset separator for the first item of the new chunk
+                separator = "";
             }
 
-            currentChunk.Append(separator).Append(item);
+            currentItemsChunk.Append(separator).Append(item);
         }
 
-        // Add the final remaining chunk
-        if (currentChunk.Length > 0)
+        if (currentItemsChunk.Length > 0)
         {
-            chunks.Add($"{poolType}pool.{currentChunk}.mn.{labelPrefix} {chunkIndex}.part.1");
+            chunks.Add(FormatPoolString(poolType, currentItemsChunk.ToString(), labelPrefix, chunkIndex));
         }
 
         return chunks;
     }
 
-    /// <summary>
-    /// Logs the raw compiled mod to Unity's console and safely saves it to a unique file.
-    /// </summary>
+    private string FormatPoolString(string poolType, string content, string labelPrefix, int chunkIndex)
+    {
+        string label = chunkIndex > 1 ? $"{labelPrefix} {chunkIndex}" : labelPrefix;
+
+        return humanReadable
+            ? $"{poolType}pool.\n{content}\n.part.1\n&Hidden.mn.{label}"
+            : $"{poolType}pool.{content}.part.1&Hidden.mn.{label}";
+    }
+
     public void OutputMod()
     {
-        // 1. Pure log to Unity Console for easy copy-pasting
         Debug.Log(compiledMod);
 
-        // 2. Safely output to file without overwriting
         try
         {
-        #if UNITY_EDITOR
-            string targetDirectory = Application.dataPath; // Saves in /Assets
-        #else
-        string targetDirectory = Application.persistentDataPath;
-        #endif
-
-            // Generate safe unique path (e.g. NewTextMod (1).txt)
+#if UNITY_EDITOR
+            string targetDirectory = Application.dataPath;
+#else
+            string targetDirectory = Application.persistentDataPath;
+#endif
             string uniqueFilePath = GetUniqueFilePath(targetDirectory, modFileName);
-
             File.WriteAllText(uniqueFilePath, compiledMod);
 
-        #if UNITY_EDITOR
-            // Refresh Unity's file database so it sees the new file immediately
+#if UNITY_EDITOR
             UnityEditor.AssetDatabase.Refresh();
-
-            // Convert full path to an "Assets/..." relative path
             string relativePath = "Assets" + uniqueFilePath.Substring(Application.dataPath.Length);
             UnityEngine.Object fileContext = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(relativePath);
-
-            // Passing 'fileContext' as the 2nd parameter makes clicking the console log jump directly to the file!
             Debug.Log($"[CompiledModData] Saved file safely to: {Path.GetFileName(uniqueFilePath)}", fileContext);
-        #else
-        Debug.Log($"[CompiledModData] Saved file safely to: {Path.GetFileName(uniqueFilePath)}");
-        #endif
+#else
+            Debug.Log($"[CompiledModData] Saved file safely to: {Path.GetFileName(uniqueFilePath)}");
+#endif
         }
-        catch (System.Exception e)
+        catch (Exception e)
         {
             Debug.LogError($"Failed to write mod file: {e.Message}");
         }
     }
 
-    /// <summary>
-    /// Ensures a file isn't overwritten by appending (1), (2), etc., if it already exists.
-    /// </summary>
     private string GetUniqueFilePath(string directory, string baseFileName)
     {
         string nameWithoutExt = Path.GetFileNameWithoutExtension(baseFileName);
         string extension = Path.GetExtension(baseFileName);
 
-        // Default to .txt if no extension was provided in the UI
         if (string.IsNullOrEmpty(extension)) extension = ".txt";
 
         string filePath = Path.Combine(directory, $"{nameWithoutExt}{extension}");
         int counter = 1;
 
-        // Increment filename if a match is found
         while (File.Exists(filePath))
         {
             filePath = Path.Combine(directory, $"{nameWithoutExt} ({counter}){extension}");

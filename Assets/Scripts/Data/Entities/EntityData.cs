@@ -776,7 +776,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             ProcessFaceFacades(face, chunks, includeInlineFacades);
             ProcessFaceDescription(face, chunks);
             ProcessFaceStasis(face, chunks);
-
+            /*
             if (chunks.Count > 0)
             {
                 string templateString = string.Join("#", chunks);
@@ -798,6 +798,23 @@ public abstract class EntityData : SDData, IPayloadContainer
                     if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
                     else groupedModifiers[templateString] = faceMask;
                 }
+            }
+            */
+
+            if (chunks.Count > 0)
+            {
+                // Unify hat/egg payloads by assigning the 'mid' positional scope directly into the template string.
+                // This allows them to group perfectly in the bitmask dictionary.
+                if (hasHatWrapper)
+                {
+                    chunks[0] = "mid." + chunks[0];
+                }
+
+                string templateString = string.Join("#", chunks);
+
+                int faceMask = 1 << i;
+                if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
+                else groupedModifiers[templateString] = faceMask;
             }
 
             // GATHER STRUCTURAL INTACT SIDE ITEMS FROM THE AST BRIDGE
