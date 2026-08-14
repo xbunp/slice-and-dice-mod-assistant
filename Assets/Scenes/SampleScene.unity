@@ -181,6 +181,9 @@ MonoBehaviour:
     customPayloads: []
     unityName: New Item
     GlobalTags: []
+    LearnedAbilities: []
+    ClearDescription: 0
+    ClearIcon: 0
     Containers: []
     Mechanics: []
   hero:
@@ -199,66 +202,24 @@ MonoBehaviour:
     curses: []
     baseAbilityData: []
     diceSides:
-    - faceType: 0
-      effectID: 0
+    - effectID: 0
       pips: 0
-      facadeID: 
-      facadeColor: 
-      keywords: []
-      sideItems: []
-      sidesc: 
-      togtime: 0
-      payload: 
-    - faceType: 0
-      effectID: 0
+      _sideMechanics: []
+    - effectID: 0
       pips: 0
-      facadeID: 
-      facadeColor: 
-      keywords: []
-      sideItems: []
-      sidesc: 
-      togtime: 0
-      payload: 
-    - faceType: 0
-      effectID: 0
+      _sideMechanics: []
+    - effectID: 0
       pips: 0
-      facadeID: 
-      facadeColor: 
-      keywords: []
-      sideItems: []
-      sidesc: 
-      togtime: 0
-      payload: 
-    - faceType: 0
-      effectID: 0
+      _sideMechanics: []
+    - effectID: 0
       pips: 0
-      facadeID: 
-      facadeColor: 
-      keywords: []
-      sideItems: []
-      sidesc: 
-      togtime: 0
-      payload: 
-    - faceType: 0
-      effectID: 0
+      _sideMechanics: []
+    - effectID: 0
       pips: 0
-      facadeID: 
-      facadeColor: 
-      keywords: []
-      sideItems: []
-      sidesc: 
-      togtime: 0
-      payload: 
-    - faceType: 0
-      effectID: 0
+      _sideMechanics: []
+    - effectID: 0
       pips: 0
-      facadeID: 
-      facadeColor: 
-      keywords: []
-      sideItems: []
-      sidesc: 
-      togtime: 0
-      payload: 
+      _sideMechanics: []
     baseReplica: 
     colorClass: 
     tier: 0

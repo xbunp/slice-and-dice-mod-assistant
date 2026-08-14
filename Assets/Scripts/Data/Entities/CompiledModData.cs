@@ -26,8 +26,8 @@ public class CompiledModData
     private const string DummyItem = "can";
 
     /// <summary>
-    /// Imports items by finding each item block, stripping any 'i.' prefix, 
-    /// capturing through the end of the '.n.Item Name' tag, and wrapping in outer brackets.
+    /// Imports items of any format (bracketed, unbracketed, ritemx, keyword-based),
+    /// stripping 'i.' prefixes, ignoring plaintext comments/labels, and enclosing them in brackets.
     /// </summary>
     public void ImportItems(string itemString)
     {
@@ -35,51 +35,93 @@ public class CompiledModData
         if (string.IsNullOrWhiteSpace(itemString)) return;
 
         string cleanText = StripComments(itemString);
-        int i = 0;
+        string[] lines = cleanText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 
-        while (i < cleanText.Length)
+        foreach (string rawLine in lines)
         {
-            // Skip whitespace
-            if (char.IsWhiteSpace(cleanText[i]))
+            string line = rawLine.Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            // Handle multiple items if pasted on the same line joined by '+'
+            List<string> subItems = SplitRootLevel(line, '+');
+            foreach (string subItem in subItems)
             {
-                i++;
-                continue;
+                ProcessSingleItem(subItem);
             }
-
-            // Skip leading "i." if present
-            if (cleanText[i] == 'i' && i + 2 < cleanText.Length && cleanText[i + 1] == '.' && cleanText[i + 2] == '(')
-            {
-                i += 2; // Advance to '('
-            }
-
-            // Every item definition begins with a parenthesis
-            if (cleanText[i] == '(')
-            {
-                string itemEntity = ExtractItemEntity(cleanText, ref i);
-                if (!string.IsNullOrEmpty(itemEntity))
-                {
-                    // Clean any residual "i." prefix
-                    if (itemEntity.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
-                    {
-                        itemEntity = itemEntity.Substring(2).TrimStart();
-                    }
-
-                    // Ensure fully enclosed in an outer pair of parentheses
-                    if (!IsFullyEnclosed(itemEntity))
-                    {
-                        itemEntity = $"({itemEntity})";
-                    }
-
-                    itemPool.Add(itemEntity);
-                    continue;
-                }
-            }
-
-            i++;
         }
 
         Compile();
         OutputMod();
+    }
+    private void ProcessSingleItem(string raw)
+    {
+        string item = raw.Trim();
+        if (string.IsNullOrEmpty(item)) return;
+
+        // Strip leading/trailing mod symbols (=, +, ,, etc.)
+        item = item.TrimStart('=', ',', '+').Trim();
+        if (item.EndsWith(",")) item = item.Substring(0, item.Length - 1).Trim();
+
+        // Validate that this line is actually an item and not a standalone title label
+        bool isItem = item.StartsWith("i.", StringComparison.OrdinalIgnoreCase)
+                   || item.Contains(".tier.")
+                   || item.Contains(".n.")
+                   || item.Contains(".img.")
+                   || item.Contains(".splice.")
+                   || (item.StartsWith("(") && item.Contains("."));
+
+        if (!isItem) return;
+
+        // Strip leading "i." prefix if present
+        if (item.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+        {
+            item = item.Substring(2).TrimStart();
+        }
+
+        // Enforce enclosing in a full pair of brackets if not already fully enclosed
+        if (!IsFullyEnclosed(item))
+        {
+            item = $"({item})";
+        }
+
+        itemPool.Add(item);
+    }
+
+    /// <summary>
+    /// Splits text by a delimiter only when outside of parenthesis depth.
+    /// </summary>
+    private List<string> SplitRootLevel(string text, char delimiter)
+    {
+        List<string> results = new List<string>();
+        int depth = 0;
+        StringBuilder current = new StringBuilder();
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+
+            if (c == delimiter && depth == 0)
+            {
+                if (current.Length > 0)
+                {
+                    results.Add(current.ToString());
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        if (current.Length > 0)
+        {
+            results.Add(current.ToString());
+        }
+
+        return results;
     }
 
     /// <summary>
