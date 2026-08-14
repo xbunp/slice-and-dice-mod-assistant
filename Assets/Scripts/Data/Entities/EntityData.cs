@@ -182,13 +182,11 @@ public abstract class EntityData : SDData, IPayloadContainer
     protected void ProcessTraitPayload(string tPayload)
     {
         if (string.IsNullOrWhiteSpace(tPayload)) return;
-
         List<string> chains = StaticBranchTracing.TopLevelSplit(tPayload, '#');
         foreach (string chain in chains)
         {
             if (string.IsNullOrWhiteSpace(chain)) continue;
             string trimmed = chain.Trim();
-
             if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase))
             {
                 OrbData orb = new OrbData();
@@ -204,7 +202,7 @@ public abstract class EntityData : SDData, IPayloadContainer
                 ModifierData nestedMod = new ModifierData();
                 nestedMod.Parse(trimmed);
                 if (customPayloads == null) customPayloads = new List<CustomPayload>();
-                customPayloads.Add(new CustomPayload { Prefix = "t", Data = nestedMod });
+                customPayloads.Add(new CustomPayload { Prefix = "t", Data = nestedMod, Type = PayloadType.Modifier });
             }
             else
             {
@@ -530,7 +528,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         string tokenLower = stream.Peek().ToLower();
         bool isI = tokenLower == "i";
         string targetToken = isI ? stream.PeekNext().ToLower() : tokenLower;
-
         if (targetToken == "t" || targetToken == "gift" || targetToken == "learn")
         {
             if (isI) stream.Consume();
@@ -540,16 +537,14 @@ public abstract class EntityData : SDData, IPayloadContainer
             if (length > 0)
             {
                 string payload = string.Join(".", stream.ConsumeRange(length));
-                if (targetToken == "t") traits.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
+                if (targetToken == "t") ProcessTraitPayload(payload);
                 else if (targetToken == "gift") blessings.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
                 else baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                if (targetToken == "t") traits = traits.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                else if (targetToken == "gift") blessings = blessings.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                else baseAbilityData = baseAbilityData.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (targetToken == "gift") blessings = blessings.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                else if (targetToken == "learn") baseAbilityData = baseAbilityData.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             }
             return true;
         }
-
         if (targetToken == "abilitydata" || targetToken == "triggerhpdata" || targetToken == "onhitdata")
         {
             if (isI) stream.Consume();
@@ -561,7 +556,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 string payload = string.Join(".", stream.ConsumeRange(length));
                 if (payload.StartsWith("("))
                 {
-                    // FIX: Pass the prefix context so CreateAbility natively targets the exact type
                     AddCustomAbility(AbilityData.CreateAbility($"{targetToken}.{payload}"));
                 }
                 else
@@ -1289,18 +1283,15 @@ public abstract class EntityData : SDData, IPayloadContainer
         MonsterData monster = this as MonsterData;
         bool isHero = hero != null;
         if (!isHero) SyncMonsterContainerBaseIdentifier(monster);
-
         string baseId = isHero ? hero.baseReplica : monster.baseMonster;
         bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) &&
                                 !string.Equals(imageOverride, "None", StringComparison.OrdinalIgnoreCase) &&
                                 !string.Equals(imageOverride, baseId, StringComparison.OrdinalIgnoreCase);
-
         // 1. Setup injection scopes
         List<string> innerHeroPayloads = new List<string>();
         List<string> lateInnerPayloads = new List<string>();
         List<string> outerPayloads = new List<string>();
         List<string> wrapperPayloads = new List<string>();
-
         // 2. Process Custom Payloads
         if (customPayloads != null)
         {
@@ -1322,7 +1313,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-            
         // 3. Custom Ability Data
         if (customAbilityData != null && customAbilityData.Count > 0)
         {
@@ -1347,7 +1337,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-
         // 4. Stock Items
         if (items != null)
         {
@@ -1367,7 +1356,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-
         // 5. Blessings
         if (isHero && blessings != null)
         {
@@ -1385,7 +1373,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-
         // 6. Base Abilities (Learn)
         if (isHero && hero.baseAbilityData != null)
         {
@@ -1400,7 +1387,6 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-
         // 7. Traits
         if (traits != null)
         {
@@ -1410,17 +1396,13 @@ public abstract class EntityData : SDData, IPayloadContainer
                 {
                     MonsterData traitMonster = new MonsterData();
                     traitMonster.Parse(t);
-
                     ItemData traitItem = new ItemData();
                     traitItem.Mechanics.Add(new ItemMechanic { Prefix = "t", PayloadData = traitMonster });
-
-                    // RouteItemPayload wraps traitItem in ModifierData (GiveItem) -> i.(t.(archer))
                     RouteItemPayload(traitItem, isHero, innerHeroPayloads, outerPayloads);
                 }
             }
         }
-
-        // 9. Curses (Routes through RouteItemPayload for BOTH Heroes and Monsters)
+        // 9. Curses
         if (curses != null)
         {
             foreach (var c in curses)
@@ -1429,18 +1411,13 @@ public abstract class EntityData : SDData, IPayloadContainer
                 {
                     ModifierData curseMod = new ModifierData();
                     curseMod.Parse(c);
-
                     ModifierData jinxMod = new ModifierData { ActionType = ModifierActionType.Jinx, NestedModifierPayload = curseMod };
-
                     ItemData traitItem = new ItemData();
                     traitItem.Mechanics.Add(new ItemMechanic { Prefix = "t", PayloadData = jinxMod });
-
-                    // RouteItemPayload wraps traitItem in ModifierData (GiveItem) -> i.(t.(jinx.(...)))
                     RouteItemPayload(traitItem, isHero, innerHeroPayloads, outerPayloads);
                 }
             }
         }
-
         // 10. Appended Doc (Hero)
         if (isHero && !string.IsNullOrEmpty(hero.appendedDoc))
         {
@@ -1449,64 +1426,48 @@ public abstract class EntityData : SDData, IPayloadContainer
             docItem.Mechanics.Add(new ItemMechanic { Prefix = "", PayloadData = parsedDocMod });
             RouteItemPayload(docItem, isHero, innerHeroPayloads, outerPayloads);
         }
-
         // --- BUILD CORE BODY ---
         string coreBody = BuildCoreBody(hero, monster, isHero, baseId, hasImageOverride, innerHeroPayloads, lateInnerPayloads);
-
         // --- BUILD TRAILING ---
         StringBuilder trailingSb = new StringBuilder();
         foreach (var outer in outerPayloads) trailingSb.Append($".{outer}");
-        if (!isHero && monster != null && !string.IsNullOrEmpty(monster.bal))
-        {
-            trailingSb.Append($".bal.{FormatName(monster.bal)}");
-        }
         if (!string.IsNullOrEmpty(doc)) trailingSb.Append($".doc.{doc}");
         if (!string.IsNullOrEmpty(doc2)) trailingSb.Append($".doc.{doc2}");
         string combined = $"{coreBody}{trailingSb.ToString()}";
-
         bool forceOuterParens = isOuterWrappedInParens || trailingSb.Length > 0;
-
         return ApplyWrappersAndOuterBracketing(combined, wrapperPayloads, forceOuterParens);
     }
     private string BuildCoreBody(HeroData hero, MonsterData monster, bool isHero, string baseId, bool hasImageOverride, List<string> innerHeroPayloads, List<string> lateInnerPayloads)
     {
         StringBuilder sb = new StringBuilder();
-
         // 1. Base Identifier
         if (!string.IsNullOrEmpty(baseId))
         {
             if (isHero) sb.Append($"replica.{FormatName(FormatSpecialImageName(baseId))}");
             else sb.Append(FormatName(FormatSpecialImageName(baseId)));
         }
-
         // 2. Pre-Name Visual Modifiers (Monsters)
         if (!isHero && !hasImageOverride) AppendColorModifier(sb);
-
         // 3. Name
         if (!string.IsNullOrEmpty(entityName) && (isHero || !string.Equals(entityName, baseId, StringComparison.OrdinalIgnoreCase)))
             sb.Append($".n.{FormatName(entityName)}");
-
         // 4. Hero Metadata
         if (isHero && !string.IsNullOrEmpty(hero.colorClass) && !IsDefaultHeroColor(hero.baseReplica, hero.colorClass))
             sb.Append($".col.{hero.colorClass}");
         if (hp > 0) sb.Append($".hp.{hp}");
         if (isHero && hero.tier >= 0) sb.Append($".tier.{hero.tier}");
         if (isHero && hero.adj.HasValue) sb.Append($".adj.{hero.adj.Value}");
-
         // 5. Dice Sides & Speech
         AppendDiceSides(sb);
         if (isHero && !string.IsNullOrEmpty(hero.speech)) sb.Append($".speech.{hero.speech}");
-
         // 6. Face Modifiers (Inline Arrays)
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
-
         // 7. --- INJECT INNER PAYLOADS HERE (Before Visual Modifiers) ---
         if (innerHeroPayloads != null)
         {
             foreach (var inner in innerHeroPayloads) sb.Append($".{inner}");
         }
-
         // 8. Image Override AND Visual Modifiers (MUST BE AT THE VERY END OF CORE BODY)
         if (hasImageOverride)
         {
@@ -1517,12 +1478,16 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             AppendColorModifier(sb);
         }
+        // Monster Balance: bal belongs inside the core body
+        if (!isHero && monster != null && !string.IsNullOrEmpty(monster.bal))
+        {
+            sb.Append($".bal.{FormatName(monster.bal)}");
+        }
         // 9. Late Inner Payloads (Spells/Tactics placed after visuals to prevent game parser bugs)
         if (lateInnerPayloads != null)
         {
             foreach (var late in lateInnerPayloads) sb.Append($".{late}");
         }
-
         string coreString = sb.ToString();
         if (coreString.StartsWith(".")) coreString = coreString.Substring(1);
         return $"({coreString})";

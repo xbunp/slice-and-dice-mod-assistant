@@ -31,21 +31,18 @@ public class MonsterData : EntityData
         InitializeAsBlank();
         if (string.IsNullOrWhiteSpace(data)) return;
         DetectBracketingState(data);
-
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string core = StaticBranchTracing.StripOuterParens(chunks[0]);
         List<string> tokens = StaticBranchTracing.TopLevelSplit(core, '.');
-
         // Unpack outer parens wrapping the core details
         while (tokens.Count > 0 && tokens[0].StartsWith("(") && tokens[0].EndsWith(")"))
         {
             string inner = StaticBranchTracing.StripOuterParens(tokens[0]);
-            if (inner == tokens[0]) break; // PREVENT INFINITE LOOP
+            if (inner == tokens[0]) break;
             List<string> innerTokens = StaticBranchTracing.TopLevelSplit(inner, '.');
             tokens.RemoveAt(0);
             tokens.InsertRange(0, innerTokens);
         }
-
         if (tokens.Count > 0)
         {
             // 1. Extract Base Monster Name / Image
@@ -57,45 +54,27 @@ public class MonsterData : EntityData
             }
             else if (!MonsterDomainRules.MonsterPropertyKeys.Contains(tokens[0]))
             {
-                baseMonster = tokens[0];
-                tokens.RemoveAt(0);
+                if (tokens[0].Equals("rmon", StringComparison.OrdinalIgnoreCase) && tokens.Count > 1 && !MonsterDomainRules.MonsterPropertyKeys.Contains(tokens[1]))
+                {
+                    baseMonster = $"{tokens[0]}.{tokens[1]}";
+                    tokens.RemoveRange(0, 2);
+                }
+                else
+                {
+                    baseMonster = tokens[0];
+                    tokens.RemoveAt(0);
+                }
             }
-
             // 2. Extract Specialized Containers (egg, vase, orb, jinx)
             string firstTokenLower = baseMonster.ToLower();
-
-            /*
-            if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx" || firstTokenLower == "rmon")
+            if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx")
             {
                 if (tokens.Count > 0)
                 {
-                    string rawPayload;
-                    if (tokens[0].StartsWith("("))
-                    {
-                        rawPayload = tokens[0];
-                        tokens.RemoveAt(0);
-                    }
-                    else
-                    {
-                        rawPayload = string.Join(".", tokens);
-                        tokens.Clear();
-                    }
-
-                    baseMonster += "." + rawPayload;
-                    string corePayload = StaticBranchTracing.StripOuterParens(rawPayload);
-            */
-
-            if (firstTokenLower == "egg" || firstTokenLower == "vase" || firstTokenLower == "orb" || firstTokenLower == "jinx" || firstTokenLower == "rmon")
-            {
-                if (tokens.Count > 0)
-                {
-                    // Pass everything to the inner payload entity (the Orc) so it owns its abilities
                     string rawPayload = string.Join(".", tokens);
                     tokens.Clear();
-
                     baseMonster += "." + rawPayload;
                     string corePayload = StaticBranchTracing.StripOuterParens(rawPayload);
-
                     if (firstTokenLower == "jinx" || firstTokenLower == "vase")
                     {
                         ModifierData mod = new ModifierData();
@@ -113,8 +92,6 @@ public class MonsterData : EntityData
                             MonsterData nestedMonster = new MonsterData();
                             nestedMonster.Parse(corePayload);
                             payloadData = nestedMonster;
-
-                            // Collapse named eggs so they export cleanly
                             if (!string.IsNullOrEmpty(nestedMonster.entityName))
                                 baseMonster = $"egg.{nestedMonster.entityName}";
                             else
@@ -125,8 +102,6 @@ public class MonsterData : EntityData
                             HeroData nestedHero = new HeroData();
                             nestedHero.Parse(corePayload);
                             payloadData = nestedHero;
-
-                            // Collapse named eggs so they export cleanly
                             if (!string.IsNullOrEmpty(nestedHero.entityName))
                                 baseMonster = $"egg.{nestedHero.entityName}";
                             else
@@ -136,7 +111,6 @@ public class MonsterData : EntityData
                 }
             }
         }
-
         // 3. Delegate ALL property, dice, and item parsing to the base TokenStream pipeline in EntityData
         ExtractKnowledge(tokens, _itemPipeline, processTraitsAndCollections: true);
         ExecuteItemPipeline();
