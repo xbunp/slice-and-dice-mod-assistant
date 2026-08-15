@@ -2565,6 +2565,11 @@ public class LearnAbilityNodeDef : AuthoringNodeDef
                     card.MechanicData.Prefix = "onhitdata";
                     exportStr = targetAbility.Export();
                 }
+                else if (targetAbility is SpellData || targetAbility is TacticData)
+                {
+                    card.MechanicData.Prefix = "learn.sthief.abilitydata";
+                    exportStr = targetAbility.Export();
+                }
                 else
                 {
                     card.MechanicData.Prefix = "abilitydata";

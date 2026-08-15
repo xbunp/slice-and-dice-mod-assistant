@@ -665,7 +665,7 @@ public class ItemUI : RootUI
         ItemNodeType type = ItemNodeType.BaseItem;
 
         if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
-        else if (AbilityDomainRules.AbilityStartTokens.Contains(prefix) || prefix == "abilitydata") type = ItemNodeType.LearnAbility;
+        else if (AbilityDomainRules.AbilityStartTokens.Contains(prefix) || prefix == "abilitydata" || prefix.StartsWith("learn") || prefix.EndsWith("abilitydata")) type = ItemNodeType.LearnAbility;
         else if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.RawString;
         else if (prefix == "sticker" || prefix == "enchant" || prefix == "cast" || (prefix == "i" && mechanic.PayloadData is ItemData)) type = ItemNodeType.Bracket;
 
