@@ -131,11 +131,18 @@ public class DiceFaceBuilderWidget
     {
         _diceUI = gridRefs;
     }
+
     public void CopyDiceFace(int index)
     {
         var sides = _getDiceSides?.Invoke();
         if (sides != null && index >= 0 && index < sides.Length)
+        {
+            // 1. Shatter before copying so we copy a safe, flat structure.
+            // This prevents legacy multi-face items from bleeding into the clipboard!
+            sides[index]?.FlattenLegacyPayloadsForEdit();
+
             SharedClipboard = sides[index].Clone();
+        }
     }
     public void PasteDiceFace(int index)
     {
@@ -143,21 +150,18 @@ public class DiceFaceBuilderWidget
         var sides = _getDiceSides?.Invoke();
         if (sides != null && index >= 0 && index < sides.Length)
         {
-            sides[index] = SharedClipboard.Clone();
+            // 1. Shatter existing items on this face so they aren't left orphaned on sibling faces
+            sides[index]?.FlattenLegacyPayloadsForEdit();
 
-            // AST flat nodes handle grouping dynamically, but complex Legacy Items must be manually retargeted
-            string targetAlias = DiceTargetHelper.FaceNames[index].ToLower();
-            foreach (var m in sides[index].sideMechanics)
-            {
-                if (m.LegacyItemPayload != null)
-                {
-                    foreach (var lm in m.LegacyItemPayload.Mechanics)
-                    {
-                        lm.Targets.Clear();
-                        lm.Targets.Add(targetAlias);
-                    }
-                }
-            }
+            // 2. Preserve parent linkage
+            var parent = sides[index]?.ParentEntity;
+
+            // 3. Paste
+            sides[index] = SharedClipboard.Clone();
+            if (sides[index] != null) sides[index].ParentEntity = parent;
+
+            // Notice we removed the legacy item manual retargeting loop here.
+            // Since CopyDiceFace now shatters before copying, the clipboard is guaranteed to only hold safe, flat AST nodes!
 
             _onStateChanged?.Invoke();
             _onRebuildRequested?.Invoke();
@@ -168,11 +172,77 @@ public class DiceFaceBuilderWidget
         var sides = _getDiceSides?.Invoke();
         if (sides != null && index >= 0 && index < sides.Length)
         {
+            // 1. Shatter existing items on this face so they aren't left orphaned on sibling faces
+            sides[index]?.FlattenLegacyPayloadsForEdit();
+
+            // 2. Preserve parent linkage
+            var parent = sides[index]?.ParentEntity;
+
+            // 3. Clear
             sides[index] = new DiceSideData();
+            if (sides[index] != null) sides[index].ParentEntity = parent;
+
             _onStateChanged?.Invoke();
             _onRebuildRequested?.Invoke();
         }
     }
+    private void IncrementPips(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index]?.FlattenLegacyPayloadsForEdit(); // <--- ADDED
+
+            sides[index].pips++;
+            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                input.SetTextWithoutNotify(sides[index].pips.ToString());
+            _onStateChanged?.Invoke();
+        }
+    }
+    private void DecrementPips(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index]?.FlattenLegacyPayloadsForEdit(); // <--- ADDED
+
+            sides[index].pips--;
+            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                input.SetTextWithoutNotify(sides[index].pips.ToString());
+            _onStateChanged?.Invoke();
+        }
+    }
+    private GridRowSpec BuildBaseRow(int index, DiceSideData face)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Base:", 0.25f),
+            GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.20f, () => _openBaseModal?.Invoke(index)),
+            GridCellSpec.CreateLabel("ID:", 0.15f),
+            GridCellSpec.CreateInput($"ID_{index}", "ID", 0.40f, (val) =>
+            {
+                face.FlattenLegacyPayloadsForEdit(); // <--- ADDED
+
+                if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; _onStateChanged?.Invoke(); }
+                else if (int.TryParse(val, out int id)) { face.effectID = id; _onStateChanged?.Invoke(); }
+            })
+        );
+    }
+    private GridRowSpec BuildPipsRow(int index, DiceSideData face)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateLabel("Pips:", 0.25f),
+            GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) =>
+            {
+                face.FlattenLegacyPayloadsForEdit(); // <--- ADDED
+
+                if (string.IsNullOrWhiteSpace(val)) { face.pips = 0; _onStateChanged?.Invoke(); }
+                else if (int.TryParse(val, out int p)) { face.pips = p; _onStateChanged?.Invoke(); }
+            }),
+            GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => DecrementPips(index)),
+            GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => IncrementPips(index))
+        );
+    }
+
     private List<string> ParseStickerKeywords(string payload)
     {
         var list = new List<string>();
@@ -280,28 +350,6 @@ public class DiceFaceBuilderWidget
         _onStateChanged?.Invoke();
 
         if (facadeAutoAssigned) UpdateUIFromData(faceIndex);
-    }
-    private void IncrementPips(int index)
-    {
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && index >= 0 && index < sides.Length)
-        {
-            sides[index].pips++;
-            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
-                input.SetTextWithoutNotify(sides[index].pips.ToString());
-            _onStateChanged?.Invoke();
-        }
-    }
-    private void DecrementPips(int index)
-    {
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && index >= 0 && index < sides.Length)
-        {
-            sides[index].pips--;
-            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
-                input.SetTextWithoutNotify(sides[index].pips.ToString());
-            _onStateChanged?.Invoke();
-        }
     }
 
     // --- LAYOUT GENERATION ---
@@ -526,32 +574,6 @@ public class DiceFaceBuilderWidget
     }
 
     // --- MODULAR ROW BUILDERS ---
-    private GridRowSpec BuildBaseRow(int index, DiceSideData face)
-    {
-        return new GridRowSpec(
-            GridCellSpec.CreateLabel("Base:", 0.25f),
-            GridCellSpec.CreateDiceButton($"BaseBtn_{index}", "B", 0.20f, () => _openBaseModal?.Invoke(index)),
-            GridCellSpec.CreateLabel("ID:", 0.15f),
-            GridCellSpec.CreateInput($"ID_{index}", "ID", 0.40f, (val) =>
-            {
-                if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; _onStateChanged?.Invoke(); }
-                else if (int.TryParse(val, out int id)) { face.effectID = id; _onStateChanged?.Invoke(); }
-            })
-        );
-    }
-    private GridRowSpec BuildPipsRow(int index, DiceSideData face)
-    {
-        return new GridRowSpec(
-            GridCellSpec.CreateLabel("Pips:", 0.25f),
-            GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) =>
-            {
-                if (string.IsNullOrWhiteSpace(val)) { face.pips = 0; _onStateChanged?.Invoke(); }
-                else if (int.TryParse(val, out int p)) { face.pips = p; _onStateChanged?.Invoke(); }
-            }),
-            GridCellSpec.CreateButton($"BtnPipDown_{index}", "▼", 0.20f, () => DecrementPips(index)),
-            GridCellSpec.CreateButton($"BtnPipUp_{index}", "▲", 0.20f, () => IncrementPips(index))
-        );
-    }
     private GridRowSpec BuildFaceHeader(int index, string faceName)
     {
         return new GridRowSpec(GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f));

@@ -411,11 +411,8 @@ public class DiceSideData
                     if (leg.PayloadData is EntityData ed)
                     {
                         string safeHat = ed.ExportAsHat();
-                        safeHat = StaticBranchTracing.StripOuterParens(safeHat);
-                        if (leg.Prefix == "hat" && !safeHat.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-                            flat.RawPayloadString = $"egg.{safeHat}";
-                        else
-                            flat.RawPayloadString = safeHat;
+                        // Let the entity define itself, just ensure it's safely bracketed for the AST
+                        flat.RawPayloadString = safeHat.StartsWith("(") ? safeHat : $"({safeHat})";
                     }
                     else if (leg.PayloadData is SDData sd)
                     {

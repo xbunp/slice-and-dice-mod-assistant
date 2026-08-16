@@ -772,7 +772,7 @@ Warchief+
 +
 ((Sudul.n.Corsair.sd.15-6:15-4:15-3:15-3:15-3:15-2.img.Dabblest.p.e6c4b8:975e1e:20.thue.71483e:21:-3.hsv.2:9:1.draw.Yca11:12:8.t.Bandit).i.left.k.heavy.i.mid.k.eliminate.i.Blue Skink.i.all.facade.sym38:0)
 +
-(Zombie.n.Attercop.sd.53-2:181-1:181-1:181-1:170-4:53-1.i.(mid.k.petrify#k.cleave#facade.kas6:0:0:64).i.(topbot.k.petrify#facade.kas6:0:0:-14).i.(right.facade.Eme92:0).i.(left2.facade.Eme183:0).i.(rightmost.facade.Eme183:0).i.(rightmost.mid.hat.(egg.(Spider))#blindfold#facade.kas26:0).img.Slate.hsv.0:0:-99.draw.Tarantus:-2:-9.p.a07146:6a43b0:33.bal.Zombie)
+(Zombie.n.Attercop.sd.53-2:181-1:181-1:181-1:170-4.i.(left.facade.Eme183:0).i.(mid.k.petrify#k.cleave#facade.kas6:0:0:62).i.(topbot.k.petrify#facade.kas6:0:0:-25).i.(right.facade.Eme92:0).i.(rightmost.mid.hat.(egg.Spider)#blindfold#facade.kas26:0).img.Slate.hsv.0:0:-99.draw.Tarantus:-2:-9.p.a07146:6a43b0:33.bal.Zombie)
 +
 ((Carrier.n.Oathbreaker.hp.7.sd.127-7:131-2:53-2:53-2:53-1:54-1.i.right.k.cleave#facade.Spi17:19:0:0.img.Gladiator.p.f8f8f8:fada49:36.thue.ab4f2b:42:13.hsv.1:85:2.bal.Carrier).t.Ghost)
 +
