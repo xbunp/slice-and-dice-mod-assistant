@@ -5,6 +5,10 @@ using System.Linq;
 [System.Serializable]
 public class DiceSideData
 {
+    [System.NonSerialized]
+    [Newtonsoft.Json.JsonIgnore]
+    public EntityData ParentEntity;
+
     public enum DiceFaceType { Base, Sticker, Cast, Enchant, Egg }
     public enum PayloadTarget { None, Self, Ally, Enemy, AllAllies, AllEnemies, Everyone }
 
@@ -16,7 +20,6 @@ public class DiceSideData
             default: return "Inherent";
         }
     }
-
     public static bool IsTargetInherentDefault(DiceSideData.DiceFaceType faceType, DiceSideData.PayloadTarget target)
     {
         if (faceType == DiceSideData.DiceFaceType.Sticker && target == DiceSideData.PayloadTarget.Ally) return true;
@@ -35,88 +38,7 @@ public class DiceSideData
     }
     public List<MechanicNode> sideItems => sideMechanics;
 
-    // --- COPY-ON-WRITE: Flatten legacy payload for this face when edited in UI ---
-    public void FlattenLegacyPayloadsForEdit()
-    {
-        var toRemove = sideMechanics.Where(m => m.LegacyItemPayload != null).ToList();
-        if (toRemove.Count == 0) return;
-
-        foreach (var m in toRemove)
-        {
-            foreach (var leg in m.LegacyItemPayload.Mechanics)
-            {
-                var flat = new MechanicNode
-                {
-                    Prefix = leg.Prefix,
-                    RawPayloadString = leg.PayloadString,
-                    ChainedKeywords = new List<string>(leg.ChainedKeywords),
-                    Multiplier = leg.Multiplier,
-                    MergedItem = leg.MergedItem,
-                    SplicedItem = leg.SplicedItem,
-                    PartIndex = leg.PartIndex,
-                    RepeatTimes = leg.RepeatTimes,
-                    PerTier = leg.PerTier,
-                    Unpack = leg.Unpack
-                };
-
-                if (leg.PayloadData is SDData sd)
-                {
-                    if (leg.Prefix == "hat") flat.RawPayloadString = $"egg.{sd.Export()}";
-                    else flat.RawPayloadString = sd.Export();
-                }
-
-                sideMechanics.Add(flat);
-            }
-            sideMechanics.Remove(m);
-        }
-    }
-
-    // --- LEGACY BRIDGE HELPERS ---
-    private string GetLegacyFacadeString()
-    {
-        foreach (var m in sideMechanics)
-        {
-            if (m.LegacyItemPayload != null)
-            {
-                foreach (var leg in m.LegacyItemPayload.Mechanics)
-                {
-                    if (leg.Prefix == "facade" && !string.IsNullOrEmpty(leg.PayloadString))
-                        return leg.PayloadString;
-
-                    foreach (var chain in leg.ChainedKeywords)
-                    {
-                        if (chain.StartsWith("facade.", StringComparison.OrdinalIgnoreCase))
-                            return chain.Substring(7);
-                        if (chain.StartsWith("facade:", StringComparison.OrdinalIgnoreCase))
-                            return chain.Substring(7);
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private ItemMechanic GetLegacyMechanic(Func<ItemMechanic, bool> predicate)
-    {
-        foreach (var m in sideMechanics)
-        {
-            if (m.LegacyItemPayload != null)
-            {
-                var found = m.LegacyItemPayload.Mechanics.FirstOrDefault(predicate);
-                if (found != null) return found;
-            }
-        }
-        return null;
-    }
-
-    private MechanicNode PrimaryPayloadMechanic => sideMechanics.FirstOrDefault(m =>
-        m.Prefix == "sticker" || m.Prefix == "cast" || m.Prefix == "enchant" || m.Prefix == "hat");
-
-    private ItemMechanic LegacyPrimaryPayloadMechanic => GetLegacyMechanic(m =>
-        m.Prefix == "sticker" || m.Prefix == "cast" || m.Prefix == "enchant" || m.Prefix == "hat");
-
     // --- AST POINTER PROPERTIES ---
-
     public string facadeID
     {
         get
@@ -180,7 +102,6 @@ public class DiceSideData
             sideMechanics.Add(new MechanicNode { Prefix = "facade", RawPayloadString = string.IsNullOrEmpty(curColor) ? value : $"{value}:{curColor}" });
         }
     }
-
     public string facadeColor
     {
         get
@@ -236,7 +157,6 @@ public class DiceSideData
             sideMechanics.Add(new MechanicNode { Prefix = "facade", RawPayloadString = $":{value}" });
         }
     }
-
     public string sidesc
     {
         get
@@ -259,7 +179,6 @@ public class DiceSideData
             if (!string.IsNullOrEmpty(value)) sideMechanics.Add(new MechanicNode { Prefix = "sidesc", RawPayloadString = value });
         }
     }
-
     public bool togtime
     {
         get => sideMechanics.Any(m => string.IsNullOrEmpty(m.Prefix) && string.Equals(m.RawPayloadString, "togtime", StringComparison.OrdinalIgnoreCase)) ||
@@ -278,7 +197,6 @@ public class DiceSideData
             }
         }
     }
-
     public List<string> keywords
     {
         get
@@ -323,7 +241,6 @@ public class DiceSideData
             }
         }
     }
-
     public DiceFaceType faceType
     {
         get
@@ -391,7 +308,6 @@ public class DiceSideData
             }
         }
     }
-
     public string payload
     {
         get
@@ -437,7 +353,6 @@ public class DiceSideData
             }
         }
     }
-
     public PayloadTarget? payloadTarget
     {
         get
@@ -455,6 +370,115 @@ public class DiceSideData
         }
     }
 
+    // --- COPY-ON-WRITE: Flatten legacy payload for this face when edited in UI ---
+    public void FlattenLegacyPayloadsForEdit()
+    {
+        var toRemove = sideMechanics.Where(m => m.LegacyItemPayload != null).ToList();
+        if (toRemove.Count == 0) return;
+
+        if (ParentEntity != null)
+        {
+            // Use ToList() to prevent collection modification exceptions
+            foreach (var m in toRemove.ToList())
+            {
+                if (m.LegacyItemPayload != null)
+                {
+                    ParentEntity.ShatterLegacyItem(m.LegacyItemPayload);
+                }
+            }
+        }
+        else
+        {
+            // Fallback for isolated DiceSideData
+            foreach (var m in toRemove)
+            {
+                foreach (var leg in m.LegacyItemPayload.Mechanics)
+                {
+                    var flat = new MechanicNode
+                    {
+                        Prefix = leg.Prefix,
+                        RawPayloadString = leg.PayloadString,
+                        ChainedKeywords = new List<string>(leg.ChainedKeywords),
+                        Multiplier = leg.Multiplier,
+                        MergedItem = leg.MergedItem,
+                        SplicedItem = leg.SplicedItem,
+                        PartIndex = leg.PartIndex,
+                        RepeatTimes = leg.RepeatTimes,
+                        PerTier = leg.PerTier,
+                        Unpack = leg.Unpack
+                    };
+
+                    if (leg.PayloadData is EntityData ed)
+                    {
+                        string safeHat = ed.ExportAsHat();
+                        safeHat = StaticBranchTracing.StripOuterParens(safeHat);
+                        if (leg.Prefix == "hat" && !safeHat.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                            flat.RawPayloadString = $"egg.{safeHat}";
+                        else
+                            flat.RawPayloadString = safeHat;
+                    }
+                    else if (leg.PayloadData is SDData sd)
+                    {
+                        flat.RawPayloadString = sd.Export();
+                    }
+                    sideMechanics.Add(flat);
+                }
+                sideMechanics.Remove(m);
+            }
+        }
+    }
+    public DiceSideData Clone()
+    {
+        return new DiceSideData
+        {
+            effectID = this.effectID,
+            pips = this.pips,
+            _sideMechanics = this._sideMechanics.Select(m => m.Clone()).ToList(),
+            ParentEntity = this.ParentEntity // Keep the link intact!
+        };
+    }
+
+    // --- LEGACY BRIDGE HELPERS ---
+    private string GetLegacyFacadeString()
+    {
+        foreach (var m in sideMechanics)
+        {
+            if (m.LegacyItemPayload != null)
+            {
+                foreach (var leg in m.LegacyItemPayload.Mechanics)
+                {
+                    if (leg.Prefix == "facade" && !string.IsNullOrEmpty(leg.PayloadString))
+                        return leg.PayloadString;
+
+                    foreach (var chain in leg.ChainedKeywords)
+                    {
+                        if (chain.StartsWith("facade.", StringComparison.OrdinalIgnoreCase))
+                            return chain.Substring(7);
+                        if (chain.StartsWith("facade:", StringComparison.OrdinalIgnoreCase))
+                            return chain.Substring(7);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    private ItemMechanic GetLegacyMechanic(Func<ItemMechanic, bool> predicate)
+    {
+        foreach (var m in sideMechanics)
+        {
+            if (m.LegacyItemPayload != null)
+            {
+                var found = m.LegacyItemPayload.Mechanics.FirstOrDefault(predicate);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+    private MechanicNode PrimaryPayloadMechanic => sideMechanics.FirstOrDefault(m =>
+        m.Prefix == "sticker" || m.Prefix == "cast" || m.Prefix == "enchant" || m.Prefix == "hat");
+    private ItemMechanic LegacyPrimaryPayloadMechanic => GetLegacyMechanic(m =>
+        m.Prefix == "sticker" || m.Prefix == "cast" || m.Prefix == "enchant" || m.Prefix == "hat");
+
     public void AddKeyword(string kw)
     {
         if (string.IsNullOrWhiteSpace(kw)) return;
@@ -466,7 +490,6 @@ public class DiceSideData
             keywords = kws;
         }
     }
-
     public bool RemoveKeyword(string kw)
     {
         if (string.IsNullOrWhiteSpace(kw)) return false;
@@ -481,17 +504,6 @@ public class DiceSideData
         }
         return false;
     }
-
-    public DiceSideData Clone()
-    {
-        return new DiceSideData
-        {
-            effectID = this.effectID,
-            pips = this.pips,
-            _sideMechanics = this._sideMechanics.Select(m => m.Clone()).ToList()
-        };
-    }
-
     private void RemoveLegacyMechanic(Func<ItemMechanic, bool> predicate)
     {
         foreach (var m in sideMechanics.ToList())

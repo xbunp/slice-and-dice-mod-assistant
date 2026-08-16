@@ -272,6 +272,8 @@ public abstract class EntityData : SDData, IPayloadContainer
         return priority;
     }
 
+    // Inside the EntityData class
+
     public void InitializeDiceFaces()
     {
         // Ensure the array itself exists
@@ -279,7 +281,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             diceSides = new DiceSideData[6];
         }
-
         // ONLY instantiate slots that are completely null, preserving existing data
         for (int i = 0; i < diceSides.Length; i++)
         {
@@ -289,8 +290,65 @@ public abstract class EntityData : SDData, IPayloadContainer
                 // Safety net: ensure keywords list is never null
                 if (diceSides[i].keywords == null) diceSides[i].keywords = new List<string>();
             }
+            // Bind the face back to the parent entity for cross-face communication
+            diceSides[i].ParentEntity = this;
         }
     }
+    public void ShatterLegacyItem(ItemData legacyItem)
+    {
+        if (legacyItem == null) return;
+
+        for (int i = 0; i < 6; i++)
+        {
+            var face = diceSides[i];
+            if (face == null) continue;
+
+            var toRemove = face.sideMechanics.Where(m => m.LegacyItemPayload == legacyItem).ToList();
+            if (toRemove.Count == 0) continue;
+
+            foreach (var m in toRemove)
+            {
+                foreach (var leg in legacyItem.Mechanics)
+                {
+                    // Check if this specific mechanic actually applied to this face
+                    List<int> targetIndices = ItemDomainRules.GetTargetIndicesOrDefault(leg);
+
+                    if (targetIndices.Contains(i))
+                    {
+                        var flat = new MechanicNode
+                        {
+                            Prefix = leg.Prefix,
+                            RawPayloadString = leg.PayloadString,
+                            ChainedKeywords = new List<string>(leg.ChainedKeywords),
+                            Multiplier = leg.Multiplier,
+                            MergedItem = leg.MergedItem,
+                            SplicedItem = leg.SplicedItem,
+                            PartIndex = leg.PartIndex,
+                            RepeatTimes = leg.RepeatTimes,
+                            PerTier = leg.PerTier,
+                            Unpack = leg.Unpack
+                        };
+
+                        // Safely re-hydrate nested entities so they conform to the intrinsic payload standard
+                        if (leg.PayloadData is EntityData ed)
+                        {
+                            string safeHat = ed.ExportAsHat();
+                            // Let the entity define itself, just ensure it's safely bracketed for the AST
+                            flat.RawPayloadString = safeHat.StartsWith("(") ? safeHat : $"({safeHat})";
+                        }
+                        else if (leg.PayloadData is SDData sd)
+                        {
+                            flat.RawPayloadString = sd.Export();
+                        }
+
+                        face.sideMechanics.Add(flat);
+                    }
+                }
+                face.sideMechanics.Remove(m);
+            }
+        }
+    }
+
     protected void AppendDiceSides(StringBuilder sb)
     {
         // Find the last modified side so we can truncate trailing zeroes

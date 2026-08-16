@@ -1017,7 +1017,6 @@ public class ItemData : SDData
     {
         if (string.IsNullOrEmpty(mech.PayloadString)) return;
         string core = StaticBranchTracing.StripOuterParens(mech.PayloadString);
-
         if (mech.Prefix == "hat")
         {
             if (StaticBranchTracing.IsMonsterEntity(core))
