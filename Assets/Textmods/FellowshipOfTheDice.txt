@@ -833,29 +833,19 @@ ch.om(4.fight.
 )&Hidden.mn.Boss 3
 &Hidden.mn.Boss Pool 1,
 
-
-
-
-
-
-
-
-
-
-
-=ch.om(8.fight.
-
-
-
+=ch.om(8.fight.((rmon.8aa.n.Tentacle.hp.3.sd.15-4:7-4:15-3:15-3:15-4:7-3.img.Eme201.hsv.-16:15:-4.t.Bones).i.triggerhpdata.(Fey.hp.10.col.v.sd.15-1.i.(left.mid.hat.(egg.(((Statue.n.Damage Watcher).i.(Dead Crow).i.(Brittle).i.t.orb.sthief.abilitydata.(Fey.n.Damage Watcher.sd.15-1.i.(left.cast.Drop).i.(left.Pharaoh Curse.m.2)))))#blindfold)))
+&
+8.x2.add.((rmon.8aa.n.Tentacle.hp.3.sd.15-4:7-4:15-3:15-3:15-4:7-3.img.Eme201.hsv.-16:15:-4.t.Bones).i.triggerhpdata.(Fey.hp.10.col.v.sd.15-1.i.(left.mid.hat.(egg.(((Statue.n.Damage Watcher).i.(Dead Crow).i.(Brittle).i.t.orb.sthief.abilitydata.(Fey.n.Damage Watcher.sd.15-1.i.(left.cast.Drop).i.(left.Pharaoh Curse.m.2)))))#blindfold)))
+&
+8.add.((rmon.ded.hsv.68:55:0.draw.bas199:0:4.p.0ca73c:1b0559:25.n.Watcher In The Water.hp.20.sd.0-3:0-3:0-2:0-2:0-3:0-3.i.(row.mid.hat.(x3.egg.((rmon.8aa.n.Tentacle.hp.3.sd.15-4:7-4:15-3:15-3:15-4:7-3.img.Eme201.hsv.-16:15:-4.t.Bones).i.(triggerhpdata.(Fey.col.v.hp.10.sd.15-1.i.(left.mid.hat.(egg.((replica.Statue).i.(Dead Crow).i.(Brittle).i.t.orb.sthief.abilitydata.(Fey.n.Damage Top Ally.sd.15-1.i.(left.cast.Drop).i.(left.Pharaoh Curse.m.2))))#blindfold)))))#blindfold#facade.Eme201:0).i.(topbot.mid.hat.(x2.egg.((rmon.8aa.n.Tentacle.hp.3.sd.15-4:7-4:15-3:15-3:15-4:7-3.img.Eme201.hsv.-16:15:-4.t.Bones).i.(triggerhpdata.(Fey.col.v.hp.10.sd.15-1.i.(left.mid.hat.(egg.((replica.Statue).i.(Dead Crow).i.(Brittle).i.t.orb.sthief.abilitydata.(Fey.n.Damage Top Ally.sd.15-1.i.(left.cast.Drop).i.(left.Pharaoh Curse.m.2))))#blindfold)))))#blindfold#facade.Eme201:0)).i.(t.(archer)))
 )&Hidden.mn.Boss 1
 @4m(8.fight.
-
-
-
-)&Hidden.mn.Boss 2
-@4m(8.fight.
-
-
-
-)&Hidden.mn.Boss 3
+((Slimelet.n.Orc.hp.3.sd.7-4:7-3:6-3:6-3.t.Caw.img.Bones.hsv.0:0:-70.draw.Goblin:-6:-4.p.6a6e34:5c7688:07).i.onhitdata.(Fey.sd.15-1.i.left.mid.hat.(Fey.sd.186.i.mid.sticker.(Pharaoh Curse.part.1)#togtarg)).bal.Archer)
+&
+8.add.
+((Slate.hsv.53:-9:8.draw.Eme194:4:4.n.Bridge of Khazadum.hp.10.sd.0:0:0:0:0:20).i.t.orb.sthief.abilitydata.(Fey.n.Crumble.sd.178-100.i.(left.k.fierce)))
+&
+8.add.
+((rmon.1a.n.Balrog.hp.30.sd.10-2:4-2:3-2:23-2:20-2:0-2.i.(top.facade.Eme34:0).i.(bot.facade.kas95:52:0:0).i.(rightmost.mid.hat.(x2.egg.((Slimelet.n.Orc.hp.3.sd.7-4:7-3:6-3:6-3.img.Bones.hsv.0:0:-70.draw.Goblin:-6:-4.p.6a6e34:5c7688:07.bal.Archer).i.(onhitdata.(Fey.sd.15-1.i.(left.mid.hat.(Fey.sd.186.i.(mid.sticker.(Pharaoh Curse.part.1)#togtarg))))).i.(t.(Caw))))#blindfold#facade.bas232:33:0:0).img.Hexia.hsv.2:-25:10.draw.Warchief:4:4.hsv.-2:49:-18.p.c0b681:c40000:26.b.600.hsv.0:20:10).i.(t.(Imp)).i.(t.jinx.allitem.(Iron Crown.splice.(Brittle.part.1))))
+)&Hidden.mn.Boss 1
 &Hidden.mn.Boss Pool 1,

@@ -154,8 +154,8 @@ public class HeroUI : EntityUI<HeroData>
     protected override void UpdateIcon(int index)
     {
         if (portraitPreview == null) return;
-        var face = CurrentEntity.diceSides[index];
-        portraitPreview.SetSlotIcon(index, ResolveFacadeName(face.facadeID), face.effectID, face.facadeColor, face.pips);
+        var face = GetEffectivePreviewFace(index);
+        portraitPreview.SetSlotIcon(index, AllowFacades() ? face.facadeID : null, face.effectID, AllowFacades() ? face.facadeColor : null, face.pips);
     }
 
     private string ResolveFacadeName(string facadeID)

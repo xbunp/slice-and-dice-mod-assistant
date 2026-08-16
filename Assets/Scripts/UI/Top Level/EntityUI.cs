@@ -136,12 +136,48 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     // =====================================================================
     // PORTRAIT / ICON MODAL SELECTION
     // =====================================================================
+    protected DiceSideData GetEffectivePreviewFace(int index)
+    {
+        var face = CurrentEntity.diceSides[index];
+        if (face == null) return null;
+
+        // Traverse mechanics to find a Hat override for this specific face
+        foreach (var m in face.sideMechanics)
+        {
+            if (m.LegacyItemPayload != null)
+            {
+                foreach (var legMech in m.LegacyItemPayload.Mechanics)
+                {
+                    if (legMech.Prefix == "hat" && legMech.PayloadData is EntityData ed)
+                    {
+                        // Ensure it's not a basic egg wrapper
+                        if (!(ed is MonsterData md && md.baseMonster != null && md.baseMonster.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            if (ed.diceSides != null && ed.diceSides[index] != null) return ed.diceSides[index];
+                        }
+                    }
+                }
+            }
+            else if (m.Prefix == "hat")
+            {
+                string raw = m.RawPayloadString;
+                if (!string.IsNullOrEmpty(raw) && !raw.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                {
+                    HeroData tempHat = new HeroData();
+                    tempHat.SuppressAutoRegister = true;
+                    tempHat.Parse(raw);
+                    if (tempHat.diceSides != null && tempHat.diceSides[index] != null) return tempHat.diceSides[index];
+                }
+            }
+        }
+
+        return face;
+    }
+
     protected virtual void UpdateIcon(int index)
     {
         if (portraitPreview == null) return;
-
-        var face = CurrentEntity.diceSides[index];
-
+        var face = GetEffectivePreviewFace(index);
         portraitPreview.SetSlotIcon(
             index,
             AllowFacades() ? face.facadeID : null,
