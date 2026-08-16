@@ -187,26 +187,28 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             if (string.IsNullOrWhiteSpace(chain)) continue;
             string trimmed = chain.Trim();
-            if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase))
+            string stripped = StaticBranchTracing.StripOuterParens(trimmed);
+
+            if (stripped.StartsWith("orb.", StringComparison.OrdinalIgnoreCase))
             {
                 OrbData orb = new OrbData();
-                orb.Parse(trimmed);
+                orb.Parse(stripped);
                 AddCustomAbility(orb);
             }
-            else if (trimmed.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
+            else if (stripped.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase))
             {
-                curses.Add(trimmed.Substring(5));
+                curses.Add(stripped.Substring(5));
             }
-            else if (trimmed.Contains("("))
+            else if (stripped.Contains("("))
             {
                 ModifierData nestedMod = new ModifierData();
-                nestedMod.Parse(trimmed);
+                nestedMod.Parse(stripped);
                 if (customPayloads == null) customPayloads = new List<CustomPayload>();
                 customPayloads.Add(new CustomPayload { Prefix = "t", Data = nestedMod, Type = PayloadType.Modifier });
             }
             else
             {
-                traits.Add(trimmed);
+                traits.Add(stripped);
             }
         }
     }
@@ -1357,7 +1359,22 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 if (payload.Type == PayloadType.Item && payload.Data is ItemData itemData)
                 {
-                    RouteItemPayload(itemData, isHero, innerHeroPayloads, outerPayloads);
+                    if (payload.Prefix != null && payload.Prefix.Equals("t", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ItemData traitItem = new ItemData();
+                        traitItem.Mechanics.Add(new ItemMechanic { Prefix = "t", PayloadData = itemData });
+                        RouteItemPayload(traitItem, isHero, innerHeroPayloads, outerPayloads);
+                    }
+                    else
+                    {
+                        RouteItemPayload(itemData, isHero, innerHeroPayloads, outerPayloads);
+                    }
+                }
+                else if (payload.Prefix != null && payload.Prefix.Equals("t", StringComparison.OrdinalIgnoreCase))
+                {
+                    ItemData traitItem = new ItemData();
+                    traitItem.Mechanics.Add(new ItemMechanic { Prefix = "t", PayloadData = payload.Data });
+                    RouteItemPayload(traitItem, isHero, innerHeroPayloads, outerPayloads);
                 }
                 else if (payload.Data is OnHitData || payload.Data is TriggerHPData || payload.Data is AbilityData || payload.Type == PayloadType.Modifier)
                 {
