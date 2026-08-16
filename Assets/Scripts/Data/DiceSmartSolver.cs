@@ -262,7 +262,6 @@ namespace SliceAndDice.Compiler
     public class FaceIntent
     {
         public Face TargetFace { get; set; }
-
         public SpecialFaceSpec? SpecialFace { get; set; }
         public HatPayload? TargetingSource { get; set; }
         public HatPayload? VisualsSource { get; set; }
@@ -274,19 +273,19 @@ namespace SliceAndDice.Compiler
         public string? Facade { get; set; }
         public RestrictionIntent? LogicGates { get; set; }
         public string? VisualEffectName { get; set; }
-
-
-        // NEW PROPERTIES
         public int PipDelta { get; set; } = 0;
         public List<string> RawKeywords { get; } = new();
         public bool RequiresPipKeywords { get; set; } = false;
+
+        public int BaseEffectId { get; set; } = 0;
+        public int BasePips { get; set; } = 0;
+        public string Sidesc { get; set; }
+        public List<string> AdditionalItems { get; } = new();
 
         public FaceIntent(Face targetFace)
         {
             TargetFace = targetFace;
         }
-
-        // Optional Helper Method
         public FaceIntent AddRawKeyword(string keyword, bool requiresPips = false)
         {
             RawKeywords.Add(keyword);
@@ -299,8 +298,9 @@ namespace SliceAndDice.Compiler
     {
         public Dictionary<Face, FaceIntent> FaceIntents { get; } = new();
         public Dictionary<Face, string> BaseFaceOverrides { get; } = new();
-        public bool FlipTargetAllegiance { get; set; } = false; // togfri
-        public bool FlipDuration { get; set; } = false;        // togtime
+        public bool FlipTargetAllegiance { get; set; } = false;
+        public bool FlipDuration { get; set; } = false;
+        public List<string> GlobalItems { get; } = new();
 
         public FaceIntent GetOrCreateFace(Face face)
         {
@@ -317,7 +317,6 @@ namespace SliceAndDice.Compiler
     {
         public Face? SidePrefix { get; set; }
         public List<string> Instructions { get; } = new();
-
         public ItemGroup(Face? sidePrefix = null)
         {
             SidePrefix = sidePrefix;
@@ -394,7 +393,6 @@ namespace SliceAndDice.Compiler
             return $"{targetSide}.{sourceSide}.hat.(egg.({entityPayload}){blindfoldSuffix})";
         }
     }
-
     #endregion
 
     #region --- VIRTUAL MACHINE & REGISTER TRACKER ---
@@ -460,7 +458,6 @@ namespace SliceAndDice.Compiler
             throw new InvalidOperationException("Register Allocation Failure: No free faces available for scratchpad operations.");
         }
     }
-
     #endregion
 
     #region --- COMPILER ENGINE ---
@@ -475,15 +472,17 @@ namespace SliceAndDice.Compiler
             _instructions.Clear();
             _vm.Reset();
 
-            // 1. EMIT SD INITIALIZATION HEADER
             string sdHeader = BuildSdHeader(intent);
             Emit(sdHeader);
 
-            // 2. GLOBAL MODIFIERS
             if (intent.FlipTargetAllegiance) Emit("togfri");
             if (intent.FlipDuration) Emit("togtime");
 
-            // 3. ACCUMULATOR (LEFT FACE) MANAGEMENT
+            foreach (var gItem in intent.GlobalItems)
+            {
+                if (!string.IsNullOrWhiteSpace(gItem)) Emit(gItem);
+            }
+
             Face? leftScratchpad = null;
             if (intent.FaceIntents.TryGetValue(Face.Left, out var leftIntent))
             {
@@ -492,13 +491,11 @@ namespace SliceAndDice.Compiler
                 _vm.Lock(leftScratchpad.Value);
             }
 
-            // 4. COMPILE NON-LEFT FACES
             foreach (var kvp in intent.FaceIntents.Where(x => x.Key != Face.Left))
             {
                 CompileFaceIntent(kvp.Value);
             }
 
-            // 5. RESTORE / COMPILE LEFT FACE
             if (leftScratchpad.HasValue && leftIntent != null)
             {
                 CompileFaceIntent(leftIntent);
@@ -507,111 +504,102 @@ namespace SliceAndDice.Compiler
 
             return string.Join(" ", _instructions);
         }
-
         private string BuildSdHeader(DieIntent intent)
         {
             Face[] executionOrder = { Face.Left, Face.Middle, Face.Top, Face.Bottom, Face.Right, Face.Rightmost };
             var faceStrings = new List<string>();
-
             foreach (var face in executionOrder)
             {
-                if (intent.BaseFaceOverrides.TryGetValue(face, out var faceStr))
+                if (intent.FaceIntents.TryGetValue(face, out var faceIntent) && (faceIntent.BaseEffectId != 0 || faceIntent.BasePips != 0))
+                {
+                    if (faceIntent.BasePips == 0) faceStrings.Add(faceIntent.BaseEffectId.ToString());
+                    else faceStrings.Add($"{faceIntent.BaseEffectId}-{faceIntent.BasePips}");
+                    _vm.MarkFaceAsPipped(face, faceIntent.BasePips > 0);
+                }
+                else if (intent.BaseFaceOverrides.TryGetValue(face, out var faceStr))
                 {
                     faceStrings.Add(faceStr);
-                    // If the string contains a hyphen (e.g. "15-3"), it has pips natively
                     _vm.MarkFaceAsPipped(face, faceStr.Contains("-"));
                 }
                 else
                 {
                     faceStrings.Add("0");
-                    _vm.MarkFaceAsPipped(face, false); // Blank registers have no pips
+                    _vm.MarkFaceAsPipped(face, false);
                 }
             }
-
             return $"sd.{string.Join(":", faceStrings)}";
         }
-
         private void CompileFaceIntent(FaceIntent intent)
         {
-            // 1. SPECIAL FACE EMISSION
             if (intent.SpecialFace != null)
             {
                 EmitSpecialFace(intent.TargetFace, intent.SpecialFace);
             }
-
-            // 2. STANDARD PROPERTY TOGS
             if (intent.PipsSource != null)
             {
                 EmitHatTog(intent.TargetFace, TogType.Pips, intent.PipsSource);
                 _vm.MarkFaceAsPipped(intent.TargetFace);
             }
-
             EmitPipMath(intent.TargetFace, intent.PipDelta);
-
             if (intent.KeywordsSource != null)
                 EmitHatTog(intent.TargetFace, TogType.Keywords, intent.KeywordsSource);
-
             if (intent.EffectSource != null)
                 EmitHatTog(intent.TargetFace, TogType.Effect, intent.EffectSource);
-
             if (intent.TargetingSource != null)
                 EmitHatTog(intent.TargetFace, TogType.Targeting, intent.TargetingSource);
-
             if (intent.VisualsSource != null)
                 EmitHatTog(intent.TargetFace, TogType.Visuals, intent.VisualsSource);
-
             if (intent.OrEffectSource != null)
                 EmitHatTog(intent.TargetFace, TogType.OrEffect, intent.OrEffectSource);
-
             if (intent.UntargetedEffect != null)
             {
                 EmitUntargetedEffect(intent.TargetFace, intent.UntargetedEffect);
             }
-
-
             if (intent.RawKeywords.Any())
             {
                 string sidePrefix = intent.TargetFace == Face.All ? "" : $"{intent.TargetFace.ToString().ToLower()}.";
-
-                // Auto-inject permissive if the face is pipless but requires pip keywords
                 if (!_vm.FaceHasPips(intent.TargetFace) && intent.RequiresPipKeywords)
                 {
                     Emit($"{sidePrefix}k.permissive");
                 }
-
-                // Format: left.k.poison#k.heavy
                 string joinedKeywords = string.Join("#k.", intent.RawKeywords);
                 Emit($"{sidePrefix}k.{joinedKeywords}");
             }
-
-            // 3. LOGIC GATES & RESTRICTIONS (togres, togresa, togreso, togresx, togresn, togress, togresm)
             if (intent.LogicGates != null)
             {
                 EmitRestrictions(intent.TargetFace, intent.LogicGates);
             }
-
-            // 2. Visual Effects (togvis)
             if (!string.IsNullOrWhiteSpace(intent.VisualEffectName))
             {
                 EmitVisualEffect(intent.TargetFace, intent.VisualEffectName);
             }
-
-            // 4. GENERAL FACADE VISUAL OVERRIDE
             if (!string.IsNullOrWhiteSpace(intent.Facade) && intent.SpecialFace == null)
             {
                 string side = intent.TargetFace.ToString().ToLower();
                 Emit($"{side}.facade.{intent.Facade}");
             }
 
+            if (!string.IsNullOrWhiteSpace(intent.Sidesc))
+            {
+                string side = intent.TargetFace == Face.All ? "" : $"{intent.TargetFace.ToString().ToLower()}.";
+                Emit($"{side}sidesc.{intent.Sidesc}");
+            }
+            foreach (var item in intent.AdditionalItems)
+            {
+                if (!string.IsNullOrWhiteSpace(item))
+                {
+                    string side = intent.TargetFace == Face.All ? "" : $"{intent.TargetFace.ToString().ToLower()}.";
+                    Emit($"{side}{item}");
+                }
+            }
+
             _vm.Lock(intent.TargetFace);
         }
-
         public void RestoreLeftFace()
         {
             Emit("Memory");
             _vm.IsLocked(Face.Left); // Ensure left is tracked properly
         }
-
         private void EmitRestrictions(Face targetFace, RestrictionIntent intent)
         {
             string targetSide = targetFace == Face.All ? "" : $"{targetFace.ToString().ToLower()}.";
@@ -660,7 +648,6 @@ namespace SliceAndDice.Compiler
                 }
             }
         }
-
         private void EmitSpecialFace(Face targetFace, SpecialFaceSpec spec)
         {
             string targetSide = targetFace.ToString().ToLower();
@@ -713,7 +700,6 @@ namespace SliceAndDice.Compiler
 
             Emit(transformedInstruction);
         }
-
         private void EmitHatTog(Face targetFace, TogType togType, HatPayload hat)
         {
             string hatSourceSide = hat.SourceFace.ToString().ToLower();
@@ -928,12 +914,10 @@ namespace SliceAndDice.Compiler
                 _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
             };
         }
-
         private void Emit(string instruction)
         {
             _instructions.Add(instruction);
         }
-
         private void EmitVisualEffect(Face targetFace, string visualName)
         {
             // 1. Resolve human name from catalog
@@ -1028,7 +1012,6 @@ namespace SliceAndDice.Compiler
             _hat.BaseHero = baseHero;
             _currentGroup = new ItemGroup();
         }
-
         public HatBuilder SetSd(params string[] faces)
         {
             var paddedFaces = faces.ToList();
@@ -1037,7 +1020,6 @@ namespace SliceAndDice.Compiler
             _hat.SdDeclaration = string.Join(":", paddedFaces.Take(6));
             return this;
         }
-
         public HatBuilder NextItem(Face? sidePrefix = null)
         {
             if (_currentGroup.Instructions.Count > 0)
@@ -1047,19 +1029,16 @@ namespace SliceAndDice.Compiler
             _currentGroup = new ItemGroup(sidePrefix);
             return this;
         }
-
         public HatBuilder AddRawItem(string itemName)
         {
             _currentGroup.Instructions.Add(itemName);
             return this;
         }
-
         public HatBuilder AddKeyword(string keyword)
         {
             _currentGroup.Instructions.Add($"k.{keyword}");
             return this;
         }
-
         public HatPayload Build(Face targetFaceToExtract = Face.Middle)
         {
             if (_currentGroup.Instructions.Count > 0)
@@ -1109,55 +1088,43 @@ namespace SliceAndDice.Compiler
     public class RestrictionIntent
     {
         public List<RestrictionStep> Steps { get; } = new();
-
         public RestrictionIntent StartWith(string payload)
         {
             Steps.Add(new RestrictionStep(RestrictionOp.Base, payload));
             return this;
         }
-
         public RestrictionIntent And(string payload)
         {
             Steps.Add(new RestrictionStep(RestrictionOp.And, payload));
             return this;
         }
-
         public RestrictionIntent Or(string payload)
         {
             Steps.Add(new RestrictionStep(RestrictionOp.Or, payload));
             return this;
         }
-
         public RestrictionIntent Xor(string payload)
         {
             Steps.Add(new RestrictionStep(RestrictionOp.Xor, payload));
             return this;
         }
-
         public RestrictionIntent Not()
         {
             Steps.Add(new RestrictionStep(RestrictionOp.Not));
             return this;
         }
-
         public RestrictionIntent SwapTarget()
         {
             Steps.Add(new RestrictionStep(RestrictionOp.SwapTarget));
             return this;
         }
-
         public RestrictionIntent AsMultiplier()
         {
             Steps.Add(new RestrictionStep(RestrictionOp.Multiplier));
             return this;
         }
     }
-
     #endregion
-
-
-
-
 }
 
 public static class TargetingPipeline
@@ -1253,7 +1220,6 @@ public static class TargetingPipeline
         return instruction;
     }
 }
-
 
 public static class CompositePipeline
 {

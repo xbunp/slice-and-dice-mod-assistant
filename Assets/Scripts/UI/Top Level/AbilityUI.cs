@@ -328,6 +328,7 @@ public class AbilityUI : RootUI
         RebuildStatsUI();
         RebuildAbilityScrollView();
     }
+
     private void UpdateUIFromData()
     {
         if (statsUI == null || abilityDataUI == null) return;
@@ -358,15 +359,20 @@ public class AbilityUI : RootUI
 
         if (_isAdvancedMode)
         {
-            // --- SYNC ADVANCED MODE UI ---
             if (abilityDataUI.Dropdowns.TryGetValue("AdvGlobalTargetDrop", out var gtd)) { gtd.SetValueWithoutNotify((int)_advancedGlobalTargetScope); gtd.RefreshShownValue(); }
             if (abilityDataUI.Toggles.TryGetValue("AdvFlipDuration", out var t2)) t2.SetIsOnWithoutNotify(_advancedDieIntent.FlipDuration);
+            if (abilityDataUI.Toggles.TryGetValue("AdvFlipTarget", out var t3)) t3.SetIsOnWithoutNotify(_advancedDieIntent.FlipTargetAllegiance);
+
+            if (abilityDataUI.Inputs.TryGetValue("AdvGlobalItems", out var gi)) gi.SetTextWithoutNotify(string.Join(", ", _advancedDieIntent.GlobalItems));
+
             if (abilityDataUI.Dropdowns.TryGetValue("AdvFaceDrop", out var fd)) { fd.SetValueWithoutNotify((int)_advancedSelectedFace); fd.RefreshShownValue(); }
 
             var faceIntent = _advancedDieIntent.GetOrCreateFace(_advancedSelectedFace);
-            _advancedDieIntent.BaseFaceOverrides.TryGetValue(_advancedSelectedFace, out string baseOverride);
 
-            if (abilityDataUI.Inputs.TryGetValue("AdvBaseFace", out var i1)) i1.SetTextWithoutNotify(baseOverride ?? "");
+            if (abilityDataUI.Inputs.TryGetValue("AdvBaseId", out var bi)) bi.SetTextWithoutNotify(faceIntent.BaseEffectId.ToString());
+            if (abilityDataUI.Inputs.TryGetValue("AdvBasePips", out var bp)) bp.SetTextWithoutNotify(faceIntent.BasePips.ToString());
+            if (abilityDataUI.Inputs.TryGetValue("AdvSidesc", out var sc)) sc.SetTextWithoutNotify(faceIntent.Sidesc ?? "");
+            if (abilityDataUI.Inputs.TryGetValue("AdvFaceItems", out var fi)) fi.SetTextWithoutNotify(string.Join(", ", faceIntent.AdditionalItems));
 
             if (faceIntent.SpecialFace != null)
             {
@@ -379,23 +385,19 @@ public class AbilityUI : RootUI
             {
                 if (abilityDataUI.Dropdowns.TryGetValue("AdvSpecialType", out var std)) { std.SetValueWithoutNotify(0); std.RefreshShownValue(); }
             }
-
             if (abilityDataUI.Inputs.TryGetValue("AdvPipDelta", out var pd)) pd.SetTextWithoutNotify(faceIntent.PipDelta.ToString());
             if (abilityDataUI.Inputs.TryGetValue("AdvKeywords", out var kw)) kw.SetTextWithoutNotify(string.Join(", ", faceIntent.RawKeywords));
             if (abilityDataUI.Inputs.TryGetValue("AdvVisualEffect", out var ve)) ve.SetTextWithoutNotify(faceIntent.VisualEffectName ?? "");
         }
         else
         {
-            // --- SYNC STANDARD MODE UI ---
             _primaryFaceBuilder?.SetGridReferences(abilityDataUI);
             _primaryFaceBuilder?.UpdateUIFromData(0);
-
             if (CurrentAbility is SpellData or TacticData)
             {
                 _secondaryFaceBuilder?.SetGridReferences(abilityDataUI);
                 _secondaryFaceBuilder?.UpdateUIFromData(1);
             }
-
             if (CurrentAbility is OrbData orb)
             {
                 if (abilityDataUI.Dropdowns.TryGetValue("OrbTypeDrop", out var orbTypeDrop))
@@ -422,7 +424,6 @@ public class AbilityUI : RootUI
                 if (abilityDataUI.Inputs.TryGetValue("TacPip_2", out var tPip2)) tPip2.SetTextWithoutNotify(tactic.TacticCostTop.pips.ToString());
                 if (abilityDataUI.Inputs.TryGetValue("TacPip_3", out var tPip3)) tPip3.SetTextWithoutNotify(tactic.TacticCostBottom.pips.ToString());
                 if (abilityDataUI.Inputs.TryGetValue("TacPip_5", out var tPip5)) tPip5.SetTextWithoutNotify(tactic.TacticCostRightmost.pips.ToString());
-
                 if (abilityDataUI.Dropdowns.TryGetValue("TacDrop_2", out var tDrop2))
                 {
                     tDrop2.SetValueWithoutNotify(GetTacticCostDropdownIndex(tactic.TacticCostTop));
@@ -468,6 +469,174 @@ public class AbilityUI : RootUI
         _pendingTextUpdate = false;
         UpdateExportText();
     }
+    private void BuildAdvancedModeLayout(List<GridRowSpec> layout)
+    {
+        // 1. Global Setup
+        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("--- GLOBAL SMART SETTINGS ---", 1.0f)));
+
+        string[] targetScopeOptions = Enum.GetNames(typeof(TargetScope));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Global Target Scope:", 0.35f),
+            GridCellSpec.CreateDropdown("AdvGlobalTargetDrop", _advancedGlobalTargetScope.ToString(), 0.65f, targetScopeOptions, (val) => {
+                if (isDrawingUI) return;
+                _advancedGlobalTargetScope = (TargetScope)val;
+                CompileAdvancedIntent();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateToggle("AdvFlipDuration", "Flip Duration (togtime)", 0.50f, (val) => {
+                if (isDrawingUI) return;
+                _advancedDieIntent.FlipDuration = val;
+                CompileAdvancedIntent();
+            }),
+            GridCellSpec.CreateToggle("AdvFlipTarget", "Flip Allegiance (togfri)", 0.50f, (val) => {
+                if (isDrawingUI) return;
+                _advancedDieIntent.FlipTargetAllegiance = val;
+                CompileAdvancedIntent();
+            })
+        ));
+
+        string globalItemsStr = string.Join(", ", _advancedDieIntent.GlobalItems);
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Global Raw Items:", 0.35f),
+            GridCellSpec.CreateInput("AdvGlobalItems", globalItemsStr, 0.65f, (val) => {
+                if (isDrawingUI) return;
+                _advancedDieIntent.GlobalItems.Clear();
+                if (!string.IsNullOrWhiteSpace(val))
+                    _advancedDieIntent.GlobalItems.AddRange(val.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+                CompileAdvancedIntent();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("--- SMART FACE EDITOR ---", 1.0f)));
+
+        string[] faceOptions = Enum.GetNames(typeof(Face));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Select Face:", 0.35f),
+            GridCellSpec.CreateDropdown("AdvFaceDrop", _advancedSelectedFace.ToString(), 0.65f, faceOptions, (val) => {
+                if (isDrawingUI) return;
+                _advancedSelectedFace = (Face)val;
+                RebuildAbilityScrollView();
+            })
+        ));
+
+        var faceIntent = _advancedDieIntent.GetOrCreateFace(_advancedSelectedFace);
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Base Effect ID:", 0.25f),
+            GridCellSpec.CreateInput("AdvBaseId", faceIntent.BaseEffectId.ToString(), 0.25f, (val) => {
+                if (isDrawingUI) return;
+                if (int.TryParse(val, out int p)) faceIntent.BaseEffectId = p; else faceIntent.BaseEffectId = 0;
+                CompileAdvancedIntent();
+            }),
+            GridCellSpec.CreateLabel("Pips:", 0.25f),
+            GridCellSpec.CreateInput("AdvBasePips", faceIntent.BasePips.ToString(), 0.25f, (val) => {
+                if (isDrawingUI) return;
+                if (int.TryParse(val, out int p)) faceIntent.BasePips = p; else faceIntent.BasePips = 0;
+                CompileAdvancedIntent();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Face Desc (sidesc):", 0.35f),
+            GridCellSpec.CreateInput("AdvSidesc", faceIntent.Sidesc ?? "", 0.65f, (val) => {
+                if (isDrawingUI) return;
+                faceIntent.Sidesc = string.IsNullOrWhiteSpace(val) ? null : val;
+                CompileAdvancedIntent();
+            })
+        ));
+
+        var specialTypes = Enum.GetNames(typeof(SpecialFaceType));
+        int currentSpecialType = faceIntent.SpecialFace == null ? 0 : (int)faceIntent.SpecialFace.Type;
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Special Face Type:", 0.35f),
+            GridCellSpec.CreateDropdown("AdvSpecialType", specialTypes[currentSpecialType], 0.65f, specialTypes, (val) => {
+                if (isDrawingUI) return;
+                if (val == 0) faceIntent.SpecialFace = null;
+                else
+                {
+                    if (faceIntent.SpecialFace == null) faceIntent.SpecialFace = new SpecialFaceSpec((SpecialFaceType)val, "");
+                    else faceIntent.SpecialFace.Type = (SpecialFaceType)val;
+                }
+                CompileAdvancedIntent();
+                RebuildAbilityScrollView();
+            })
+        ));
+
+        if (faceIntent.SpecialFace != null)
+        {
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Payload:", 0.35f),
+                GridCellSpec.CreateInput("AdvSpecialPayload", faceIntent.SpecialFace.Payload, 0.65f, (val) => {
+                    if (isDrawingUI) return;
+                    faceIntent.SpecialFace.Payload = val;
+                    CompileAdvancedIntent();
+                })
+            ));
+
+            int currentScope = (int)faceIntent.SpecialFace.TargetScope;
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Target Scope:", 0.35f),
+                GridCellSpec.CreateDropdown("AdvTargetScope", targetScopeOptions[currentScope], 0.65f, targetScopeOptions, (val) => {
+                    if (isDrawingUI) return;
+                    faceIntent.SpecialFace.TargetScope = (TargetScope)val;
+                    CompileAdvancedIntent();
+                })
+            ));
+
+            layout.Add(new GridRowSpec(
+                GridCellSpec.CreateLabel("Facade:", 0.35f),
+                GridCellSpec.CreateInput("AdvSpecialFacade", faceIntent.SpecialFace.Facade, 0.65f, (val) => {
+                    if (isDrawingUI) return;
+                    faceIntent.SpecialFace.Facade = val;
+                    CompileAdvancedIntent();
+                })
+            ));
+        }
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Pip Delta (+/-):", 0.35f),
+            GridCellSpec.CreateInput("AdvPipDelta", faceIntent.PipDelta.ToString(), 0.65f, (val) => {
+                if (isDrawingUI) return;
+                if (int.TryParse(val, out int p)) { faceIntent.PipDelta = p; CompileAdvancedIntent(); }
+            })
+        ));
+
+        string kws = string.Join(", ", faceIntent.RawKeywords);
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Keywords (comma sep):", 0.35f),
+            GridCellSpec.CreateInput("AdvKeywords", kws, 0.65f, (val) => {
+                if (isDrawingUI) return;
+                faceIntent.RawKeywords.Clear();
+                var parts = val.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var p in parts) faceIntent.AddRawKeyword(p.Trim());
+                CompileAdvancedIntent();
+            })
+        ));
+
+        string addItemsStr = string.Join(", ", faceIntent.AdditionalItems);
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Face Modifiers (CSV):", 0.35f),
+            GridCellSpec.CreateInput("AdvFaceItems", addItemsStr, 0.65f, (val) => {
+                if (isDrawingUI) return;
+                faceIntent.AdditionalItems.Clear();
+                if (!string.IsNullOrWhiteSpace(val))
+                    faceIntent.AdditionalItems.AddRange(val.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+                CompileAdvancedIntent();
+            })
+        ));
+
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Visual Effect Override:", 0.35f),
+            GridCellSpec.CreateInput("AdvVisualEffect", faceIntent.VisualEffectName ?? "", 0.65f, (val) => {
+                if (isDrawingUI) return;
+                faceIntent.VisualEffectName = string.IsNullOrWhiteSpace(val) ? null : val;
+                CompileAdvancedIntent();
+            })
+        ));
+    }
+
     private void UpdateExportText()
     {
         if (rawTextOutput != null && CurrentAbility != null)
@@ -708,137 +877,6 @@ public class AbilityUI : RootUI
     // =====================================================================
     // ADVANCED MODE (SMART SOLVER) INTEGRATION
     // =====================================================================
-    private void BuildAdvancedModeLayout(List<GridRowSpec> layout)
-    {
-        // 1. Global Settings
-        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("--- GLOBAL SETTINGS ---", 1.0f)));
-
-        // NEW: Replaced Checkbox with TargetScope Dropdown
-        string[] targetScopeOptions = Enum.GetNames(typeof(TargetScope));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Global Target Scope:", 0.35f),
-            GridCellSpec.CreateDropdown("AdvGlobalTargetDrop", _advancedGlobalTargetScope.ToString(), 0.65f, targetScopeOptions, (val) => {
-                if (isDrawingUI) return; // Prevent layout rebuilding from triggering compiles
-                _advancedGlobalTargetScope = (TargetScope)val;
-                CompileAdvancedIntent();
-            })
-        ));
-
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateToggle("AdvFlipDuration", "Flip Duration (togtime)", 0.5f, (val) => {
-                if (isDrawingUI) return; // Prevent layout rebuilding from triggering compiles
-                _advancedDieIntent.FlipDuration = val;
-                CompileAdvancedIntent();
-            })
-        ));
-
-        // 2. Face Selector
-        layout.Add(new GridRowSpec(GridCellSpec.CreateLabel("--- FACE EDITOR ---", 1.0f)));
-        string[] faceOptions = Enum.GetNames(typeof(Face));
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Select Face:", 0.35f),
-            GridCellSpec.CreateDropdown("AdvFaceDrop", _advancedSelectedFace.ToString(), 0.65f, faceOptions, (val) => {
-                if (isDrawingUI) return;
-                _advancedSelectedFace = (Face)val;
-                RebuildAbilityScrollView(); // Rebuild to show the correct face's data
-            })
-        ));
-
-        var faceIntent = _advancedDieIntent.GetOrCreateFace(_advancedSelectedFace);
-        _advancedDieIntent.BaseFaceOverrides.TryGetValue(_advancedSelectedFace, out string baseOverride);
-
-        // 3. Base Face Override
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Base Face Override:", 0.35f),
-            GridCellSpec.CreateInput("AdvBaseFace", baseOverride ?? "", 0.65f, (val) => {
-                if (isDrawingUI) return;
-                if (string.IsNullOrWhiteSpace(val)) _advancedDieIntent.BaseFaceOverrides.Remove(_advancedSelectedFace);
-                else _advancedDieIntent.BaseFaceOverrides[_advancedSelectedFace] = val;
-                CompileAdvancedIntent();
-            })
-        ));
-
-        // 4. Special Face Setup
-        var specialTypes = Enum.GetNames(typeof(SpecialFaceType));
-        int currentSpecialType = faceIntent.SpecialFace == null ? 0 : (int)faceIntent.SpecialFace.Type;
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Special Face Type:", 0.35f),
-            GridCellSpec.CreateDropdown("AdvSpecialType", specialTypes[currentSpecialType], 0.65f, specialTypes, (val) => {
-                if (isDrawingUI) return;
-                if (val == 0) faceIntent.SpecialFace = null;
-                else
-                {
-                    if (faceIntent.SpecialFace == null) faceIntent.SpecialFace = new SpecialFaceSpec((SpecialFaceType)val, "");
-                    else faceIntent.SpecialFace.Type = (SpecialFaceType)val;
-                }
-                CompileAdvancedIntent();
-                RebuildAbilityScrollView();
-            })
-        ));
-
-        if (faceIntent.SpecialFace != null)
-        {
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Payload:", 0.35f),
-                GridCellSpec.CreateInput("AdvSpecialPayload", faceIntent.SpecialFace.Payload, 0.65f, (val) => {
-                    if (isDrawingUI) return;
-                    faceIntent.SpecialFace.Payload = val;
-                    CompileAdvancedIntent();
-                })
-            ));
-
-            int currentScope = (int)faceIntent.SpecialFace.TargetScope;
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Target Scope:", 0.35f),
-                GridCellSpec.CreateDropdown("AdvTargetScope", targetScopeOptions[currentScope], 0.65f, targetScopeOptions, (val) => {
-                    if (isDrawingUI) return;
-                    faceIntent.SpecialFace.TargetScope = (TargetScope)val;
-                    CompileAdvancedIntent();
-                })
-            ));
-
-            layout.Add(new GridRowSpec(
-                GridCellSpec.CreateLabel("Facade:", 0.35f),
-                GridCellSpec.CreateInput("AdvSpecialFacade", faceIntent.SpecialFace.Facade, 0.65f, (val) => {
-                    if (isDrawingUI) return;
-                    faceIntent.SpecialFace.Facade = val;
-                    CompileAdvancedIntent();
-                })
-            ));
-        }
-
-        // 5. Pip Delta
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Pip Delta (+/-):", 0.35f),
-            GridCellSpec.CreateInput("AdvPipDelta", faceIntent.PipDelta.ToString(), 0.65f, (val) => {
-                if (isDrawingUI) return;
-                if (int.TryParse(val, out int p)) { faceIntent.PipDelta = p; CompileAdvancedIntent(); }
-            })
-        ));
-
-        // 6. Keywords
-        string kws = string.Join(", ", faceIntent.RawKeywords);
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Keywords (comma sep):", 0.35f),
-            GridCellSpec.CreateInput("AdvKeywords", kws, 0.65f, (val) => {
-                if (isDrawingUI) return;
-                faceIntent.RawKeywords.Clear();
-                var parts = val.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (var p in parts) faceIntent.AddRawKeyword(p.Trim());
-                CompileAdvancedIntent();
-            })
-        ));
-
-        // 7. Visual Effect Name
-        layout.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Visual Effect Override:", 0.35f),
-            GridCellSpec.CreateInput("AdvVisualEffect", faceIntent.VisualEffectName ?? "", 0.65f, (val) => {
-                if (isDrawingUI) return;
-                faceIntent.VisualEffectName = string.IsNullOrWhiteSpace(val) ? null : val;
-                CompileAdvancedIntent();
-            })
-        ));
-    }
     private void CompileAdvancedIntent()
     {
         // Check mode flag AND re-entrancy lock
