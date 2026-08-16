@@ -313,7 +313,7 @@ public static class ItemDomainRules
         }
 
         string pfx = mech.Prefix?.ToLower() ?? "";
-        if (pfx == "facade" || pfx == "sticker" || pfx == "cast" || pfx == "enchant")
+        if (pfx == "facade" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "hat")
         {
             return new List<int> { 1 }; // Implicit Mid (Index 1)
         }
@@ -369,20 +369,12 @@ public class ItemMechanic
         string corePayload = PayloadString;
         if (PayloadData != null)
         {
-            // Both Heroes and Monsters (like Eggs) use ExportAsHat when attached as a Hat mechanic.
+            // Always dynamically export the live EntityData so UI mutations write directly into the string
             if (Prefix == "hat" && PayloadData is EntityData ed)
             {
-                // Preserve full bracket envelope to ensure safe encapsulation
-                if (!string.IsNullOrEmpty(PayloadString))
-                {
-                    corePayload = PayloadString.StartsWith("(") && PayloadString.EndsWith(")")
-                        ? PayloadString
-                        : $"({PayloadString})";
-                }
-                else
-                {
-                    corePayload = ed.ExportAsHat();
-                }
+                string hatStr = ed.ExportAsHat();
+                corePayload = hatStr.StartsWith("(") && hatStr.EndsWith(")") ? hatStr : $"({hatStr})";
+                PayloadString = corePayload;
             }
             // EVERYTHING ELSE (Abilities, Traits, Triggers, Curses, Modifiers) exports natively
             else if (PayloadData is SDData sdData)
@@ -753,16 +745,14 @@ public class ItemData : SDData
         foreach (var mech in Mechanics)
         {
             string pfx = mech.Prefix?.ToLower() ?? "";
-
             // Reject raw Modifiers unless they are enchants
             if (mech.PayloadData is ModifierData && pfx != "enchant")
             {
                 hasUnmappedMechanics = true;
                 continue;
             }
-
             bool isFaceModifier = pfx == "k" || pfx == "facade" || pfx == "sidesc" ||
-                                 pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "";
+                                 pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "hat" || pfx == "";
             bool isEntityCollection = pfx == "t" || pfx == "gift" || pfx == "learn" || pfx == "abilitydata";
 
             if (!isEntityCollection && !isFaceModifier)
@@ -814,18 +804,35 @@ public class ItemData : SDData
             Tier = null;
         }
 
-        // SCENARIO 1: The item mutates faces.
         if (isFaceModifierItem)
         {
             HashSet<int> allTargetFaces = new HashSet<int>();
             foreach (var mech in Mechanics)
             {
                 string pfx = mech.Prefix?.ToLower() ?? "";
-                if (pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "")
+                if (pfx == "k" || pfx == "facade" || pfx == "sidesc" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "hat" || pfx == "")
                 {
-                    List<int> targetFaces = ItemDomainRules.GetTargetIndicesOrDefault(mech);
-                    if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid"))
-                        targetFaces.Remove(1);
+                    List<int> targetFaces;
+
+                    if (pfx == "hat")
+                    {
+                        // Hat targets: [HeroTarget, HatSource]. We ONLY want to attach to HeroTarget in the AST.
+                        if (mech.Targets.Count > 0)
+                        {
+                            targetFaces = DiceTargetHelper.GetIndicesForTarget(mech.Targets[0]);
+                        }
+                        else
+                        {
+                            targetFaces = new List<int> { 1 }; // Default to mid
+                        }
+                    }
+                    else
+                    {
+                        targetFaces = ItemDomainRules.GetTargetIndicesOrDefault(mech);
+                        if (isLeftMidException && targetFaces.Contains(0) && targetFaces.Contains(1) && mech.Targets.Contains("left") && mech.Targets.Contains("mid"))
+                            targetFaces.Remove(1);
+                    }
+
                     foreach (int faceIdx in targetFaces) allTargetFaces.Add(faceIdx);
                 }
             }

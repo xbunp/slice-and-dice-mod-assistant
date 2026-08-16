@@ -1,22 +1,67 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
 
 public static class SpriteCacheHelper
 {
-    private static Dictionary<string, Sprite> _facadeCache = new Dictionary<string, Sprite>();
-    private static Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>();
+    private static Dictionary<string, Sprite> _facadeCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, string> _facadeResolutionCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    public static string ResolveFacadeName(string facadeID)
+    {
+        if (string.IsNullOrEmpty(facadeID)) return facadeID;
+        if (_facadeResolutionCache.TryGetValue(facadeID, out string cachedName)) return cachedName;
+
+        if (EntityUIHelpers.AllActionSprites != null)
+        {
+            var direct = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && string.Equals(sp.name, facadeID, StringComparison.OrdinalIgnoreCase));
+            if (direct != null)
+            {
+                _facadeResolutionCache[facadeID] = direct.name;
+                return direct.name;
+            }
+        }
+
+        var match = Regex.Match(facadeID, @"^([a-zA-Z]+)(\d+)$");
+        if (match.Success && EntityUIHelpers.AllActionSprites != null)
+        {
+            string prefix = match.Groups[1].Value;
+            string id = match.Groups[2].Value;
+            string searchPrefix = $"{prefix}_{id}_";
+
+            if (prefix.Equals("bas", StringComparison.OrdinalIgnoreCase) && int.TryParse(id, out int basId))
+            {
+                if (basId >= 188 && basId <= 219) searchPrefix = $"big_{basId - 188}_";
+                else if (basId >= 220 && basId <= 247) searchPrefix = $"hug_{basId - 220}_";
+                else if (basId >= 248 && basId <= 265) searchPrefix = $"tin_{basId - 248}_";
+            }
+
+            var sprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && sp.name.StartsWith(searchPrefix, StringComparison.OrdinalIgnoreCase));
+            if (sprite != null)
+            {
+                _facadeResolutionCache[facadeID] = sprite.name;
+                return sprite.name;
+            }
+        }
+
+        _facadeResolutionCache[facadeID] = facadeID;
+        return facadeID;
+    }
 
     public static Sprite GetFacadeSprite(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
-        if (_facadeCache.TryGetValue(name, out Sprite s)) return s;
-        s = EntityUIHelpers.GetFacadeSprite(name);
-        _facadeCache[name] = s;
+        string resolved = ResolveFacadeName(name);
+        if (_facadeCache.TryGetValue(resolved, out Sprite s)) return s;
+        s = EntityUIHelpers.GetFacadeSprite(resolved);
+        _facadeCache[resolved] = s;
         return s;
     }
+
     public static Sprite GetSpriteForPortrait(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
@@ -80,13 +125,21 @@ public class DiceFaceBuilderWidget
         public bool HasStringPayload { get; set; }
     }
 
+    // Encapsulated context for hat overrides to prevent leaky method signatures
+    private struct HatOverrideContext
+    {
+        public string HatSourceName;
+        public DiceSideData HatFace;
+        public Action Save;
+    }
+
     public static readonly List<PayloadType> RegisteredPayloads = new List<PayloadType>
     {
-    new PayloadType { Id = "standard", DisplayName = "Standard Base", HasBase = true, HasPips = true, HasStringPayload = false },
-    new PayloadType { Id = "sticker", DisplayName = "Sticker (Give Item)", HasBase = false, HasPips = false, HasStringPayload = true },
-    new PayloadType { Id = "cast", DisplayName = "Cast (Ability)", HasBase = false, HasPips = false, HasStringPayload = true },
-    new PayloadType { Id = "enchant", DisplayName = "Enchant (Give Modifier)", HasBase = false, HasPips = false, HasStringPayload = true },
-    new PayloadType { Id = "egg", DisplayName = "Egg (Summon)", HasBase = false, HasPips = true, HasStringPayload = true }
+        new PayloadType { Id = "standard", DisplayName = "Standard Base", HasBase = true, HasPips = true, HasStringPayload = false },
+        new PayloadType { Id = "sticker", DisplayName = "Sticker (Give Item)", HasBase = false, HasPips = false, HasStringPayload = true },
+        new PayloadType { Id = "cast", DisplayName = "Cast (Ability)", HasBase = false, HasPips = false, HasStringPayload = true },
+        new PayloadType { Id = "enchant", DisplayName = "Enchant (Give Modifier)", HasBase = false, HasPips = false, HasStringPayload = true },
+        new PayloadType { Id = "egg", DisplayName = "Egg (Summon)", HasBase = false, HasPips = true, HasStringPayload = true }
     };
 
     public static DiceSideData SharedClipboard = null;
@@ -127,10 +180,82 @@ public class DiceFaceBuilderWidget
         _getKeywordOptions = getKeywordOptions;
     }
 
-    #region UI Draw
+    public void SetGridReferences(GridReferences gridRefs)
+    {
+        _diceUI = gridRefs;
+    }
+
+    public void CopyDiceFace(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index]?.FlattenLegacyPayloadsForEdit();
+            SharedClipboard = sides[index].Clone();
+        }
+    }
+
+    public void PasteDiceFace(int index)
+    {
+        if (SharedClipboard == null) return;
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index]?.FlattenLegacyPayloadsForEdit();
+            var parent = sides[index]?.ParentEntity;
+            sides[index] = SharedClipboard.Clone();
+            if (sides[index] != null) sides[index].ParentEntity = parent;
+
+            _onStateChanged?.Invoke();
+            _onRebuildRequested?.Invoke();
+        }
+    }
+
+    public void ClearDiceFace(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index]?.FlattenLegacyPayloadsForEdit();
+            var parent = sides[index]?.ParentEntity;
+            sides[index] = new DiceSideData();
+            if (sides[index] != null) sides[index].ParentEntity = parent;
+
+            _onStateChanged?.Invoke();
+            _onRebuildRequested?.Invoke();
+        }
+    }
+
+    private void IncrementPips(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index]?.FlattenLegacyPayloadsForEdit();
+            sides[index].pips++;
+            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                input.SetTextWithoutNotify(sides[index].pips.ToString());
+            _onStateChanged?.Invoke();
+        }
+    }
+
+    private void DecrementPips(int index)
+    {
+        var sides = _getDiceSides?.Invoke();
+        if (sides != null && index >= 0 && index < sides.Length)
+        {
+            sides[index]?.FlattenLegacyPayloadsForEdit();
+            sides[index].pips--;
+            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
+                input.SetTextWithoutNotify(sides[index].pips.ToString());
+            _onStateChanged?.Invoke();
+        }
+    }
+
     // =====================================================================
-    // CORE UI GENERATION PIPELINE
+    // CORE UI PIPELINES (SRP)
     // =====================================================================
+
     public List<GridRowSpec> GenerateLayout(int tabIndex)
     {
         var layout = new List<GridRowSpec>();
@@ -144,9 +269,9 @@ public class DiceFaceBuilderWidget
         {
             var face = sides[i];
 
-            if (TryGetHatOverride(face, out EntityData hatEntity))
+            if (TryGetHatOverride(i, face, out HatOverrideContext hatCtx))
             {
-                layout.AddRange(BuildHatOverrideFaceLayout(i, face, hatEntity));
+                layout.AddRange(BuildHatOverrideFaceLayout(i, hatCtx));
             }
             else
             {
@@ -156,6 +281,7 @@ public class DiceFaceBuilderWidget
 
         return layout;
     }
+
     public void UpdateUIFromData(int tabIndex)
     {
         if (_diceUI == null) return;
@@ -169,9 +295,9 @@ public class DiceFaceBuilderWidget
         {
             var face = sides[i];
 
-            if (TryGetHatOverride(face, out EntityData hatEntity))
+            if (TryGetHatOverride(i, face, out HatOverrideContext hatCtx))
             {
-                UpdateHatOverrideUIFromData(i, hatEntity);
+                UpdateHatOverrideUIFromData(i, hatCtx);
             }
             else
             {
@@ -179,6 +305,7 @@ public class DiceFaceBuilderWidget
             }
         }
     }
+
     public void UpdateVisuals(int tabIndex)
     {
         if (_diceUI == null || _diceUI.Buttons == null) return;
@@ -192,9 +319,9 @@ public class DiceFaceBuilderWidget
         {
             var face = sides[i];
 
-            if (TryGetHatOverride(face, out EntityData hatEntity))
+            if (TryGetHatOverride(i, face, out HatOverrideContext hatCtx))
             {
-                UpdateHatOverrideVisuals(i, hatEntity);
+                UpdateHatOverrideVisuals(i, hatCtx);
             }
             else
             {
@@ -206,9 +333,10 @@ public class DiceFaceBuilderWidget
     // =====================================================================
     // HAT OVERRIDE PIPELINE
     // =====================================================================
-    private bool TryGetHatOverride(DiceSideData face, out EntityData hatEntity)
+
+    private bool TryGetHatOverride(int faceIndex, DiceSideData face, out HatOverrideContext ctx)
     {
-        hatEntity = null;
+        ctx = default;
         if (face == null) return false;
 
         foreach (var m in face.sideMechanics)
@@ -221,7 +349,27 @@ public class DiceFaceBuilderWidget
                     {
                         if (!(ed is MonsterData md && md.baseMonster != null && md.baseMonster.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)))
                         {
-                            hatEntity = ed;
+                            int sourceIdx = faceIndex;
+                            if (leg.Targets.Count > 1)
+                            {
+                                var sourceTargets = DiceTargetHelper.GetIndicesForTarget(leg.Targets[1]);
+                                if (sourceTargets.Count > 0) sourceIdx = sourceTargets[0];
+                            }
+
+                            if (ed.diceSides == null) ed.InitializeDiceFaces();
+                            var hFace = ed.diceSides[sourceIdx] ?? (ed.diceSides[sourceIdx] = new DiceSideData());
+
+                            ctx = new HatOverrideContext
+                            {
+                                HatSourceName = DiceTargetHelper.FaceNames[sourceIdx].ToUpper(),
+                                HatFace = hFace,
+                                Save = () => {
+                                    ed.diceSides[sourceIdx] = hFace;
+                                    leg.PayloadData = ed;
+                                    leg.PayloadString = ed.ExportAsHat();
+                                    _onStateChanged?.Invoke();
+                                }
+                            };
                             return true;
                         }
                     }
@@ -232,83 +380,77 @@ public class DiceFaceBuilderWidget
                 string raw = m.RawPayloadString;
                 if (!string.IsNullOrEmpty(raw) && !raw.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
                 {
-                    HeroData tempHat = new HeroData();
+                    EntityData tempHat = StaticBranchTracing.IsMonsterEntity(raw) ? (EntityData)new MonsterData() : new HeroData();
                     tempHat.SuppressAutoRegister = true;
                     tempHat.Parse(raw);
-                    hatEntity = tempHat;
+
+                    int sourceIdx = faceIndex;
+                    if (m.TargetStrings != null && m.TargetStrings.Count > 1)
+                    {
+                        var sourceTargets = DiceTargetHelper.GetIndicesForTarget(m.TargetStrings[1]);
+                        if (sourceTargets.Count > 0) sourceIdx = sourceTargets[0];
+                    }
+                    else if (m.TargetEnums != null && m.TargetEnums.Count > 1)
+                    {
+                        var sourceTargets = DiceTargetHelper.GetIndicesForTarget(m.TargetEnums[1].ToString().ToLower());
+                        if (sourceTargets.Count > 0) sourceIdx = sourceTargets[0];
+                    }
+
+                    if (tempHat.diceSides == null) tempHat.InitializeDiceFaces();
+                    var hFace = tempHat.diceSides[sourceIdx] ?? (tempHat.diceSides[sourceIdx] = new DiceSideData());
+
+                    ctx = new HatOverrideContext
+                    {
+                        HatSourceName = DiceTargetHelper.FaceNames[sourceIdx].ToUpper(),
+                        HatFace = hFace,
+                        Save = () => {
+                            tempHat.diceSides[sourceIdx] = hFace;
+                            m.RawPayloadString = tempHat.ExportAsHat();
+                            _onStateChanged?.Invoke();
+                        }
+                    };
                     return true;
                 }
             }
         }
         return false;
     }
-    private List<GridRowSpec> BuildHatOverrideFaceLayout(int index, DiceSideData parentFace, EntityData hatEntity)
+
+    private List<GridRowSpec> BuildHatOverrideFaceLayout(int index, HatOverrideContext ctx)
     {
         var faceRows = new List<GridRowSpec>();
         string faceName = DiceTargetHelper.FaceNames[index].ToUpper();
 
         faceRows.Add(BuildFaceHeader(index, faceName));
         faceRows.Add(new GridRowSpec(GridCellSpec.CreateLabel("<color=#F5A9B8>HAT OVERRIDE DETECTED</color>", 1.0f)));
-        faceRows.Add(new GridRowSpec(GridCellSpec.CreateLabel("<color=#CCCCCC><i>This face is driven by a Hat container. Edits here apply directly to the Hat.</i></color>", 1.0f)));
-
-        var hatFace = hatEntity.diceSides[index];
-        if (hatFace == null)
-        {
-            hatEntity.InitializeDiceFaces();
-            hatFace = hatEntity.diceSides[index];
-        }
-
-        // Extremely careful mutation handler
-        Action saveHat = () => {
-            hatEntity.diceSides[index] = hatFace;
-
-            // Push mutation back into the parent Face AST
-            foreach (var m in parentFace.sideMechanics)
-            {
-                if (m.LegacyItemPayload != null)
-                {
-                    foreach (var leg in m.LegacyItemPayload.Mechanics)
-                    {
-                        if (leg.Prefix == "hat" && leg.PayloadData is EntityData ed)
-                        {
-                            leg.PayloadData = hatEntity;
-                        }
-                    }
-                }
-                else if (m.Prefix == "hat")
-                {
-                    m.RawPayloadString = hatEntity.ExportAsHat();
-                }
-            }
-            _onStateChanged?.Invoke();
-        };
+        faceRows.Add(new GridRowSpec(GridCellSpec.CreateLabel($"<color=#CCCCCC><i>This face is driven by the {ctx.HatSourceName} face of an attached Hat. Edits apply to the Hat.</i></color>", 1.0f)));
 
         faceRows.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Hat Facade:", 0.25f),
             GridCellSpec.CreateDiceButton($"HatFacBtn_{index}", "F", 0.20f, () => {
-                OpenHatFacadeModal(hatFace.facadeID, (facStr, spr) => {
-                    hatFace.facadeID = facStr;
-                    saveHat();
+                OpenHatFacadeModal(ctx.HatFace.facadeID, (facStr, spr) => {
+                    ctx.HatFace.facadeID = facStr;
+                    ctx.Save();
                     _onRebuildRequested?.Invoke();
                 });
             }),
             GridCellSpec.CreateLabel("ID:", 0.15f),
-            GridCellSpec.CreateInput($"HatFacInput_{index}", "ID", 0.40f, (val) => {
-                hatFace.facadeID = val;
-                saveHat();
+            GridCellSpec.CreateInput($"HatFacInput_{index}", ctx.HatFace.facadeID ?? "", 0.40f, (val) => {
+                ctx.HatFace.facadeID = val;
+                ctx.Save();
             })
         ));
 
         Action<int, int> updateHatHsv = (compIdx, val) => {
-            string[] parts = (hatFace.facadeColor ?? "0:0:0").Split(':');
+            string[] parts = (ctx.HatFace.facadeColor ?? "0:0:0").Split(':');
             List<string> hsvList = new List<string>(parts);
             while (hsvList.Count < 3) hsvList.Add("0");
             hsvList[compIdx] = val.ToString();
 
-            if (hsvList[0] == "0" && hsvList[1] == "0" && hsvList[2] == "0") hatFace.facadeColor = null;
-            else hatFace.facadeColor = $"{hsvList[0]}:{hsvList[1]}:{hsvList[2]}";
+            if (hsvList[0] == "0" && hsvList[1] == "0" && hsvList[2] == "0") ctx.HatFace.facadeColor = null;
+            else ctx.HatFace.facadeColor = $"{hsvList[0]}:{hsvList[1]}:{hsvList[2]}";
 
-            saveHat();
+            ctx.Save();
         };
 
         faceRows.Add(new GridRowSpec(
@@ -338,15 +480,15 @@ public class DiceFaceBuilderWidget
         finalLayout.AddRange(faceRows);
         return finalLayout;
     }
-    private void UpdateHatOverrideUIFromData(int index, EntityData hatEntity)
-    {
-        var hatFace = hatEntity.diceSides[index];
-        if (hatFace == null) return;
 
-        if (_diceUI.Inputs.TryGetValue($"HatFacInput_{index}", out var hfi)) hfi.SetTextWithoutNotify(hatFace.facadeID);
+    private void UpdateHatOverrideUIFromData(int index, HatOverrideContext ctx)
+    {
+        if (ctx.HatFace == null) return;
+
+        if (_diceUI.Inputs.TryGetValue($"HatFacInput_{index}", out var hfi)) hfi.SetTextWithoutNotify(ctx.HatFace.facadeID);
 
         int h = 0, s = 0, v = 0;
-        string[] hsv = (hatFace.facadeColor ?? "").Split(':');
+        string[] hsv = (ctx.HatFace.facadeColor ?? "").Split(':');
         if (hsv.Length > 0 && int.TryParse(hsv[0], out int pH)) h = pH;
         if (hsv.Length > 1 && int.TryParse(hsv[1], out int pS)) s = pS;
         if (hsv.Length > 2 && int.TryParse(hsv[2], out int pV)) v = pV;
@@ -359,12 +501,12 @@ public class DiceFaceBuilderWidget
         if (_diceUI.Inputs.TryGetValue($"HatFacS_{index}", out var dS)) dS.SetTextWithoutNotify(s != 0 ? s.ToString() : "");
         if (_diceUI.Inputs.TryGetValue($"HatFacV_{index}", out var dV)) dV.SetTextWithoutNotify(v != 0 ? v.ToString() : "");
     }
-    private void UpdateHatOverrideVisuals(int index, EntityData hatEntity)
+
+    private void UpdateHatOverrideVisuals(int index, HatOverrideContext ctx)
     {
-        var hatFace = hatEntity.diceSides[index];
-        if (hatFace != null && _diceUI.Buttons.TryGetValue($"HatFacBtn_{index}", out var hfb))
+        if (ctx.HatFace != null && _diceUI.Buttons.TryGetValue($"HatFacBtn_{index}", out var hfb))
         {
-            Sprite s = _getFacadeSprite?.Invoke(hatFace.facadeID);
+            Sprite s = SpriteCacheHelper.GetFacadeSprite(ctx.HatFace.facadeID);
             StaticUI.SetButtonIcon(hfb, s);
         }
     }
@@ -372,6 +514,7 @@ public class DiceFaceBuilderWidget
     // =====================================================================
     // STANDARD FACE PIPELINE
     // =====================================================================
+
     private List<GridRowSpec> BuildStandardFaceLayout(int index, DiceSideData face)
     {
         var faceRows = new List<GridRowSpec>();
@@ -430,6 +573,7 @@ public class DiceFaceBuilderWidget
         finalLayout.AddRange(faceRows);
         return finalLayout;
     }
+
     private void UpdateStandardFaceUIFromData(int i, DiceSideData face)
     {
         var faceType = GetFaceType(i, face);
@@ -525,6 +669,7 @@ public class DiceFaceBuilderWidget
             targetDrop.RefreshShownValue();
         }
     }
+
     private void UpdateStandardFaceVisuals(int i, DiceSideData face)
     {
         var faceType = GetFaceType(i, face);
@@ -543,138 +688,9 @@ public class DiceFaceBuilderWidget
     }
 
     // =====================================================================
-    // HELPER / SUPPORT METHODS
+    // SUB-BUILDERS & SUPPORT METHODS
     // =====================================================================
-    private void OpenHatFacadeModal(string currentValue, Action<string, Sprite> onSelectionMade)
-    {
-        var iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
-        if (iconPicker == null) return;
-        IconPickerConfig config = new IconPickerConfig
-        {
-            Sprites = EntityUIHelpers.AllActionSprites,
-            IsValid = (index, sprite) => EntityUIHelpers.IsSpriteValid(sprite),
-            GetSearchName = (index, sprite) =>
-            {
-                if (sprite.name.StartsWith("bas_", StringComparison.OrdinalIgnoreCase))
-                {
-                    string[] p = sprite.name.Split('_');
-                    if (p.Length > 1 && int.TryParse(p[1], out int id) && id > 187)
-                        return IconPickerModal.GetCleanLeafName(sprite.name);
-                }
-                return sprite.name;
-            },
-            GetTooltip = (index, sprite) => sprite.name,
-            OnSelectionMade = (index, sprite) =>
-            {
-                if (sprite != null)
-                {
-                    string filename = sprite.name;
-                    string[] parts = filename.Split('_');
-                    string facadeStr;
-                    if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
-                    {
-                        string prefix = parts[0].ToLower();
-                        if (prefix == "big" && parsedId >= 0 && parsedId <= 31) facadeStr = $"bas{188 + parsedId}";
-                        else if (prefix == "hug" && parsedId >= 0 && parsedId <= 27) facadeStr = $"bas{220 + parsedId}";
-                        else if (prefix == "tin" && parsedId >= 0 && parsedId <= 17) facadeStr = $"bas{248 + parsedId}";
-                        else facadeStr = $"{parts[0]}{parts[1]}";
-                    }
-                    else
-                    {
-                        facadeStr = filename;
-                    }
-                    onSelectionMade?.Invoke(facadeStr, sprite);
-                }
-            }
-        };
-        iconPicker.OpenModal(config);
-    }
-    #endregion
 
-    public void SetGridReferences(GridReferences gridRefs)
-    {
-        _diceUI = gridRefs;
-    }
-    public void CopyDiceFace(int index)
-    {
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && index >= 0 && index < sides.Length)
-        {
-            // 1. Shatter before copying so we copy a safe, flat structure.
-            // This prevents legacy multi-face items from bleeding into the clipboard!
-            sides[index]?.FlattenLegacyPayloadsForEdit();
-
-            SharedClipboard = sides[index].Clone();
-        }
-    }
-    public void PasteDiceFace(int index)
-    {
-        if (SharedClipboard == null) return;
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && index >= 0 && index < sides.Length)
-        {
-            // 1. Shatter existing items on this face so they aren't left orphaned on sibling faces
-            sides[index]?.FlattenLegacyPayloadsForEdit();
-
-            // 2. Preserve parent linkage
-            var parent = sides[index]?.ParentEntity;
-
-            // 3. Paste
-            sides[index] = SharedClipboard.Clone();
-            if (sides[index] != null) sides[index].ParentEntity = parent;
-
-            // Notice we removed the legacy item manual retargeting loop here.
-            // Since CopyDiceFace now shatters before copying, the clipboard is guaranteed to only hold safe, flat AST nodes!
-
-            _onStateChanged?.Invoke();
-            _onRebuildRequested?.Invoke();
-        }
-    }
-    public void ClearDiceFace(int index)
-    {
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && index >= 0 && index < sides.Length)
-        {
-            // 1. Shatter existing items on this face so they aren't left orphaned on sibling faces
-            sides[index]?.FlattenLegacyPayloadsForEdit();
-
-            // 2. Preserve parent linkage
-            var parent = sides[index]?.ParentEntity;
-
-            // 3. Clear
-            sides[index] = new DiceSideData();
-            if (sides[index] != null) sides[index].ParentEntity = parent;
-
-            _onStateChanged?.Invoke();
-            _onRebuildRequested?.Invoke();
-        }
-    }
-    private void IncrementPips(int index)
-    {
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && index >= 0 && index < sides.Length)
-        {
-            sides[index]?.FlattenLegacyPayloadsForEdit(); // <--- ADDED
-
-            sides[index].pips++;
-            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
-                input.SetTextWithoutNotify(sides[index].pips.ToString());
-            _onStateChanged?.Invoke();
-        }
-    }
-    private void DecrementPips(int index)
-    {
-        var sides = _getDiceSides?.Invoke();
-        if (sides != null && index >= 0 && index < sides.Length)
-        {
-            sides[index]?.FlattenLegacyPayloadsForEdit(); // <--- ADDED
-
-            sides[index].pips--;
-            if (_diceUI != null && _diceUI.Inputs.TryGetValue($"Pips_{index}", out var input))
-                input.SetTextWithoutNotify(sides[index].pips.ToString());
-            _onStateChanged?.Invoke();
-        }
-    }
     private GridRowSpec BuildBaseRow(int index, DiceSideData face)
     {
         return new GridRowSpec(
@@ -683,21 +699,20 @@ public class DiceFaceBuilderWidget
             GridCellSpec.CreateLabel("ID:", 0.15f),
             GridCellSpec.CreateInput($"ID_{index}", "ID", 0.40f, (val) =>
             {
-                face.FlattenLegacyPayloadsForEdit(); // <--- ADDED
-
+                face.FlattenLegacyPayloadsForEdit();
                 if (string.IsNullOrWhiteSpace(val)) { face.effectID = 0; _onStateChanged?.Invoke(); }
                 else if (int.TryParse(val, out int id)) { face.effectID = id; _onStateChanged?.Invoke(); }
             })
         );
     }
+
     private GridRowSpec BuildPipsRow(int index, DiceSideData face)
     {
         return new GridRowSpec(
             GridCellSpec.CreateLabel("Pips:", 0.25f),
             GridCellSpec.CreateInput($"Pips_{index}", "", 0.35f, (val) =>
             {
-                face.FlattenLegacyPayloadsForEdit(); // <--- ADDED
-
+                face.FlattenLegacyPayloadsForEdit();
                 if (string.IsNullOrWhiteSpace(val)) { face.pips = 0; _onStateChanged?.Invoke(); }
                 else if (int.TryParse(val, out int p)) { face.pips = p; _onStateChanged?.Invoke(); }
             }),
@@ -711,14 +726,12 @@ public class DiceFaceBuilderWidget
         var list = new List<string>();
         if (string.IsNullOrWhiteSpace(payload)) return list;
 
-        // Legacy fallback for any broken comma-separated data currently saved
         if (payload.Contains(","))
         {
             return payload.Split(',').Select(s => s.Trim().ToLower()).Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
 
         string temp = payload.Trim();
-        // Strip out the bracketing
         if (temp.StartsWith("(") && temp.EndsWith(")"))
         {
             temp = temp.Substring(1, temp.Length - 2);
@@ -728,44 +741,33 @@ public class DiceFaceBuilderWidget
         foreach (var p in parts)
         {
             string clean = p.Trim().ToLower();
-            if (clean.StartsWith("k."))
-            {
-                list.Add(clean.Substring(2));
-            }
-            else if (!string.IsNullOrEmpty(clean))
-            {
-                // Accept as is (fallback for raw input crossovers)
-                list.Add(clean);
-            }
+            if (clean.StartsWith("k.")) list.Add(clean.Substring(2));
+            else if (!string.IsNullOrEmpty(clean)) list.Add(clean);
         }
         return list;
     }
+
     private string SerializeStickerKeywords(List<string> kws)
     {
         if (kws == null || kws.Count == 0) return "";
-
-        // Convert to game-engine syntax: k.keyword1#k.keyword2
         string serialized = string.Join("#", kws.Select(k => $"k.{k}"));
-
-        // If there are multiple mechanics, bracket them so they stay self-contained inside the sticker payload
-        if (kws.Count > 1)
-        {
-            serialized = $"({serialized})";
-        }
+        if (kws.Count > 1) serialized = $"({serialized})";
         return serialized;
     }
+
     private void RemoveKeywordFromFace(int faceIndex, string keyword)
     {
         var sides = _getDiceSides?.Invoke();
         if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
         {
-            if (sides[faceIndex].RemoveKeyword(keyword)) // <--- UPDATED: Use the new AST helper
+            if (sides[faceIndex].RemoveKeyword(keyword))
             {
                 _onStateChanged?.Invoke();
                 _onRebuildRequested?.Invoke();
             }
         }
     }
+
     private void UpdateFaceHsv(int faceIndex, int componentIndex, int value)
     {
         if (_allowFacades != null && !_allowFacades()) return;
@@ -773,7 +775,6 @@ public class DiceFaceBuilderWidget
         if (sides == null || faceIndex < 0 || faceIndex >= sides.Length) return;
 
         value = Mathf.Clamp(value, -99, 99);
-
         var face = sides[faceIndex];
         bool facadeAutoAssigned = false;
 
@@ -793,14 +794,8 @@ public class DiceFaceBuilderWidget
 
         hsv[componentIndex] = value.ToString();
 
-        if (hsv[0] == "0" && hsv[1] == "0" && hsv[2] == "0")
-        {
-            face.facadeColor = null;
-        }
-        else
-        {
-            face.facadeColor = $"{hsv[0]}:{hsv[1]}:{hsv[2]}";
-        }
+        if (hsv[0] == "0" && hsv[1] == "0" && hsv[2] == "0") face.facadeColor = null;
+        else face.facadeColor = $"{hsv[0]}:{hsv[1]}:{hsv[2]}";
 
         string inputKey = componentIndex == 0 ? $"FacH_{faceIndex}" : (componentIndex == 1 ? $"FacS_{faceIndex}" : $"FacV_{faceIndex}");
         if (_diceUI != null && _diceUI.Inputs.TryGetValue(inputKey, out var input))
@@ -811,77 +806,14 @@ public class DiceFaceBuilderWidget
             slider.SetValueWithoutNotify(value);
 
         _onStateChanged?.Invoke();
-
         if (facadeAutoAssigned) UpdateUIFromData(faceIndex);
     }
-    private List<GridRowSpec> BuildHatOverrideLayout(int index, DiceSideData heroFace, EntityData hatEntity, Action<EntityData> saveHat)
-    {
-        var rows = new List<GridRowSpec>();
 
-        rows.Add(new GridRowSpec(GridCellSpec.CreateLabel("<color=#F5A9B8>HAT OVERRIDE DETECTED</color>", 1.0f)));
-        rows.Add(new GridRowSpec(GridCellSpec.CreateLabel("<color=#CCCCCC><i>This face is driven by a Hat container. Edits here apply directly to the Hat.</i></color>", 1.0f)));
-
-        var hatFace = hatEntity.diceSides[index];
-        if (hatFace == null)
-        {
-            hatEntity.InitializeDiceFaces();
-            hatFace = hatEntity.diceSides[index];
-        }
-
-        rows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Hat Facade:", 0.25f),
-            GridCellSpec.CreateDiceButton($"HatFacBtn_{index}", "F", 0.20f, () => {
-                OpenHatFacadeModal(hatFace.facadeID, (facStr, spr) => {
-                    hatFace.facadeID = facStr;
-                    saveHat(hatEntity);
-                    _onStateChanged?.Invoke();
-                    _onRebuildRequested?.Invoke();
-                });
-            }),
-            GridCellSpec.CreateLabel("ID:", 0.15f),
-            GridCellSpec.CreateInput($"HatFacInput_{index}", "ID", 0.40f, (val) => {
-                hatFace.facadeID = val;
-                saveHat(hatEntity);
-                _onStateChanged?.Invoke();
-            })
-        ));
-
-        // Facade color safety helpers to mutate the Hat object
-        Action<int, int> updateHatHsv = (compIdx, val) => {
-            string[] parts = (hatFace.facadeColor ?? "0:0:0").Split(':');
-            List<string> hsvList = new List<string>(parts);
-            while (hsvList.Count < 3) hsvList.Add("0");
-            hsvList[compIdx] = val.ToString();
-
-            if (hsvList[0] == "0" && hsvList[1] == "0" && hsvList[2] == "0") hatFace.facadeColor = null;
-            else hatFace.facadeColor = $"{hsvList[0]}:{hsvList[1]}:{hsvList[2]}";
-
-            saveHat(hatEntity);
-            _onStateChanged?.Invoke();
-        };
-
-        rows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Hue:", 0.30f),
-            GridCellSpec.CreateSlider($"HatSliH_{index}", -99, 99, true, 0.50f, (val) => updateHatHsv(0, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput($"HatFacH_{index}", "H", 0.20f, (val) => { if (int.TryParse(val, out int vval)) updateHatHsv(0, vval); })
-        ));
-        rows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Sat:", 0.30f),
-            GridCellSpec.CreateSlider($"HatSliS_{index}", -99, 99, true, 0.50f, (val) => updateHatHsv(1, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput($"HatFacS_{index}", "S", 0.20f, (val) => { if (int.TryParse(val, out int vval)) updateHatHsv(1, vval); })
-        ));
-        rows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Val:", 0.30f),
-            GridCellSpec.CreateSlider($"HatSliV_{index}", -99, 99, true, 0.50f, (val) => updateHatHsv(2, Mathf.RoundToInt(val))),
-            GridCellSpec.CreateInput($"HatFacV_{index}", "V", 0.20f, (val) => { if (int.TryParse(val, out int vval)) updateHatHsv(2, vval); })
-        ));
-
-        return rows;
-    }
     private GridRowSpec BuildFaceHeader(int index, string faceName)
     {
         return new GridRowSpec(GridCellSpec.CreateLabel($"LblFaceName_{index}", $"--- {faceName} FACE ---", 1.0f));
     }
+
     private GridRowSpec BuildStringPayload(int index, DiceSideData face, PayloadType faceType)
     {
         return new GridRowSpec(
@@ -893,6 +825,7 @@ public class DiceFaceBuilderWidget
             })
         );
     }
+
     private List<GridRowSpec> BuildFacades(int index, DiceSideData face)
     {
         return new List<GridRowSpec>
@@ -905,6 +838,7 @@ public class DiceFaceBuilderWidget
             )
         };
     }
+
     private List<GridRowSpec> BuildHSV(int index, DiceSideData face)
     {
         return new List<GridRowSpec>
@@ -926,6 +860,7 @@ public class DiceFaceBuilderWidget
             )
         };
     }
+
     private void AddKeywordToFace(int faceIndex, int dropdownValue)
     {
         if (dropdownValue <= 0) return;
@@ -935,19 +870,18 @@ public class DiceFaceBuilderWidget
         var sides = _getDiceSides?.Invoke();
         if (sides != null && faceIndex >= 0 && faceIndex < sides.Length)
         {
-            var face = sides[faceIndex];
-            face.AddKeyword(targetKeyword); // <--- UPDATED: Use the new AST helper
+            sides[faceIndex].AddKeyword(targetKeyword);
             _onStateChanged?.Invoke();
             _onRebuildRequested?.Invoke();
         }
     }
+
     private List<GridRowSpec> BuildKeywords(int index, DiceSideData face)
     {
         var keywordRows = new List<GridRowSpec>();
         string[] rawOptions = _getKeywordOptions != null ? _getKeywordOptions() : Enum.GetNames(typeof(EffectKeyword));
 
-        List<string> displayOptions = new List<string>();
-        displayOptions.Add("--- Select Keyword ---");
+        List<string> displayOptions = new List<string> { "--- Select Keyword ---" };
 
         foreach (string rawKw in rawOptions)
         {
@@ -955,38 +889,20 @@ public class DiceFaceBuilderWidget
             if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = rawKw;
 
             string desc = null;
-            if (EffectKeywordColors.Descriptions.TryGetValue(rawKw, out string matchedDesc))
-            {
-                desc = matchedDesc;
-            }
+            if (EffectKeywordColors.Descriptions.TryGetValue(rawKw, out string matchedDesc)) desc = matchedDesc;
             else
             {
                 var kvp = EffectKeywordColors.Descriptions.FirstOrDefault(x => string.Equals(x.Key, rawKw, StringComparison.OrdinalIgnoreCase));
                 if (!string.IsNullOrEmpty(kvp.Value)) desc = kvp.Value;
             }
 
-            if (!string.IsNullOrWhiteSpace(desc))
-            {
-                displayOptions.Add($"{coloredLabel}<pos=170><color=#AAAAAA>: {desc}</color>");
-            }
-            else
-            {
-                displayOptions.Add(coloredLabel);
-            }
+            if (!string.IsNullOrWhiteSpace(desc)) displayOptions.Add($"{coloredLabel}<pos=170><color=#AAAAAA>: {desc}</color>");
+            else displayOptions.Add(coloredLabel);
         }
 
+        keywordRows.Add(new GridRowSpec(GridCellSpec.CreateLabel("Add Keyword:", 1.0f)));
         keywordRows.Add(new GridRowSpec(
-            GridCellSpec.CreateLabel("Add Keyword:", 1.0f)
-        ));
-
-        keywordRows.Add(new GridRowSpec(
-            GridCellSpec.CreateFilteredDropdown(
-                $"KwDrop_{index}",
-                "--- Select Keyword ---", // <--- UPDATED (was "")
-                1.0f,
-                displayOptions.ToArray(),
-                (val) => AddKeywordToFace(index, val)
-            )
+            GridCellSpec.CreateFilteredDropdown($"KwDrop_{index}", "--- Select Keyword ---", 1.0f, displayOptions.ToArray(), (val) => AddKeywordToFace(index, val))
         ));
 
         foreach (var kw in face.keywords)
@@ -1000,6 +916,7 @@ public class DiceFaceBuilderWidget
         }
         return keywordRows;
     }
+
     private GridRowSpec BuildClipboardButtons(int index)
     {
         return new GridRowSpec(
@@ -1008,19 +925,18 @@ public class DiceFaceBuilderWidget
             GridCellSpec.CreateButton($"BtnClear_{index}", "Clear Dice", 0.33f, () => ClearDiceFace(index))
         );
     }
+
     private GridRowSpec BuildFaceTypeSelector(int index, DiceSideData face, PayloadType faceType)
     {
         var typeOptions = RegisteredPayloads.Select(t => t.DisplayName).ToArray();
         return new GridRowSpec(
             GridCellSpec.CreateLabel("Face Type:", 0.30f),
-
             GridCellSpec.CreateFilteredDropdown($"FaceTypeDrop_{index}", faceType.DisplayName, 0.70f, typeOptions, (val) =>
             {
                 if (val < 0 || val >= RegisteredPayloads.Count) return;
                 string newTypeId = RegisteredPayloads[val].Id;
                 if (newTypeId != GetFaceType(index, face).Id)
                 {
-                    // 1. Assign faceType directly
                     DiceSideData.DiceFaceType newFaceType = newTypeId switch
                     {
                         "standard" => DiceSideData.DiceFaceType.Base,
@@ -1033,7 +949,6 @@ public class DiceFaceBuilderWidget
 
                     face.faceType = newFaceType;
 
-                    // 2. Manage Egg-specific blindfold tags cleanly
                     string currentPayload = GetFacePayload(face);
                     if (newTypeId == "egg" && !currentPayload.Contains("#blindfold"))
                     {
@@ -1069,17 +984,16 @@ public class DiceFaceBuilderWidget
             face.payload = payloadData ?? "";
         }
     }
+
     private GridRowSpec BuildTargetSelector(int index, DiceSideData face)
     {
         var enumNames = Enum.GetNames(typeof(DiceSideData.PayloadTarget));
-
-        // 1. Dynamically name the first option based on context
         string defaultLabel = $"Default ({DiceSideData.GetInherentDefaultTargetName(face.faceType)})";
         List<string> targetOptions = new List<string> { defaultLabel };
 
         foreach (var name in enumNames)
         {
-            targetOptions.Add(System.Text.RegularExpressions.Regex.Replace(name, "([a-z])([A-Z])", "$1 $2"));
+            targetOptions.Add(Regex.Replace(name, "([a-z])([A-Z])", "$1 $2"));
         }
 
         int currentVisualIndex = face.payloadTarget == null ? 0 : (int)face.payloadTarget.Value + 1;
@@ -1089,13 +1003,11 @@ public class DiceFaceBuilderWidget
             GridCellSpec.CreateFilteredDropdown($"PayloadTargetDrop_{index}", targetOptions[currentVisualIndex], 0.70f, targetOptions.ToArray(), (val) => {
                 if (val == 0)
                 {
-                    face.payloadTarget = null; // Revert to Inherent
+                    face.payloadTarget = null;
                 }
                 else if (val > 0 && (val - 1) < enumNames.Length)
                 {
                     var selectedTarget = (DiceSideData.PayloadTarget)(val - 1);
-
-                    // 2. Optimization: Collapse redundant explicit selections back to null
                     if (DiceSideData.IsTargetInherentDefault(face.faceType, selectedTarget))
                     {
                         face.payloadTarget = null;
@@ -1106,10 +1018,11 @@ public class DiceFaceBuilderWidget
                     }
                 }
                 _onStateChanged?.Invoke();
-                _onRebuildRequested?.Invoke(); // Rebuild to instantly update the visual dropdown state if collapsed
+                _onRebuildRequested?.Invoke();
             })
         );
     }
+
     private GridRowSpec BuildSideDescRow(int index, DiceSideData face)
     {
         return new GridRowSpec(
@@ -1122,6 +1035,7 @@ public class DiceFaceBuilderWidget
             })
         );
     }
+
     private GridRowSpec BuildTogtimeRow(int index, DiceSideData face)
     {
         string labelText = face.togtime ? "For entire fight" : "for 1 turn";
@@ -1134,6 +1048,7 @@ public class DiceFaceBuilderWidget
             })
         );
     }
+
     private List<GridRowSpec> BuildStickerPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
@@ -1142,7 +1057,6 @@ public class DiceFaceBuilderWidget
 
         int mode = _stickerModeState.TryGetValue(index, out int m) ? m : 0;
 
-        // Mode Selector Dropdown
         rows.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Sticker Type:", 0.30f),
             GridCellSpec.CreateDropdown($"StickerModeDrop_{index}", "", 0.70f, new string[] { "Custom Item", "Keyword(s)", "Raw Input" }, (val) => {
@@ -1224,14 +1138,13 @@ public class DiceFaceBuilderWidget
                 GridCellSpec.CreateLabel("Add Keyword:", 0.30f),
                 GridCellSpec.CreateFilteredDropdown(
                     $"StickerKwDrop_{index}",
-                    "--- Select Keyword ---", // <--- UPDATED (was "")
+                    "--- Select Keyword ---",
                     0.70f,
                     displayOptions.ToArray(),
-                                (val) => {
+                    (val) => {
                         if (val <= 0) return;
                         string targetKeyword = rawOptions[val - 1].ToLower();
 
-                        // Statelessly read current payload from source
                         var freshKws = ParseStickerKeywords(GetFacePayload(face));
 
                         if (!freshKws.Contains(targetKeyword))
@@ -1250,14 +1163,13 @@ public class DiceFaceBuilderWidget
                 var activeKws = ParseStickerKeywords(currentPayload);
                 foreach (var kw in activeKws)
                 {
-                    string keywordString = kw; // Local capture for lambda
+                    string keywordString = kw;
                     string coloredLabel = EntityUIHelpers.GetColoredKeywordLabel(keywordString);
                     if (string.IsNullOrEmpty(coloredLabel)) coloredLabel = keywordString;
 
                     rows.Add(new GridRowSpec(
                         GridCellSpec.CreateLabel($"KwTag_{index}_{keywordString}", coloredLabel, 0.80f),
                         GridCellSpec.CreateButton($"KwDel_{index}_{keywordString}", "[X]", 0.20f, () => {
-                            // Statelessly read to prevent closure bugs if clicked rapidly
                             var freshKws = ParseStickerKeywords(GetFacePayload(face));
                             freshKws.Remove(keywordString);
                             SetFacePayload(face, faceType.Id, SerializeStickerKeywords(freshKws));
@@ -1281,12 +1193,12 @@ public class DiceFaceBuilderWidget
 
         return rows;
     }
+
     private List<GridRowSpec> BuildCastPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
         bool isCustom = IsCastCustom(index, face);
 
-        // 1. Toggle switch row
         rows.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Cast Source:", 0.30f),
             GridCellSpec.CreateButton($"BtnToggleCastType_{index}", isCustom ? "► CUSTOM (Click for Base)" : "► BASE (Click for Custom)", 0.70f, () => ToggleCastType(index, face))
@@ -1295,7 +1207,6 @@ public class DiceFaceBuilderWidget
         string currentPayload = GetFacePayload(face);
         bool hasPayload = !string.IsNullOrWhiteSpace(currentPayload);
 
-        // 2. Render Base Ability Selector
         if (!isCustom)
         {
             var baseAbilities = BaseAbilityDatabase.Abilities;
@@ -1313,7 +1224,7 @@ public class DiceFaceBuilderWidget
                 GridCellSpec.CreateFilteredDropdown($"CastBaseAbilityDrop_{index}", "-- Select Base Ability --", 0.70f, dropdownChoices.ToArray(), (val) => {
                     if (val <= 0 || val >= dropdownChoices.Count || baseAbilities == null) return;
 
-                    var targetAbility = baseAbilities[val - 1]; // Offset by 1 for placeholder
+                    var targetAbility = baseAbilities[val - 1];
                     if (targetAbility != null)
                     {
                         SetFacePayload(face, faceType.Id, targetAbility.name);
@@ -1339,7 +1250,6 @@ public class DiceFaceBuilderWidget
                 ));
             }
         }
-        // 3. Render Custom Ability Selector
         else
         {
             var customAbilities = ModPackage.Instance?.CustomAbilities;
@@ -1394,10 +1304,10 @@ public class DiceFaceBuilderWidget
 
         return rows;
     }
+
     private List<GridRowSpec> BuildEnchantPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
-
         var customModifiers = ModPackage.Instance?.CustomModifiers;
         var modifierNames = new List<string> { "-- Select Custom Modifier --" };
 
@@ -1411,7 +1321,6 @@ public class DiceFaceBuilderWidget
         string currentPayload = GetFacePayload(face);
         bool hasPayload = !string.IsNullOrWhiteSpace(currentPayload);
 
-        // Modifier Dropdown Selection
         rows.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Set Modifier:", 0.30f),
             GridCellSpec.CreateFilteredDropdown($"EnchantModifierDrop_{index}", "-- Select Custom Modifier --", 0.70f, modifierNames.ToArray(), (val) => {
@@ -1435,7 +1344,6 @@ public class DiceFaceBuilderWidget
             })
         ));
 
-        // Active selection with clear [X] button
         if (hasPayload)
         {
             string displayLabel = currentPayload.Length > 25 ? currentPayload.Substring(0, 22) + "..." : currentPayload;
@@ -1452,6 +1360,7 @@ public class DiceFaceBuilderWidget
 
         return rows;
     }
+
     private List<GridRowSpec> BuildEggPayload(int index, DiceSideData face, PayloadType faceType)
     {
         var rows = new List<GridRowSpec>();
@@ -1461,7 +1370,6 @@ public class DiceFaceBuilderWidget
         bool killsUser = !isSafe;
         string cleanSummon = isSafe ? rawPayload.Substring(0, rawPayload.Length - 10) : rawPayload;
 
-        // 1. Kill User Toggle
         rows.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Kill User?", 0.30f),
             GridCellSpec.CreateButton($"BtnEggKill_{index}", killsUser ? "Yes (Hero dies)" : "No (Adds blindfold)", 0.70f, () => {
@@ -1473,7 +1381,6 @@ public class DiceFaceBuilderWidget
             })
         ));
 
-        // 2. Summon Entity Dropdown
         var entityNames = new List<string> { "-- Select Entity to Summon --" };
         if (ModPackage.Instance != null)
         {
@@ -1501,7 +1408,6 @@ public class DiceFaceBuilderWidget
             })
         ));
 
-        // 3. Active selection with clear [X] button
         if (hasCleanPayload)
         {
             string displayLabel = cleanSummon.Length > 25 ? cleanSummon.Substring(0, 22) + "..." : cleanSummon;
@@ -1520,47 +1426,56 @@ public class DiceFaceBuilderWidget
         return rows;
     }
 
-    // Payload Getters / Setters
     private string GetFacePayload(DiceSideData face)
     {
         return face.payload ?? "";
     }
-    private void OpenHatBaseModal(Action<int, Sprite> onSelectionMade)
+
+    private void OpenHatFacadeModal(string currentValue, Action<string, Sprite> onSelectionMade)
     {
         var iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
         if (iconPicker == null) return;
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = EntityUIHelpers.BaseActionSprites,
-            IsValid = (index, sprite) =>
+            Sprites = EntityUIHelpers.AllActionSprites,
+            IsValid = (index, sprite) => EntityUIHelpers.IsSpriteValid(sprite),
+            GetSearchName = (index, sprite) =>
             {
-                if (sprite == null || !EntityUIHelpers.IsSpriteValid(sprite)) return false;
                 if (sprite.name.StartsWith("bas_", StringComparison.OrdinalIgnoreCase))
                 {
-                    string[] parts = sprite.name.Split('_');
-                    if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
-                    {
-                        return parsedId >= 0 && parsedId <= 187;
-                    }
+                    string[] p = sprite.name.Split('_');
+                    if (p.Length > 1 && int.TryParse(p[1], out int id) && id > 187)
+                        return IconPickerModal.GetCleanLeafName(sprite.name);
                 }
-                return true;
+                return sprite.name;
             },
-            GetSearchName = (index, sprite) => sprite.name,
-            GetTooltip = (index, sprite) => EntityUIHelpers.GetBaseTooltip(sprite),
+            GetTooltip = (index, sprite) => sprite.name,
             OnSelectionMade = (index, sprite) =>
             {
                 if (sprite != null)
                 {
-                    string[] parts = sprite.name.Split('_');
-                    if (parts.Length > 1 && int.TryParse(parts[1], out int parsedId))
+                    string filename = sprite.name;
+                    string[] parts = filename.Split('_');
+                    string facadeStr;
+                    if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
                     {
-                        onSelectionMade?.Invoke(parsedId, sprite);
+                        string prefix = parts[0].ToLower();
+                        if (prefix == "big" && parsedId >= 0 && parsedId <= 31) facadeStr = $"bas{188 + parsedId}";
+                        else if (prefix == "hug" && parsedId >= 0 && parsedId <= 27) facadeStr = $"bas{220 + parsedId}";
+                        else if (prefix == "tin" && parsedId >= 0 && parsedId <= 17) facadeStr = $"bas{248 + parsedId}";
+                        else facadeStr = $"{parts[0]}{parts[1]}";
                     }
+                    else
+                    {
+                        facadeStr = filename;
+                    }
+                    onSelectionMade?.Invoke(facadeStr, sprite);
                 }
             }
         };
         iconPicker.OpenModal(config);
     }
+
     private PayloadType GetFaceType(int faceIndex, DiceSideData face)
     {
         string targetId = "standard";
@@ -1574,6 +1489,7 @@ public class DiceFaceBuilderWidget
         }
         return RegisteredPayloads.First(p => p.Id == targetId);
     }
+
     private bool IsCastCustom(int index, DiceSideData face)
     {
         if (_castIsCustomOverride.TryGetValue(index, out bool val))
@@ -1581,13 +1497,11 @@ public class DiceFaceBuilderWidget
             return val;
         }
 
-        // Auto-detect based on active payload
         if (string.IsNullOrEmpty(face.payload))
         {
-            return false; // Default to Base
+            return false;
         }
 
-        // If the current payload matches an entity name in custom abilities, treat it as custom
         var customAbilities = ModPackage.Instance?.CustomAbilities;
         if (customAbilities != null && customAbilities.Any(a => a.entityName == face.payload || a.Export().Contains(face.payload)))
         {
@@ -1596,12 +1510,12 @@ public class DiceFaceBuilderWidget
 
         return false;
     }
+
     private void ToggleCastType(int index, DiceSideData face)
     {
         bool nextState = !IsCastCustom(index, face);
         _castIsCustomOverride[index] = nextState;
 
-        // Clear active selection to avoid weird cross-over state
         SetFacePayload(face, "cast", "");
 
         _onStateChanged?.Invoke();

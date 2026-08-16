@@ -136,12 +136,12 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     // =====================================================================
     // PORTRAIT / ICON MODAL SELECTION
     // =====================================================================
+    protected virtual string ResolveFacadeName(string facadeID) => SpriteCacheHelper.ResolveFacadeName(facadeID);
     protected DiceSideData GetEffectivePreviewFace(int index)
     {
         var face = CurrentEntity.diceSides[index];
         if (face == null) return null;
 
-        // Traverse mechanics to find a Hat override for this specific face
         foreach (var m in face.sideMechanics)
         {
             if (m.LegacyItemPayload != null)
@@ -150,37 +150,61 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 {
                     if (legMech.Prefix == "hat" && legMech.PayloadData is EntityData ed)
                     {
-                        // Ensure it's not a basic egg wrapper
                         if (!(ed is MonsterData md && md.baseMonster != null && md.baseMonster.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)))
                         {
-                            if (ed.diceSides != null && ed.diceSides[index] != null) return ed.diceSides[index];
+                            int hatSourceIndex = index;
+                            if (legMech.Targets.Count > 1)
+                            {
+                                var sourceTargets = DiceTargetHelper.GetIndicesForTarget(legMech.Targets[1]);
+                                if (sourceTargets.Count > 0) hatSourceIndex = sourceTargets[0];
+                            }
+
+                            if (ed.diceSides != null && ed.diceSides[hatSourceIndex] != null)
+                            {
+                                return ed.diceSides[hatSourceIndex];
+                            }
                         }
                     }
                 }
             }
             else if (m.Prefix == "hat")
             {
-                string raw = m.RawPayloadString;
-                if (!string.IsNullOrEmpty(raw) && !raw.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                string rawPayload = m.RawPayloadString;
+                if (!string.IsNullOrEmpty(rawPayload) && !rawPayload.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
                 {
-                    HeroData tempHat = new HeroData();
+                    EntityData tempHat = StaticBranchTracing.IsMonsterEntity(rawPayload) ? (EntityData)new MonsterData() : new HeroData();
                     tempHat.SuppressAutoRegister = true;
-                    tempHat.Parse(raw);
-                    if (tempHat.diceSides != null && tempHat.diceSides[index] != null) return tempHat.diceSides[index];
+                    tempHat.Parse(rawPayload);
+
+                    int hatSourceIndex = index;
+                    if (m.TargetStrings != null && m.TargetStrings.Count > 1)
+                    {
+                        var sourceTargets = DiceTargetHelper.GetIndicesForTarget(m.TargetStrings[1]);
+                        if (sourceTargets.Count > 0) hatSourceIndex = sourceTargets[0];
+                    }
+                    else if (m.TargetEnums != null && m.TargetEnums.Count > 1)
+                    {
+                        var sourceTargets = DiceTargetHelper.GetIndicesForTarget(m.TargetEnums[1].ToString().ToLower());
+                        if (sourceTargets.Count > 0) hatSourceIndex = sourceTargets[0];
+                    }
+
+                    if (tempHat.diceSides != null && tempHat.diceSides[hatSourceIndex] != null)
+                    {
+                        return tempHat.diceSides[hatSourceIndex];
+                    }
                 }
             }
         }
 
         return face;
     }
-
     protected virtual void UpdateIcon(int index)
     {
         if (portraitPreview == null) return;
         var face = GetEffectivePreviewFace(index);
         portraitPreview.SetSlotIcon(
             index,
-            AllowFacades() ? face.facadeID : null,
+            AllowFacades() ? ResolveFacadeName(face.facadeID) : null,
             face.effectID,
             AllowFacades() ? face.facadeColor : null,
             face.pips
