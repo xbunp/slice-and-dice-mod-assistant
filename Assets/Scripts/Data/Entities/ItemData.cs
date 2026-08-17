@@ -309,16 +309,16 @@ public static class ItemDomainRules
         if (mech == null) return new List<int> { 0, 1, 2, 3, 4, 5 };
         if (mech.Targets != null && mech.Targets.Count > 0)
         {
-            return mech.Targets.SelectMany(t => DiceTargetHelper.GetIndicesForTarget(t)).Distinct().ToList();
+            // STRICT RULE: The FIRST target strictly represents the destination face(s) on the host entity.
+            // Subsequent targets (e.g. 'mid' in 'top.mid.hat') strictly dictate the source face of the incoming payload.
+            return DiceTargetHelper.GetIndicesForTarget(mech.Targets[0]).Distinct().ToList();
         }
-
         string pfx = mech.Prefix?.ToLower() ?? "";
         if (pfx == "facade" || pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "hat")
         {
-            return new List<int> { 1 }; // Implicit Mid (Index 1)
+            return new List<int> { 1 };
         }
-
-        return new List<int> { 0, 1, 2, 3, 4, 5 }; // Implicit All (Indices 0-5)
+        return new List<int> { 0, 1, 2, 3, 4, 5 };
     }
 }
 

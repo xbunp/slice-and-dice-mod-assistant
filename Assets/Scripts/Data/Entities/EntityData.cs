@@ -1155,25 +1155,21 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
         string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
+
         string fullSummonExport = cleanSummon;
-        if (ModPackage.Instance != null)
+
+        // Only look up if it's a simple, unbracketed name typed by the user directly in the UI
+        if (ModPackage.Instance != null && !cleanSummon.Contains("("))
         {
             string searchName = cleanSummon;
-            if (cleanSummon.StartsWith("("))
-            {
-                EntityData tempEntity = StaticBranchTracing.IsMonsterEntity(cleanSummon) ? (EntityData)new MonsterData() : new HeroData();
-                tempEntity.SuppressAutoRegister = true;
-                tempEntity.Parse(cleanSummon);
-                if (!string.IsNullOrEmpty(tempEntity.entityName))
-                {
-                    searchName = tempEntity.entityName;
-                }
-            }
+            if (searchName.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                searchName = searchName.Substring(4).Trim();
+
             var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(
                 h => string.Equals(h.entityName, searchName, StringComparison.OrdinalIgnoreCase));
             if (summonHero != null)
             {
-                fullSummonExport = summonHero.Export();
+                fullSummonExport = $"egg.{summonHero.Export()}";
             }
             else
             {
@@ -1181,48 +1177,44 @@ public abstract class EntityData : SDData, IPayloadContainer
                     m => string.Equals(m.entityName, searchName, StringComparison.OrdinalIgnoreCase));
                 if (summonMonster != null)
                 {
-                    fullSummonExport = summonMonster.Export();
+                    fullSummonExport = $"egg.{summonMonster.Export()}";
                 }
             }
         }
 
-        // --- ADDED: Guarantee pristine wrapper environment for repacking ---
         string stripped = StaticBranchTracing.StripOuterParens(fullSummonExport);
+        string xMultStr = "";
 
-        // Strip out existing x. multiplier 
+        // Extract existing multiplier if present so it doesn't double up
         if (stripped.StartsWith("x", StringComparison.OrdinalIgnoreCase) && stripped.Length > 1 && char.IsDigit(stripped[1]))
         {
             int dotIdx = stripped.IndexOf('.');
             if (dotIdx > 0 && dotIdx < 3)
             {
+                xMultStr = stripped.Substring(0, dotIdx + 1); // e.g. "x2."
                 stripped = stripped.Substring(dotIdx + 1).Trim();
             }
         }
 
-        // Strip out existing egg container tag
-        if (stripped.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-        {
-            stripped = stripped.Substring(4).Trim();
-        }
-        else if (stripped.StartsWith("rmon.egg.", StringComparison.OrdinalIgnoreCase))
-        {
-            stripped = stripped.Substring(9).Trim();
-        }
-
-        MonsterData eggMonster = new MonsterData();
-        eggMonster.baseMonster = $"egg.{stripped}";
-
-        // Let the face pip dictate exactly what the multiplier should be without mutation buildup
+        // Face pips override the multiplier naturally
         if (face.pips >= 2 && face.pips <= 9)
         {
-            eggMonster.xMultiplier = face.pips;
+            xMultStr = $"x{face.pips}.";
         }
 
-        chunks.Add($"hat.{eggMonster.Export()}");
+        // Ensure the egg. prefix is present
+        if (!stripped.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+        {
+            stripped = $"egg.{stripped}";
+        }
+
+        chunks.Add($"hat.({xMultStr}{stripped})");
+
         if (hasBlindfold)
         {
             chunks.Add("blindfold");
         }
+
         return true;
     }
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)

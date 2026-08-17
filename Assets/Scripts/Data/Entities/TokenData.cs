@@ -135,6 +135,7 @@ public static class StaticBranchTracing
     public static bool IsMonsterEntity(string core)
     {
         if (string.IsNullOrEmpty(core)) return false;
+        core = StripOuterParens(core);
         string firstToken = TopLevelSplit(core, '.')[0].ToLower();
         while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
         {
@@ -175,6 +176,7 @@ public static class StaticBranchTracing
     public static bool IsHeroEntity(string core)
     {
         if (string.IsNullOrEmpty(core)) return false;
+        core = StripOuterParens(core);
         List<string> tokens = TopLevelSplit(core, '.');
         string firstToken = tokens[0].ToLower();
         while (firstToken.StartsWith("(") && firstToken.EndsWith(")"))
