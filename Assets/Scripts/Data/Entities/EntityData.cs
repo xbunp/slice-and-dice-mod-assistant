@@ -1324,6 +1324,13 @@ public abstract class EntityData : SDData, IPayloadContainer
                     stream.Consume();
                     List<string> subTokens = stream.ConsumeRange(length);
                     string itemString = string.Join(".", subTokens);
+
+                    // Delegate repair and absorption of any mutated or raw abilities
+                    if (TryProcessMutatedAbilityItem(itemString))
+                    {
+                        continue;
+                    }
+
                     ItemData parsedItem = new ItemData();
                     parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
                     bool isItemParsedDataEmpty = string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0 && parsedItem.LearnedAbilities.Count == 0 && parsedItem.Containers.Count == 0 && !parsedItem.Tier.HasValue && string.IsNullOrEmpty(parsedItem.doc) && string.IsNullOrEmpty(parsedItem.imageOverride);
@@ -1716,5 +1723,73 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Detects and repairs mutated ability item strings (e.g., i.(abilitydata.(...)) or i.(learn.Balance)),
+    /// preserving stock ability names directly and wrapping custom ability payloads with the correct carrier prefix.
+    /// </summary>
+    protected bool TryProcessMutatedAbilityItem(string rawItemString)
+    {
+        if (string.IsNullOrWhiteSpace(rawItemString)) return false;
+
+        string cleaned = StaticBranchTracing.StripOuterParens(rawItemString).Trim();
+        bool isAbility = false;
+
+        // Peel away any nested mutation/wrapper layers
+        while (true)
+        {
+            cleaned = StaticBranchTracing.StripOuterParens(cleaned).Trim();
+
+            if (cleaned.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+            {
+                cleaned = cleaned.Substring(2);
+                continue;
+            }
+            if (cleaned.StartsWith("learn.", StringComparison.OrdinalIgnoreCase))
+            {
+                cleaned = cleaned.Substring(6);
+                isAbility = true;
+                continue;
+            }
+            if (cleaned.StartsWith("sthief.", StringComparison.OrdinalIgnoreCase))
+            {
+                cleaned = cleaned.Substring(7);
+                isAbility = true;
+                continue;
+            }
+            if (cleaned.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
+            {
+                cleaned = cleaned.Substring(12);
+                isAbility = true;
+                continue;
+            }
+            break;
+        }
+
+        if (!isAbility) return false;
+
+        // Check if this is a stock/base ability (e.g. "Balance", "Restore", or a standalone name)
+        bool isBaseAbility = ExternalGameRegistry.IsValidAbility(cleaned) || (!cleaned.Contains("(") && !cleaned.Contains("."));
+
+        if (isBaseAbility)
+        {
+            if (!baseAbilityData.Contains(cleaned, StringComparer.OrdinalIgnoreCase))
+            {
+                baseAbilityData.Add(cleaned);
+            }
+            return true;
+        }
+
+        // Only complex custom abilities require the sthief carrier wrapper
+        string cleanCore = cleaned.StartsWith("(") ? cleaned : $"({cleaned})";
+        string formattedCarrier = $"sthief.abilitydata.{cleanCore}";
+
+        if (!baseAbilityData.Contains(formattedCarrier, StringComparer.OrdinalIgnoreCase))
+        {
+            baseAbilityData.Add(formattedCarrier);
+        }
+
+        return true;
     }
 }

@@ -6,6 +6,11 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using static SDColors;
 
+//TODO - WAYS IN WHICH THE GAME CRASHES:
+// monsters with cleave or descend shields - single or all works fine 
+// any  cleave monster targetting its own allies. 
+// monsters with blue skink, or any other 'copies other monsters faces' 
+
 public static class HpHelper
 {
     // HP Preset Names mapping directly to values 1-21
