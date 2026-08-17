@@ -1007,11 +1007,9 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
     private bool ProcessFacePayload(DiceSideData face, List<string> chunks)
     {
-        // Strictly only check flat AST mechanics, ignoring legacy payloads
         var m = face.sideMechanics.FirstOrDefault(x =>
             x.Prefix == "sticker" || x.Prefix == "cast" || x.Prefix == "enchant" || x.Prefix == "hat"
         );
-
         if (m == null || string.IsNullOrWhiteSpace(m.RawPayloadString))
             return false;
 
@@ -1024,14 +1022,9 @@ public abstract class EntityData : SDData, IPayloadContainer
             _ => DiceSideData.DiceFaceType.Sticker
         };
 
-        // Branch out for specialized parsing
         if (fType == DiceSideData.DiceFaceType.Egg)
         {
-            // Egg format is "egg.Wolf". Strip the prefix for the processor.
-            string cleanSummon = payloadStr.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)
-                ? payloadStr.Substring(4)
-                : payloadStr;
-            return ProcessEggPayload(face, cleanSummon, chunks);
+            return ProcessEggPayload(face, payloadStr, chunks);
         }
         else
         {
@@ -1163,7 +1156,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
         string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
         string fullSummonExport = cleanSummon;
-
         if (ModPackage.Instance != null)
         {
             string searchName = cleanSummon;
@@ -1177,42 +1169,60 @@ public abstract class EntityData : SDData, IPayloadContainer
                     searchName = tempEntity.entityName;
                 }
             }
-
-            // Search ModPackage for an existing Hero or Monster matching that entity name
             var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(
                 h => string.Equals(h.entityName, searchName, StringComparison.OrdinalIgnoreCase));
-
             if (summonHero != null)
             {
-                fullSummonExport = summonHero.Export(); // <-- FIX: Fetch full Export() string instead of just entityName!
+                fullSummonExport = summonHero.Export();
             }
             else
             {
                 var summonMonster = ModPackage.Instance.Monsters?.FirstOrDefault(
                     m => string.Equals(m.entityName, searchName, StringComparison.OrdinalIgnoreCase));
-
                 if (summonMonster != null)
                 {
-                    fullSummonExport = summonMonster.Export(); // <-- FIX: Fetch full Export() string instead of just entityName!
+                    fullSummonExport = summonMonster.Export();
                 }
             }
         }
 
-        MonsterData eggMonster = new MonsterData();
-        eggMonster.baseMonster = $"egg.{fullSummonExport}";
+        // --- ADDED: Guarantee pristine wrapper environment for repacking ---
+        string stripped = StaticBranchTracing.StripOuterParens(fullSummonExport);
 
+        // Strip out existing x. multiplier 
+        if (stripped.StartsWith("x", StringComparison.OrdinalIgnoreCase) && stripped.Length > 1 && char.IsDigit(stripped[1]))
+        {
+            int dotIdx = stripped.IndexOf('.');
+            if (dotIdx > 0 && dotIdx < 3)
+            {
+                stripped = stripped.Substring(dotIdx + 1).Trim();
+            }
+        }
+
+        // Strip out existing egg container tag
+        if (stripped.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+        {
+            stripped = stripped.Substring(4).Trim();
+        }
+        else if (stripped.StartsWith("rmon.egg.", StringComparison.OrdinalIgnoreCase))
+        {
+            stripped = stripped.Substring(9).Trim();
+        }
+
+        MonsterData eggMonster = new MonsterData();
+        eggMonster.baseMonster = $"egg.{stripped}";
+
+        // Let the face pip dictate exactly what the multiplier should be without mutation buildup
         if (face.pips >= 2 && face.pips <= 9)
         {
             eggMonster.xMultiplier = face.pips;
         }
 
         chunks.Add($"hat.{eggMonster.Export()}");
-
         if (hasBlindfold)
         {
             chunks.Add("blindfold");
         }
-
         return true;
     }
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)
