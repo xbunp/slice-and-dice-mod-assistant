@@ -61,8 +61,11 @@ public class MonsterData : EntityData
                 }
                 else
                 {
-                    baseMonster = tokens[0];
-                    tokens.RemoveAt(0);
+                    baseMonster = ExtractBaseIdentifier(tokens[0]);
+                    if (tokens[0].Equals(baseMonster, StringComparison.OrdinalIgnoreCase))
+                    {
+                        tokens.RemoveAt(0);
+                    }
                 }
             }
             // 2. Extract Specialized Containers (egg, vase, orb, jinx)
@@ -126,6 +129,13 @@ public class MonsterData : EntityData
             if (!stream.IsEOF) bal = stream.Consume();
             return true;
         }
+        string cleanBase = ExtractBaseIdentifier(baseMonster);
+        if (!string.IsNullOrEmpty(cleanBase) && string.Equals(stream.Peek(), cleanBase, StringComparison.OrdinalIgnoreCase))
+        {
+            stream.Consume();
+            return true;
+        }
+
         return base.TryProcessSpecificMetadata(stream);
     }
     public static string ExportAsSpirit(MonsterData monster)

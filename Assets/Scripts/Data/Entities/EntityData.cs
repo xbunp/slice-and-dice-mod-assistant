@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -71,6 +71,7 @@ public abstract class EntityData : SDData, IPayloadContainer
     [Header("Core Shared Info")]
     public int hp = 0;
     public string appendedDoc = "";
+    public bool forceZeroSides = false;
 
     [Header("Shared Extended Modifiers")]
     public List<string> items = new List<string>();
@@ -353,20 +354,26 @@ public abstract class EntityData : SDData, IPayloadContainer
 
     protected void AppendDiceSides(StringBuilder sb)
     {
-        // Find the last modified side so we can truncate trailing zeroes
         int lastActiveIndex = -1;
         for (int i = 0; i < 6; i++)
         {
-            // CHANGED: Also check if pips != 0 so we don't drop pip-only modifications
             if (diceSides[i] != null && (diceSides[i].effectID != 0 || diceSides[i].pips != 0))
             {
                 lastActiveIndex = i;
             }
         }
 
-        // If no custom sides are defined, omit the .sd block entirely
-        if (lastActiveIndex == -1) return;
+        // If all faces are 0, only output .sd.0 if explicitly requested
+        if (lastActiveIndex == -1)
+        {
+            if (forceZeroSides)
+            {
+                sb.Append(".sd.0");
+            }
+            return;
+        }
 
+        // Any .sd declaration zeroes all subsequent faces in the game engine
         sb.Append(".sd.");
         for (int i = 0; i <= lastActiveIndex; i++)
         {
@@ -377,18 +384,10 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
             else
             {
-                // Simplify: if pips are 0, omit the "-0" suffix
-                if (side.pips == 0)
-                {
-                    sb.Append(side.effectID);
-                }
-                else
-                {
-                    sb.Append($"{side.effectID}-{side.pips}");
-                }
+                if (side.pips == 0) sb.Append(side.effectID);
+                else sb.Append($"{side.effectID}-{side.pips}");
             }
 
-            // Only append separator if there are more customized sides remaining
             if (i < lastActiveIndex) sb.Append(":");
         }
     }
@@ -463,16 +462,32 @@ public abstract class EntityData : SDData, IPayloadContainer
         stream.Consume(); // 'sd'
         if (stream.IsEOF) return true;
 
+        // Presence of .sd means all unspecified faces default to 0
+        InitializeDiceFaces();
+        for (int i = 0; i < 6; i++)
+        {
+            diceSides[i].effectID = 0;
+            diceSides[i].pips = 0;
+        }
+
         string[] faces = stream.Consume().Split(':');
+        bool hasNonZeroFace = false;
+
         for (int f = 0; f < Mathf.Min(faces.Length, 6); f++)
         {
             if (faces[f] == "0" || faces[f] == "0-0") continue;
-            if (diceSides[f] == null) diceSides[f] = new DiceSideData { effectID = 0, pips = 0, keywords = new List<string>() };
+
             string[] faceParts = faces[f].Split('-');
-            int.TryParse(faceParts[0], out diceSides[f].effectID);
-            if (faceParts.Length > 1) int.TryParse(faceParts[1], out diceSides[f].pips);
-            else diceSides[f].pips = 0;
+            if (int.TryParse(faceParts[0], out int effId)) diceSides[f].effectID = effId;
+            if (faceParts.Length > 1 && int.TryParse(faceParts[1], out int pips)) diceSides[f].pips = pips;
+
+            if (diceSides[f].effectID != 0 || diceSides[f].pips != 0)
+                hasNonZeroFace = true;
         }
+
+        // If .sd was defined (e.g. .sd.0) but had no non-zero faces, flag forceZeroSides
+        forceZeroSides = !hasNonZeroFace;
+
         return true;
     }
     protected bool TryProcessTriggerData(TokenStream stream)
@@ -1152,16 +1167,14 @@ public abstract class EntityData : SDData, IPayloadContainer
         if (ModPackage.Instance != null)
         {
             string searchName = cleanSummon;
-
-            // If cleanSummon is a full raw string like "(replica.Statue.n.Smeagol...)", parse out its entity name safely
             if (cleanSummon.StartsWith("("))
             {
-                HeroData tempHero = new HeroData();
-                tempHero.SuppressAutoRegister = true;
-                tempHero.Parse(cleanSummon);
-                if (!string.IsNullOrEmpty(tempHero.entityName))
+                EntityData tempEntity = StaticBranchTracing.IsMonsterEntity(cleanSummon) ? (EntityData)new MonsterData() : new HeroData();
+                tempEntity.SuppressAutoRegister = true;
+                tempEntity.Parse(cleanSummon);
+                if (!string.IsNullOrEmpty(tempEntity.entityName))
                 {
-                    searchName = tempHero.entityName;
+                    searchName = tempEntity.entityName;
                 }
             }
 

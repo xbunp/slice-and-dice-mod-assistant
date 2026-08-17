@@ -199,6 +199,8 @@ public class MonsterUI : EntityUI<MonsterData>
             })
         ));
 
+        AppendZeroSidesLayout(layout);
+
         // 6. Color Modifiers (Order: P -> THue -> HSV)
         AppendColorModifiersLayout(layout);
 

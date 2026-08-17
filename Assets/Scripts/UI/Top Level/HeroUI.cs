@@ -325,6 +325,8 @@ public class HeroUI : EntityUI<HeroData>
             })
         ));
 
+        AppendZeroSidesLayout(layout);
+
         // 6. Color Class
         HeroColorOption currentOption = SDColors.GetOptionFromColorCode(CurrentEntity.colorClass);
         string currentFormattedName = SDColors.GetFormattedColorName(currentOption);

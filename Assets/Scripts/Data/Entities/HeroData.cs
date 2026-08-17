@@ -61,7 +61,10 @@ public class HeroData : EntityData
             if (!HeroDomainRules.MetadataKeys.Contains(firstLower) && firstLower != "i" && firstLower != "sd" && firstLower != "t")
             {
                 baseReplica = baseTokenClean;
-                tokens.RemoveAt(0); // Ensures ExtractKnowledge doesn't discard it
+                if (tokens[0].Equals(baseTokenClean, StringComparison.OrdinalIgnoreCase))
+                {
+                    tokens.RemoveAt(0);
+                }
             }
         }
         ExtractKnowledge(tokens, _itemPipeline, true); // was false before
@@ -79,6 +82,14 @@ public class HeroData : EntityData
             case "x": stream.Consume(); if (int.TryParse(stream.Consume(), out int a)) adj = a; return true;
             case "speech": stream.Consume(); speech = stream.Consume(); return true;
         }
+
+        string cleanBase = ExtractBaseIdentifier(baseReplica);
+        if (!string.IsNullOrEmpty(cleanBase) && string.Equals(tokenLower, cleanBase, StringComparison.OrdinalIgnoreCase))
+        {
+            stream.Consume();
+            return true;
+        }
+
         return false;
     }
 

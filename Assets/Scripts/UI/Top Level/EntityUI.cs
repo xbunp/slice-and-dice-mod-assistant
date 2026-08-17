@@ -1220,6 +1220,19 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         );
     }
+    protected void AppendZeroSidesLayout(List<GridRowSpec> layout)
+    {
+        string stateLabel = CurrentEntity.forceZeroSides ? "[X] Blank Faces (.sd.0)" : "[ ] Default Base Faces";
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Zero Out Faces:", 0.40f),
+            GridCellSpec.CreateButton("BtnZeroSides", stateLabel, 0.60f, () =>
+            {
+                CurrentEntity.forceZeroSides = !CurrentEntity.forceZeroSides;
+                NotifyStateChanged();
+                RebuildStatsUI();
+            })
+        ));
+    }
     private void OpenAllPortraitsModal(Action<bool, int, Sprite> onPortraitSelected)
     {
         if (iconPicker == null) return;
