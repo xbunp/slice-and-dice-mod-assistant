@@ -512,8 +512,7 @@ public abstract class SDData
                 case VisualType.Draw:
                     if (!string.IsNullOrWhiteSpace(vis.RawValue))
                     {
-                        if (vis.x != 0 || vis.y != 0) sb.Append($".draw.{vis.RawValue}:{vis.x}:{vis.y}");
-                        else sb.Append($".draw.{vis.RawValue}");
+                        sb.Append($".draw.{vis.RawValue}:{vis.x}:{vis.y}");
                     }
                     break;
                 case VisualType.Rect:

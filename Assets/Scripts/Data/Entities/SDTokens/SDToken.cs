@@ -303,7 +303,7 @@ public class DrawClause : SDClause
     public override string Export()
     {
         if (string.IsNullOrWhiteSpace(SpriteRef)) return "";
-        return (OffsetX != 0 || OffsetY != 0) ? $"draw.{SpriteRef}:{OffsetX}:{OffsetY}" : $"draw.{SpriteRef}";
+        return $"draw.{SpriteRef}:{OffsetX}:{OffsetY}";
     }
 }
 

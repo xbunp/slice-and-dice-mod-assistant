@@ -1341,7 +1341,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (iconPicker == null) return;
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = EntityUIHelpers.AllActionSprites, // Includes heroes, monsters, and facades
+            Sprites = EntityUIHelpers.AllActionSprites,
             IsValid = (index, sprite) => sprite != null,
             GetSearchName = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
             GetTooltip = (index, sprite) => sprite.name,
@@ -1349,7 +1349,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             {
                 if (sprite != null)
                 {
-                    onIconSelected?.Invoke(IconPickerModal.GetCleanLeafName(sprite.name));
+                    onIconSelected?.Invoke(EntityUIHelpers.FormatFacadeID(sprite.name));
                 }
             }
         };
