@@ -333,14 +333,13 @@ public abstract class SDData
         ParseCore(clean);
 
         // REINABLE IF YOU WANT A PARSED ENTITY TO UNPACK BACK INTO THE FULL UI.
-
         // --- NEW CODE: Automatically bubble valid top-level custom data to the Mod Editor ---
-        /*
+
         if (!SuppressAutoRegister && ModPackage.Instance != null && ModPackage.Instance.IsModLoaded)
         {
             ModPackage.Instance.TryAutoRegisterParsedEntity(this);
         }
-        */
+
     }
     protected abstract void ParseCore(string cleanData);
 

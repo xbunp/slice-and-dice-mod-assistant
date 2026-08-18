@@ -751,6 +751,8 @@ public class ItemData : SDData
                 hasUnmappedMechanics = true;
                 continue;
             }
+
+            // All hats (including Hero hats and Eggs) are face modifiers
             bool isFaceModifier = pfx == "k" || pfx == "facade" || pfx == "sidesc" ||
                                  pfx == "sticker" || pfx == "cast" || pfx == "enchant" || pfx == "hat" || pfx == "";
             bool isEntityCollection = pfx == "t" || pfx == "gift" || pfx == "learn" || pfx == "abilitydata";

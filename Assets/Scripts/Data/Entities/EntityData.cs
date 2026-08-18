@@ -1807,4 +1807,78 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         return true;
     }
+    /// <summary>
+    /// Returns all custom items: loose custom payloads AND attached face modifier items (e.g. Hats).
+    /// </summary>
+    public List<ItemData> GetAllCustomItems()
+    {
+        var result = new List<ItemData>();
+
+        // 1. Items stored in customPayloads
+        if (customPayloads != null)
+        {
+            foreach (var p in customPayloads)
+            {
+                if (p.Type == PayloadType.Item && p.Data is ItemData id && !result.Contains(id))
+                {
+                    result.Add(id);
+                }
+            }
+        }
+
+        // 2. Legacy items attached to dice faces (Hats, face modifier items)
+        if (diceSides != null)
+        {
+            foreach (var face in diceSides)
+            {
+                if (face?.sideMechanics == null) continue;
+                foreach (var m in face.sideMechanics)
+                {
+                    if (m.LegacyItemPayload != null && !result.Contains(m.LegacyItemPayload))
+                    {
+                        result.Add(m.LegacyItemPayload);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+    /// <summary>
+    /// Adds a custom item: absorbs it into dice sides if it affects faces (Hats, Facades, etc.),
+    /// or adds it to customPayloads if it is a general payload.
+    /// </summary>
+    public void AddCustomItem(ItemData item)
+    {
+        if (item == null) return;
+        bool absorbed = item.TryAbsorbIntoEntity(this);
+        if (!absorbed)
+        {
+            if (customPayloads == null) customPayloads = new List<CustomPayload>();
+            customPayloads.Add(new CustomPayload { Type = PayloadType.Item, Data = item, Prefix = "i" });
+        }
+    }
+    /// <summary>
+    /// Removes a custom item from both customPayloads and all dice sides sideMechanics.
+    /// </summary>
+    public void RemoveCustomItem(ItemData itemToRemove)
+    {
+        if (itemToRemove == null) return;
+
+        // 1. Remove from customPayloads
+        if (customPayloads != null)
+        {
+            customPayloads.RemoveAll(p => p.Type == PayloadType.Item && p.Data == itemToRemove);
+        }
+
+        // 2. Remove from diceSides sideMechanics
+        if (diceSides != null)
+        {
+            foreach (var face in diceSides)
+            {
+                if (face?.sideMechanics == null) continue;
+                face.sideMechanics.RemoveAll(m => m.LegacyItemPayload == itemToRemove);
+            }
+        }
+    }
 }

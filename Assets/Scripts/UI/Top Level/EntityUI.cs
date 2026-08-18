@@ -1010,59 +1010,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         );
     }
-    protected void AppendCustomItemsSelector(List<GridRowSpec> layout)
-    {
-        AppendCollectionSelector<string>(
-            layout: layout, label: "Add Custom Item:", uniqueKey: "CustomItem",
-            availableChoices: ModPackage.Instance?.CustomItems?
-                .Select(i => !string.IsNullOrEmpty(i.unityName) ? i.unityName : (!string.IsNullOrEmpty(i.entityName) ? i.entityName : "Unnamed Item"))
-                .Distinct().ToList() ?? new List<string>(),
-            currentActiveItems: CurrentEntity.customPayloads?
-                .Where(p => p.Type == PayloadType.Item)
-                .Select(p => p.Data as ItemData)
-                .Where(item => item != null)
-                .Select(item => !string.IsNullOrEmpty(item.unityName) ? item.unityName : item.entityName)
-                .ToList() ?? new List<string>(),
-            getKey: (name) => name,
-            getDisplay: (name) => name,
-            onAdd: (itemName) => {
-                if (CurrentEntity.customPayloads == null) CurrentEntity.customPayloads = new List<CustomPayload>();
-                var templateItem = ModPackage.Instance?.CustomItems?.FirstOrDefault(i => i.unityName == itemName || i.entityName == itemName);
-                if (templateItem != null)
-                {
-                    bool alreadyExists = CurrentEntity.customPayloads.Any(p =>
-                        p.Type == PayloadType.Item &&
-                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
-
-                    if (!alreadyExists)
-                    {
-                        ItemData clonedItem = new ItemData();
-                        clonedItem.Parse(templateItem.Export());
-                        clonedItem.entityName = templateItem.entityName;
-                        clonedItem.unityName = templateItem.unityName;
-                        CurrentEntity.customPayloads.Add(new CustomPayload { Type = PayloadType.Item, Data = clonedItem });
-                        NotifyStateChanged();
-                        RebuildStatsUI();
-                    }
-                }
-            },
-            onRemove: (itemName) => {
-                if (CurrentEntity.customPayloads != null)
-                {
-                    var targetPayload = CurrentEntity.customPayloads.FirstOrDefault(p =>
-                        p.Type == PayloadType.Item &&
-                        ((p.Data as ItemData)?.unityName == itemName || (p.Data as ItemData)?.entityName == itemName));
-
-                    if (targetPayload != null)
-                    {
-                        CurrentEntity.customPayloads.Remove(targetPayload);
-                        NotifyStateChanged();
-                        RebuildStatsUI();
-                    }
-                }
-            }
-        );
-    }
     protected void AppendCustomAbilitiesSelector(List<GridRowSpec> layout, List<string> customAbilityNames)
     {
         AppendCollectionSelector<string>(
@@ -1653,5 +1600,89 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         diceBuilderWidget?.UpdateVisuals(currentDiceTab);
 
         TriggerTextUpdate();
+    }
+
+    protected string GetCustomItemDisplayName(ItemData item)
+    {
+        if (item == null) return "Unknown Item";
+        if (!string.IsNullOrWhiteSpace(item.unityName)) return item.unityName;
+        if (!string.IsNullOrWhiteSpace(item.entityName)) return item.entityName;
+
+        // Format a concise name for Hats
+        var hatMech = item.Mechanics?.FirstOrDefault(m => string.Equals(m.Prefix, "hat", StringComparison.OrdinalIgnoreCase));
+        if (hatMech != null)
+        {
+            string targets = hatMech.Targets != null && hatMech.Targets.Count > 0 ? string.Join(".", hatMech.Targets) : "mid";
+            string hatName = (hatMech.PayloadData as EntityData)?.entityName;
+            if (string.IsNullOrEmpty(hatName))
+            {
+                if (hatMech.PayloadData is HeroData hd && !string.IsNullOrEmpty(hd.baseReplica)) hatName = hd.baseReplica;
+                else if (hatMech.PayloadData is MonsterData md && !string.IsNullOrEmpty(md.baseMonster)) hatName = md.baseMonster;
+                else hatName = "Hat";
+            }
+            return $"{targets}.hat.({hatName})";
+        }
+
+        string exported = item.Export();
+        exported = StaticBranchTracing.StripOuterParens(exported);
+        return string.IsNullOrEmpty(exported) ? "Unnamed Item" : exported;
+    }
+    protected void AppendCustomItemsSelector(List<GridRowSpec> layout)
+    {
+        List<ItemData> activeCustomItems = CurrentEntity.GetAllCustomItems();
+
+        List<string> displayList = new List<string>();
+        Dictionary<string, ItemData> displayToItemMap = new Dictionary<string, ItemData>();
+
+        for (int i = 0; i < activeCustomItems.Count; i++)
+        {
+            var item = activeCustomItems[i];
+            string displayName = GetCustomItemDisplayName(item);
+
+            // Ensure unique label key in the UI
+            string uniqueDisplay = displayName;
+            int counter = 2;
+            while (displayToItemMap.ContainsKey(uniqueDisplay))
+            {
+                uniqueDisplay = $"{displayName} ({counter++})";
+            }
+
+            displayToItemMap[uniqueDisplay] = item;
+            displayList.Add(uniqueDisplay);
+        }
+
+        var availableItems = ModPackage.Instance?.CustomItems ?? new List<ItemData>();
+
+        AppendCollectionSelector<ItemData>(
+            layout: layout,
+            label: "Add Custom Item:",
+            uniqueKey: "CustomItem",
+            availableChoices: availableItems,
+            currentActiveItems: displayList,
+            getKey: (item) => GetCustomItemDisplayName(item),
+            getDisplay: (item) => GetCustomItemDisplayName(item),
+            onAdd: (templateItem) =>
+            {
+                ItemData clonedItem = new ItemData();
+                clonedItem.Parse(templateItem.Export());
+                clonedItem.entityName = templateItem.entityName;
+                clonedItem.unityName = templateItem.unityName;
+
+                CurrentEntity.AddCustomItem(clonedItem);
+                NotifyStateChanged();
+                RebuildStatsUI();
+                RebuildDiceScrollView();
+            },
+            onRemove: (displayKey) =>
+            {
+                if (displayToItemMap.TryGetValue(displayKey, out ItemData itemToRemove))
+                {
+                    CurrentEntity.RemoveCustomItem(itemToRemove);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                    RebuildDiceScrollView();
+                }
+            }
+        );
     }
 }
