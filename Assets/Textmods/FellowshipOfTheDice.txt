@@ -65,11 +65,11 @@ itempool.
 &Hidden.mn.Item Pool,
 
 itempool.
-((bot.hat.(Fey.sd.27-1)).img.ite420.draw.bas27:-1:-1.tier.1.n.Sting)
+((bot.left.hat.(Fey.sd.27-1)).img.ite420.draw.bas27:-1:-1.tier.3.n.Sting)
 +
 (t.Boar.img.ite72.hsv.61:-20:29.tier.3.n.Mithril Shirt)
 +
-(topbot.k.era.img.ite123.thue.01cbec:52:30.tier.7.n.Narya)
+((topbot.k.era).img.ite123.thue.01cbec:52:30.tier.7.n.Narya)
 +
 ((topbot.k.Shield#k.Selfshield).img.ite123.hsv.0:-17:9.p.2557e1:d3dfff:12.tier.7.n.Nenya)
 +
@@ -135,7 +135,7 @@ itempool.
 +
 (((left.hat.(Fey.sd.17-1.i.(left.k.moxie#facade.har21:0)))).img.har21.tier.3.n.Herugrim)
 +
-((self.t1.allitem.topbot.k.first).img.ite173.hsv.47:-16:36.tier.2.n.Silver Rod)
+((Hourglass.splice.topbot.k.first).img.ite173.hsv.47:-16:36.tier.2.n.Silver Rod)
 +
 ((self.et2.Mundane).img.Lem37.hsv.0:-16:6.tier.1.n.Mana Rock)
 +
@@ -333,7 +333,7 @@ heropool.
 +
 ((replica.Statue.n.Gimli.col.y.hp.9.tier.2.sd.39-6:39-4:119-1:119-1:104-3:104-3.i.(left2.k.pain#k.threesy#facade.Ber40:0).i.(topbot.k.underdog#facade.bas119:11:0:0).i.(right2.k.buffed#facade.ite381:-5:24:0).img.Brute.p.7a677b:64666d:20.hsv.-3:5:-6.p.a63a0d:2d3432:26).i.(learn.DTFeint))
 +
-(replica.Statue.n.Gimli.col.y.hp.8.tier.2.sd.39-7:39-3:39-2:39-2:39-2.i.(left.facade.Ber40:0).i.(mid.k.boost#k.doubleuse#facade.Yca19:0).i.(right.k.trio).i.(topbot.k.engage#k.moxie#facade.Can4:0).img.Brute.p.7a677b:64666d:20.hsv.-3:5:-6.p.a63a0d:2d3432:26)
+(replica.Statue.n.Gimli.col.y.hp.8.tier.2.sd.39-7:39-3:39-2:39-2:39-2.i.(left.k.pain#facade.Ber40:0).i.(mid.k.boost#k.doubleuse#facade.Yca19:0).i.(topbot.k.engage#k.moxie#facade.Can4:0).i.(right.k.trio).img.Brute.p.7a677b:64666d:20.hsv.-3:5:-6.p.a63a0d:2d3432:26)
 +
 ((replica.Statue.n.Gimli.col.y.hp.8.tier.2.sd.23-5:51-3:0:0:51-2:75-1.i.(left.k.heavy#k.decay#facade.Ber59:0).i.(mid2.k.heavy#k.trio#facade.Ber42:0).img.Brute.p.7a677b:64666d:20.hsv.-3:5:-6.p.a63a0d:2d3432:26).doc.[2d2000JD2kwawawawawk] Cannot level up.i.(t.(Housecat)))
 +

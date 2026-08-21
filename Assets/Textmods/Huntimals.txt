@@ -1,0 +1,15 @@
+=(monsterpool.bee.part.0)&(heropool.fey.part.0)&(itempool.can.part.0)&Hidden.mn.Clear Pools,
+
+(alliteme.(Leather Vest)#(t.Boar)#(triggerhpdata.(Fey.n.Flee.col.y.hp.22.sd.187-1.i.(left.k.fierce))))&(allitem.Extra Pocket).mn.Hunt Mode Setup,
+
+ch.m(party.
+(replica.Statue.n.Resilient.col.y.hp.7.tier.1.sd.23-3:15-2:0:0:15-1.img.Robot)
++
+(replica.Statue.n.Enduring.col.g.hp.7.tier.1.sd.56-3:56-2:0:0:56-1.thue.6e9943:43:30.hsv.0:-69:1)
++
+(replica.Statue.n.Trainer.hp.6.tier.1.sd.122-2:15-2:56-2:103-2:76-2:136-1.i.(left.k.singleuse#facade.Leo76:0#sidesc.Capture weakened Mon).img.Dabble)
++
+(replica.Vessel.n.Dogma.col.r.hp.7.tier.1.sd.103-3:103-2:0:0:112-1)
++
+(replica.Reflection.n.Stasis.col.b.hp.7.tier.1.sd.76-3:76-2:0:0:76-1)
+).mn.Party Comp,
