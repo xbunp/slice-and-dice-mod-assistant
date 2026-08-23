@@ -60,7 +60,7 @@ itempool.
 +
 ((t.orb.sthief.abilitydata.(Fey.sd.15-1.i.(left.mid.hat.(egg.(Housecat))#blindfold))).img.ite58.tier.4.n.Rod of Aiwendil)
 +
-((mid.k.Rainbow).img.Bal28.hsv.0:0:0.tier.4.n.Rod of Curumo)
+((right.k.Rainbow).img.Bal28.hsv.0:0:0.tier.5.n.Rod of Curumo)
 .part.1
 &Hidden.mn.Item Pool,
 
