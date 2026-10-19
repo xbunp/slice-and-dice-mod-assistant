@@ -558,6 +558,13 @@ public class AtlasProcessor : AssetPostprocessor
             */
 
             string normalizedPath = NormalizePath(originalPath);
+
+            if (string.Equals(normalizedPath, "portrait/monster/reg/special/gremlineR4U1", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedPath, "portrait/monster/reg/special/eggR1U1", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             string[] pathParts = normalizedPath.Split('/');
 
             // Extract the leaf name from the original path to preserve casing

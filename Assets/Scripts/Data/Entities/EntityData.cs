@@ -1065,16 +1065,16 @@ public abstract class EntityData : SDData, IPayloadContainer
                         chunks.Add(innerPayloadStr);
                         break;
                     case DiceSideData.PayloadTarget.AllAllies:
-                        hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg";
+                        hatWrapperFmt = "Fey.sd.179.i.mid." + innerPayloadStr + "#togtarg";
                         break;
                     case DiceSideData.PayloadTarget.AllEnemies:
-                        hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg#togfri";
+                        hatWrapperFmt = "Fey.sd.179.i.mid." + innerPayloadStr + "#togtarg#togfri";
                         break;
                     case DiceSideData.PayloadTarget.Everyone:
-                        hatWrapperFmt = "Fey.sd.185.i.{0}." + innerPayloadStr + "#togtarg";
+                        hatWrapperFmt = "Fey.sd.185.i.mid." + innerPayloadStr + "#togtarg";
                         break;
                     case DiceSideData.PayloadTarget.Self:
-                        hatWrapperFmt = "Fey.sd.186.i.{0}." + innerPayloadStr + "#togtarg";
+                        hatWrapperFmt = "Fey.sd.186.i.mid." + innerPayloadStr + "#togtarg";
                         break;
                     case DiceSideData.PayloadTarget.Ally:
                     case DiceSideData.PayloadTarget.None:
@@ -1418,7 +1418,20 @@ public abstract class EntityData : SDData, IPayloadContainer
                 if (cab == null) continue;
                 if (cab is SpellData || cab is TacticData)
                 {
-                    lateInnerPayloads.Add(AbilityData.GetFormattedExportString(cab));
+                    if (isHero)
+                    {
+                        string cabExport = cab.Export();
+                        if (!cabExport.StartsWith("(") && !ExternalGameRegistry.IsValidAbility(cabExport))
+                            cabExport = $"({cabExport})";
+
+                        outerPayloads.Add(ExternalGameRegistry.IsValidAbility(cabExport)
+                            ? $"i.learn.{cabExport}"
+                            : $"i.learn.sthief.abilitydata.{cabExport}");
+                    }
+                    else
+                    {
+                        lateInnerPayloads.Add(AbilityData.GetFormattedExportString(cab));
+                    }
                 }
                 else if (cab is OrbData orb)
                 {
@@ -1786,7 +1799,6 @@ public abstract class EntityData : SDData, IPayloadContainer
 
         // Check if this is a stock/base ability (e.g. "Balance", "Restore", or a standalone name)
         bool isBaseAbility = ExternalGameRegistry.IsValidAbility(cleaned) || (!cleaned.Contains("(") && !cleaned.Contains("."));
-
         if (isBaseAbility)
         {
             if (!baseAbilityData.Contains(cleaned, StringComparer.OrdinalIgnoreCase))
@@ -1796,16 +1808,14 @@ public abstract class EntityData : SDData, IPayloadContainer
             return true;
         }
 
-        // Only complex custom abilities require the sthief carrier wrapper
-        string cleanCore = cleaned.StartsWith("(") ? cleaned : $"({cleaned})";
-        string formattedCarrier = $"sthief.abilitydata.{cleanCore}";
-
-        if (!baseAbilityData.Contains(formattedCarrier, StringComparer.OrdinalIgnoreCase))
+        AbilityData customAbility = AbilityData.CreateAbility(cleaned);
+        if (customAbility != null)
         {
-            baseAbilityData.Add(formattedCarrier);
+            AddCustomAbility(customAbility);
+            return true;
         }
 
-        return true;
+        return false;
     }
     /// <summary>
     /// Returns all custom items: loose custom payloads AND attached face modifier items (e.g. Hats).

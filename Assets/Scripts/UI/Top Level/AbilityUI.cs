@@ -241,7 +241,7 @@ public class AbilityUI : RootUI
         IconPickerConfig config = new IconPickerConfig
         {
             Sprites = EntityUIHelpers.CommunitySprites,
-            IsValid = (index, sprite) => sprite != null,
+            IsValid = (index, sprite) => sprite != null && !HasExcludedPrefix(sprite),
             GetSearchName = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
             GetTooltip = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
             OnSelectionMade = (index, sprite) =>
@@ -272,7 +272,7 @@ public class AbilityUI : RootUI
             Sprites = EntityUIHelpers.BaseActionSprites,
             IsValid = (index, sprite) =>
             {
-                if (sprite == null || !EntityUIHelpers.IsSpriteValid(sprite)) return false;
+                if (sprite == null || !EntityUIHelpers.IsSpriteValid(sprite) || HasExcludedPrefix(sprite)) return false;
                 if (sprite.name.StartsWith("bas_", StringComparison.OrdinalIgnoreCase))
                 {
                     string[] parts = sprite.name.Split('_');
@@ -1445,5 +1445,16 @@ public class AbilityUI : RootUI
         config.Sprites = abilitySprites;
 
         iconPicker.OpenModal(config);
+    }
+
+    // Add helper method to AbilityUI:
+    private static bool HasExcludedPrefix(Sprite sprite)
+    {
+        if (sprite == null) return true;
+        string name = sprite.name;
+        return name.StartsWith("key_", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("alp_", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("old_", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("lap_", StringComparison.OrdinalIgnoreCase);
     }
 }

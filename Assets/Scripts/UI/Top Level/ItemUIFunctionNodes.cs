@@ -2174,7 +2174,15 @@ public class BaseItemNodeDef : AuthoringNodeDef
                     break;
                 case BasePackEntryType.Keyword:
                     string kwTarget = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
-                    s = $"{kwTarget}k.{e.ItemName}";
+                    string kwName = (e.ItemName ?? "").ToLower();
+                    if (kwName == "future" || kwName == "ritemx.dae9" || kwName == "dae9")
+                    {
+                        s = $"{kwTarget}ritemx.dae9";
+                    }
+                    else
+                    {
+                        s = $"{kwTarget}k.{kwName}";
+                    }
                     break;
                 case BasePackEntryType.TogItem:
                     string togTarget = string.IsNullOrEmpty(e.Target) || e.Target == "none" ? "" : $"{e.Target}.";
@@ -2230,6 +2238,11 @@ public class BaseItemNodeDef : AuthoringNodeDef
             {
                 entry.Type = BasePackEntryType.Keyword;
                 entry.ItemName = workingSegment.Substring(2);
+            }
+            else if (workingSegment.Equals("ritemx.dae9", StringComparison.OrdinalIgnoreCase) || workingSegment.Equals("dae9", StringComparison.OrdinalIgnoreCase))
+            {
+                entry.Type = BasePackEntryType.Keyword;
+                entry.ItemName = "Future";
             }
             else if (GetOptionArray(BasePackEntryType.TogItem).Any(tog => workingSegment.EndsWith(tog)))
             {

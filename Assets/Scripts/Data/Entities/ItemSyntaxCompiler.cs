@@ -493,18 +493,16 @@ public static class ItemSyntaxCompiler
         {
             baseExpr = WrapIfNeeded(childrenCompiled);
         }
+        if (card.RootData.ClearDescription) baseExpr += "#cleardesc";
+        if (card.RootData.ClearIcon) baseExpr += "#clearicon";
         List<string> parts = new List<string> { baseExpr };
-
         // Unified rendering block
         string visualsStr = BuildVisualsString(card.RootData, card.RootData.imageOverride);
         if (!string.IsNullOrEmpty(visualsStr))
         {
             parts.Add(visualsStr);
         }
-
         // Output structural modifiers safely outside of the payload wrapper
-        if (card.RootData.ClearDescription) parts.Add("cleardesc");
-        if (card.RootData.ClearIcon) parts.Add("clearicon");
         if (card.RootData.Tier.HasValue) parts.Add($"tier.{card.RootData.Tier.Value}");
         if (!string.IsNullOrEmpty(card.RootData.entityName)) parts.Add($"n.{card.RootData.entityName}");
         if (!string.IsNullOrEmpty(card.RootData.doc)) parts.Add($"doc.{card.RootData.doc}");

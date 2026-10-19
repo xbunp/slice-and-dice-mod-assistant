@@ -19192,198 +19192,188 @@
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/special/eggR1U1",
+            "path": "portrait/monster/reg/special/rmR2U1",
             "id": 201
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/special/gremlineR4U1",
+            "path": "portrait/monster/reg/special/totemR1U1",
             "id": 202
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/special/rmR2U1",
+            "path": "portrait/monster/reg/special/totemdeathR1U1",
             "id": 203
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/special/totemR1U1",
+            "path": "portrait/monster/reg/special/totemdecayR1U1",
             "id": 204
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/special/totemdeathR1U1",
+            "path": "portrait/monster/reg/special/totempainR1U1",
             "id": 205
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/special/totemdecayR1U1",
+            "path": "portrait/monster/reg/sudulR1U1",
             "id": 206
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/special/totempainR1U1",
+            "path": "portrait/monster/reg/warchiefR1U1",
             "id": 207
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/sudulR1U1",
+            "path": "portrait/monster/reg/wolfR1",
             "id": 208
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/warchiefR1U1",
+            "path": "portrait/monster/reg/z0mbieR2D1",
             "id": 209
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/wolfR1",
+            "path": "portrait/monster/reg/zombieR1U1",
             "id": 210
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/z0mbieR2D1",
+            "path": "portrait/monster/small/archerU1",
             "id": 211
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/reg/zombieR1U1",
+            "path": "portrait/monster/small/beeR3",
             "id": 212
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/archerU1",
+            "path": "portrait/monster/small/bonesR1",
             "id": 213
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/beeR3",
+            "path": "portrait/monster/small/caw-eggR1U1",
             "id": 214
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/bonesR1",
+            "path": "portrait/monster/small/chestR1U1",
             "id": 215
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/caw-eggR1U1",
+            "path": "portrait/monster/small/graveR3U1",
             "id": 216
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/chestR1U1",
+            "path": "portrait/monster/small/illusionR2U1",
             "id": 217
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/graveR3U1",
+            "path": "portrait/monster/small/impU1R2",
             "id": 218
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/illusionR2U1",
+            "path": "portrait/monster/small/logR2U2",
             "id": 219
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/impU1R2",
+            "path": "portrait/monster/small/ratU1R1",
             "id": 220
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/logR2U2",
+            "path": "portrait/monster/small/seedR1U1",
             "id": 221
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/ratU1R1",
+            "path": "portrait/monster/small/shadeR1",
             "id": 222
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/seedR1U1",
+            "path": "portrait/monster/small/slimeletU1R2",
             "id": 223
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/shadeR1",
+            "path": "portrait/monster/small/sniperU1R1",
             "id": 224
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/slimeletU1R2",
+            "path": "portrait/monster/small/special/eggR1U1",
             "id": 225
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/sniperU1R1",
+            "path": "portrait/monster/small/special/orbR1U1",
             "id": 226
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/special/eggR1U1",
+            "path": "portrait/monster/small/special/rmR1U1",
             "id": 227
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/special/orbR1U1",
+            "path": "portrait/monster/small/special/totemR5U1",
             "id": 228
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/special/rmR1U1",
+            "path": "portrait/monster/small/special/vaseR2U1",
             "id": 229
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/special/totemR5U1",
+            "path": "portrait/monster/small/spiderU1R2",
             "id": 230
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/special/vaseR2U1",
+            "path": "portrait/monster/small/thornR1U1",
             "id": 231
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/spiderU1R2",
+            "path": "portrait/monster/small/wispU1R1",
             "id": 232
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/thornR1U1",
+            "path": "portrait/placeholder/hero/reg",
             "id": 233
         },
         {
             "prefix": "prt",
-            "path": "portrait/monster/small/wispU1R1",
+            "path": "portrait/placeholder/monster/big",
             "id": 234
         },
         {
             "prefix": "prt",
-            "path": "portrait/placeholder/hero/reg",
+            "path": "portrait/placeholder/monster/huge",
             "id": 235
         },
         {
             "prefix": "prt",
-            "path": "portrait/placeholder/monster/big",
+            "path": "portrait/placeholder/monster/reg",
             "id": 236
         },
         {
             "prefix": "prt",
-            "path": "portrait/placeholder/monster/huge",
-            "id": 237
-        },
-        {
-            "prefix": "prt",
-            "path": "portrait/placeholder/monster/reg",
-            "id": 238
-        },
-        {
-            "prefix": "prt",
             "path": "portrait/placeholder/monster/small",
-            "id": 239
+            "id": 237
         }
     ]
 }
