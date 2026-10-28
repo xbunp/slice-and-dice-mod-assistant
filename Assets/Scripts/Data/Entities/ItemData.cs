@@ -320,6 +320,7 @@ public static class ItemDomainRules
         }
         return new List<int> { 0, 1, 2, 3, 4, 5 };
     }
+
 }
 
 [System.Serializable]
@@ -400,6 +401,24 @@ public class ItemMechanic
         if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
 
         return string.Join(".", parts);
+    }
+    public ItemMechanic Clone()
+    {
+        return new ItemMechanic
+        {
+            Targets = new List<string>(Targets),
+            Prefix = Prefix,
+            PayloadString = PayloadString,
+            PayloadData = PayloadData,
+            Multiplier = Multiplier,
+            MergedItem = MergedItem,
+            SplicedItem = SplicedItem,
+            ChainedKeywords = new List<string>(ChainedKeywords),
+            RepeatTimes = RepeatTimes,
+            PerTier = PerTier,
+            Unpack = Unpack,
+            PartIndex = PartIndex
+        };
     }
 }
 
@@ -1287,24 +1306,6 @@ public class ItemData : SDData
         }
     }
 
-    private ItemMechanic CloneMechanic(ItemMechanic original)
-    {
-        return new ItemMechanic
-        {
-            Targets = new List<string>(original.Targets),
-            Prefix = original.Prefix,
-            PayloadString = original.PayloadString,
-            PayloadData = original.PayloadData, // Shallow reference copy is fine
-            Multiplier = original.Multiplier,
-            MergedItem = original.MergedItem,
-            SplicedItem = original.SplicedItem,
-            ChainedKeywords = new List<string>(original.ChainedKeywords),
-            RepeatTimes = original.RepeatTimes,
-            PerTier = original.PerTier,
-            Unpack = original.Unpack,
-            PartIndex = original.PartIndex
-        };
-    }
     public void DebugContentsToConsole(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -1357,6 +1358,9 @@ public class ItemData : SDData
         }
         UnityEngine.Debug.Log(sb.ToString());
     }
+
+    private ItemMechanic CloneMechanic(ItemMechanic original) => original.Clone();
+
 }
 
 public enum PayloadInjectionZone

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -53,7 +54,7 @@ public class EntityCard : ReorderableItem, IPointerClickHandler
         {
             Color nodeColor = NodeRegistry.Get(NodeType).GetColor();
             nodeColor = nodeColor * 1.5f;
-            string hex = ColorUtility.ToHtmlStringRGB(nodeColor);
+            string hex = UnityEngine.ColorUtility.ToHtmlStringRGB(nodeColor);
 
             return $"<color=#{hex}>{rawStr}</color>";
         }
@@ -655,15 +656,37 @@ public class ItemUI : RootUI
     }
     private void LoadMechanicIntoUI(ItemMechanic mechanic, ReorderableZone targetZone, int depth = 0)
     {
+        // Decompose Spliced or Merged mechanics into: Left Card -> Operator Card -> Right Card(s)
+        if (!string.IsNullOrEmpty(mechanic.MergedItem) || !string.IsNullOrEmpty(mechanic.SplicedItem))
+        {
+            string op = !string.IsNullOrEmpty(mechanic.SplicedItem) ? ".splice." : ".mrg.";
+            string rightPayload = !string.IsNullOrEmpty(mechanic.SplicedItem) ? mechanic.SplicedItem : mechanic.MergedItem;
+
+            // 1. Isolate and load the left-hand mechanic
+            var leftMech = mechanic.Clone();
+            leftMech.MergedItem = string.Empty;
+            leftMech.SplicedItem = string.Empty;
+            LoadMechanicIntoUI(leftMech, targetZone, depth);
+
+            // 2. Insert the join operator card (.splice. or .mrg.)
+            EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
+            opCard.MechanicData.PayloadString = op;
+            targetZone.AddEntrant(opCard);
+
+            // 3. Parse and recursively load the right-hand payload into cards
+            ItemData rightItem = new ItemData();
+            rightItem.Parse(rightPayload);
+            ProcessMechanicsList(rightItem.Mechanics, targetZone);
+            return;
+        }
+
         string prefix = mechanic.Prefix?.ToLower() ?? "";
         if (prefix == "hat")
         {
             ProcessHatNode(mechanic, targetZone);
             return;
         }
-
         ItemNodeType type = ItemNodeType.BaseItem;
-
         if (prefix == "mrg" || prefix == "splice") type = ItemNodeType.Operator;
         else if (AbilityDomainRules.AbilityStartTokens.Contains(prefix) || prefix == "abilitydata" || prefix.StartsWith("learn") || prefix.EndsWith("abilitydata")) type = ItemNodeType.LearnAbility;
         else if (prefix == "facade" || prefix == "sidesc" || prefix == "img" || prefix == "doc") type = ItemNodeType.RawString;
@@ -671,54 +694,14 @@ public class ItemUI : RootUI
 
         if (type == ItemNodeType.BaseItem)
         {
-            // BaseItemNodeDef handles targets, multipliers, unpack, and repeats natively.
-            // We only force a bracket wrapper if the item utilizes the engine-complex .mrg. or .splice. suffixes
-            bool needsBracket = !string.IsNullOrEmpty(mechanic.MergedItem) || !string.IsNullOrEmpty(mechanic.SplicedItem);
             string fullExport = mechanic.Export();
-
-            if (needsBracket)
-            {
-                EntityCard bracketCard = CreateEntityCard(ItemNodeType.Bracket) as EntityCard;
-                bracketCard.MechanicData = new ItemMechanic
-                {
-                    MergedItem = mechanic.MergedItem,
-                    SplicedItem = mechanic.SplicedItem
-                };
-                targetZone.AddEntrant(bracketCard);
-
-                EntityCard pureBaseCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
-
-                // Strip the suffix operators from the inner payload since the bracket handles them
-                string pureStr = fullExport;
-                if (!string.IsNullOrEmpty(mechanic.MergedItem))
-                {
-                    int mrgIdx = pureStr.IndexOf(".mrg.");
-                    if (mrgIdx >= 0) pureStr = pureStr.Substring(0, mrgIdx);
-                }
-                if (!string.IsNullOrEmpty(mechanic.SplicedItem))
-                {
-                    int splIdx = pureStr.IndexOf(".splice.");
-                    if (splIdx >= 0) pureStr = pureStr.Substring(0, splIdx);
-                }
-
-                pureBaseCard.MechanicData = new ItemMechanic { PayloadString = pureStr };
-                if (bracketCard.PayloadPort != null)
-                {
-                    bracketCard.PayloadPort.AddEntrant(pureBaseCard);
-                }
-                return;
-            }
-            else
-            {
-                EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
-                mechCard.MechanicData = new ItemMechanic { PayloadString = fullExport };
-                targetZone.AddEntrant(mechCard);
-                return;
-            }
+            EntityCard mechCard = CreateEntityCard(ItemNodeType.BaseItem) as EntityCard;
+            mechCard.MechanicData = new ItemMechanic { PayloadString = fullExport };
+            targetZone.AddEntrant(mechCard);
+            return;
         }
         else if (type == ItemNodeType.RawString)
         {
-            // Forces unmapped nodes (like free-floating Facades) to retain their target/prefix data
             EntityCard mechCardObj = CreateEntityCard(type) as EntityCard;
             mechCardObj.MechanicData = new ItemMechanic { PayloadString = mechanic.Export() };
             targetZone.AddEntrant(mechCardObj);
