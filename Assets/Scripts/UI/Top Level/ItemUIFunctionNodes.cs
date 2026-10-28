@@ -2225,13 +2225,17 @@ public class BaseItemNodeDef : AuthoringNodeDef
 
             string target = "none";
             string workingSegment = segment;
-            var targetMatch = Regex.Match(segment, @"^([a-z0-9_]+)\.(k\.|tog|ritemx\.)");
-            if (targetMatch.Success)
-            {
-                target = targetMatch.Groups[1].Value;
-                workingSegment = segment.Substring(targetMatch.Groups[1].Length + 1);
-            }
 
+            int firstDot = segment.IndexOf('.');
+            if (firstDot > 0)
+            {
+                string candidateTarget = segment.Substring(0, firstDot);
+                if (DiceTargetHelper.TargetAliases.Any(a => a.name.Equals(candidateTarget, StringComparison.OrdinalIgnoreCase)))
+                {
+                    target = candidateTarget;
+                    workingSegment = segment.Substring(firstDot + 1);
+                }
+            }
             entry.Target = target;
 
             if (workingSegment.StartsWith("k."))

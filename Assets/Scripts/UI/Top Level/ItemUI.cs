@@ -659,21 +659,20 @@ public class ItemUI : RootUI
         // Decompose Spliced or Merged mechanics into: Left Card -> Operator Card -> Right Card(s)
         if (!string.IsNullOrEmpty(mechanic.MergedItem) || !string.IsNullOrEmpty(mechanic.SplicedItem))
         {
-            string op = !string.IsNullOrEmpty(mechanic.SplicedItem) ? ".splice." : ".mrg.";
-            string rightPayload = !string.IsNullOrEmpty(mechanic.SplicedItem) ? mechanic.SplicedItem : mechanic.MergedItem;
+            bool hasMerged = !string.IsNullOrEmpty(mechanic.MergedItem);
+            string op = hasMerged ? ".mrg." : ".splice.";
+            string rightPayload = hasMerged ? mechanic.MergedItem : mechanic.SplicedItem;
 
-            // 1. Isolate and load the left-hand mechanic
             var leftMech = mechanic.Clone();
-            leftMech.MergedItem = string.Empty;
-            leftMech.SplicedItem = string.Empty;
+            if (hasMerged) leftMech.MergedItem = string.Empty;
+            else leftMech.SplicedItem = string.Empty;
+
             LoadMechanicIntoUI(leftMech, targetZone, depth);
 
-            // 2. Insert the join operator card (.splice. or .mrg.)
             EntityCard opCard = CreateEntityCard(ItemNodeType.Operator) as EntityCard;
             opCard.MechanicData.PayloadString = op;
             targetZone.AddEntrant(opCard);
 
-            // 3. Parse and recursively load the right-hand payload into cards
             ItemData rightItem = new ItemData();
             rightItem.Parse(rightPayload);
             ProcessMechanicsList(rightItem.Mechanics, targetZone);
@@ -719,6 +718,7 @@ public class ItemUI : RootUI
             }
         }
     }
+
 
     /// <summary>
     /// Evaluates the metadata and flags on a mechanic instance, spawns its card UI representation, 

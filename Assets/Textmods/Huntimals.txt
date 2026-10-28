@@ -411,13 +411,15 @@ monsterpool.
 .mn.Duelist Soul)).bal.Gnoll
 
 +
-((Illusion.p.5ec573:00ede3:01.n.Miromote.sd.11-2:11-2:11-1:11-1:11-1:11-1.i.(all.k.duplicate))
+(
+(Illusion.p.5ec573:00ede3:01.n.Miromote.sd.11-2:11-2:11-1:11-1:11-1:11-1.i.(all.k.duplicate))
 .t.vase.(i.
 (Full Moon.splice.(col.hat.(Fey.sd.0:133-2:132-1:134-1)).img.ite144.thue.2bba44:51:23.tier.2.n.Miro Soul)
 .mn.Miro Soul)).bal.Illusion
 
 +
-(((Militia.n.Zealot.hp.3.sd.41:51-3:41:41:117:117.i.(right2.ritemx.dae9).img.Valkyrie.hsv.-10:26:0).i.(t.(Golem)))
+(
+((Militia.n.Zealot.hp.3.sd.41:51-3:41:41:117:117.i.(right2.ritemx.dae9).img.Valkyrie.hsv.-10:26:0).i.(t.(Golem)))
 .t.vase.(i.
 (((right2.hat.(Fey.sd.0:0:0:0:103-4:103-2.i.(right2.k.ego#facade.eba38:0)))#Iron Crown.splice.(right2.hat.(Fey.sd.0:0:0:0:56-4:56-2.i.(right2.k.ego#facade.kas10:60:30:57)))).img.ite200.tier.5.n.Zealous Soul)
 .mn.Zealous Soul)).bal.Militia

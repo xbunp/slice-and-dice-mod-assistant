@@ -84,10 +84,11 @@ public static class ItemDomainRules
         "left2", "rightmost", "right", "bot", "top", "mid", "left", "k", "t"
     };
 
+    // In Assets/Scripts/Data/Entities/ItemData.cs -> ItemDomainRules class:
     public static readonly HashSet<string> ContainerKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "triggerhpdata", "onhitdata", "learn", "unpack", "splice", "abilitydata",
-        "peritem", "allitem", "alliteme", "sticker", "enchant", "cast", "mrg", "hat"
+        "triggerhpdata", "onhitdata", "learn", "unpack", "abilitydata",
+        "peritem", "allitem", "alliteme", "sticker", "enchant", "cast", "hat"
     };
 
     /// <summary>
@@ -522,6 +523,24 @@ public class ItemData : SDData
             string originalToken = stream.Peek();
             string tokenLower = originalToken.ToLower();
 
+            if (tokenLower == "mrg" || tokenLower == "splice")
+            {
+                string op = stream.Consume().ToLower();
+                string suffixPayload = BuildSuffixPayloadString(stream);
+                if (item.Mechanics.Count > 0)
+                {
+                    var lastMech = item.Mechanics.Last();
+                    if (op == "splice") lastMech.SplicedItem = suffixPayload;
+                    else lastMech.MergedItem = suffixPayload;
+                }
+                else
+                {
+                    item.Mechanics.Add(new ItemMechanic { Prefix = op, PayloadString = suffixPayload });
+                }
+                isFirstMechanic = false;
+                continue;
+            }
+
             if (originalToken.StartsWith("(") && originalToken.EndsWith(")"))
             {
                 stream.Consume();
@@ -601,6 +620,7 @@ public class ItemData : SDData
                 stream.Consume();
                 continue;
             }
+
 
             // --- NEW: Strip outer parens before prefix lookup so wrapped mechanics (e.g. "(hat.Ace...)") preserve their prefix ---
             string cleanToken = originalToken;
