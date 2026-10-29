@@ -457,70 +457,12 @@ public class IconPickerModal : MonoBehaviour
         if (TryGetHeroType(sprite.name, out HeroType _)) return MonsterSize.HeroSized;
         return null;
     }
-    /*
-    private void BuildCache(IconPickerConfig config)
-    {
-        if (config.Sprites == null) return;
-
-        var cachedList = new List<CachedIcon>(config.Sprites.Length);
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        _isPortraitMode = false;
-
-        for (int i = 0; i < config.Sprites.Length; i++)
-        {
-            Sprite sprite = config.Sprites[i];
-
-            if (sprite == null && !config.AllowNullSprites) continue;
-
-            if (!config.DisableDeduplication && sprite != null)
-            {
-                if (!seenNames.Add(sprite.name)) continue;
-            }
-
-            bool isValid = config.IsValid?.Invoke(i, sprite) ?? true;
-            if (!isValid) continue;
-
-            int width = sprite != null ? Mathf.RoundToInt(sprite.rect.width) : 0;
-            string searchName = config.GetSearchName?.Invoke(i, sprite) ?? sprite?.name ?? "Unknown";
-            string tooltipText = config.GetTooltip?.Invoke(i, sprite) ?? sprite?.name ?? "Unknown";
-            MonsterSize? monsterSize = null;
-
-            if (sprite != null && sprite.name.StartsWith("prt_", StringComparison.OrdinalIgnoreCase))
-            {
-                monsterSize = GetPortraitMonsterSize(sprite);
-                if (monsterSize.HasValue) _isPortraitMode = true;
-            }
-
-            bool hasCustomText = config.GetNameText != null;
-
-            cachedList.Add(new CachedIcon
-            {
-                OriginalIndex = i,
-                Sprite = sprite,
-                SearchName = searchName,
-                TooltipText = tooltipText,
-                Width = width,
-                AssociatedMonsterSize = monsterSize,
-                IsValid = true,
-                HasCustomText = hasCustomText,
-                NameText = hasCustomText ? config.GetNameText?.Invoke(i, sprite) : null,
-                TierText = config.GetTierText?.Invoke(i, sprite),
-                HPText = config.GetHPText?.Invoke(i, sprite),
-                BgColor = config.GetColor != null ? config.GetColor(i, sprite) : Color.white
-            });
-        }
-
-        _cachedIcons = cachedList.ToArray();
-    }
-    */
-
     private void BuildCache(IconPickerConfig config)
     {
         if (config.Sprites == null) return;
         var cachedList = new List<CachedIcon>(config.Sprites.Length);
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
         _isPortraitMode = false;
-
         for (int i = 0; i < config.Sprites.Length; i++)
         {
             Sprite sprite = config.Sprites[i];

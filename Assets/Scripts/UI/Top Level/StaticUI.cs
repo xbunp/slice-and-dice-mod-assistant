@@ -7,51 +7,52 @@ using UnityEngine.UI;
 
 public static class SpriteCacheHelper
 {
-    private static Dictionary<string, Sprite> _facadeCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
-    private static Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
-    private static Dictionary<string, string> _facadeResolutionCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
+    private static Dictionary<string, Sprite> _facadeCache = new Dictionary<string, Sprite>(StringComparer.Ordinal);
+    private static Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>(StringComparer.Ordinal);
+    private static Dictionary<string, string> _facadeResolutionCache = new Dictionary<string, string>(StringComparer.Ordinal);
     public static string ResolveFacadeName(string facadeID)
     {
         if (string.IsNullOrEmpty(facadeID)) return facadeID;
         if (_facadeResolutionCache.TryGetValue(facadeID, out string cachedName)) return cachedName;
-
         if (EntityUIHelpers.AllActionSprites != null)
         {
-            var direct = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && string.Equals(sp.name, facadeID, StringComparison.OrdinalIgnoreCase));
+            var direct = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && string.Equals(sp.name, facadeID, StringComparison.Ordinal));
+            if (direct == null)
+            {
+                direct = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && string.Equals(sp.name, facadeID, StringComparison.OrdinalIgnoreCase));
+            }
             if (direct != null)
             {
                 _facadeResolutionCache[facadeID] = direct.name;
                 return direct.name;
             }
         }
-
         var match = Regex.Match(facadeID, @"^([a-zA-Z]+)(\d+)$");
         if (match.Success && EntityUIHelpers.AllActionSprites != null)
         {
             string prefix = match.Groups[1].Value;
             string id = match.Groups[2].Value;
             string searchPrefix = $"{prefix}_{id}_";
-
             if (prefix.Equals("bas", StringComparison.OrdinalIgnoreCase) && int.TryParse(id, out int basId))
             {
                 if (basId >= 188 && basId <= 219) searchPrefix = $"big_{basId - 188}_";
                 else if (basId >= 220 && basId <= 247) searchPrefix = $"hug_{basId - 220}_";
                 else if (basId >= 248 && basId <= 265) searchPrefix = $"tin_{basId - 248}_";
             }
-
-            var sprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && sp.name.StartsWith(searchPrefix, StringComparison.OrdinalIgnoreCase));
+            var sprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && sp.name.StartsWith(searchPrefix, StringComparison.Ordinal));
+            if (sprite == null)
+            {
+                sprite = EntityUIHelpers.AllActionSprites.FirstOrDefault(sp => sp != null && sp.name.StartsWith(searchPrefix, StringComparison.OrdinalIgnoreCase));
+            }
             if (sprite != null)
             {
                 _facadeResolutionCache[facadeID] = sprite.name;
                 return sprite.name;
             }
         }
-
         _facadeResolutionCache[facadeID] = facadeID;
         return facadeID;
     }
-
     public static Sprite GetFacadeSprite(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
@@ -61,7 +62,6 @@ public static class SpriteCacheHelper
         _facadeCache[resolved] = s;
         return s;
     }
-
     public static Sprite GetSpriteForPortrait(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;

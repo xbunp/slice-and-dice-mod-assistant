@@ -27,9 +27,7 @@ public static class EntityUIHelpers
     {
         Sprite[] baseAtlas = SpriteCache.GetBaseSprites();
         Sprite[] commAtlas = SpriteCache.GetCommunitySprites();
-
         List<Sprite> allSp = new List<Sprite>();
-
         if (baseAtlas != null)
         {
             for (int i = 0; i < baseAtlas.Length; i++)
@@ -40,7 +38,6 @@ public static class EntityUIHelpers
                 }
             }
         }
-
         if (commAtlas != null)
         {
             for (int i = 0; i < commAtlas.Length; i++)
@@ -51,7 +48,6 @@ public static class EntityUIHelpers
                 }
             }
         }
-
         List<Sprite> commSp = new List<Sprite>();
         if (commAtlas != null)
         {
@@ -60,14 +56,11 @@ public static class EntityUIHelpers
                 if (commAtlas[i] != null && !IsForbidden(commAtlas[i].name))
                 {
                     commSp.Add(commAtlas[i]);
-                    allSp.Add(commAtlas[i]);
                 }
             }
         }
         CommunitySprites = commSp.ToArray();
-
         AllActionSprites = allSp.ToArray();
-
         List<Sprite> basSp = new List<Sprite>();
         for (int i = 0; i < AllActionSprites.Length; i++)
         {
@@ -77,7 +70,6 @@ public static class EntityUIHelpers
                 basSp.Add(AllActionSprites[i]);
             }
         }
-
         BaseActionSprites = basSp.ToArray();
     }
 
@@ -155,8 +147,11 @@ public static class EntityUIHelpers
     public static Sprite GetSpriteForPortrait(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
-
-        Sprite directMatch = Array.Find(AllActionSprites, s => s != null && s.name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        Sprite directMatch = Array.Find(AllActionSprites, s => s != null && s.name.Equals(name, StringComparison.Ordinal));
+        if (directMatch == null)
+        {
+            directMatch = Array.Find(AllActionSprites, s => s != null && s.name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
         if (directMatch != null) return directMatch;
 
         string targetSpriteName = null;
@@ -372,12 +367,12 @@ public static class EntityUIHelpers
     public static Sprite GetSpriteForFacade(string facadeId)
     {
         if (string.IsNullOrWhiteSpace(facadeId) || facadeId.Length < 4) return null;
-
         string prefix = facadeId.Substring(0, 3);
         string num = facadeId.Substring(3);
         string search = $"{prefix}_{num}";
-
-        return Array.Find(AllActionSprites, s => s != null && (s.name == search || s.name.StartsWith($"{search}_")));
+        Sprite match = Array.Find(AllActionSprites, s => s != null && (string.Equals(s.name, search, StringComparison.Ordinal) || s.name.StartsWith($"{search}_", StringComparison.Ordinal)));
+        if (match != null) return match;
+        return Array.Find(AllActionSprites, s => s != null && (string.Equals(s.name, search, StringComparison.OrdinalIgnoreCase) || s.name.StartsWith($"{search}_", StringComparison.OrdinalIgnoreCase)));
     }
 
     // =====================================================================
