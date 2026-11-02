@@ -256,13 +256,13 @@ monsterpool.
 (Wolf.n.Wolf
 .t.vase.(i.
 (((topbot.hat.(Fey.sd.0:0:181-1:181-1.i.(topbot.k.vulnerable#facade.ite402:0)))#Standard.splice.(row.hat.(Fey.sd.170-3:170-2:0:0:171-1:171-1)))#cleardesc.img.ite438.tier.2.n.Wolf Soul)
-.mn.Wolf Soul)).bal.Wolf
+.mn.Wolf Soul)).bal.Wolf.hp.9
 
 +
 ((Wolf.p.70675c:d13a3a:26.n.Bloodwolf.hp.5.sd.52-4:52-4:0:0:52-2:52-2.i.(left2.k.onesie#facade.Yca5:0).i.(right2.facade.Col34:1:22:11).i.(topbot.mid.hat.(Fey.sd.107-1:170-2.i.(mid.facade.DgK17:0).i.(togunt))))
 .t.vase.(i.
 (((right3.hat.(Fey.sd.52-2:52-2:107-1:107-1:103-4:103-4))#Scalpel.splice.(topbot.hat.(Fey.sd.0:0:107-1:107-1)))#cleardesc.img.ite438.tier.3.n.Bloodwolf Soul)
-.mn.Red Soul)).bal.Wolf
+.mn.Red Soul)).bal.(Wolf)
 +
 ((Bones.hsv.0:-99:1.n.Gray.sd.8-4:8-2:8-2:8-2:8-3:8-3.i.(col.k.descend#facade.bas256:-8:-20:45)).i.triggerhpdata.(Fey.hp.22.col.w.sd.15-1.i.(left.mid.hat.(egg.(((Statue.n.Top And Bottom 1 damage).i.(Dead Crow).i.(Brittle).i.t.orb.sthief.abilitydata.(Fey.n.Cast Crush.sd.15-1.i.(left.hat.(Slimer.sd.23-1))))))#blindfold))
 .t.vase.(i.
@@ -849,8 +849,63 @@ monsterpool.
 .mn.Hex Soul)).bal.(Sniper.hp.5)
 
 
++
+(
+(rmon.8aa.n.Shortsword.hp.3.sd.8-4:8-2:8-2:8-2.i.(col.facade.dan20:0).i.(left.facade.dan20:0).img.kas87)
+.t.vase.(i.
+((left.hat.(Fey.sd.15-3))#Leather Vest.img.Void.draw.bas15:0:-1.tier.1.n.Sword Soul)
+.mn.Sword Soul)).bal.(rmon.8aa.n.Shortsword.hp.3.sd.8-4:8-2:8-2:8-2)
+
++
+(
+(rmon.8aa.n.Twinblade.hp.3.sd.8-1:8-1:8-1:8-1:8-1:8-1.i.(all.k.descend#facade.Ese19:0).img.DgK35)
+.t.vase.(i.
+((Standard.splice.(topbot.hat.(Fey.sd.0:0:24-2:24-2))#(top.hat.(Fey.sd.0:0:24-2))).img.Void.draw.bas24:0:-1.tier.1.n.Twin Soul)
+.mn.Twin Soul)).bal.(rmon.8aa.n.Twinblade.hp.3.sd.8-1:8-1:8-1:8-1:8-1:8-1)
+
++
+(
+(rmon.8aa.n.Battleaxe.hp.5.sd.8-2:8-1:8-1:8-1:8-1:8-1.i.(left.k.cleave#k.heavy#facade.Ese1:0).i.(right5.k.cleave#facade.Ese1:0).img.bas223)
+.t.vase.(i.
+((Standard.splice.(left.hat.(Fey.sd.39-6))#(topbot.hat.(Fey.sd.0:0:39-4:39-4)))#Leather Vest.m.2.img.dan6.tier.2.n.Battle Soul)
+.mn.Battle Soul)).bal.(rmon.8aa.n.Battleaxe.hp.5.sd.8-2:8-1:8-1:8-1:8-1:8-1)
 
 
++
+(
+((rmon.8aa.n.Rifle.hp.2.sd.6-2:6-2:6-1:6-1:0:3-1.i.(rightmost.k.boost).img.kas92).i.(t.(Archer)))
+.t.vase.(i.
+((Standard.splice.(left.hat.(Fey.sd.39-6))#(topbot.hat.(Fey.sd.0:0:39-4:39-4)))#Leather Vest.m.2.img.dan6.tier.2.n.Battle Soul)
+.mn.Gun Soul)).bal.(Archer)
+
+
++
+(
+(Wolf.n.Frost.sd.112-1:112-1:15-4:15-4:45:45.i.(left2.k.weaken#k.wither#facade.Lem176:0#sidesc.Heal enemy [pips]).i.(topbot.k.minusera#facade.ite206:0).img.kas88)
+.t.vase.(i.
+(((col.k.minusera#Eye Of Horus.m.2)#(rightmost.hat.(Fey.sd.0:0:0:0:0:95-2))).img.ite206.tier.4.n.Melt Soul)
+.mn.Melt Soul)).bal.(Wolf.hp.4)
+
++
+(
+(Wolf.n.Dramatis.hp.4.sd.42-3:0:42-2:42-2.i.(right3.sticker.(k.guilt)#togtime#togfri#facade.Mut53:0).img.Spi36)
+.t.vase.(i.
+(((left2.hat.(Fey.sd.20-3:73-1))#(topbot.Eye Of Horus)#(right2.Eye Of Horus.m.-1)).img.Void.draw.bas134:0:-1.tier.3.n.Drama Soul)
+.mn.Drama Soul)).bal.(Wolf.hp.4.sd.42-3:0:42-2:42-2)
+
++
+(
+((Wolf.n.Torment.sd.45-2:45-1:45-1:45-1:45:45.i.(all.k.fierce#facade.eba31:0).img.Eme65.hsv.5:0:1.p.ffae46:f2941d:19).i.(t.(Wisp)))
+.t.vase.(i.
+(((left.hat.(Fey.sd.45-2))#(rightmost.hat.(Fey.sd.0:0:0:0:0:96-4))).img.kas26.p.543c19:87188e:7.p.ff7b2d:dfe056:35.n.Torment Soul.doc.4)
+.mn.Torment Soul)).bal.(Wolf.sd.45-2:45-1:45-1:45-1:45:45)
+
++
+(
+(Wolf.n.Watcher.sd.44-1:0:181-3:15-1:18-2:116-2.i.(left.facade.Bal19:0).i.(mid.sticker.(Blindfold)#togtime#togfri#facade.ite157:0).i.(top.k.wither#facade.DgK20:0).i.(bot.k.petrify#facade.OkN12:0).i.(right.k.onesie#facade.Bal20:0).i.(rightmost.facade.DgK22:75:-14:-4).img.dar13)
+.t.vase.(i.
+((topbot.hat.(Fey.sd.0:0:44-1:15-4.i.(bot.k.wither#facade.Eme14:0))).img.ite402.hsv.47:-24:25.tier.3.n.Sight Soul)
+.mn.Sight Soul)).bal.(Wolf.sd.45-2:45-1:45-1:45-1:45:45)
 
 
 .part.1
@@ -989,6 +1044,8 @@ monsterpool.
 
 .part.1
 &Hidden.mn.Boss Monsterpool 1,
+
+
 
 
 
@@ -1205,6 +1262,35 @@ itempool.
 
 
 
+itempool.
+
+((top.k.stasis).img.ite298.p.a5da70:00eef2:51.p.052809:2126ab:59.p.47721d:2b6cff:77.hsv.-2:17:25.tier.1.n.Stasis Shard T)
++
+((bot.k.stasis).img.ite298.p.a5da70:00eef2:51.p.052809:2126ab:59.p.47721d:2b6cff:77.hsv.-4:17:16.tier.2.n.Stasis Shard B)
++
+((right.k.stasis).img.ite298.p.a5da70:00eef2:51.p.052809:2126ab:59.p.47721d:2b6cff:77.hsv.2:21:11.tier.3.n.Stasis Shard R)
++
+((mid2.k.stasis).img.ite298.p.a5da70:00eef2:58.p.052809:2126ab:51.p.47721d:2b6cff:65.hsv.0:17:2.tier.4.n.Stasis Shard M2)
++
+((left.k.dogma).img.ite298.hsv.-20:2:1.p.b0622f:f2dd13:35.tier.5.n.Dogma Shard L)
++
+((right2.k.dogma).img.ite298.hsv.-19:2:1.p.b0622f:f2dd13:31.tier.3.n.Dogma Shard R2)
++
+((topbot.k.dogma).img.ite298.hsv.-16:2:-10.p.b0622f:f2dd13:54.tier.4.n.Dogma Shard TB)
++
+((mid.k.dogma).img.ite298.hsv.35:-57:1.tier.6.n.Enduring Shard M)
++
+((right2.k.dogma).img.ite298.hsv.35:-57:1.tier.7.n.Enduring Shard R2)
++
+(((top.k.enduring)#(mid.k.enduring)).img.ite298.hsv.35:-57:-7.tier.8.n.Enduring Shard TM)
++
+(((bot.k.enduring)#(mid.k.enduring)).img.ite298.hsv.42:-48:-2.tier.8.n.Enduring Shard BM)
++
+Ice Cube
+
+.part.1
+&Hidden.mn.Gemstone Itempool,
+
 
 
 
@@ -1361,3 +1447,24 @@ Sidesc Tags
 [muish]
 [vuish]
 [niether vuish]
+
+
+
+
+(Skip Rewards&Hidden.mn.No Rewards),
+(2-19.phi.1&Hidden.mn.Item Progression),
+(et2.phi.1&Hidden.mn.Item Progression),
+
+
+
+ch.m(party.
+(replica.Statue.n.Resilient.col.y.hp.6.tier.1.sd.23-3:15-2:115-1:115-1:46-1:56-1.img.Robot)
++
+(replica.Statue.n.Enduring.col.g.hp.7.tier.1.sd.56-3:118-2:15-1:15-1:119-1.thue.6e9943:43:30.hsv.0:-69:1)
++
+((replica.Statue.n.Hunter.hp.7.tier.1.sd.15-2:130:103-3:56-3:76-2:136-1.img.Dabble).i.(learn.sthief.abilitydata.(Fey.n.Capture.sd.122-2:0:0:0:76-2.i.(left.k.singleuse#sidesc.Capture soul with [pips] or fewer hp).img.Leo76)))
++
+(replica.Vessel.n.Dogma.col.r.hp.5.tier.1.sd.103-4:103-3:104-1:104-1:112-1.i.(topbot.k.managain#facade.bas104:55:16:4)).i.learn.Bandage
++
+((replica.Reflection.n.Stasis.col.b.hp.5.tier.1.sd.76-2:93-2:93-1:93-1:76-1).i.learn.Poke)
+).mn.Party Comp,

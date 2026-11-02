@@ -38,6 +38,10 @@ public class DiceSideData
     }
     public List<MechanicNode> sideItems => sideMechanics;
 
+
+    [UnityEngine.SerializeField]
+    private string _dormantFacadeColor = "";
+
     // --- AST POINTER PROPERTIES ---
     public string facadeID
     {
@@ -45,32 +49,47 @@ public class DiceSideData
         {
             var m = sideMechanics.FirstOrDefault(x => x.Prefix == "facade");
             if (m != null && !string.IsNullOrEmpty(m.RawPayloadString))
-                return m.RawPayloadString.Split(':')[0];
-
+            {
+                string id = m.RawPayloadString.Split(':')[0];
+                if (string.IsNullOrEmpty(id))
+                {
+                    // Clean up any corrupt node without an ID so it never leaks into exports
+                    string col = facadeColor;
+                    if (!string.IsNullOrEmpty(col) && col != "0:0:0" && col != "0")
+                        _dormantFacadeColor = col;
+                    sideMechanics.Remove(m);
+                    return "";
+                }
+                return id;
+            }
             string legFac = GetLegacyFacadeString();
             if (!string.IsNullOrEmpty(legFac))
-                return legFac.Split(':')[0];
-
+            {
+                string id = legFac.Split(':')[0];
+                return id;
+            }
             return "";
         }
         set
         {
             FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
 
+            // When facade ID is deleted, cache the HSV color and remove the facade node completely
+            if (string.IsNullOrEmpty(value))
+            {
+                string color = facadeColor;
+                if (!string.IsNullOrEmpty(color) && color != "0:0:0" && color != "0")
+                {
+                    _dormantFacadeColor = color;
+                }
+                sideMechanics.RemoveAll(x => x.Prefix == "facade");
+                RemoveLegacyMechanic(x => x.Prefix == "facade");
+                return;
+            }
+
             var m = sideMechanics.FirstOrDefault(x => x.Prefix == "facade");
             if (m != null)
             {
-                if (string.IsNullOrEmpty(value))
-                {
-                    string color = facadeColor;
-                    if (string.IsNullOrEmpty(color) || color == "0:0:0" || color == "0")
-                    {
-                        sideMechanics.Remove(m);
-                        return;
-                    }
-                    m.RawPayloadString = $":{color}";
-                    return;
-                }
                 string c = facadeColor;
                 m.RawPayloadString = (string.IsNullOrEmpty(c) || c == "0:0:0" || c == "0") ? value : $"{value}:{c}";
                 return;
@@ -79,27 +98,17 @@ public class DiceSideData
             var leg = GetLegacyMechanic(x => x.Prefix == "facade");
             if (leg != null)
             {
-                if (string.IsNullOrEmpty(value))
-                {
-                    string color = facadeColor;
-                    if (string.IsNullOrEmpty(color) || color == "0:0:0" || color == "0")
-                    {
-                        RemoveLegacyMechanic(x => x.Prefix == "facade");
-                        return;
-                    }
-                    leg.PayloadString = $":{color}";
-                    return;
-                }
                 string c = facadeColor;
                 leg.PayloadString = (string.IsNullOrEmpty(c) || c == "0:0:0" || c == "0") ? value : $"{value}:{c}";
                 return;
             }
 
-            // DO NOT create a node if setting an empty ID and there is no color
-            if (string.IsNullOrEmpty(value)) return;
-
             string curColor = facadeColor;
-            sideMechanics.Add(new MechanicNode { Prefix = "facade", RawPayloadString = string.IsNullOrEmpty(curColor) ? value : $"{value}:{curColor}" });
+            sideMechanics.Add(new MechanicNode
+            {
+                Prefix = "facade",
+                RawPayloadString = (string.IsNullOrEmpty(curColor) || curColor == "0:0:0" || curColor == "0") ? value : $"{value}:{curColor}"
+            });
         }
     }
     public string facadeColor
@@ -110,30 +119,65 @@ public class DiceSideData
             if (m != null && !string.IsNullOrEmpty(m.RawPayloadString))
             {
                 var parts = m.RawPayloadString.Split(':');
-                return parts.Length > 1 ? string.Join(":", parts.Skip(1)) : "";
+                if (parts.Length > 1) return string.Join(":", parts.Skip(1));
             }
             string legFac = GetLegacyFacadeString();
             if (!string.IsNullOrEmpty(legFac))
             {
                 var parts = legFac.Split(':');
-                return parts.Length > 1 ? string.Join(":", parts.Skip(1)) : "";
+                if (parts.Length > 1) return string.Join(":", parts.Skip(1));
             }
-            return "";
+            return _dormantFacadeColor ?? "";
         }
         set
         {
             FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
 
+            bool isZeroColor = string.IsNullOrEmpty(value) || value == "0:0:0" || value == "0";
+            if (isZeroColor)
+            {
+                _dormantFacadeColor = "";
+                var mExisting = sideMechanics.FirstOrDefault(x => x.Prefix == "facade");
+                if (mExisting != null)
+                {
+                    string id = mExisting.RawPayloadString.Split(':')[0];
+                    if (string.IsNullOrEmpty(id))
+                    {
+                        sideMechanics.Remove(mExisting);
+                    }
+                    else
+                    {
+                        mExisting.RawPayloadString = id;
+                    }
+                }
+                var legExisting = GetLegacyMechanic(x => x.Prefix == "facade");
+                if (legExisting != null)
+                {
+                    string id = legExisting.PayloadString.Split(':')[0];
+                    if (string.IsNullOrEmpty(id))
+                    {
+                        RemoveLegacyMechanic(x => x.Prefix == "facade");
+                    }
+                    else
+                    {
+                        legExisting.PayloadString = id;
+                    }
+                }
+                return;
+            }
+
+            // Non-zero HSV color being applied
+            _dormantFacadeColor = value;
             var m = sideMechanics.FirstOrDefault(x => x.Prefix == "facade");
             if (m != null)
             {
                 string id = m.RawPayloadString.Split(':')[0];
-                if (string.IsNullOrEmpty(id) && (string.IsNullOrEmpty(value) || value == "0:0:0" || value == "0"))
+                // If facade ID was empty, re-populate with base effect icon
+                if (string.IsNullOrEmpty(id))
                 {
-                    sideMechanics.Remove(m);
-                    return;
+                    id = $"bas{effectID}";
                 }
-                m.RawPayloadString = (string.IsNullOrEmpty(value) || value == "0:0:0" || value == "0") ? id : $"{id}:{value}";
+                m.RawPayloadString = $"{id}:{value}";
                 return;
             }
 
@@ -141,22 +185,20 @@ public class DiceSideData
             if (leg != null)
             {
                 string id = leg.PayloadString.Split(':')[0];
-                if (string.IsNullOrEmpty(id) && (string.IsNullOrEmpty(value) || value == "0:0:0" || value == "0"))
+                if (string.IsNullOrEmpty(id))
                 {
-                    RemoveLegacyMechanic(x => x.Prefix == "facade");
-                    return;
+                    id = $"bas{effectID}";
                 }
-                leg.PayloadString = (string.IsNullOrEmpty(value) || value == "0:0:0" || value == "0") ? id : $"{id}:{value}";
+                leg.PayloadString = $"{id}:{value}";
                 return;
             }
 
-            // DO NOT create a node if setting an empty/zero color when no facade ID exists
-            if (string.IsNullOrEmpty(value) || value == "0:0:0" || value == "0")
-                return;
-
-            sideMechanics.Add(new MechanicNode { Prefix = "facade", RawPayloadString = $":{value}" });
+            // No facade node exists: re-populate with base effect and apply HSV color
+            string defaultId = $"bas{effectID}";
+            sideMechanics.Add(new MechanicNode { Prefix = "facade", RawPayloadString = $"{defaultId}:{value}" });
         }
     }
+
     public string sidesc
     {
         get
@@ -431,7 +473,8 @@ public class DiceSideData
             effectID = this.effectID,
             pips = this.pips,
             _sideMechanics = this._sideMechanics.Select(m => m.Clone()).ToList(),
-            ParentEntity = this.ParentEntity // Keep the link intact!
+            ParentEntity = this.ParentEntity,
+            _dormantFacadeColor = this._dormantFacadeColor
         };
     }
 
