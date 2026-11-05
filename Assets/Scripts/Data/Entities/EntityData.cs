@@ -794,10 +794,11 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
             else if (lowerPrefix == "sticker" || lowerPrefix == "cast" || lowerPrefix == "enchant" || lowerPrefix == "hat")
             {
-                if (lowerPrefix == "hat" && mech.PayloadData is HeroData hatHero)
+                if (lowerPrefix == "hat")
                 {
-                    diceSides[faceIdx].faceType = DiceSideData.DiceFaceType.Sticker;
-                    diceSides[faceIdx].payload = hatHero.ExportAsHat();
+                    bool isEgg = payload.StartsWith("egg.", StringComparison.OrdinalIgnoreCase);
+                    diceSides[faceIdx].faceType = isEgg ? DiceSideData.DiceFaceType.Egg : DiceSideData.DiceFaceType.Hat;
+                    diceSides[faceIdx].payload = payload;
                 }
                 else
                 {
@@ -1012,24 +1013,41 @@ public abstract class EntityData : SDData, IPayloadContainer
         );
         if (m == null || string.IsNullOrWhiteSpace(m.RawPayloadString))
             return false;
-
         string payloadStr = m.RawPayloadString.Trim();
-        DiceSideData.DiceFaceType fType = m.Prefix switch
+
+        DiceSideData.DiceFaceType fType;
+        if (m.Prefix == "hat")
         {
-            "hat" => DiceSideData.DiceFaceType.Egg,
-            "cast" => DiceSideData.DiceFaceType.Cast,
-            "enchant" => DiceSideData.DiceFaceType.Enchant,
-            _ => DiceSideData.DiceFaceType.Sticker
-        };
+            fType = payloadStr.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)
+                ? DiceSideData.DiceFaceType.Egg
+                : DiceSideData.DiceFaceType.Hat;
+        }
+        else if (m.Prefix == "cast") fType = DiceSideData.DiceFaceType.Cast;
+        else if (m.Prefix == "enchant") fType = DiceSideData.DiceFaceType.Enchant;
+        else fType = DiceSideData.DiceFaceType.Sticker;
 
         if (fType == DiceSideData.DiceFaceType.Egg)
         {
             return ProcessEggPayload(face, payloadStr, chunks);
         }
+        else if (fType == DiceSideData.DiceFaceType.Hat)
+        {
+            return ProcessHatFacePayload(face, payloadStr, chunks);
+        }
         else
         {
             return ProcessStandardPayload(face, payloadStr, fType, m.PayloadTargetOverride, chunks);
         }
+    }
+    private bool ProcessHatFacePayload(DiceSideData face, string payloadStr, List<string> chunks)
+    {
+        string stripped = StaticBranchTracing.StripOuterParens(payloadStr.Trim());
+        // Clean out any rogue egg prefix if present on a non-egg Hat
+        if (stripped.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+            stripped = stripped.Substring(4).Trim();
+
+        chunks.Add($"hat.({stripped})");
+        return true;
     }
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, DiceSideData.DiceFaceType faceType, DiceSideData.PayloadTarget? payloadTarget, List<string> chunks)
     {

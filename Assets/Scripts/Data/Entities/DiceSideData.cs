@@ -9,7 +9,7 @@ public class DiceSideData
     [Newtonsoft.Json.JsonIgnore]
     public EntityData ParentEntity;
 
-    public enum DiceFaceType { Base, Sticker, Cast, Enchant, Egg }
+    public enum DiceFaceType { Base, Sticker, Cast, Enchant, Egg, Hat }
     public enum PayloadTarget { None, Self, Ally, Enemy, AllAllies, AllEnemies, Everyone }
 
     public static string GetInherentDefaultTargetName(DiceSideData.DiceFaceType faceType)
@@ -290,7 +290,12 @@ public class DiceSideData
             var m = PrimaryPayloadMechanic;
             if (m != null)
             {
-                if (m.Prefix == "hat") return DiceFaceType.Egg;
+                if (m.Prefix == "hat")
+                {
+                    if (!string.IsNullOrEmpty(m.RawPayloadString) && m.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                        return DiceFaceType.Egg;
+                    return DiceFaceType.Hat;
+                }
                 if (m.Prefix == "cast") return DiceFaceType.Cast;
                 if (m.Prefix == "enchant") return DiceFaceType.Enchant;
                 return DiceFaceType.Sticker;
@@ -298,7 +303,12 @@ public class DiceSideData
             var leg = LegacyPrimaryPayloadMechanic;
             if (leg != null)
             {
-                if (leg.Prefix == "hat") return DiceFaceType.Egg;
+                if (leg.Prefix == "hat")
+                {
+                    if (!string.IsNullOrEmpty(leg.PayloadString) && leg.PayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                        return DiceFaceType.Egg;
+                    return DiceFaceType.Hat;
+                }
                 if (leg.Prefix == "cast") return DiceFaceType.Cast;
                 if (leg.Prefix == "enchant") return DiceFaceType.Enchant;
                 return DiceFaceType.Sticker;
@@ -308,7 +318,6 @@ public class DiceSideData
         set
         {
             FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
-
             // Base explicitly clears all payload mechanics
             if (value == DiceFaceType.Base)
             {
@@ -317,26 +326,24 @@ public class DiceSideData
                 RemoveLegacyMechanic(x => x.Prefix == "sticker" || x.Prefix == "cast" || x.Prefix == "enchant" || x.Prefix == "hat");
                 return;
             }
-
             string targetPrefix = value switch
             {
                 DiceFaceType.Egg => "hat",
+                DiceFaceType.Hat => "hat",
                 DiceFaceType.Cast => "cast",
                 DiceFaceType.Enchant => "enchant",
                 _ => "sticker"
             };
-
             var existing = PrimaryPayloadMechanic;
             if (existing != null)
             {
                 existing.Prefix = targetPrefix;
-
-                // Format or strip egg prefixes when transitioning face types
-                if (targetPrefix == "hat" && !string.IsNullOrEmpty(existing.RawPayloadString) && !existing.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                // Only format egg prefixes if explicitly transitioning to/from Egg
+                if (value == DiceFaceType.Egg && !string.IsNullOrEmpty(existing.RawPayloadString) && !existing.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
                 {
                     existing.RawPayloadString = $"egg.{existing.RawPayloadString}";
                 }
-                else if (targetPrefix != "hat" && !string.IsNullOrEmpty(existing.RawPayloadString))
+                else if (value != DiceFaceType.Egg && !string.IsNullOrEmpty(existing.RawPayloadString))
                 {
                     if (existing.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
                         existing.RawPayloadString = existing.RawPayloadString.Substring(4);
@@ -345,8 +352,8 @@ public class DiceSideData
             }
             else
             {
-                // Create the active payload node (even with an empty payload string!)
-                sideMechanics.Add(new MechanicNode { Prefix = targetPrefix, RawPayloadString = "" });
+                // Create the active payload node
+                sideMechanics.Add(new MechanicNode { Prefix = targetPrefix, RawPayloadString = value == DiceFaceType.Egg ? "egg." : "" });
             }
         }
     }
@@ -371,18 +378,15 @@ public class DiceSideData
         set
         {
             FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
-
             var m = PrimaryPayloadMechanic;
             if (m == null)
             {
-                // If set on Base, default to Sticker
                 if (string.IsNullOrEmpty(value)) return;
                 m = new MechanicNode { Prefix = "sticker" };
                 sideMechanics.Add(m);
             }
-
-            // DO NOT delete m if value is empty! Keep the node alive for the faceType.
-            if (m.Prefix == "hat")
+            // ONLY enforce egg. if the face type is explicitly Egg
+            if (m.Prefix == "hat" && faceType == DiceFaceType.Egg)
             {
                 if (!string.IsNullOrEmpty(value) && !value.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
                     m.RawPayloadString = $"egg.{value}";

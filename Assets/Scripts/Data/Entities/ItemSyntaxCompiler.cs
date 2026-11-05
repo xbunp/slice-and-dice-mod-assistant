@@ -398,8 +398,26 @@ public static class ItemSyntaxCompiler
 
         if (card.MechanicData.PartIndex.HasValue) parts.Add($"part.{card.MechanicData.PartIndex.Value}");
         if (card.MechanicData.Multiplier != 1) parts.Add($"m.{card.MechanicData.Multiplier}");
-        if (!string.IsNullOrEmpty(card.MechanicData.MergedItem)) parts.Add($"mrg.{card.MechanicData.MergedItem}");
-        if (!string.IsNullOrEmpty(card.MechanicData.SplicedItem)) parts.Add($"splice.{card.MechanicData.SplicedItem}");
+
+        if (card.MechanicData.MergedItems != null && card.MechanicData.MergedItems.Count > 0)
+        {
+            foreach (var mrg in card.MechanicData.MergedItems)
+                if (!string.IsNullOrEmpty(mrg)) parts.Add($"mrg.{mrg}");
+        }
+        else if (!string.IsNullOrEmpty(card.MechanicData.MergedItem))
+        {
+            parts.Add($"mrg.{card.MechanicData.MergedItem}");
+        }
+
+        if (card.MechanicData.SplicedItems != null && card.MechanicData.SplicedItems.Count > 0)
+        {
+            foreach (var spl in card.MechanicData.SplicedItems)
+                if (!string.IsNullOrEmpty(spl)) parts.Add($"splice.{spl}");
+        }
+        else if (!string.IsNullOrEmpty(card.MechanicData.SplicedItem))
+        {
+            parts.Add($"splice.{card.MechanicData.SplicedItem}");
+        }
 
         string payload = string.Join(".", parts);
         return $"({payload})";

@@ -330,24 +330,49 @@ public class ItemProperty { public string Key { get; set; } public string Value 
 [System.Serializable]
 public class ItemMechanic
 {
-    public List<string> Targets = new List<string>();  // e.g., left, topbot, mid
-    public string Prefix = "";  // e.g., i, sd, k, t
-    public string PayloadString = ""; // Raw nested string (e.g., facade.bas1)
+    public List<string> Targets = new List<string>();
+    public string Prefix = "";
+    public string PayloadString = "";
     public object PayloadData = null;
-    /// <summary> (.m#) Numerical effect multiplier. Multiplies the item's numerical output by this value (can be negative). Default is 1. </summary>
     public int Multiplier = 1;
-    /// <summary>
-    /// (.mrg.) Merged Item combinations. Combines the effect of two items.
-    /// Example: If Item A modifies Top/Bot, and Item B modifies Mid, MRG applies B's Mid effect to A's Top/Bot.
-    /// Note: Results are highly engine-dependent and difficult to predict outside the game environment.
-    /// </summary>
-    public string MergedItem = string.Empty;
-    /// <summary>
-    /// (.splice.) Spliced Item combinations. Similar to MRG, but uses alternative combination logic.
-    /// Creates distinct combined results. Highly engine-dependent.
-    /// </summary>
-    public string SplicedItem = string.Empty;
-    /// <summary> Supports '#' delimited sub-keywords (e.g., "topbot.k.growth#k.cleave" adds both to top and bottom faces). </summary>
+
+    // --- MULTI-MERGE & MULTI-SPLICE SUPPORT ---
+    public List<string> MergedItems = new List<string>();
+    public List<string> SplicedItems = new List<string>();
+
+    public string MergedItem
+    {
+        get => MergedItems.Count > 0 ? string.Join(".mrg.", MergedItems) : string.Empty;
+        set
+        {
+            MergedItems.Clear();
+            if (!string.IsNullOrEmpty(value))
+            {
+                var parts = value.Split(new[] { ".mrg." }, StringSplitOptions.None);
+                foreach (var p in parts)
+                {
+                    if (!string.IsNullOrWhiteSpace(p)) MergedItems.Add(p.Trim());
+                }
+            }
+        }
+    }
+    public string SplicedItem
+    {
+        get => SplicedItems.Count > 0 ? string.Join(".splice.", SplicedItems) : string.Empty;
+        set
+        {
+            SplicedItems.Clear();
+            if (!string.IsNullOrEmpty(value))
+            {
+                var parts = value.Split(new[] { ".splice." }, StringSplitOptions.None);
+                foreach (var p in parts)
+                {
+                    if (!string.IsNullOrWhiteSpace(p)) SplicedItems.Add(p.Trim());
+                }
+            }
+        }
+    }
+
     public List<string> ChainedKeywords = new List<string>();
     public int RepeatTimes = 1;
     public bool PerTier = false;
@@ -367,18 +392,15 @@ public class ItemMechanic
         if (PerTier) parts.Add("pertier");
         if (Unpack) parts.Add("unpack");
         if (!string.IsNullOrEmpty(Prefix)) parts.Add(Prefix);
-
         string corePayload = PayloadString;
         if (PayloadData != null)
         {
-            // Always dynamically export the live EntityData so UI mutations write directly into the string
             if (Prefix == "hat" && PayloadData is EntityData ed)
             {
                 string hatStr = ed.ExportAsHat();
                 corePayload = hatStr.StartsWith("(") && hatStr.EndsWith(")") ? hatStr : $"({hatStr})";
                 PayloadString = corePayload;
             }
-            // EVERYTHING ELSE (Abilities, Traits, Triggers, Curses, Modifiers) exports natively
             else if (PayloadData is SDData sdData)
             {
                 corePayload = sdData.Export();
@@ -388,18 +410,39 @@ public class ItemMechanic
                 UnityEngine.Debug.LogError($"Tried to export unknown PayloadData type: {PayloadData.GetType()}");
             }
         }
-
-        // LAW 1 & 2: Chained Keywords append to the mechanic itself, not inside the payload's brackets!
         if (ChainedKeywords.Count > 0)
         {
             corePayload += "#" + string.Join("#", ChainedKeywords);
         }
-
         if (!string.IsNullOrEmpty(corePayload)) parts.Add(corePayload);
         if (PartIndex.HasValue) parts.Add($"part.{PartIndex.Value}");
         if (Multiplier != 1) { parts.Add("m"); parts.Add(Multiplier.ToString()); }
-        if (!string.IsNullOrEmpty(MergedItem)) parts.Add($"mrg.{MergedItem}");
-        if (!string.IsNullOrEmpty(SplicedItem)) parts.Add($"splice.{SplicedItem}");
+
+        // EXPORT ALL MERGES IN SEQUENCE
+        if (MergedItems != null && MergedItems.Count > 0)
+        {
+            foreach (var mrg in MergedItems)
+            {
+                if (!string.IsNullOrEmpty(mrg)) parts.Add($"mrg.{mrg}");
+            }
+        }
+        else if (!string.IsNullOrEmpty(MergedItem))
+        {
+            parts.Add($"mrg.{MergedItem}");
+        }
+
+        // EXPORT ALL SPLICES IN SEQUENCE
+        if (SplicedItems != null && SplicedItems.Count > 0)
+        {
+            foreach (var spl in SplicedItems)
+            {
+                if (!string.IsNullOrEmpty(spl)) parts.Add($"splice.{spl}");
+            }
+        }
+        else if (!string.IsNullOrEmpty(SplicedItem))
+        {
+            parts.Add($"splice.{SplicedItem}");
+        }
 
         return string.Join(".", parts);
     }
@@ -412,8 +455,8 @@ public class ItemMechanic
             PayloadString = PayloadString,
             PayloadData = PayloadData,
             Multiplier = Multiplier,
-            MergedItem = MergedItem,
-            SplicedItem = SplicedItem,
+            MergedItems = new List<string>(MergedItems),
+            SplicedItems = new List<string>(SplicedItems),
             ChainedKeywords = new List<string>(ChainedKeywords),
             RepeatTimes = RepeatTimes,
             PerTier = PerTier,
@@ -530,8 +573,14 @@ public class ItemData : SDData
                 if (item.Mechanics.Count > 0)
                 {
                     var lastMech = item.Mechanics.Last();
-                    if (op == "splice") lastMech.SplicedItem = suffixPayload;
-                    else lastMech.MergedItem = suffixPayload;
+                    if (op == "splice")
+                    {
+                        if (!string.IsNullOrEmpty(suffixPayload)) lastMech.SplicedItems.Add(suffixPayload);
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrEmpty(suffixPayload)) lastMech.MergedItems.Add(suffixPayload);
+                    }
                 }
                 else
                 {
@@ -684,8 +733,18 @@ public class ItemData : SDData
             string nextTokenLower = stream.Peek().ToLower();
             if (nextTokenLower == "part") { stream.Consume(); mech.PartIndex = int.Parse(stream.Consume()); }
             else if (nextTokenLower == "m") { stream.Consume(); mech.Multiplier = int.Parse(stream.Consume()); }
-            else if (nextTokenLower == "mrg") { stream.Consume(); mech.MergedItem = BuildSuffixPayloadString(stream); }
-            else if (nextTokenLower == "splice") { stream.Consume(); mech.SplicedItem = BuildSuffixPayloadString(stream); }
+            else if (nextTokenLower == "mrg")
+            {
+                stream.Consume();
+                string suffix = BuildSuffixPayloadString(stream);
+                if (!string.IsNullOrEmpty(suffix)) mech.MergedItems.Add(suffix);
+            }
+            else if (nextTokenLower == "splice")
+            {
+                stream.Consume();
+                string suffix = BuildSuffixPayloadString(stream);
+                if (!string.IsNullOrEmpty(suffix)) mech.SplicedItems.Add(suffix);
+            }
             else break;
         }
 
@@ -1082,11 +1141,16 @@ public class ItemData : SDData
                 mech.PayloadData = hero;
             }
 
-            // NEW: Immediately normalize the payload string so the UI receives a safe 
-            // compressed reference (e.g. egg.Smeagol) instead of the giant inline string.
             if (mech.PayloadData is EntityData ed)
             {
                 string safeHat = ed.ExportAsHat();
+                // Only enforce egg. if the incoming payload was originally an egg
+                if (core.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                {
+                    string inner = StaticBranchTracing.StripOuterParens(safeHat);
+                    if (!inner.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                        safeHat = $"egg.{inner}";
+                }
                 mech.PayloadString = safeHat.StartsWith("(") ? safeHat : $"({safeHat})";
             }
         }
