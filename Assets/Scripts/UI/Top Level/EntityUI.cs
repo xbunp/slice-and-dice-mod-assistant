@@ -1242,14 +1242,12 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     protected void AddVisualModifier(VisualType type)
     {
         if (CurrentEntity.visuals == null) CurrentEntity.visuals = new List<VisualModifier>();
-
         if (CurrentEntity.visuals.Count >= 16) return;
-
         var newVis = new VisualModifier { Type = type };
         if (type == VisualType.P) newVis.p = new Phue { colorRange = 1 };
         else if (type == VisualType.THue) newVis.thue = new Thue { colorRange = 1 };
         else if (type == VisualType.HSV) { newVis.v = 1; }
-
+        else if (type == VisualType.B) { newVis.RawValue = "fff"; }
         CurrentEntity.visuals.Add(newVis);
         NotifyStateChanged();
         RebuildStatsUI();
@@ -1325,6 +1323,7 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             case VisualType.HSV: return "Global HSV Adjustment";
             case VisualType.Hue: return "Global Hue Shift";
             case VisualType.Draw: return "Draw Icon Overlay";
+            case VisualType.B: return "Border Color";
             default: return type.ToString();
         }
     }
@@ -1334,32 +1333,27 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             GridCellSpec.CreateLabel("Manage Visuals:", 0.40f),
             GridCellSpec.CreateButton("BtnPasteVisuals", "Paste Visuals from Clipboard", 0.60f, PasteVisualsFromClipboard)
         ));
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Add Visual Modifier:", 0.40f),
             GridCellSpec.CreateFilteredDropdown("AddVisualDrop", "Select...", 0.60f,
-                new string[] { "Select...", "P-Hue Swap", "T-Hue Color", "Global HSV", "Global Hue", "Draw Icon" },
+                new string[] { "Select...", "P-Hue Swap", "T-Hue Color", "Global HSV", "Global Hue", "Draw Icon", "Border (B)" },
                 (idx) => {
                     if (idx == 1) AddVisualModifier(VisualType.P);
                     else if (idx == 2) AddVisualModifier(VisualType.THue);
                     else if (idx == 3) AddVisualModifier(VisualType.HSV);
                     else if (idx == 4) AddVisualModifier(VisualType.Hue);
                     else if (idx == 5) AddVisualModifier(VisualType.Draw);
+                    else if (idx == 6) AddVisualModifier(VisualType.B);
                 })
         ));
-
         if (CurrentEntity.visuals == null || CurrentEntity.visuals.Count == 0) return;
-
         for (int i = 0; i < CurrentEntity.visuals.Count; i++)
         {
             int index = i;
             var vis = CurrentEntity.visuals[index];
-
-            if (vis.Type == VisualType.B || vis.Type == VisualType.Rect)
+            if (vis.Type == VisualType.Rect)
                 continue;
-
             AppendVisualHeader(layout, GetNiceVisualName(vis.Type), index);
-
             if (vis.Type == VisualType.P)
             {
                 if (vis.p == null) vis.p = new Phue();
@@ -1456,7 +1450,49 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     GridCellSpec.CreateInput($"VisDrawY_{index}", "0", 0.10f, (val) => { if (int.TryParse(val, out int y)) { vis.y = y; NotifyStateChanged(); } })
                 ));
             }
+            else if (vis.Type == VisualType.B)
+            {
+                layout.Add(new GridRowSpec(
+                    GridCellSpec.CreateLabel("Border Color:", 0.30f),
+                    GridCellSpec.CreateButton($"VisBColorBtn_{index}", "Pick Color", 0.40f, () => {
+                        if (uiGenerator.colorPicker == null) return;
+                        Color initialColor = ParseHexColor(vis.RawValue);
+                        OpenColorPicker(initialColor, (color) => {
+                            vis.RawValue = ColorToHex3(color);
+                            NotifyStateChanged();
+                        });
+                    }),
+                    GridCellSpec.CreateInput($"VisBHexIn_{index}", "Hex", 0.30f, (val) => {
+                        if (isDrawingUI) return;
+                        string clean = val.Trim().TrimStart('#');
+                        if (clean.Length >= 6)
+                            clean = $"{clean[0]}{clean[2]}{clean[4]}";
+                        else if (clean.Length > 3)
+                            clean = clean.Substring(0, 3);
+                        vis.RawValue = clean.ToLowerInvariant();
+                        NotifyStateChanged();
+                    })
+                ));
+            }
         }
+    }
+
+    protected string ColorToHex3(Color color)
+    {
+        int r = Mathf.Clamp(Mathf.RoundToInt(color.r * 15f), 0, 15);
+        int g = Mathf.Clamp(Mathf.RoundToInt(color.g * 15f), 0, 15);
+        int b = Mathf.Clamp(Mathf.RoundToInt(color.b * 15f), 0, 15);
+        return $"{r:x}{g:x}{b:x}";
+    }
+
+    protected Color ParseHexColor(string hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return Color.white;
+        string formatted = hex.Trim();
+        if (!formatted.StartsWith("#")) formatted = "#" + formatted;
+        if (ColorUtility.TryParseHtmlString(formatted, out Color color))
+            return color;
+        return Color.white;
     }
     protected virtual void UpdateUIFromData()
     {
@@ -1529,7 +1565,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             UpdateSpecificVisuals();
             portraitPreview.SetPortraitVisualModifiers(CurrentEntity.visuals);
         }
-
         if (statsUI != null && CurrentEntity.visuals != null)
         {
             for (int i = 0; i < CurrentEntity.visuals.Count; i++)
@@ -1594,11 +1629,20 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                         if (statsUI.Inputs.TryGetValue($"VisDrawY_{i}", out var iY)) iY.SetTextWithoutNotify(vis.y.ToString());
                     }
                 }
+                else if (vis.Type == VisualType.B)
+                {
+                    if (statsUI.Buttons != null && statsUI.Buttons.TryGetValue($"VisBColorBtn_{i}", out var bColorBtn))
+                        SetButtonColorPreview(bColorBtn, ParseHexColor(vis.RawValue));
+                    if (statsUI.Inputs != null && statsUI.Inputs.TryGetValue($"VisBHexIn_{i}", out var bHexIn))
+                    {
+                        if (!bHexIn.isFocused)
+                            bHexIn.SetTextWithoutNotify(vis.RawValue ?? "");
+                    }
+                }
             }
         }
         for (int i = 0; i < 6; i++) UpdateIcon(i);
         diceBuilderWidget?.UpdateVisuals(currentDiceTab);
-
         TriggerTextUpdate();
     }
 

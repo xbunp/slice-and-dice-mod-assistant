@@ -12,7 +12,7 @@ public static class StringExtensions
             .Replace("&", "[amp]/[and]")
             .Replace(",", "[comma]")
             .Replace("+", "[plus]")
-            .Replace("-", "[minus]")
+            //.Replace("-", "[minus]")
             .Replace("#", "[hash]")
             //.Replace("pips", "[pips]")
             //.Replace("pipsk", "[pipsk]")
