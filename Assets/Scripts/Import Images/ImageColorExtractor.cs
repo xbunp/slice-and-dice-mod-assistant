@@ -215,16 +215,36 @@ public static class ImageColorExtractor
     private static Color32[] SampleNearest(Color32[] src, int srcW, int srcH, int dstW, int dstH)
     {
         var dst = new Color32[dstW * dstH];
+
+        // 1:1 Exact Copy (No scaling needed)
+        if (srcW == dstW && srcH == dstH)
+        {
+            for (int dstY = 0; dstY < dstH; dstY++)
+            {
+                // Unity textures have (0,0) at bottom-left; canvas has (0,0) at top-left
+                int srcYUnity = srcH - 1 - dstY;
+                int srcRowStart = srcYUnity * srcW;
+                int dstRowStart = dstY * dstW;
+
+                Array.Copy(src, srcRowStart, dst, dstRowStart, srcW);
+            }
+            return dst;
+        }
+
+        // Resampling Path (Only if image was downscaled from > 999px)
         for (int dstY = 0; dstY < dstH; dstY++)
         {
-            int srcYCanvas = Mathf.FloorToInt((float)dstY / dstH * srcH);
+            // Use integer arithmetic instead of floats to prevent precision truncation
+            int srcYCanvas = (dstY * srcH) / dstH;
             int srcYUnity = srcH - 1 - srcYCanvas;
+
             for (int dstX = 0; dstX < dstW; dstX++)
             {
-                int srcX = Mathf.FloorToInt((float)dstX / dstW * srcW);
+                int srcX = (dstX * srcW) / dstW;
                 dst[dstY * dstW + dstX] = src[srcYUnity * srcW + srcX];
             }
         }
+
         return dst;
     }
 
