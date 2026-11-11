@@ -42,6 +42,8 @@ public static class SpriteSearchAliases
         new[] { "steel", "bash" },
         new[] { "selfshield", "self-shield", "swordshield" },
         new[] { "ice", "cold", "snow", "chill", "frost" },
+        new[] { "hungry", "cruesh", "eatcruel" },
+        new[] { "caltrop", "dmgself", "har_106_", "yca_51_" },
 
         new[] { "gun", "baseak", "basesniper", "ammo", "gunshot", "flintlock", "blaster", "musket" },
         /*
@@ -101,7 +103,7 @@ public static class SpriteSearchAliases
         { "red",  new[] { "heart", "heal", "pain"  } },
         { "pink",  new[] { "zglam", "vigil", "cantrip" } },
         { "grey",  new[] { "space", "pale" } },
-        { "yellow",  new[] { "engage", "steel", "93_coin", "brimstone", "gold", "heart-of-light", "puzzle-box", "tiara", "twisted-flax", "moxie", "star", "cymbals", "rescue", "tuba", "engine", "alchemyair", "eba_38", "eba_30", "banana", "castzap", "sun", "rampage", "fierce", "holy", "lead" } },
+        { "yellow",  new[] { "engage", "steel", "93_coin", "brimstone", "gold", "gilded", "heart-of-light", "puzzle-box", "tiara", "twisted-flax", "moxie", "star", "cymbals", "rescue", "tuba", "engine", "alchemyair", "eba_38", "eba_30", "banana", "castzap", "sun", "rampage", "fierce", "holy", "lead" } },
         { "letter",  new[] { "sym" } }
     };
 

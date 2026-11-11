@@ -318,18 +318,48 @@ public abstract class EntityData : SDData, IPayloadContainer
 
                     if (targetIndices.Contains(i))
                     {
+                        string shatteredPayload = leg.PayloadString;
+                        bool isPayloadPrefix = leg.Prefix == "sticker" || leg.Prefix == "cast" || leg.Prefix == "enchant" || leg.Prefix == "hat";
+                        bool preserveUnpackFlag = leg.Unpack;
+
+                        // Sticker, Cast, Enchant, and Hat payloads are raw payload expressions.
+                        // If 'unpack' was consumed as an item-level modifier flag during import,
+                        // bake it back into the payload string and clear the flag so MechanicNode.Export()
+                        // doesn't corrupt it into unpack.(...).
+                        if (isPayloadPrefix && leg.Unpack)
+                        {
+                            if (!string.IsNullOrEmpty(shatteredPayload) && !shatteredPayload.StartsWith("unpack.", StringComparison.OrdinalIgnoreCase))
+                            {
+                                shatteredPayload = $"unpack.{shatteredPayload}";
+                            }
+                            preserveUnpackFlag = false;
+                        }
+
+                        // Re-stitch chained keywords (#) that belong to sticker/cast/enchant payloads
+                        // so they are not stripped or emitted as dot-separated suffixes.
+                        List<string> remainingChainedKeywords = new List<string>(leg.ChainedKeywords);
+                        if (isPayloadPrefix && remainingChainedKeywords.Count > 0)
+                        {
+                            var chainsToAbsorb = remainingChainedKeywords.Where(k => !string.IsNullOrEmpty(k)).ToList();
+                            if (chainsToAbsorb.Count > 0)
+                            {
+                                shatteredPayload = $"({shatteredPayload}#{string.Join("#", chainsToAbsorb)})";
+                                remainingChainedKeywords.Clear();
+                            }
+                        }
+
                         var flat = new MechanicNode
                         {
                             Prefix = leg.Prefix,
-                            RawPayloadString = leg.PayloadString,
-                            ChainedKeywords = new List<string>(leg.ChainedKeywords),
+                            RawPayloadString = shatteredPayload,
+                            ChainedKeywords = remainingChainedKeywords,
                             Multiplier = leg.Multiplier,
                             MergedItem = leg.MergedItem,
                             SplicedItem = leg.SplicedItem,
                             PartIndex = leg.PartIndex,
                             RepeatTimes = leg.RepeatTimes,
                             PerTier = leg.PerTier,
-                            Unpack = leg.Unpack
+                            Unpack = preserveUnpackFlag
                         };
 
                         // Safely re-hydrate nested entities so they conform to the intrinsic payload standard
@@ -794,18 +824,37 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
             else if (lowerPrefix == "sticker" || lowerPrefix == "cast" || lowerPrefix == "enchant" || lowerPrefix == "hat")
             {
+                // RECONSTRUCT EXACT PAYLOAD IF AST PARSER DECOMPOSED UNPACK OR CHAINED KEYWORDS
+                string fullPayload = payload;
+                if (mech.Unpack && !fullPayload.StartsWith("unpack.", StringComparison.OrdinalIgnoreCase))
+                {
+                    fullPayload = $"unpack.{fullPayload}";
+                }
+                if (mech.ChainedKeywords != null && mech.ChainedKeywords.Count > 0)
+                {
+                    // If the payload had chained keywords (#k.selfshield) that got absorbed into the mechanic,
+                    // re-stitch them with '#' so the sticker payload remains intact.
+                    var payloadChains = mech.ChainedKeywords.Where(k => !string.IsNullOrEmpty(k)).ToList();
+                    if (payloadChains.Count > 0)
+                    {
+                        fullPayload = $"({fullPayload}#{string.Join("#", payloadChains)})";
+                        // Clear them from chained keywords so they don't also get added to face.keywords
+                        mech.ChainedKeywords.Clear();
+                    }
+                }
+
                 if (lowerPrefix == "hat")
                 {
-                    bool isEgg = payload.StartsWith("egg.", StringComparison.OrdinalIgnoreCase);
+                    bool isEgg = fullPayload.StartsWith("egg.", StringComparison.OrdinalIgnoreCase);
                     diceSides[faceIdx].faceType = isEgg ? DiceSideData.DiceFaceType.Egg : DiceSideData.DiceFaceType.Hat;
-                    diceSides[faceIdx].payload = payload;
+                    diceSides[faceIdx].payload = fullPayload;
                 }
                 else
                 {
                     diceSides[faceIdx].faceType = lowerPrefix == "cast" ? DiceSideData.DiceFaceType.Cast :
                                                   lowerPrefix == "enchant" ? DiceSideData.DiceFaceType.Enchant :
                                                   DiceSideData.DiceFaceType.Sticker;
-                    diceSides[faceIdx].payload = payload;
+                    diceSides[faceIdx].payload = fullPayload;
                 }
             }
         }
@@ -901,6 +950,7 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
 
         // 1. Export inherent grouped string properties
+        // 1. Export inherent grouped string properties
         foreach (var kvp in groupedModifiers)
         {
             string templateString = kvp.Key;
@@ -908,10 +958,17 @@ public abstract class EntityData : SDData, IPayloadContainer
             foreach (string alias in optimalAliases)
             {
                 string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, alias) : templateString;
-                ItemData giveItem = new ItemData();
-                giveItem.Parse($"{alias}.{resolvedMod}");
-                ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giveItem };
-                modSb.Append($".{modifier.Export()}");
+
+                // If it contains complex syntax, preserve verbatim without passing through ItemData.Parse
+                string rawModifier = $"{alias}.{resolvedMod}";
+                if (rawModifier.StartsWith("(") && rawModifier.EndsWith(")"))
+                {
+                    modSb.Append($".i.{rawModifier}");
+                }
+                else
+                {
+                    modSb.Append($".i.({rawModifier})");
+                }
             }
         }
 
@@ -1051,7 +1108,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     }
     private bool ProcessStandardPayload(DiceSideData face, string payloadStr, DiceSideData.DiceFaceType faceType, DiceSideData.PayloadTarget? payloadTarget, List<string> chunks)
     {
-        // If payloadStr is complex, ItemData self-brackets on export.
         string prefix = faceType.ToString().ToLower();
         bool applyStickerRules = faceType == DiceSideData.DiceFaceType.Sticker;
 
@@ -1063,10 +1119,19 @@ public abstract class EntityData : SDData, IPayloadContainer
             applyStickerRules = true;
         }
 
-        string innerPayloadStr = $"{prefix}.{payloadStr}";
-        string hatWrapperFmt = null;
+        string formattedPayload = payloadStr?.Trim() ?? "";
 
-        // Use the safe property to check if togtime exists ANYWHERE on this face
+        // Check if the payload is already enclosed in outer parentheses using the existing StripOuterParens helper
+        bool alreadyEnclosed = formattedPayload.StartsWith("(") && formattedPayload.EndsWith(")")
+            && StaticBranchTracing.StripOuterParens(formattedPayload) != formattedPayload;
+
+        if (!alreadyEnclosed && (formattedPayload.Contains("#") || formattedPayload.Contains(".")))
+        {
+            formattedPayload = $"({formattedPayload})";
+        }
+
+        string innerPayloadStr = $"{prefix}.{formattedPayload}";
+        string hatWrapperFmt = null;
         bool hasTogtime = face.togtime;
 
         if (applyStickerRules)
@@ -1110,7 +1175,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             if (hasTogtime && faceType == DiceSideData.DiceFaceType.Enchant)
                 innerPayloadStr += "#togtime";
-
             chunks.Add(innerPayloadStr);
         }
 
@@ -1119,7 +1183,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             chunks.Add($"hat.({hatWrapperFmt})");
             return true;
         }
-
         return false;
     }
     private void ProcessFaceFacades(DiceSideData face, List<string> chunks, bool includeInlineFacades)

@@ -1383,6 +1383,7 @@ Custom color
 
 fff is the color code.
 
+// "DEPLETE" = ritemx.539ce9a
 
 Line Breaks
 

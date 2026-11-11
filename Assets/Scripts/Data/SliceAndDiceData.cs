@@ -1355,7 +1355,7 @@ public static class EffectKeywordColors
         { EffectKeyword.Equipped, Grey },
         { EffectKeyword.Era, Blue },
         { EffectKeyword.Evil, Red },
-        { EffectKeyword.Exert, Grey },
+        { EffectKeyword.Exert, Purple },
         { EffectKeyword.Fashionable, Blue },
         { EffectKeyword.Fault, Blue },
         { EffectKeyword.Fierce, Yellow },

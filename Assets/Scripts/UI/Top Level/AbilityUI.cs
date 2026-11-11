@@ -780,11 +780,11 @@ public class AbilityUI : RootUI
         ));
 
         var abilityOnlyKeywords = new Dictionary<string, string> {
-            { "Channel", "k.growth" },
+            { "Channel", "ritemx.302ea5e.part.0" },
             { "Cooldown", "k.exert" },
-            { "Deplete", "k.decay" },
+            { "Deplete", "ritemx.539ce9a" },
             { "Future", "ritemx.dae9" },
-            { "Spell Rescue", "k.rescue" },
+            { "Spell Rescue", "ritemx.62e8" },
             { "Single Cast", "k.singleuse" }
         };
 
