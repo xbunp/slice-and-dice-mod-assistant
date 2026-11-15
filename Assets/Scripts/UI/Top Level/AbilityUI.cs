@@ -176,9 +176,8 @@ public class AbilityUI : RootUI
             getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
             getFacadeSprite: (id) => null,
             onStateChanged: () => NotifyStateChanged(),
-            onRebuildRequested: () => RebuildAbilityScrollView()
+            onRebuildRequested: () => { RebuildStatsUI(); RebuildAbilityScrollView(); }
         );
-
         _secondaryFaceBuilder = new DiceFaceBuilderWidget(
             getDiceSides: () => CurrentAbility?.diceSides,
             allowFacades: () => false,
@@ -187,7 +186,7 @@ public class AbilityUI : RootUI
             getBaseSprite: (id) => EntityUIHelpers.GetBaseSprite(id),
             getFacadeSprite: (id) => null,
             onStateChanged: () => NotifyStateChanged(),
-            onRebuildRequested: () => RebuildAbilityScrollView()
+            onRebuildRequested: () => { RebuildStatsUI(); RebuildAbilityScrollView(); }
         );
     }
     protected override void BuildUIAndBind()
@@ -728,61 +727,46 @@ public class AbilityUI : RootUI
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateButton("BtnReset", "Reset All to Default", 1.0f, ResetToDefault)
         ));
-
         string poolBtnText = _currentPoolIndex == 0 ? "Mod Pool: New Ability" : $"Mod Pool: {CurrentAbility.entityName}";
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateButton("BtnOpenPool", poolBtnText, 0.70f, OpenModPoolModal),
             GridCellSpec.CreateButton("BtnSavePool", "Save to Mod", 0.30f, SaveToModPool)
         ));
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Ability Name:", 0.35f),
             GridCellSpec.CreateInput("Name", "", 0.65f, (val) => { CurrentAbility.entityName = val.SanitizePlainInput(); NotifyStateChanged(); })
         ));
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Image:", 0.30f),
             GridCellSpec.CreateDiceButton("OverrideBtn", "P", 0.15f, OpenImageOverrideModal),
             GridCellSpec.CreateInput("OverrideName", "None", 0.35f, (val) => { CurrentAbility.imageOverride = val; NotifyStateChanged(); }),
             GridCellSpec.CreateButton("ToggleCustomBtn", showCustomImagePanel ? "Custom-" : "Custom+", 0.20f, () => { showCustomImagePanel = !showCustomImagePanel; RebuildStatsUI(); })
         ));
-
         if (showCustomImagePanel)
             layout.Add(new GridRowSpec(200, GridCellSpec.CreateCustomImg("CustomImgPanel", 1.0f)));
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Hue:", 0.30f),
             GridCellSpec.CreateSlider("HeroSliH", -99, 99, true, 0.50f, (val) => UpdateAbilityHsvData(0, Mathf.RoundToInt(val))),
             GridCellSpec.CreateInput("HeroFacH", "H", 0.20f, (val) => { if (int.TryParse(val, out int h)) UpdateAbilityHsvData(0, h); })
         ));
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Saturation:", 0.30f),
             GridCellSpec.CreateSlider("HeroSliS", -99, 99, true, 0.50f, (val) => UpdateAbilityHsvData(1, Mathf.RoundToInt(val))),
             GridCellSpec.CreateInput("HeroFacS", "S", 0.20f, (val) => { if (int.TryParse(val, out int s)) UpdateAbilityHsvData(1, s); })
         ));
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel("Value:", 0.30f),
             GridCellSpec.CreateSlider("HeroSliV", -99, 99, true, 0.50f, (val) => UpdateAbilityHsvData(2, Mathf.RoundToInt(val))),
             GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateAbilityHsvData(2, v); })
         ));
 
-        var abilityOnlyKeywords = new Dictionary<string, string> {
-            { "Channel", "ritemx.302ea5e.part.0" },
-            { "Cooldown", "k.exert" },
-            { "Deplete", "ritemx.539ce9a" },
-            { "Future", "ritemx.dae9" },
-            { "Spell Rescue", "ritemx.62e8" },
-            { "Single Cast", "k.singleuse" }
-        };
-
+        var abilityOnlyKeywords = AbilityDomainRules.AbilityOnlyKeywords;
         var activeKeywordKeys = CurrentAbility.items
             ?.Where(i => abilityOnlyKeywords.Values.Any(v => string.Equals(v, i, StringComparison.OrdinalIgnoreCase)))
             .Select(i => abilityOnlyKeywords.FirstOrDefault(x => string.Equals(x.Value, i, StringComparison.OrdinalIgnoreCase)).Key)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList() ?? new List<string>();
 
-        /*
         AppendCollectionSelector<string>(
             layout: layout,
             label: "Add Ability-Only Keyword:",
@@ -793,9 +777,9 @@ public class AbilityUI : RootUI
             getDisplay: (niceName) => niceName,
             onAdd: (niceName) =>
             {
+                if (string.IsNullOrEmpty(niceName) || !abilityOnlyKeywords.TryGetValue(niceName, out string internalId)) return;
                 if (CurrentAbility.items == null) CurrentAbility.items = new List<string>();
-                string internalId = abilityOnlyKeywords[niceName];
-                if (!CurrentAbility.items.Contains(internalId))
+                if (!CurrentAbility.items.Any(i => string.Equals(i, internalId, StringComparison.OrdinalIgnoreCase)))
                 {
                     CurrentAbility.items.Add(internalId);
                     NotifyStateChanged();
@@ -804,15 +788,14 @@ public class AbilityUI : RootUI
             },
             onRemove: (niceName) =>
             {
-                string internalId = abilityOnlyKeywords[niceName];
-                if (CurrentAbility.items != null && CurrentAbility.items.Remove(internalId))
+                if (string.IsNullOrEmpty(niceName) || !abilityOnlyKeywords.TryGetValue(niceName, out string internalId)) return;
+                if (CurrentAbility.items != null && CurrentAbility.items.RemoveAll(i => string.Equals(i, internalId, StringComparison.OrdinalIgnoreCase)) > 0)
                 {
                     NotifyStateChanged();
                     RebuildStatsUI();
                 }
             }
         );
-        */
 
         return layout;
     }
@@ -1310,7 +1293,7 @@ public class AbilityUI : RootUI
             case 4:
                 var orb = new OrbData();
                 orb.isHardcoded = false;
-                orb.carrierPrefix = "sthief.abilitydata";
+                orb.carrierPrefix = $"{AbilityDomainRules.DefaultCarrier}.abilitydata";
                 newAbility = orb;
                 break;
             case 0:
@@ -1318,7 +1301,6 @@ public class AbilityUI : RootUI
                 newAbility = new SpellData();
                 break;
         }
-
         newAbility.entityName = CurrentAbility.entityName;
         newAbility.imageOverride = CurrentAbility.imageOverride;
         newAbility.baseReplica = CurrentAbility.baseReplica;
@@ -1326,12 +1308,16 @@ public class AbilityUI : RootUI
         newAbility.h = CurrentAbility.h;
         newAbility.s = CurrentAbility.s;
         newAbility.v = CurrentAbility.v;
-
         if (CurrentAbility.diceSides != null && CurrentAbility.diceSides[0] != null)
+        {
             newAbility.diceSides[0] = CurrentAbility.diceSides[0].Clone();
+            newAbility.diceSides[0].ParentEntity = newAbility;
+        }
         if (CurrentAbility.diceSides != null && CurrentAbility.diceSides[1] != null)
+        {
             newAbility.diceSides[1] = CurrentAbility.diceSides[1].Clone();
-
+            newAbility.diceSides[1].ParentEntity = newAbility;
+        }
         ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(newAbility);
         NotifyStateChanged();
         RebuildStatsUI();
@@ -1444,7 +1430,7 @@ public class AbilityUI : RootUI
         string formatted = AbilityData.GetFormattedExportString(ability);
         if (ability is SpellData || ability is TacticData)
         {
-            return $"i.learn.sthief.{formatted}";
+            return $"i.learn.{AbilityDomainRules.DefaultCarrier}.{formatted}";
         }
         return formatted;
     }

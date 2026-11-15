@@ -251,7 +251,6 @@ public class DiceSideData
                     if (!string.IsNullOrEmpty(m.RawPayloadString)) kws.Add(m.RawPayloadString);
                 }
                 kws.AddRange(m.ChainedKeywords.Where(k => ExternalGameRegistry.IsValidKeyword(k) || k.StartsWith("k.", StringComparison.OrdinalIgnoreCase)));
-
                 if (m.LegacyItemPayload != null)
                 {
                     foreach (var legMech in m.LegacyItemPayload.Mechanics)
@@ -269,16 +268,24 @@ public class DiceSideData
         set
         {
             FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
-
             sideMechanics.RemoveAll(m => m.Prefix == "k" || (string.IsNullOrEmpty(m.Prefix) && ExternalGameRegistry.IsValidKeyword(m.RawPayloadString)));
             foreach (var m in sideMechanics) m.ChainedKeywords.RemoveAll(k => ExternalGameRegistry.IsValidKeyword(k) || k.StartsWith("k.", StringComparison.OrdinalIgnoreCase));
-
             if (value != null)
             {
                 foreach (var kw in value)
                 {
                     if (string.IsNullOrWhiteSpace(kw)) continue;
-                    sideMechanics.Add(new MechanicNode { Prefix = "k", RawPayloadString = kw.Trim() });
+                    string clean = kw.Trim();
+                    if (ParentEntity is AbilityData ability && AbilityDomainRules.TryGetAbilityOnlyKeywordItem(clean, out string abilityItem))
+                    {
+                        if (ability.items == null) ability.items = new List<string>();
+                        if (!ability.items.Any(i => string.Equals(i, abilityItem, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            ability.items.Add(abilityItem);
+                        }
+                        continue;
+                    }
+                    sideMechanics.Add(new MechanicNode { Prefix = "k", RawPayloadString = clean });
                 }
             }
         }

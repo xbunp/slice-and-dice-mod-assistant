@@ -4,61 +4,216 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
+public enum AbilityPrefixKind
+{
+    None,
+    AbilityData,
+    OnHitData,
+    TriggerHPData,
+    Cast,
+    Orb
+}
+
 public static class AbilityDomainRules
 {
+    public const string DefaultCarrier = "sthief";
+
+    public static readonly Dictionary<string, string> AbilityOnlyKeywords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Channel", "ritemx.302ea5e.part.0" },
+        { "Cooldown", "k.exert" },
+        { "Deplete", "ritemx.539ce9a" },
+        { "Future", "ritemx.dae9" },
+        { "Spell Rescue", "ritemx.62e8" },
+        { "Single Cast", "k.singleuse" }
+    };
+
+    private static readonly Dictionary<string, string> NormalizedAbilityOnlyKeywords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "channel", "ritemx.302ea5e.part.0" },
+        { "cooldown", "k.exert" },
+        { "deplete", "ritemx.539ce9a" },
+        { "future", "ritemx.dae9" },
+        { "spellrescue", "ritemx.62e8" },
+        { "singlecast", "k.singleuse" }
+    };
+
+    public static bool TryGetAbilityOnlyKeywordItem(string keyword, out string itemToken)
+    {
+        itemToken = null;
+        if (string.IsNullOrWhiteSpace(keyword)) return false;
+        string normalized = keyword.Trim().Replace(" ", "").Replace("_", "");
+        return NormalizedAbilityOnlyKeywords.TryGetValue(normalized, out itemToken);
+    }
+
     public static readonly HashSet<string> AbilityKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "sd", "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "n", "img", "hp", "col", "tier",
         "hsv", "hsl", "hue", "p", "b", "rect", "draw", "thue", "doc", "adj", "speech", "orb"
     };
-
     public static readonly HashSet<string> AbilityStartTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     { "orb", "triggerhpdata", "onhitdata", "abilitydata", "cast" };
-
     public static readonly string[] AbilityPrefixes = new string[]
     {
-    "i.learn.sthief.abilitydata.",
-    "learn.sthief.abilitydata.",
-    "i.triggerhpdata.",
-    "triggerhpdata.",
-    "i.onhitdata.",
-    "i.abilitydata.",
-    "abilitydata.",
-    "onhitdata.",
-    "i.t.orb.",
-    "t.orb.",
-    "cast.",
-    "orb."
+        "i.triggerhpdata.",
+        "triggerhpdata.",
+        "i.onhitdata.",
+        "i.abilitydata.",
+        "abilitydata.",
+        "onhitdata.",
+        "i.t.orb.",
+        "t.orb.",
+        "cast.",
+        "orb."
     };
+
+    public static bool IsAbilityCarrierToken(string token)
+    {
+        if (string.IsNullOrEmpty(token) || token.Length < 2) return false;
+        char prefix = char.ToLowerInvariant(token[0]);
+        if (prefix != 's' && prefix != 't') return false;
+
+        string candidateHero = token.Substring(1);
+        if (char.IsDigit(candidateHero[0]) || candidateHero[0] == '-' || candidateHero[0] == '+' || candidateHero.IndexOf(',') >= 0)
+            return false;
+
+        return Enum.TryParse(candidateHero, true, out HeroType parsed) && parsed != HeroType.None;
+    }
+
+    public static bool TryParseAbilityPrefix(string data, out AbilityPrefixKind kind, out string carrier, out string remainder)
+    {
+        kind = AbilityPrefixKind.None;
+        carrier = string.Empty;
+        remainder = data;
+
+        if (string.IsNullOrWhiteSpace(data)) return false;
+
+        string clean = data.Trim();
+        int firstParen = clean.IndexOf('(');
+        string prefixRegion = firstParen >= 0 ? clean.Substring(0, firstParen) : clean;
+
+        List<(string token, int endAfterDot)> parts = new List<(string, int)>();
+        int start = 0;
+        for (int i = 0; i <= prefixRegion.Length; i++)
+        {
+            if (i == prefixRegion.Length || prefixRegion[i] == '.')
+            {
+                if (i > start)
+                {
+                    string tok = prefixRegion.Substring(start, i - start);
+                    int endAfter = (i < clean.Length && clean[i] == '.') ? i + 1 : i;
+                    parts.Add((tok, endAfter));
+                }
+                start = i + 1;
+            }
+        }
+
+        if (parts.Count == 0) return false;
+
+        int idx = 0;
+
+        // Optional leading "i."
+        if (parts[idx].token.Equals("i", StringComparison.OrdinalIgnoreCase))
+        {
+            idx++;
+            if (idx >= parts.Count) return false;
+        }
+
+        // Optional "t." before "orb." (i.t.orb. / t.orb.)
+        if (parts[idx].token.Equals("t", StringComparison.OrdinalIgnoreCase) &&
+            idx + 1 < parts.Count &&
+            parts[idx + 1].token.Equals("orb", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = AbilityPrefixKind.Orb;
+            int afterOrb = parts[idx + 1].endAfterDot;
+            remainder = afterOrb < clean.Length ? clean.Substring(afterOrb).Trim() : string.Empty;
+            return true;
+        }
+
+        // Direct "orb."
+        if (parts[idx].token.Equals("orb", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = AbilityPrefixKind.Orb;
+            int afterOrb = parts[idx].endAfterDot;
+            remainder = afterOrb < clean.Length ? clean.Substring(afterOrb).Trim() : string.Empty;
+            return true;
+        }
+
+        // Direct "cast."
+        if (parts[idx].token.Equals("cast", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = AbilityPrefixKind.Cast;
+            int afterCast = parts[idx].endAfterDot;
+            remainder = afterCast < clean.Length ? clean.Substring(afterCast).Trim() : string.Empty;
+            return true;
+        }
+
+        // Optional "learn."
+        bool hasLearn = false;
+        if (parts[idx].token.Equals("learn", StringComparison.OrdinalIgnoreCase))
+        {
+            hasLearn = true;
+            idx++;
+            if (idx >= parts.Count) return false;
+        }
+
+        // Optional [s|t]<HeroType> carrier token
+        if (IsAbilityCarrierToken(parts[idx].token))
+        {
+            carrier = parts[idx].token;
+            idx++;
+            if (idx >= parts.Count) return false;
+        }
+        else if (hasLearn)
+        {
+            string nextLower = parts[idx].token.ToLowerInvariant();
+            if (nextLower != "abilitydata" && nextLower != "onhitdata" && nextLower != "triggerhpdata")
+                return false;
+        }
+
+        string kindToken = parts[idx].token.ToLowerInvariant();
+        switch (kindToken)
+        {
+            case "abilitydata":
+                kind = AbilityPrefixKind.AbilityData;
+                break;
+            case "onhitdata":
+                kind = AbilityPrefixKind.OnHitData;
+                break;
+            case "triggerhpdata":
+                kind = AbilityPrefixKind.TriggerHPData;
+                break;
+            default:
+                return false;
+        }
+
+        int remStart = parts[idx].endAfterDot;
+        remainder = remStart < clean.Length ? clean.Substring(remStart).Trim() : string.Empty;
+        return true;
+    }
 
     public static bool IsAbilityStartSequence(List<string> tokens, int index)
     {
         string token = tokens[index];
         if (AbilityStartTokens.Contains(token)) return true;
-
         // Check if the sequence matches [s|t]<HeroType>.[abilitydata|triggerhpdata|onhitdata]
         if (index + 1 < tokens.Count)
         {
             string nextToken = tokens[index + 1].ToLower();
             if (nextToken == "abilitydata" || nextToken == "triggerhpdata" || nextToken == "onhitdata")
             {
-                if (token.Length > 1 && (token[0] == 's' || token[0] == 'S' || token[0] == 't' || token[0] == 'T'))
+                if (IsAbilityCarrierToken(token))
                 {
-                    string candidateHero = token.Substring(1);
-                    // Strictly verify against the actual game registry enum
-                    if (Enum.TryParse(candidateHero, true, out HeroType _))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
         return false;
     }
+
     public static int GetAbilityBlockLength(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
-
         // Check if startIndex is a strictly validated carrier
         if (endIndex + 1 < tokens.Count)
         {
@@ -66,24 +221,17 @@ public static class AbilityDomainRules
             string nextToken = tokens[endIndex + 1].ToLower();
             if (nextToken == "abilitydata" || nextToken == "triggerhpdata" || nextToken == "onhitdata")
             {
-                if (token.Length > 1 && (token[0] == 's' || token[0] == 'S' || token[0] == 't' || token[0] == 'T'))
+                if (IsAbilityCarrierToken(token))
                 {
-                    string candidateHero = token.Substring(1);
-                    if (Enum.TryParse(candidateHero, true, out HeroType _))
-                    {
-                        endIndex++; // Consume the carrier token safely
-                    }
+                    endIndex++; // Consume the carrier token safely
                 }
             }
         }
-
         while (endIndex < tokens.Count)
         {
             string peek = tokens[endIndex].ToLower();
             endIndex++;
-
             if (peek.StartsWith("(") && peek.EndsWith(")")) break;
-
             if (endIndex - startIndex >= 2)
             {
                 if (endIndex < tokens.Count && tokens[endIndex].ToLower() == "abilitydata") continue;
@@ -328,43 +476,33 @@ public abstract class AbilityData : HeroData
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
         string trimmed = data.Trim();
-        // 1. Explicitly check for AbilityData/Cast/Learn to guarantee CreateSpellOrTactic mapping before heuristics
-        if (trimmed.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("i.abilitydata.", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("cast.", StringComparison.OrdinalIgnoreCase) ||
-            TryStripLearnAbilityPrefix(trimmed, out _))
+
+        if (AbilityDomainRules.TryParseAbilityPrefix(trimmed, out AbilityPrefixKind prefixKind, out _, out string remainder))
         {
-            string cleanStr = StripPrefix(trimmed);
-            return CreateSpellOrTactic(cleanStr);
+            switch (prefixKind)
+            {
+                case AbilityPrefixKind.AbilityData:
+                case AbilityPrefixKind.Cast:
+                    return CreateSpellOrTactic(remainder);
+                case AbilityPrefixKind.OnHitData:
+                    OnHitData onHit = new OnHitData();
+                    onHit.Parse(remainder);
+                    return onHit;
+                case AbilityPrefixKind.TriggerHPData:
+                    TriggerHPData triggerHP = new TriggerHPData();
+                    triggerHP.Parse(remainder);
+                    return triggerHP;
+                case AbilityPrefixKind.Orb:
+                    OrbData orb = new OrbData();
+                    orb.Parse(remainder);
+                    return orb;
+            }
         }
-        // 2. Explicitly check for OnHit
-        if (trimmed.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("i.onhitdata.", StringComparison.OrdinalIgnoreCase))
-        {
-            OnHitData onHit = new OnHitData();
-            onHit.Parse(trimmed);
-            return onHit;
-        }
-        // 3. Explicitly check for TriggerHP
-        if (trimmed.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("i.triggerhpdata.", StringComparison.OrdinalIgnoreCase))
-        {
-            TriggerHPData triggerHP = new TriggerHPData();
-            triggerHP.Parse(trimmed);
-            return triggerHP;
-        }
-        // 4. Fallback heuristic for un-prefixed ability strings
+
+        // Fallback heuristic for un-prefixed ability strings
         string clean = StripPrefix(data);
         ProbeAbilityData probe = new ProbeAbilityData();
         probe.Parse(clean);
-        if (trimmed.StartsWith("orb.", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("i.t.orb.", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("t.orb.", StringComparison.OrdinalIgnoreCase))
-        {
-            OrbData orb = new OrbData();
-            orb.Parse(clean);
-            return orb;
-        }
         if (probe.hp != 0)
         {
             TriggerHPData triggerHP = new TriggerHPData();
@@ -442,16 +580,9 @@ public abstract class AbilityData : HeroData
     {
         if (string.IsNullOrWhiteSpace(data)) return string.Empty;
         string clean = data.Trim();
-        foreach (string prefix in AbilityDomainRules.AbilityPrefixes)
+        if (AbilityDomainRules.TryParseAbilityPrefix(clean, out _, out _, out string remainder))
         {
-            if (clean.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return clean.Substring(prefix.Length).Trim();
-            }
-        }
-        if (TryStripLearnAbilityPrefix(clean, out string stripped))
-        {
-            return stripped;
+            return remainder.Trim();
         }
         return clean;
     }
