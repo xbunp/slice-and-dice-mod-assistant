@@ -637,17 +637,6 @@ public class AbilityUI : RootUI
         ));
     }
 
-    private void UpdateExportText()
-    {
-        if (rawTextOutput != null && CurrentAbility != null)
-        {
-            string exportedString = AbilityData.GetFormattedExportString(CurrentAbility);
-            rawTextOutput.SetTextWithoutNotify(exportedString);
-            if (syntaxHighlighterText != null)
-                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
-        }
-    }
-
     // =====================================================================
     // VIEW TO STATE DISPATCHERS
     // =====================================================================
@@ -1199,7 +1188,6 @@ public class AbilityUI : RootUI
         FullScreenUIGenerator.SetAnchors(inputObj.GetComponent<RectTransform>(), 0.0f, 0.08f, 1.0f, 0.58f);
         var innerLabel = inputObj.GetComponentInChildren<TextMeshProUGUI>();
         if (innerLabel != null) Destroy(innerLabel.gameObject);
-
         rawTextOutput = inputObj.GetComponentInChildren<TMP_InputField>();
         rawTextOutput.lineType = TMP_InputField.LineType.MultiLineNewline;
         rawTextOutput.interactable = true;
@@ -1210,17 +1198,14 @@ public class AbilityUI : RootUI
         rawTextOutput.textComponent.enableAutoSizing = false;
         rawTextOutput.pointSize = 16;
         rawTextOutput.textComponent.autoSizeTextContainer = false;
-
         GameObject highlighterObj = Instantiate(uiGenerator.labelPrefab, rawTextOutput.textComponent.transform.parent);
         syntaxHighlighterText = highlighterObj.GetComponentInChildren<TextMeshProUGUI>();
         var canvasGroup = highlighterObj.GetComponent<CanvasGroup>();
         if (canvasGroup == null) canvasGroup = highlighterObj.AddComponent<CanvasGroup>();
         canvasGroup.blocksRaycasts = false;
         canvasGroup.interactable = false;
-
         foreach (var script in highlighterObj.GetComponents<MonoBehaviour>())
             if (script != null && !(script is TextMeshProUGUI)) DestroyImmediate(script);
-
         RectTransform highlightRt = highlighterObj.GetComponent<RectTransform>();
         RectTransform textCompRt = rawTextOutput.textComponent.GetComponent<RectTransform>();
         highlightRt.anchorMin = textCompRt.anchorMin;
@@ -1228,7 +1213,6 @@ public class AbilityUI : RootUI
         highlightRt.offsetMin = textCompRt.offsetMin;
         highlightRt.offsetMax = textCompRt.offsetMax;
         highlightRt.pivot = textCompRt.pivot;
-
         syntaxHighlighterText.enableAutoSizing = false;
         syntaxHighlighterText.fontSize = 16;
         syntaxHighlighterText.alignment = rawTextOutput.textComponent.alignment;
@@ -1236,15 +1220,13 @@ public class AbilityUI : RootUI
         syntaxHighlighterText.enableWordWrapping = rawTextOutput.textComponent.enableWordWrapping;
         syntaxHighlighterText.autoSizeTextContainer = false;
         syntaxHighlighterText.richText = true;
-
         rawTextOutput.onValueChanged.AddListener((val) => {
             if (syntaxHighlighterText != null) syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(val);
         });
-
         rawTextOutput.onEndEdit.AddListener((val) =>
         {
             if (string.IsNullOrWhiteSpace(val)) return;
-            string currentExport = AbilityData.GetFormattedExportString(CurrentAbility);
+            string currentExport = GetUIExportString(CurrentAbility);
             if (val == currentExport) return;
             try
             {
@@ -1260,14 +1242,14 @@ public class AbilityUI : RootUI
             catch (Exception ex) { Debug.LogWarning($"Could not parse pasted ability string: {ex.Message}"); }
         });
     }
+
     private void BuildClipboardActionButtons(RectTransform parent)
     {
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         copyBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Copy Ability String";
         copyBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() =>
-            GUIUtility.systemCopyBuffer = AbilityData.GetFormattedExportString(CurrentAbility));
+            GUIUtility.systemCopyBuffer = GetUIExportString(CurrentAbility));
         FullScreenUIGenerator.SetAnchors(copyBtnObj.GetComponent<RectTransform>(), 0.0f, 0.0f, 0.48f, 0.06f);
-
         GameObject pasteBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
         pasteBtnObj.GetComponentInChildren<TextMeshProUGUI>().text = "Paste Ability String";
         pasteBtnObj.GetComponentInChildren<Button>().onClick.AddListener(() =>
@@ -1289,6 +1271,7 @@ public class AbilityUI : RootUI
         });
         FullScreenUIGenerator.SetAnchors(pasteBtnObj.GetComponent<RectTransform>(), 0.52f, 0.0f, 1.0f, 0.06f);
     }
+
     private void ConfigureFlexibleLayout(RectTransform target)
     {
         if (target == null) return;
@@ -1395,7 +1378,6 @@ public class AbilityUI : RootUI
     {
         if (iconPicker == null || ModPackage.Instance == null) return;
         var abilities = ModPackage.Instance.CustomAbilities;
-
         IconPickerConfig config = new IconPickerConfig
         {
             Sprites = null, // Using Custom Modal Rendering mode
@@ -1411,7 +1393,7 @@ public class AbilityUI : RootUI
             {
                 if (index == 0) return "Create a new blank ability";
                 if (index - 1 < abilities.Count)
-                    return AbilityData.GetFormattedExportString(abilities[index - 1]);
+                    return GetUIExportString(abilities[index - 1]);
                 return string.Empty;
             },
             OnSelectionMade = (index, sprite) =>
@@ -1432,7 +1414,6 @@ public class AbilityUI : RootUI
                 RebuildAbilityScrollView();
             }
         };
-
         // Populate sprites array for visual preview inside modal
         Sprite[] abilitySprites = new Sprite[abilities.Count + 1];
         abilitySprites[0] = SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
@@ -1443,7 +1424,6 @@ public class AbilityUI : RootUI
             abilitySprites[i + 1] = SpriteCacheHelper.GetFacadeSprite(imgStr) ?? SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
         }
         config.Sprites = abilitySprites;
-
         iconPicker.OpenModal(config);
     }
 
@@ -1456,5 +1436,27 @@ public class AbilityUI : RootUI
             || name.StartsWith("alp_", StringComparison.OrdinalIgnoreCase)
             || name.StartsWith("old_", StringComparison.OrdinalIgnoreCase)
             || name.StartsWith("lap_", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetUIExportString(AbilityData ability)
+    {
+        if (ability == null) return string.Empty;
+        string formatted = AbilityData.GetFormattedExportString(ability);
+        if (ability is SpellData || ability is TacticData)
+        {
+            return $"i.learn.sthief.{formatted}";
+        }
+        return formatted;
+    }
+
+    private void UpdateExportText()
+    {
+        if (rawTextOutput != null && CurrentAbility != null)
+        {
+            string exportedString = GetUIExportString(CurrentAbility);
+            rawTextOutput.SetTextWithoutNotify(exportedString);
+            if (syntaxHighlighterText != null)
+                syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
+        }
     }
 }

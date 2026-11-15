@@ -43,7 +43,14 @@ public static class SpriteSearchAliases
         new[] { "selfshield", "self-shield", "swordshield" },
         new[] { "ice", "cold", "snow", "chill", "frost" },
         new[] { "hungry", "cruesh", "eatcruel" },
-        new[] { "caltrop", "dmgself", "har_106_", "yca_51_" },
+        new[] { "caltrop", "dmgself", "har_106_", "yca_51_", "zhgem5" },
+        new[] { "foot", "stomp", "boot" },
+        new[] { "uparrow", "downarrow", "powerup", "level", "zharr", "direction" },
+        new[] { "target", "snipe", "bullseye" },
+        new[] { "trigger", "exclamation" },
+        new[] { "inflictpain", "wail" },
+        new[] { "hero", "SlimeCleave", "SlimeSlam", "Tusks", "Wail", "WeakenEye", "Bats", "Barrel" },
+        new[] { "Eba_54_z", "Charged" },
 
         new[] { "gun", "baseak", "basesniper", "ammo", "gunshot", "flintlock", "blaster", "musket" },
         /*
@@ -91,6 +98,7 @@ public static class SpriteSearchAliases
         { "selfshield",  new[] { "Okn_39", "Eme_112" } },
         { "smith",  new[] { "eba_65", "eba_66", "eba_67", "eba_68" } },
         { "descend",  new[] { "tuningfork" } },
+        { "card",  new[] { "ace-of-spades", "pair-of-kings", "three-of-a-kind", "two-of-clubs", "spades", "clubs", "diamond",  } },
 
         { "holy",  new[] { "ankh", "cross", "vigil", "halo" } },
 

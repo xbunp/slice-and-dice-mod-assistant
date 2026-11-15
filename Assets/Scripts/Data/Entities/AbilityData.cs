@@ -17,16 +17,19 @@ public static class AbilityDomainRules
 
     public static readonly string[] AbilityPrefixes = new string[]
     {
-        "i.triggerhpdata.",
-        "triggerhpdata.",
-        "i.onhitdata.",
-        "abilitydata.",
-        "onhitdata.",
-        "i.t.orb.",
-        "t.orb.",
-        "cast.",
-        "orb."
-}   ;
+    "i.learn.sthief.abilitydata.",
+    "learn.sthief.abilitydata.",
+    "i.triggerhpdata.",
+    "triggerhpdata.",
+    "i.onhitdata.",
+    "i.abilitydata.",
+    "abilitydata.",
+    "onhitdata.",
+    "i.t.orb.",
+    "t.orb.",
+    "cast.",
+    "orb."
+    };
 
     public static bool IsAbilityStartSequence(List<string> tokens, int index)
     {
@@ -256,20 +259,6 @@ public abstract class AbilityData : HeroData
         if (!string.IsNullOrEmpty(doc2)) sb.Append($".doc.{doc2}");
         return sb.ToString();
     }
-    public static string StripPrefix(string data)
-    {
-        if (string.IsNullOrWhiteSpace(data)) return string.Empty;
-        string clean = data.Trim();
-
-        foreach (string prefix in AbilityDomainRules.AbilityPrefixes)
-        {
-            if (clean.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return clean.Substring(prefix.Length).Trim();
-            }
-        }
-        return clean;
-    }
 
     public static string GetPipsAffectedDescription(int hp)
     {
@@ -339,16 +328,15 @@ public abstract class AbilityData : HeroData
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
         string trimmed = data.Trim();
-
-        // 1. Explicitly check for AbilityData/Cast to guarantee CreateSpellOrTactic mapping before heuristics
+        // 1. Explicitly check for AbilityData/Cast/Learn to guarantee CreateSpellOrTactic mapping before heuristics
         if (trimmed.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.abilitydata.", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("cast.", StringComparison.OrdinalIgnoreCase))
+            trimmed.StartsWith("cast.", StringComparison.OrdinalIgnoreCase) ||
+            TryStripLearnAbilityPrefix(trimmed, out _))
         {
             string cleanStr = StripPrefix(trimmed);
             return CreateSpellOrTactic(cleanStr);
         }
-
         // 2. Explicitly check for OnHit
         if (trimmed.StartsWith("onhitdata.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.onhitdata.", StringComparison.OrdinalIgnoreCase))
@@ -357,7 +345,6 @@ public abstract class AbilityData : HeroData
             onHit.Parse(trimmed);
             return onHit;
         }
-
         // 3. Explicitly check for TriggerHP
         if (trimmed.StartsWith("triggerhpdata.", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("i.triggerhpdata.", StringComparison.OrdinalIgnoreCase))
@@ -366,7 +353,6 @@ public abstract class AbilityData : HeroData
             triggerHP.Parse(trimmed);
             return triggerHP;
         }
-
         // 4. Fallback heuristic for un-prefixed ability strings
         string clean = StripPrefix(data);
         ProbeAbilityData probe = new ProbeAbilityData();
@@ -385,7 +371,6 @@ public abstract class AbilityData : HeroData
             triggerHP.Parse(clean);
             return triggerHP;
         }
-
         bool isSpell = false;
         if (probe.diceSides != null && probe.diceSides.Length > 4)
         {
@@ -398,7 +383,6 @@ public abstract class AbilityData : HeroData
             spell.Parse(clean);
             return spell;
         }
-
         bool onlyLeftFace = false;
         if (probe.diceSides != null && probe.diceSides.Length > 0)
         {
@@ -420,18 +404,58 @@ public abstract class AbilityData : HeroData
                 }
             }
         }
-
         if (onlyLeftFace)
         {
             OnHitData onHit = new OnHitData();
             onHit.Parse(clean);
             return onHit;
         }
-
         TacticData tactic = new TacticData();
         tactic.Parse(clean);
         return tactic;
     }
+
+    private static bool TryStripLearnAbilityPrefix(string clean, out string stripped)
+    {
+        stripped = clean;
+        if (string.IsNullOrWhiteSpace(clean)) return false;
+
+        if (!clean.StartsWith("i.learn.", StringComparison.OrdinalIgnoreCase) &&
+            !clean.StartsWith("learn.", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        const string marker = ".abilitydata.";
+        int firstParen = clean.IndexOf('(');
+        int markerIdx = clean.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIdx > 0 && (firstParen < 0 || markerIdx < firstParen))
+        {
+            stripped = clean.Substring(markerIdx + marker.Length).Trim();
+            return true;
+        }
+
+        return false;
+    }
+
+    public static string StripPrefix(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data)) return string.Empty;
+        string clean = data.Trim();
+        foreach (string prefix in AbilityDomainRules.AbilityPrefixes)
+        {
+            if (clean.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return clean.Substring(prefix.Length).Trim();
+            }
+        }
+        if (TryStripLearnAbilityPrefix(clean, out string stripped))
+        {
+            return stripped;
+        }
+        return clean;
+    }
+
     public static AbilityData CreateSpellOrTactic(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
