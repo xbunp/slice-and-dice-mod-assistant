@@ -26,7 +26,6 @@ public static class EntityDomainRules
         while (endIndex < tokens.Count)
         {
             string peek = tokens[endIndex].ToLower();
-
             if (peek.StartsWith("(") && peek.EndsWith(")"))
             {
                 endIndex++; continue;
@@ -39,19 +38,42 @@ public static class EntityDomainRules
             {
                 endIndex += AbilityDomainRules.GetAbilityBlockLength(tokens, endIndex); continue;
             }
-
+            if (endIndex > startIndex && (peek == "splice" || peek == "mrg"))
+            {
+                endIndex++;
+                if (endIndex < tokens.Count)
+                {
+                    string rhs = tokens[endIndex].ToLower();
+                    if (rhs.StartsWith("(") && rhs.EndsWith(")"))
+                    {
+                        endIndex++;
+                    }
+                    else if (ModifierDomainRules.IsModifierStartToken(rhs))
+                    {
+                        endIndex += ModifierDomainRules.GetModifierBlockLength(tokens, endIndex);
+                    }
+                    else
+                    {
+                        endIndex++;
+                        if ((rhs == "rmon" || rhs == "rmod" || rhs == "ritem" || rhs == "ritemx" || rhs == "rditem" || rhs == "t" || rhs == "k") &&
+                            endIndex < tokens.Count && !tokens[endIndex].StartsWith("("))
+                        {
+                            endIndex++;
+                        }
+                    }
+                }
+                continue;
+            }
             // Standard single-token payloads (like t.Beefy)
             if (endIndex == startIndex)
             {
                 endIndex++;
-
                 // Fix for dot-separated identifiers to ensure trailing tokens are grouped together natively
                 if (peek == "rmon" || peek == "rmod" || peek == "ritem" || peek == "ritemx" || peek == "rditem")
                 {
                     if (endIndex < tokens.Count && !tokens[endIndex].StartsWith("("))
                         endIndex++;
                 }
-
                 continue;
             }
             break;
@@ -642,11 +664,43 @@ public abstract class EntityData : SDData, IPayloadContainer
             if (length > 0)
             {
                 string payload = string.Join(".", stream.ConsumeRange(length));
-                if (targetToken == "t") ProcessTraitPayload(payload);
-                else if (targetToken == "gift") blessings.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                else baseAbilityData.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
-                if (targetToken == "gift") blessings = blessings.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                else if (targetToken == "learn") baseAbilityData = baseAbilityData.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (targetToken == "t")
+                {
+                    ProcessTraitPayload(payload);
+                }
+                else if (targetToken == "gift")
+                {
+                    blessings.AddRange(StaticBranchTracing.TopLevelSplit(payload, '#'));
+                    blessings = blessings.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                }
+                else // targetToken == "learn"
+                {
+                    foreach (string rawAb in StaticBranchTracing.TopLevelSplit(payload, '#'))
+                    {
+                        string trimmedAb = rawAb?.Trim();
+                        if (string.IsNullOrEmpty(trimmedAb)) continue;
+
+                        bool isBaseAbility = ExternalGameRegistry.IsValidAbility(trimmedAb) ||
+                                             (!trimmedAb.Contains("(") && !trimmedAb.Contains("."));
+                        if (isBaseAbility)
+                        {
+                            if (!baseAbilityData.Contains(trimmedAb, StringComparer.OrdinalIgnoreCase))
+                                baseAbilityData.Add(trimmedAb);
+                        }
+                        else
+                        {
+                            AbilityData customAbility = AbilityData.CreateAbility(trimmedAb);
+                            if (customAbility != null)
+                            {
+                                AddCustomAbility(customAbility);
+                            }
+                            else if (!baseAbilityData.Contains(trimmedAb, StringComparer.OrdinalIgnoreCase))
+                            {
+                                baseAbilityData.Add(trimmedAb);
+                            }
+                        }
+                    }
+                }
             }
             return true;
         }
@@ -1600,12 +1654,35 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 if (!string.IsNullOrEmpty(c))
                 {
-                    ModifierData curseMod = new ModifierData();
-                    curseMod.Parse(c);
-                    ModifierData jinxMod = new ModifierData { ActionType = ModifierActionType.Jinx, NestedModifierPayload = curseMod };
-                    ItemData traitItem = new ItemData();
-                    traitItem.Mechanics.Add(new ItemMechanic { Prefix = "t", PayloadData = jinxMod });
-                    RouteItemPayload(traitItem, isHero, innerHeroPayloads, outerPayloads);
+                    string trimmed = c.Trim();
+                    bool isAlreadyWrapped = trimmed.StartsWith("(") && trimmed.EndsWith(")") &&
+                                            StaticBranchTracing.StripOuterParens(trimmed) != trimmed;
+                    bool isComplex = isAlreadyWrapped ||
+                                     trimmed.Contains(".") ||
+                                     trimmed.Contains("#") ||
+                                     trimmed.Contains("(");
+
+                    if (isComplex)
+                    {
+                        string safeCurse = isAlreadyWrapped ? trimmed : $"({trimmed})";
+                        outerPayloads.Add($"i.t.jinx.{safeCurse}");
+                    }
+                    else
+                    {
+                        ModifierData curseMod = new ModifierData();
+                        curseMod.Parse(trimmed);
+                        string exportedCurse = curseMod.ExportInternal(false);
+                        if (string.IsNullOrEmpty(exportedCurse)) exportedCurse = trimmed;
+                        if (exportedCurse.Contains(".") || exportedCurse.Contains("#"))
+                        {
+                            if (!(exportedCurse.StartsWith("(") && exportedCurse.EndsWith(")") &&
+                                  StaticBranchTracing.StripOuterParens(exportedCurse) != exportedCurse))
+                            {
+                                exportedCurse = $"({exportedCurse})";
+                            }
+                        }
+                        outerPayloads.Add($"i.t.jinx.{exportedCurse}");
+                    }
                 }
             }
         }

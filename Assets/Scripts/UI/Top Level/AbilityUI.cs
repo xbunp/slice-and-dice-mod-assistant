@@ -114,6 +114,7 @@ public class AbilityUI : RootUI
     private void UpdateVisualsOnly()
     {
         if (previewName != null) previewName.text = CurrentAbility.entityName;
+        var drawVis = CurrentAbility.visuals?.FirstOrDefault(v => v.Type == VisualType.Draw && !string.IsNullOrWhiteSpace(v.RawValue));
         if (previewIcon != null)
         {
             bool isUsingCustomImage = !string.IsNullOrEmpty(_customImageString) && CurrentAbility.imageOverride == _customImageString;
@@ -123,7 +124,12 @@ public class AbilityUI : RootUI
             }
             else
             {
-                Sprite targetSprite = SpriteCacheHelper.GetFacadeSprite(CurrentAbility.imageOverride);
+                bool isBlankOrVoidImage = string.IsNullOrEmpty(CurrentAbility.imageOverride) ||
+                                          string.Equals(CurrentAbility.imageOverride, "None", StringComparison.OrdinalIgnoreCase) ||
+                                          string.Equals(CurrentAbility.imageOverride, "Void", StringComparison.OrdinalIgnoreCase);
+                Sprite targetSprite = (drawVis != null && isBlankOrVoidImage)
+                    ? SpriteCacheHelper.GetFacadeSprite(drawVis.RawValue)
+                    : SpriteCacheHelper.GetFacadeSprite(CurrentAbility.imageOverride);
                 previewIcon.sprite = targetSprite != null ? targetSprite : SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
             }
             previewIcon.color = Color.white;
@@ -134,22 +140,20 @@ public class AbilityUI : RootUI
                 previewIcon.material.SetFloat("_Value", CurrentAbility.v);
             }
         }
-
         if (statsUI != null && statsUI.Buttons != null)
         {
             if (statsUI.Buttons.TryGetValue("OverrideBtn", out var overrideBtn))
                 StaticUI.SetButtonIcon(overrideBtn, SpriteCacheHelper.GetFacadeSprite(CurrentAbility.imageOverride));
+            if (statsUI.Buttons.TryGetValue("DrawBtn", out var drawBtn))
+                StaticUI.SetButtonIcon(drawBtn, drawVis != null ? SpriteCacheHelper.GetFacadeSprite(drawVis.RawValue) : null);
         }
-
         _primaryFaceBuilder?.SetGridReferences(abilityDataUI);
         _primaryFaceBuilder?.UpdateVisuals(0);
-
         if (CurrentAbility is SpellData or TacticData)
         {
             _secondaryFaceBuilder?.SetGridReferences(abilityDataUI);
             _secondaryFaceBuilder?.UpdateVisuals(1);
         }
-
         TriggerTextUpdate();
     }
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
@@ -327,12 +331,10 @@ public class AbilityUI : RootUI
         RebuildStatsUI();
         RebuildAbilityScrollView();
     }
-
     private void UpdateUIFromData()
     {
         if (statsUI == null || abilityDataUI == null) return;
         isDrawingUI = true;
-
         if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentAbility.entityName);
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(CurrentAbility.imageOverride);
         if (statsUI.Sliders.TryGetValue("HeroSliH", out var shH)) shH.SetValueWithoutNotify(CurrentAbility.h);
@@ -341,7 +343,10 @@ public class AbilityUI : RootUI
         if (statsUI.Inputs.TryGetValue("HeroFacH", out var hH)) hH.SetTextWithoutNotify(CurrentAbility.h.ToString());
         if (statsUI.Inputs.TryGetValue("HeroFacS", out var hS)) hS.SetTextWithoutNotify(CurrentAbility.s.ToString());
         if (statsUI.Inputs.TryGetValue("HeroFacV", out var hV)) hV.SetTextWithoutNotify(CurrentAbility.v.ToString());
-
+        var drawVis = CurrentAbility.visuals?.FirstOrDefault(v => v.Type == VisualType.Draw);
+        if (statsUI.Inputs.TryGetValue("DrawName", out var drawNameIn)) drawNameIn.SetTextWithoutNotify(drawVis?.RawValue ?? string.Empty);
+        if (statsUI.Inputs.TryGetValue("DrawX", out var drawXIn)) drawXIn.SetTextWithoutNotify((drawVis?.x ?? 0).ToString());
+        if (statsUI.Inputs.TryGetValue("DrawY", out var drawYIn)) drawYIn.SetTextWithoutNotify((drawVis?.y ?? 0).ToString());
         if (abilityDataUI.Dropdowns.TryGetValue("ModeDrop", out var modeDrop))
         {
             int modeIdx = 0;
@@ -352,27 +357,20 @@ public class AbilityUI : RootUI
             modeDrop.SetValueWithoutNotify(modeIdx);
             modeDrop.RefreshShownValue();
         }
-
         if (abilityDataUI.Toggles.TryGetValue("AdvModeToggle", out var advToggle))
             advToggle.SetIsOnWithoutNotify(_isAdvancedMode);
-
         if (_isAdvancedMode)
         {
             if (abilityDataUI.Dropdowns.TryGetValue("AdvGlobalTargetDrop", out var gtd)) { gtd.SetValueWithoutNotify((int)_advancedGlobalTargetScope); gtd.RefreshShownValue(); }
             if (abilityDataUI.Toggles.TryGetValue("AdvFlipDuration", out var t2)) t2.SetIsOnWithoutNotify(_advancedDieIntent.FlipDuration);
             if (abilityDataUI.Toggles.TryGetValue("AdvFlipTarget", out var t3)) t3.SetIsOnWithoutNotify(_advancedDieIntent.FlipTargetAllegiance);
-
             if (abilityDataUI.Inputs.TryGetValue("AdvGlobalItems", out var gi)) gi.SetTextWithoutNotify(string.Join(", ", _advancedDieIntent.GlobalItems));
-
             if (abilityDataUI.Dropdowns.TryGetValue("AdvFaceDrop", out var fd)) { fd.SetValueWithoutNotify((int)_advancedSelectedFace); fd.RefreshShownValue(); }
-
             var faceIntent = _advancedDieIntent.GetOrCreateFace(_advancedSelectedFace);
-
             if (abilityDataUI.Inputs.TryGetValue("AdvBaseId", out var bi)) bi.SetTextWithoutNotify(faceIntent.BaseEffectId.ToString());
             if (abilityDataUI.Inputs.TryGetValue("AdvBasePips", out var bp)) bp.SetTextWithoutNotify(faceIntent.BasePips.ToString());
             if (abilityDataUI.Inputs.TryGetValue("AdvSidesc", out var sc)) sc.SetTextWithoutNotify(faceIntent.Sidesc ?? "");
             if (abilityDataUI.Inputs.TryGetValue("AdvFaceItems", out var fi)) fi.SetTextWithoutNotify(string.Join(", ", faceIntent.AdditionalItems));
-
             if (faceIntent.SpecialFace != null)
             {
                 if (abilityDataUI.Dropdowns.TryGetValue("AdvSpecialType", out var std)) { std.SetValueWithoutNotify((int)faceIntent.SpecialFace.Type); std.RefreshShownValue(); }
@@ -462,7 +460,6 @@ public class AbilityUI : RootUI
                 }
             }
         }
-
         isDrawingUI = false;
         UpdateVisualsOnly();
         _pendingTextUpdate = false;
@@ -646,10 +643,10 @@ public class AbilityUI : RootUI
     }
     private void ResetToDefault()
     {
-        ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(CreateNewSpell());
-        showCustomImagePanel = false;
         _currentPoolIndex = 0;
+        showCustomImagePanel = false;
         _advancedDieIntent = new DieIntent(); // Reset solver state
+        ModPackage.Instance.LoadEntityForEditing<AbilityData>(CreateNewSpell());
         ModPackage.Instance.NotifyActiveEntityChanged<AbilityData>(this);
         RebuildStatsUI();
         RebuildAbilityScrollView();
@@ -759,14 +756,24 @@ public class AbilityUI : RootUI
             GridCellSpec.CreateSlider("HeroSliV", -99, 99, true, 0.50f, (val) => UpdateAbilityHsvData(2, Mathf.RoundToInt(val))),
             GridCellSpec.CreateInput("HeroFacV", "V", 0.20f, (val) => { if (int.TryParse(val, out int v)) UpdateAbilityHsvData(2, v); })
         ));
-
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Draw:", 0.30f),
+            GridCellSpec.CreateDiceButton("DrawBtn", "P", 0.15f, OpenDrawOverrideModal),
+            GridCellSpec.CreateInput("DrawName", "", 0.55f, (val) => { if (!isDrawingUI) SetAbilityDrawSprite(val); })
+        ));
+        layout.Add(new GridRowSpec(
+            GridCellSpec.CreateLabel("Draw Offset:", 0.30f),
+            GridCellSpec.CreateLabel("X:", 0.10f),
+            GridCellSpec.CreateInput("DrawX", "0", 0.25f, (val) => { if (!isDrawingUI) UpdateAbilityDrawOffset(true, val); }),
+            GridCellSpec.CreateLabel("Y:", 0.10f),
+            GridCellSpec.CreateInput("DrawY", "0", 0.25f, (val) => { if (!isDrawingUI) UpdateAbilityDrawOffset(false, val); })
+        ));
         var abilityOnlyKeywords = AbilityDomainRules.AbilityOnlyKeywords;
         var activeKeywordKeys = CurrentAbility.items
             ?.Where(i => abilityOnlyKeywords.Values.Any(v => string.Equals(v, i, StringComparison.OrdinalIgnoreCase)))
             .Select(i => abilityOnlyKeywords.FirstOrDefault(x => string.Equals(x.Value, i, StringComparison.OrdinalIgnoreCase)).Key)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList() ?? new List<string>();
-
         AppendCollectionSelector<string>(
             layout: layout,
             label: "Add Ability-Only Keyword:",
@@ -796,7 +803,6 @@ public class AbilityUI : RootUI
                 }
             }
         );
-
         return layout;
     }
     private List<GridRowSpec> GenerateAbilityLayout()
@@ -853,9 +859,7 @@ public class AbilityUI : RootUI
     {
         // Check mode flag AND re-entrancy lock
         if (!_isAdvancedMode || _isCompilingAdvanced) return;
-
         _isCompilingAdvanced = true;
-
         try
         {
             // Temporary mapping: Map the selected scope to the boolean the compiler currently looks for
@@ -867,10 +871,8 @@ public class AbilityUI : RootUI
             {
                 _advancedDieIntent.FlipTargetAllegiance = false;
             }
-
             var compiler = new SliceAndDiceCompiler();
             string compiledStr = compiler.Compile(_advancedDieIntent);
-
             // Create a fresh AbilityData from the generated string to preview outputs seamlessly
             AbilityData imported = AbilityData.CreateAbility(compiledStr);
             if (imported != null)
@@ -879,16 +881,27 @@ public class AbilityUI : RootUI
                 imported.entityName = CurrentAbility.entityName;
                 imported.imageOverride = CurrentAbility.imageOverride;
                 imported.baseReplica = CurrentAbility.baseReplica;
-                imported.h = CurrentAbility.h;
-                imported.s = CurrentAbility.s;
-                imported.v = CurrentAbility.v;
-
+                if (CurrentAbility.visuals != null)
+                {
+                    imported.visuals = CurrentAbility.visuals.Select(v => new VisualModifier
+                    {
+                        Type = v.Type,
+                        RawValue = v.RawValue,
+                        x = v.x,
+                        y = v.y,
+                        h = v.h,
+                        s = v.s,
+                        v = v.v,
+                        hue = v.hue,
+                        p = v.p != null ? new Phue { colorStart = v.p.colorStart, colorDestination = v.p.colorDestination, colorRange = v.p.colorRange } : null,
+                        thue = v.thue != null ? new Thue { colorHex = v.thue.colorHex, colorRange = v.thue.colorRange, colorOffset = v.thue.colorOffset } : null
+                    }).ToList();
+                }
                 // Inherit specific traits
                 if (CurrentAbility is SpellData currentSpell && imported is SpellData newSpell)
                 {
                     newSpell.manaCost = currentSpell.manaCost;
                 }
-
                 // Update active clone, but don't perform a hard UI re-render (which would destroy input focus)
                 ModPackage.Instance.UpdateActiveEntityClone<AbilityData>(imported);
                 UpdateVisualsOnly();
@@ -1225,7 +1238,6 @@ public class AbilityUI : RootUI
             catch (Exception ex) { Debug.LogWarning($"Could not parse pasted ability string: {ex.Message}"); }
         });
     }
-
     private void BuildClipboardActionButtons(RectTransform parent)
     {
         GameObject copyBtnObj = Instantiate(uiGenerator.buttonPrefab, parent);
@@ -1254,7 +1266,6 @@ public class AbilityUI : RootUI
         });
         FullScreenUIGenerator.SetAnchors(pasteBtnObj.GetComponent<RectTransform>(), 0.52f, 0.0f, 1.0f, 0.06f);
     }
-
     private void ConfigureFlexibleLayout(RectTransform target)
     {
         if (target == null) return;
@@ -1305,9 +1316,22 @@ public class AbilityUI : RootUI
         newAbility.imageOverride = CurrentAbility.imageOverride;
         newAbility.baseReplica = CurrentAbility.baseReplica;
         newAbility.items = new List<string>(CurrentAbility.items ?? new List<string>());
-        newAbility.h = CurrentAbility.h;
-        newAbility.s = CurrentAbility.s;
-        newAbility.v = CurrentAbility.v;
+        if (CurrentAbility.visuals != null)
+        {
+            newAbility.visuals = CurrentAbility.visuals.Select(v => new VisualModifier
+            {
+                Type = v.Type,
+                RawValue = v.RawValue,
+                x = v.x,
+                y = v.y,
+                h = v.h,
+                s = v.s,
+                v = v.v,
+                hue = v.hue,
+                p = v.p != null ? new Phue { colorStart = v.p.colorStart, colorDestination = v.p.colorDestination, colorRange = v.p.colorRange } : null,
+                thue = v.thue != null ? new Thue { colorHex = v.thue.colorHex, colorRange = v.thue.colorRange, colorOffset = v.thue.colorOffset } : null
+            }).ToList();
+        }
         if (CurrentAbility.diceSides != null && CurrentAbility.diceSides[0] != null)
         {
             newAbility.diceSides[0] = CurrentAbility.diceSides[0].Clone();
@@ -1364,10 +1388,29 @@ public class AbilityUI : RootUI
     {
         if (iconPicker == null || ModPackage.Instance == null) return;
         var abilities = ModPackage.Instance.CustomAbilities;
+
+        // Populate sprites array for visual preview inside modal
+        Sprite[] abilitySprites = new Sprite[abilities.Count + 1];
+        abilitySprites[0] = SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
+        for (int i = 0; i < abilities.Count; i++)
+        {
+            var a = abilities[i];
+            string imgStr = string.IsNullOrEmpty(a.imageOverride) || a.imageOverride == "None" ? a.baseReplica : a.imageOverride;
+            if (string.Equals(imgStr, "Void", StringComparison.OrdinalIgnoreCase))
+            {
+                var drawVis = a.visuals?.FirstOrDefault(v => v.Type == VisualType.Draw && !string.IsNullOrWhiteSpace(v.RawValue));
+                if (drawVis != null) imgStr = drawVis.RawValue;
+            }
+            abilitySprites[i + 1] = SpriteCacheHelper.GetFacadeSprite(imgStr) ?? SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
+        }
+
         IconPickerConfig config = new IconPickerConfig
         {
-            Sprites = null, // Using Custom Modal Rendering mode
+            Sprites = abilitySprites,
+            DisableDeduplication = true,
+            AllowNullSprites = true,
             IsValid = (index, sprite) => true,
+            CellSize = new Vector2(80, 80),
             GetSearchName = (index, sprite) =>
             {
                 if (index == 0) return "New Ability";
@@ -1382,16 +1425,33 @@ public class AbilityUI : RootUI
                     return GetUIExportString(abilities[index - 1]);
                 return string.Empty;
             },
+            GetNameText = (index, sprite) =>
+            {
+                if (index == 0) return "New Ability";
+                if (index - 1 < abilities.Count)
+                    return abilities[index - 1].entityName ?? "Unnamed Ability";
+                return string.Empty;
+            },
+            GetColor = (index, sprite) =>
+            {
+                if (index == 0) return Color.white;
+                if (index - 1 < abilities.Count && !string.IsNullOrEmpty(abilities[index - 1].colorClass))
+                    return SDColors.GetColor(EntityUIHelpers.ReverseLookupColor(abilities[index - 1].colorClass));
+                return Color.white;
+            },
             OnSelectionMade = (index, sprite) =>
             {
                 if (index == 0)
                 {
                     _currentPoolIndex = 0;
+                    showCustomImagePanel = false;
+                    _advancedDieIntent = new DieIntent();
                     ModPackage.Instance.LoadEntityForEditing<AbilityData>(CreateNewSpell());
                 }
                 else if (index - 1 < abilities.Count)
                 {
                     _currentPoolIndex = index;
+                    showCustomImagePanel = false;
                     var selectedAbility = abilities[index - 1];
                     ModPackage.Instance.LoadEntityForEditing<AbilityData>(selectedAbility);
                 }
@@ -1400,20 +1460,9 @@ public class AbilityUI : RootUI
                 RebuildAbilityScrollView();
             }
         };
-        // Populate sprites array for visual preview inside modal
-        Sprite[] abilitySprites = new Sprite[abilities.Count + 1];
-        abilitySprites[0] = SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
-        for (int i = 0; i < abilities.Count; i++)
-        {
-            var a = abilities[i];
-            string imgStr = string.IsNullOrEmpty(a.imageOverride) || a.imageOverride == "None" ? a.baseReplica : a.imageOverride;
-            abilitySprites[i + 1] = SpriteCacheHelper.GetFacadeSprite(imgStr) ?? SpriteCacheHelper.GetFacadeSprite("SpellPlaceholder");
-        }
-        config.Sprites = abilitySprites;
         iconPicker.OpenModal(config);
     }
 
-    // Add helper method to AbilityUI:
     private static bool HasExcludedPrefix(Sprite sprite)
     {
         if (sprite == null) return true;
@@ -1423,7 +1472,6 @@ public class AbilityUI : RootUI
             || name.StartsWith("old_", StringComparison.OrdinalIgnoreCase)
             || name.StartsWith("lap_", StringComparison.OrdinalIgnoreCase);
     }
-
     private static string GetUIExportString(AbilityData ability)
     {
         if (ability == null) return string.Empty;
@@ -1444,5 +1492,88 @@ public class AbilityUI : RootUI
             if (syntaxHighlighterText != null)
                 syntaxHighlighterText.text = EntityUIHelpers.FormatSyntaxHighlighting(exportedString);
         }
+    }
+    private void OpenDrawOverrideModal()
+    {
+        if (iconPicker == null) return;
+        IconPickerConfig config = new IconPickerConfig
+        {
+            Sprites = EntityUIHelpers.CommunitySprites,
+            IsValid = (index, sprite) => sprite != null && !HasExcludedPrefix(sprite),
+            GetSearchName = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
+            GetTooltip = (index, sprite) => IconPickerModal.GetCleanLeafName(sprite.name),
+            OnSelectionMade = (index, sprite) =>
+            {
+                if (sprite != null)
+                {
+                    string filename = sprite.name;
+                    string[] parts = filename.Split('_');
+                    string formattedName;
+                    if (parts.Length >= 2 && int.TryParse(parts[1], out int parsedId))
+                    {
+                        formattedName = $"{parts[0]}{parts[1]}";
+                    }
+                    else
+                    {
+                        formattedName = filename;
+                    }
+                    SetAbilityDrawSprite(formattedName);
+                    if (statsUI != null && statsUI.Inputs.TryGetValue("DrawName", out var drawNameIn))
+                        drawNameIn.SetTextWithoutNotify(formattedName);
+                }
+            }
+        };
+        iconPicker.OpenModal(config);
+    }
+    private void SetAbilityDrawSprite(string spriteName)
+    {
+        if (CurrentAbility == null) return;
+        string clean = spriteName?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(clean))
+        {
+            CurrentAbility.draw = null;
+            if (statsUI != null)
+            {
+                if (statsUI.Inputs.TryGetValue("DrawX", out var drawXIn)) drawXIn.SetTextWithoutNotify("0");
+                if (statsUI.Inputs.TryGetValue("DrawY", out var drawYIn)) drawYIn.SetTextWithoutNotify("0");
+            }
+            NotifyStateChanged();
+            return;
+        }
+        if (CurrentAbility.visuals == null) CurrentAbility.visuals = new List<VisualModifier>();
+        var vis = CurrentAbility.visuals.FirstOrDefault(v => v.Type == VisualType.Draw);
+        if (vis == null)
+        {
+            vis = new VisualModifier { Type = VisualType.Draw };
+            CurrentAbility.visuals.Add(vis);
+        }
+        vis.RawValue = clean;
+        if (string.IsNullOrEmpty(CurrentAbility.imageOverride) ||
+            string.Equals(CurrentAbility.imageOverride, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            CurrentAbility.imageOverride = "Void";
+            if (statsUI != null && statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn))
+                overNameIn.SetTextWithoutNotify(CurrentAbility.imageOverride);
+        }
+        NotifyStateChanged();
+    }
+    private void UpdateAbilityDrawOffset(bool isX, string val)
+    {
+        if (CurrentAbility == null) return;
+        int offset = 0;
+        if (!string.IsNullOrWhiteSpace(val))
+        {
+            if (!int.TryParse(val, out offset)) return;
+        }
+        if (CurrentAbility.visuals == null) CurrentAbility.visuals = new List<VisualModifier>();
+        var vis = CurrentAbility.visuals.FirstOrDefault(v => v.Type == VisualType.Draw);
+        if (vis == null)
+        {
+            vis = new VisualModifier { Type = VisualType.Draw, RawValue = string.Empty };
+            CurrentAbility.visuals.Add(vis);
+        }
+        if (isX) vis.x = offset;
+        else vis.y = offset;
+        NotifyStateChanged();
     }
 }

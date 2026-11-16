@@ -51,6 +51,7 @@ public static class SpriteSearchAliases
         new[] { "inflictpain", "wail" },
         new[] { "hero", "SlimeCleave", "SlimeSlam", "Tusks", "Wail", "WeakenEye", "Bats", "Barrel" },
         new[] { "Eba_54_z", "Charged" },
+        new[] { "lightning", "bolt", "zap", "charge", "electric", "spark", "flash" },
 
         new[] { "gun", "baseak", "basesniper", "ammo", "gunshot", "flintlock", "blaster", "musket" },
         /*

@@ -17,7 +17,6 @@ public enum AbilityPrefixKind
 public static class AbilityDomainRules
 {
     public const string DefaultCarrier = "sthief";
-
     public static readonly Dictionary<string, string> AbilityOnlyKeywords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         { "Channel", "ritemx.302ea5e.part.0" },
@@ -27,7 +26,6 @@ public static class AbilityDomainRules
         { "Spell Rescue", "ritemx.62e8" },
         { "Single Cast", "k.singleuse" }
     };
-
     private static readonly Dictionary<string, string> NormalizedAbilityOnlyKeywords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         { "channel", "ritemx.302ea5e.part.0" },
@@ -37,7 +35,6 @@ public static class AbilityDomainRules
         { "spellrescue", "ritemx.62e8" },
         { "singlecast", "k.singleuse" }
     };
-
     public static bool TryGetAbilityOnlyKeywordItem(string keyword, out string itemToken)
     {
         itemToken = null;
@@ -45,7 +42,12 @@ public static class AbilityDomainRules
         string normalized = keyword.Trim().Replace(" ", "").Replace("_", "");
         return NormalizedAbilityOnlyKeywords.TryGetValue(normalized, out itemToken);
     }
-
+    public static bool IsAbilityOnlyKeywordItem(string itemToken)
+    {
+        if (string.IsNullOrWhiteSpace(itemToken)) return false;
+        string clean = itemToken.Trim();
+        return AbilityOnlyKeywords.Values.Any(v => string.Equals(v, clean, StringComparison.OrdinalIgnoreCase));
+    }
     public static readonly HashSet<string> AbilityKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "sd", "i", "t", "gift", "abilitydata", "triggerhpdata", "onhitdata", "n", "img", "hp", "col", "tier",
@@ -66,32 +68,25 @@ public static class AbilityDomainRules
         "cast.",
         "orb."
     };
-
     public static bool IsAbilityCarrierToken(string token)
     {
         if (string.IsNullOrEmpty(token) || token.Length < 2) return false;
         char prefix = char.ToLowerInvariant(token[0]);
         if (prefix != 's' && prefix != 't') return false;
-
         string candidateHero = token.Substring(1);
         if (char.IsDigit(candidateHero[0]) || candidateHero[0] == '-' || candidateHero[0] == '+' || candidateHero.IndexOf(',') >= 0)
             return false;
-
         return Enum.TryParse(candidateHero, true, out HeroType parsed) && parsed != HeroType.None;
     }
-
     public static bool TryParseAbilityPrefix(string data, out AbilityPrefixKind kind, out string carrier, out string remainder)
     {
         kind = AbilityPrefixKind.None;
         carrier = string.Empty;
         remainder = data;
-
         if (string.IsNullOrWhiteSpace(data)) return false;
-
         string clean = data.Trim();
         int firstParen = clean.IndexOf('(');
         string prefixRegion = firstParen >= 0 ? clean.Substring(0, firstParen) : clean;
-
         List<(string token, int endAfterDot)> parts = new List<(string, int)>();
         int start = 0;
         for (int i = 0; i <= prefixRegion.Length; i++)
@@ -107,18 +102,14 @@ public static class AbilityDomainRules
                 start = i + 1;
             }
         }
-
         if (parts.Count == 0) return false;
-
         int idx = 0;
-
         // Optional leading "i."
         if (parts[idx].token.Equals("i", StringComparison.OrdinalIgnoreCase))
         {
             idx++;
             if (idx >= parts.Count) return false;
         }
-
         // Optional "t." before "orb." (i.t.orb. / t.orb.)
         if (parts[idx].token.Equals("t", StringComparison.OrdinalIgnoreCase) &&
             idx + 1 < parts.Count &&
@@ -129,7 +120,6 @@ public static class AbilityDomainRules
             remainder = afterOrb < clean.Length ? clean.Substring(afterOrb).Trim() : string.Empty;
             return true;
         }
-
         // Direct "orb."
         if (parts[idx].token.Equals("orb", StringComparison.OrdinalIgnoreCase))
         {
@@ -138,7 +128,6 @@ public static class AbilityDomainRules
             remainder = afterOrb < clean.Length ? clean.Substring(afterOrb).Trim() : string.Empty;
             return true;
         }
-
         // Direct "cast."
         if (parts[idx].token.Equals("cast", StringComparison.OrdinalIgnoreCase))
         {
@@ -147,7 +136,6 @@ public static class AbilityDomainRules
             remainder = afterCast < clean.Length ? clean.Substring(afterCast).Trim() : string.Empty;
             return true;
         }
-
         // Optional "learn."
         bool hasLearn = false;
         if (parts[idx].token.Equals("learn", StringComparison.OrdinalIgnoreCase))
@@ -156,7 +144,6 @@ public static class AbilityDomainRules
             idx++;
             if (idx >= parts.Count) return false;
         }
-
         // Optional [s|t]<HeroType> carrier token
         if (IsAbilityCarrierToken(parts[idx].token))
         {
@@ -170,7 +157,6 @@ public static class AbilityDomainRules
             if (nextLower != "abilitydata" && nextLower != "onhitdata" && nextLower != "triggerhpdata")
                 return false;
         }
-
         string kindToken = parts[idx].token.ToLowerInvariant();
         switch (kindToken)
         {
@@ -186,12 +172,10 @@ public static class AbilityDomainRules
             default:
                 return false;
         }
-
         int remStart = parts[idx].endAfterDot;
         remainder = remStart < clean.Length ? clean.Substring(remStart).Trim() : string.Empty;
         return true;
     }
-
     public static bool IsAbilityStartSequence(List<string> tokens, int index)
     {
         string token = tokens[index];
@@ -210,7 +194,6 @@ public static class AbilityDomainRules
         }
         return false;
     }
-
     public static int GetAbilityBlockLength(List<string> tokens, int startIndex)
     {
         int endIndex = startIndex;
@@ -337,14 +320,18 @@ public abstract class AbilityData : HeroData
     protected virtual string ExportInner()
     {
         StringBuilder sb = new StringBuilder();
+        var drawVisuals = visuals?
+            .Where(vis => vis.Type == VisualType.Draw && !string.IsNullOrWhiteSpace(vis.RawValue))
+            .ToList();
+        bool hasDraw = drawVisuals != null && drawVisuals.Count > 0;
         bool hasImageOverride = !string.IsNullOrEmpty(imageOverride) && imageOverride != "None" && imageOverride != baseReplica;
+
         if (!string.IsNullOrEmpty(baseReplica)) sb.Append(FormatName(baseReplica));
         if (!string.IsNullOrEmpty(entityName) && entityName != "NewEntity" && entityName != "Fey")
             sb.Append($".n.{FormatName(entityName)}");
         if (!string.IsNullOrEmpty(colorClass)) sb.Append($".col.{colorClass}");
         if (hp > 0) sb.Append($".hp.{hp}");
         AppendDiceSides(sb);
-        if (items != null) foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x))) sb.Append($".i.{itm}");
 
         if (baseAbilityData != null && baseAbilityData.Count > 0)
         {
@@ -356,8 +343,7 @@ public abstract class AbilityData : HeroData
             }
             if (formattedAbilities.Count > 0) sb.Append($".abilitydata.{string.Join("#", formattedAbilities)}");
         }
-
-        // --- NEW: Fix truncation of nested Carrier Abilities (e.g. sthief.abilitydata) ---
+        // --- Fix truncation of nested Carrier Abilities (e.g. sthief.abilitydata) ---
         if (customAbilityData != null && customAbilityData.Count > 0)
         {
             foreach (var cab in customAbilityData)
@@ -379,28 +365,62 @@ public abstract class AbilityData : HeroData
                 }
             }
         }
-        // -------------------------------------------------------------------------------
-
+        // ---------------------------------------------------------------------------
+        List<string> deferredAbilityKeywordPayloads = new List<string>();
         if (customPayloads != null)
         {
             foreach (var cp in customPayloads)
             {
                 string e = cp.Export();
-                if (!string.IsNullOrEmpty(e)) sb.Append($".{e}");
+                if (string.IsNullOrEmpty(e)) continue;
+                if (e.StartsWith("i.", StringComparison.OrdinalIgnoreCase) &&
+                    AbilityDomainRules.IsAbilityOnlyKeywordItem(e.Substring(2)))
+                {
+                    deferredAbilityKeywordPayloads.Add(e);
+                }
+                else
+                {
+                    sb.Append($".{e}");
+                }
             }
         }
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
 
+        // Emit non-ability-keyword items first, then ability-only keywords AFTER all face modifiers and payloads
+        if (items != null)
+        {
+            foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x) && !AbilityDomainRules.IsAbilityOnlyKeywordItem(x)))
+            {
+                sb.Append($".i.{itm}");
+            }
+            foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x) && AbilityDomainRules.IsAbilityOnlyKeywordItem(x)))
+            {
+                sb.Append($".i.{itm}");
+            }
+        }
+        foreach (var deferred in deferredAbilityKeywordPayloads)
+        {
+            sb.Append($".{deferred}");
+        }
+
+        // Enforce exact visual order: .img.<img|Void> -> .draw.<sprite>:<x>:<y> -> .hsv.<h>:<s>:<v>
         if (hasImageOverride)
         {
             sb.Append($".img.{FormatName(imageOverride)}");
-            AppendColorModifier(sb);
         }
-        else
+        else if (hasDraw)
         {
-            AppendColorModifier(sb);
+            sb.Append(".img.Void");
         }
+        if (hasDraw)
+        {
+            foreach (var dv in drawVisuals)
+            {
+                sb.Append($".draw.{dv.RawValue}:{dv.x}:{dv.y}");
+            }
+        }
+        AppendColorModifier(sb, skipDraw: true);
 
         if (thue != null && thue.colorOffset != 0) sb.Append($".{PackTHue(thue)}");
         if (!string.IsNullOrEmpty(doc)) sb.Append($".doc.{doc}");

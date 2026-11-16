@@ -955,8 +955,20 @@ public class ItemData : SDData
         // SCENARIO 2: Fallback for pure entity-collection items (like t.Cleave with no face modifiers)
         foreach (var ab in LearnedAbilities)
         {
-            if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
-                entity.baseAbilityData.Add(ab);
+            if (string.IsNullOrEmpty(ab)) continue;
+            bool isBaseAbility = ExternalGameRegistry.IsValidAbility(ab) || (!ab.Contains("(") && !ab.Contains("."));
+            if (isBaseAbility)
+            {
+                if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
+                    entity.baseAbilityData.Add(ab);
+            }
+            else
+            {
+                AbilityData customAbility = AbilityData.CreateAbility(ab);
+                if (customAbility != null) entity.AddCustomAbility(customAbility);
+                else if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
+                    entity.baseAbilityData.Add(ab);
+            }
         }
         foreach (var mech in Mechanics)
         {
@@ -979,7 +991,21 @@ public class ItemData : SDData
             }
             else if (pfx == "learn" || pfx == "abilitydata")
             {
-                if (!entity.baseAbilityData.Contains(mech.PayloadString, StringComparer.OrdinalIgnoreCase)) entity.baseAbilityData.Add(mech.PayloadString);
+                string ab = mech.PayloadString;
+                if (string.IsNullOrEmpty(ab)) continue;
+                bool isBaseAbility = ExternalGameRegistry.IsValidAbility(ab) || (!ab.Contains("(") && !ab.Contains("."));
+                if (isBaseAbility)
+                {
+                    if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
+                        entity.baseAbilityData.Add(ab);
+                }
+                else
+                {
+                    AbilityData customAbility = AbilityData.CreateAbility(pfx == "abilitydata" ? $"abilitydata.{ab}" : ab);
+                    if (customAbility != null) entity.AddCustomAbility(customAbility);
+                    else if (!entity.baseAbilityData.Contains(ab, StringComparer.OrdinalIgnoreCase))
+                        entity.baseAbilityData.Add(ab);
+                }
             }
         }
 
@@ -1156,7 +1182,13 @@ public class ItemData : SDData
         }
         else if (mech.Prefix == "onhitdata") { OnHitData ohd = new OnHitData(); ohd.Parse(core); mech.PayloadData = ohd; }
         else if (mech.Prefix == "triggerhpdata") { TriggerHPData thp = new TriggerHPData(); thp.Parse(core); mech.PayloadData = thp; }
-        else if (mech.Prefix == "enchant") { ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod; }
+        else if (mech.Prefix == "enchant")
+        {
+            if (!IsComplexOrSplicedModifier(core))
+            {
+                ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
+            }
+        }
         else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata") { mech.PayloadData = AbilityData.CreateSpellOrTactic(core); }
         else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         else if (mech.Prefix == "t")
@@ -1166,7 +1198,10 @@ public class ItemData : SDData
                 string.Equals(core, "jinx", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(core, "vase", StringComparison.OrdinalIgnoreCase))
             {
-                ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
+                if (!IsComplexOrSplicedModifier(core))
+                {
+                    ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
+                }
             }
             else if (StaticBranchTracing.IsMonsterEntity(core))
             {
@@ -1183,11 +1218,12 @@ public class ItemData : SDData
             {
                 ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item;
             }
-            else if (mech.Prefix == "self" ||
-                     mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase) ||
-                     mech.PayloadString.StartsWith("self.", StringComparison.OrdinalIgnoreCase) ||
-                     mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase) ||
-                     mech.PayloadString.StartsWith("vase.", StringComparison.OrdinalIgnoreCase))
+            else if ((mech.Prefix == "self" ||
+                      mech.Targets.Contains("self", StringComparer.OrdinalIgnoreCase) ||
+                      mech.PayloadString.StartsWith("self.", StringComparison.OrdinalIgnoreCase) ||
+                      mech.PayloadString.StartsWith("jinx.", StringComparison.OrdinalIgnoreCase) ||
+                      mech.PayloadString.StartsWith("vase.", StringComparison.OrdinalIgnoreCase)) &&
+                     !IsComplexOrSplicedModifier(core))
             {
                 ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
             }
@@ -1444,6 +1480,18 @@ public class ItemData : SDData
     }
 
     private ItemMechanic CloneMechanic(ItemMechanic original) => original.Clone();
+
+    private static bool IsComplexOrSplicedModifier(string expr)
+    {
+        if (string.IsNullOrEmpty(expr)) return false;
+        return expr.IndexOf(".splice.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               expr.IndexOf(".mrg.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               expr.IndexOf("rmod.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               expr.IndexOf("ritem.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               expr.IndexOf("ritemx.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               expr.IndexOf("rmon.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               expr.IndexOf("rditem.", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
 
 }
 

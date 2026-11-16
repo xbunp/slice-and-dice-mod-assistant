@@ -487,7 +487,7 @@ public abstract class SDData
         }
         return false;
     }
-    protected void AppendColorModifier(StringBuilder sb)
+    protected void AppendColorModifier(StringBuilder sb, bool skipDraw = false)
     {
         foreach (var vis in visuals)
         {
@@ -509,7 +509,7 @@ public abstract class SDData
                     if (!string.IsNullOrWhiteSpace(vis.RawValue)) sb.Append($".b.{vis.RawValue}");
                     break;
                 case VisualType.Draw:
-                    if (!string.IsNullOrWhiteSpace(vis.RawValue))
+                    if (!skipDraw && !string.IsNullOrWhiteSpace(vis.RawValue))
                     {
                         sb.Append($".draw.{vis.RawValue}:{vis.x}:{vis.y}");
                     }
