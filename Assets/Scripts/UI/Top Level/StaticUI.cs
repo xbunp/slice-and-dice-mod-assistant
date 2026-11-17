@@ -180,6 +180,17 @@ public class DiceFaceBuilderWidget
         _getKeywordOptions = getKeywordOptions;
     }
 
+    private GridRowSpec BuildBlindfoldRow(int index, DiceSideData face)
+    {
+        return new GridRowSpec(
+            GridCellSpec.CreateToggle($"Blindfold_{index}", "Blindfold?", 1.0f, (val) =>
+            {
+                face.blindfold = val;
+                _onStateChanged?.Invoke();
+            })
+        );
+    }
+
     public void SetGridReferences(GridReferences gridRefs)
     {
         _diceUI = gridRefs;
@@ -559,6 +570,7 @@ public class DiceFaceBuilderWidget
         }
 
         faceRows.Add(BuildSideDescRow(index, face));
+        faceRows.Add(BuildBlindfoldRow(index, face));
         faceRows.AddRange(BuildKeywords(index, face));
         faceRows.Add(BuildClipboardButtons(index));
 
@@ -577,6 +589,11 @@ public class DiceFaceBuilderWidget
     private void UpdateStandardFaceUIFromData(int i, DiceSideData face)
     {
         var faceType = GetFaceType(i, face);
+
+        if (_diceUI.Toggles.TryGetValue($"Blindfold_{i}", out var blindfoldToggle))
+        {
+            blindfoldToggle.SetIsOnWithoutNotify(face.blindfold);
+        }
 
         if (_diceUI.Dropdowns.TryGetValue($"FaceTypeDrop_{i}", out var typeDrop))
         {

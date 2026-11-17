@@ -943,8 +943,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     /// FACE BUILDING //////////
     ////////////////////////////
 
-    // Update BuildFaceModifiers & ProcessIntrinsicFaceKeywords in Assets/Scripts/Data/Entities/EntityData.cs
-
     public string BuildFaceModifiers(bool includeInlineFacades)
     {
         StringBuilder modSb = new StringBuilder();
@@ -959,50 +957,34 @@ public abstract class EntityData : SDData, IPayloadContainer
             var face = diceSides[i];
             if (face == null) continue;
             List<string> chunks = new List<string>();
-
             bool hasHatWrapper = ProcessFacePayload(face, chunks);
+
+            // Blindfold strips inherent keywords and must precede keywords/facades
+            bool hasFlatBlindfold = face.sideMechanics.Any(m =>
+                m.LegacyItemPayload == null &&
+                string.IsNullOrEmpty(m.Prefix) &&
+                string.Equals(m.RawPayloadString, "blindfold", StringComparison.OrdinalIgnoreCase)
+            );
+            if (hasFlatBlindfold)
+            {
+                chunks.Add("Blindfold");
+            }
 
             // Process native properties, decoupled entirely from Legacy Side Items
             ProcessIntrinsicFaceKeywords(face, chunks);
             ProcessFaceFacades(face, chunks, includeInlineFacades);
             ProcessFaceDescription(face, chunks);
             ProcessFaceStasis(face, chunks);
-            /*
-            if (chunks.Count > 0)
-            {
-                string templateString = string.Join("#", chunks);
-                bool isLeftFaceHat = i == 0 && hasHatWrapper;
-                bool isEggOnOuterFace = face.faceType == DiceSideData.DiceFaceType.Egg && (i == 2 || i == 3 || i == 5);
-
-                if (isLeftFaceHat || isEggOnOuterFace)
-                {
-                    string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, "mid") : templateString;
-                    string faceAlias = i == 0 ? "left" : (i == 2 ? "top" : (i == 3 ? "bot" : "rightmost"));
-                    ItemData giveItem = new ItemData();
-                    giveItem.Parse($"{faceAlias}.mid.{resolvedMod}");
-                    ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = giveItem };
-                    modSb.Append($".{modifier.Export()}");
-                }
-                else
-                {
-                    int faceMask = 1 << i;
-                    if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
-                    else groupedModifiers[templateString] = faceMask;
-                }
-            }
-            */
 
             if (chunks.Count > 0)
             {
-                // Unify hat/egg payloads by assigning the 'mid' positional scope directly into the template string.
-                // This allows them to group perfectly in the bitmask dictionary.
                 if (hasHatWrapper)
                 {
-                    chunks[0] = "mid." + chunks[0];
+                    int hatIdx = chunks.FindIndex(c => c.StartsWith("hat.", StringComparison.OrdinalIgnoreCase));
+                    if (hatIdx >= 0) chunks[hatIdx] = "mid." + chunks[hatIdx];
+                    else chunks[0] = "mid." + chunks[0];
                 }
-
                 string templateString = string.Join("#", chunks);
-
                 int faceMask = 1 << i;
                 if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
                 else groupedModifiers[templateString] = faceMask;
@@ -1068,10 +1050,21 @@ public abstract class EntityData : SDData, IPayloadContainer
             // Collect exploded flat nodes
             if (!string.IsNullOrEmpty(m.RawPayloadString) &&
                 !string.Equals(m.RawPayloadString, "togtime", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(m.RawPayloadString, "stasis", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(m.RawPayloadString, "stasis", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(m.RawPayloadString, "blindfold", StringComparison.OrdinalIgnoreCase))
             {
                 if (m.Prefix == "k") flatKeywords.Add($"k.{m.RawPayloadString}");
                 else flatKeywords.Add(m.RawPayloadString);
+            }
+            // Just in case any ChainedKeywords remained unexploded
+            foreach (var kw in m.ChainedKeywords)
+            {
+                if (!string.Equals(kw, "togtime", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(kw, "stasis", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(kw, "blindfold", StringComparison.OrdinalIgnoreCase))
+                {
+                    flatKeywords.Add(kw);
+                }
             }
 
             // Just in case any ChainedKeywords remained unexploded
@@ -1096,7 +1089,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             string rawKw = kw.Trim();
             string cleanKw = rawKw.ToLower();
 
-            if (cleanKw == "permissive" || cleanKw == "k.permissive" || cleanKw == "stasis" || cleanKw == "k.stasis") continue;
+            if (cleanKw == "permissive" || cleanKw == "k.permissive" || cleanKw == "stasis" || cleanKw == "k.stasis" || cleanKw == "blindfold" || cleanKw == "k.blindfold") continue;
 
             if (cleanKw == "future" || cleanKw == "k.future")
             {

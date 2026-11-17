@@ -422,6 +422,23 @@ public class DiceSideData
             if (m != null) m.PayloadTargetOverride = value;
         }
     }
+    public bool blindfold
+    {
+        get => sideMechanics.Any(m => string.IsNullOrEmpty(m.Prefix) && string.Equals(m.RawPayloadString, "blindfold", StringComparison.OrdinalIgnoreCase)) ||
+               sideMechanics.Any(m => m.LegacyItemPayload != null && m.LegacyItemPayload.Mechanics.Any(leg => string.Equals(leg.PayloadString, "blindfold", StringComparison.OrdinalIgnoreCase) || leg.ChainedKeywords.Contains("blindfold", StringComparer.OrdinalIgnoreCase)));
+        set
+        {
+            FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
+            if (value)
+            {
+                if (!blindfold) sideMechanics.Add(new MechanicNode { Prefix = "", RawPayloadString = "Blindfold" });
+            }
+            else
+            {
+                sideMechanics.RemoveAll(m => string.IsNullOrEmpty(m.Prefix) && string.Equals(m.RawPayloadString, "blindfold", StringComparison.OrdinalIgnoreCase));
+            }
+        }
+    }
 
     // --- COPY-ON-WRITE: Flatten legacy payload for this face when edited in UI ---
     public void FlattenLegacyPayloadsForEdit()
