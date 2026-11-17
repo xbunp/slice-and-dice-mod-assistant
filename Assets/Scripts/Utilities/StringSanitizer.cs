@@ -8,10 +8,11 @@ public static class StringExtensions
         }
 
         return value
-            .Replace(".", "[dot]")
+            .Replace("...", "[dot]")
             .Replace("&", "[amp]/[and]")
-            .Replace(",", "[comma]")
-            .Replace("+", "[plus]")
+            .Replace(",,", "[comma]")
+            //.Replace("++", "[plus]")
+            .Replace("hp+", "[hp-plus]")
             //.Replace("-", "[minus]")
             .Replace("#", "[hash]")
             //.Replace("pips", "[pips]")

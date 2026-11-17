@@ -34,7 +34,7 @@ itempool.
 +
 (((ritemx.de.splice.Garnet)#(ritemx.de.splice.Iron Pendant)).img.Void.draw.kas72:0:-1.hsv.-61:0:11.tier.2.n.Supervision)
 +
-((ritemx.de.splice.(Glass Helm.part.0)).img.ite75.hsv.79:0:1.tier.6.n.Deperation)
+((ritemx.de.splice.(Glass Helm.part.0)).img.ite75.hsv.79:0:1.tier.6.n.Desperation)
 +
 ((learn.sthief.abilitydata.(Fey.n.Waylay.sd.15-1:0:0:0:76-2.i.(left.sticker.(k.lucky)#togfri#k.singleuse).img.spe48.hsv.-17:41:-2)).img.Bal19.tier.6.n.Waylay)
 +

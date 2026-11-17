@@ -371,8 +371,13 @@ public abstract class AbilityData : HeroData
         {
             foreach (var cp in customPayloads)
             {
+                if (cp == null) continue;
                 string e = cp.Export();
                 if (string.IsNullOrEmpty(e)) continue;
+                if (cp.Type == PayloadType.Item && !e.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+                {
+                    e = $"i.{e}";
+                }
                 if (e.StartsWith("i.", StringComparison.OrdinalIgnoreCase) &&
                     AbilityDomainRules.IsAbilityOnlyKeywordItem(e.Substring(2)))
                 {

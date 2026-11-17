@@ -1484,7 +1484,10 @@ public abstract class EntityData : SDData, IPayloadContainer
                     ItemData parsedItem = new ItemData();
                     parsedItem.Parse(StaticBranchTracing.StripOuterParens(itemString));
                     bool isItemParsedDataEmpty = string.IsNullOrEmpty(parsedItem.entityName) && parsedItem.Mechanics.Count == 0 && parsedItem.LearnedAbilities.Count == 0 && parsedItem.Containers.Count == 0 && !parsedItem.Tier.HasValue && string.IsNullOrEmpty(parsedItem.doc) && string.IsNullOrEmpty(parsedItem.imageOverride);
-                    if (isItemParsedDataEmpty) parsedItem.entityName = itemString;
+                    if (isItemParsedDataEmpty)
+                    {
+                        parsedItem.Mechanics.Add(new ItemMechanic { Prefix = "", PayloadString = itemString });
+                    }
                     itemPipeline.Add(parsedItem);
                     continue;
                 }

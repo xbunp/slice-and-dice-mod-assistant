@@ -809,7 +809,7 @@ public class ItemData : SDData
                                 Containers.Count == 0;
         if (isPureEntityName)
         {
-            entity.customPayloads.Add(new CustomPayload { Data = this, Type = PayloadType.Item });
+            entity.customPayloads.Add(new CustomPayload { Prefix = "i", Data = this, Type = PayloadType.Item });
             return true;
         }
 
@@ -834,7 +834,7 @@ public class ItemData : SDData
         if (isPureBaseItem)
         {
             // Route to customPayloads to maintain strict sequential ordering across all entity items
-            entity.customPayloads.Add(new CustomPayload { Data = this, Type = PayloadType.Item });
+            entity.customPayloads.Add(new CustomPayload { Prefix = "i", Data = this, Type = PayloadType.Item });
             return true;
         }
 

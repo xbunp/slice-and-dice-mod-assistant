@@ -48,7 +48,7 @@ public static class DiceTargets
 
     /*
     Items:
-    Pendulum - swap left and middle
+    "Pendulum" - swap left and middle
     Ballet Shoes - swap left and rightmost OR "Rorrim Tekcop" - copy the rightmost onto the left side
     left.Origami - swap right with left
     Left.Compass - swaps bot with left (rotates faces around center)
