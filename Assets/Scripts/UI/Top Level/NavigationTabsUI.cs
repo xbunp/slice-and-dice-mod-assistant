@@ -115,4 +115,47 @@ public class NavigationTabsUI : MonoBehaviour
 
         onTabSelectedCallback?.Invoke(index);
     }
+
+    /// <summary>
+    /// Switches to the tab that owns or contains the given panel GameObject.
+    /// </summary>
+    public bool SelectTabByPanel(GameObject panel)
+    {
+        if (panel == null) return false;
+
+        for (int i = 0; i < targetPanels.Count; i++)
+        {
+            if (targetPanels[i] == null) continue;
+
+            if (targetPanels[i] == panel ||
+                panel.transform.IsChildOf(targetPanels[i].transform) ||
+                targetPanels[i].transform.IsChildOf(panel.transform))
+            {
+                SelectTab(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Switches to the first tab whose button label contains the specified name.
+    /// </summary>
+    public bool SelectTabByName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+
+        for (int i = 0; i < tabButtons.Count; i++)
+        {
+            if (tabButtons[i] == null) continue;
+
+            var txt = tabButtons[i].GetComponentInChildren<TextMeshProUGUI>();
+            if (txt != null && txt.text.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                SelectTab(i);
+                return true;
+            }
+        }
+        return false;
+    }
 }

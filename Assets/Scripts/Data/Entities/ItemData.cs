@@ -513,19 +513,18 @@ public class ItemData : SDData
 
     protected override void ParseCore(string data)
     {
+        string existingUnityName = unityName;
         GlobalTags.Clear(); PropertiesClear(); Containers.Clear(); Mechanics.Clear();
         if (string.IsNullOrWhiteSpace(data)) return;
 
         List<string> chunks = StaticBranchTracing.TopLevelSplit(data.Trim(), '&');
         string itemCore = StaticBranchTracing.StripOuterParens(chunks[0]);
-
         for (int c = 1; c < chunks.Count; c++)
         {
             List<string> hiddenTokens = StaticBranchTracing.TopLevelSplit(chunks[c], '.');
             if (hiddenTokens.Count > 0 && (hiddenTokens[0].ToLower() == "hidden" || hiddenTokens[0].ToLower() == "temporary"))
                 GlobalTags.Add(hiddenTokens[0]);
         }
-
         List<string> chains = StaticBranchTracing.TopLevelSplit(itemCore, '#');
         List<string> lastTargets = null;
         foreach (var chain in chains)
@@ -534,20 +533,16 @@ public class ItemData : SDData
             int mechCountBefore = Mechanics.Count;
             var stream = new TokenStream(StaticBranchTracing.TopLevelSplit(chain, '.'));
             ExtractKnowledge(stream, this, lastTargets);
-
             if (Mechanics.Count > mechCountBefore)
             {
                 string trimmedChain = chain.Trim();
                 bool isScopedBlock = trimmedChain.StartsWith("(") && trimmedChain.EndsWith(")");
-
                 if (isScopedBlock)
                 {
-                    // A scoped block firmly isolates its context. It does not leak targets to siblings.
                     lastTargets = null;
                 }
                 else
                 {
-                    // Standard propagation: Update context if explicitly targeted. Otherwise, retain running context.
                     var lastMechTargets = Mechanics.Last().Targets;
                     if (lastMechTargets != null && lastMechTargets.Count > 0)
                     {
@@ -556,7 +551,18 @@ public class ItemData : SDData
                 }
             }
         }
+
+        // Preserve user-authored unityName if one was set; otherwise deterministically assign one
+        if (!string.IsNullOrEmpty(existingUnityName) && !existingUnityName.Equals("New Item", StringComparison.OrdinalIgnoreCase))
+        {
+            unityName = existingUnityName;
+        }
+        else
+        {
+            unityName = GetDeterministicName();
+        }
     }
+
     private void ExtractKnowledge(TokenStream stream, ItemData item, List<string> inheritedTargets)
     {
         bool isFirstMechanic = true;
@@ -1491,6 +1497,124 @@ public class ItemData : SDData
                expr.IndexOf("ritemx.", StringComparison.OrdinalIgnoreCase) >= 0 ||
                expr.IndexOf("rmon.", StringComparison.OrdinalIgnoreCase) >= 0 ||
                expr.IndexOf("rditem.", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>
+    /// Generates a human-readable deterministic name based on the item's primary face target and mechanical payload.
+    /// </summary>
+    public string GetDeterministicName()
+    {
+        if (Mechanics == null || Mechanics.Count == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(entityName)) return entityName;
+            return "Custom Item";
+        }
+
+        // Find the first mechanic with an explicit target, prefix, or payload
+        ItemMechanic firstMech = Mechanics.FirstOrDefault(m =>
+            (m.Targets != null && m.Targets.Count > 0) ||
+            !string.IsNullOrEmpty(m.Prefix) ||
+            !string.IsNullOrEmpty(m.PayloadString)) ?? Mechanics[0];
+
+        // 1. Resolve Side Declaration
+        string side = "";
+        if (firstMech.Targets != null && firstMech.Targets.Count > 0 && !string.IsNullOrWhiteSpace(firstMech.Targets[0]))
+        {
+            string rawTarget = firstMech.Targets[0].Trim();
+            if (!rawTarget.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                side = char.ToUpper(rawTarget[0]) + rawTarget.Substring(1).ToLower();
+            }
+        }
+
+        // 2. Resolve "What it is"
+        string pfx = firstMech.Prefix?.ToLower() ?? "";
+        string kind = "";
+
+        if (pfx == "hat")
+        {
+            bool isEgg = (firstMech.PayloadString != null && firstMech.PayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) ||
+                         (firstMech.PayloadData is MonsterData md && md.baseMonster != null && md.baseMonster.StartsWith("egg.", StringComparison.OrdinalIgnoreCase));
+            string typeLabel = isEgg ? "Egg" : "Hat";
+
+            string subName = "";
+            if (firstMech.PayloadData is HeroData hd && !string.IsNullOrEmpty(hd.baseReplica))
+                subName = hd.baseReplica;
+            else if (firstMech.PayloadData is MonsterData mnd && !string.IsNullOrEmpty(mnd.baseMonster))
+                subName = mnd.baseMonster.StartsWith("egg.", StringComparison.OrdinalIgnoreCase) ? mnd.baseMonster.Substring(4) : mnd.baseMonster;
+            else if (!string.IsNullOrEmpty(firstMech.PayloadString))
+            {
+                string clean = StaticBranchTracing.StripOuterParens(firstMech.PayloadString);
+                if (clean.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) clean = clean.Substring(4);
+                int dot = clean.IndexOf('.');
+                subName = dot > 0 ? clean.Substring(0, dot) : clean;
+            }
+
+            kind = string.IsNullOrEmpty(subName) ? typeLabel : $"{typeLabel} ({subName})";
+        }
+        else if (pfx == "k" || firstMech.ChainedKeywords.Count > 0 || (string.IsNullOrEmpty(pfx) && ExternalGameRegistry.IsValidKeyword(firstMech.PayloadString)))
+        {
+            List<string> kwList = new List<string>();
+            if (!string.IsNullOrEmpty(firstMech.PayloadString) && pfx == "k") kwList.Add(firstMech.PayloadString);
+            else if (string.IsNullOrEmpty(pfx) && ExternalGameRegistry.IsValidKeyword(firstMech.PayloadString)) kwList.Add(firstMech.PayloadString);
+            kwList.AddRange(firstMech.ChainedKeywords.Where(k => !string.IsNullOrEmpty(k)));
+
+            if (kwList.Count > 0)
+                kind = $"Keywords ({string.Join(", ", kwList.Take(2))})";
+            else
+                kind = "Keywords";
+        }
+        else if (pfx == "sticker")
+        {
+            string sub = !string.IsNullOrEmpty(firstMech.PayloadString) ? StaticBranchTracing.StripOuterParens(firstMech.PayloadString) : "";
+            kind = string.IsNullOrEmpty(sub) ? "Sticker" : $"Sticker ({sub})";
+        }
+        else if (pfx == "enchant")
+        {
+            string sub = !string.IsNullOrEmpty(firstMech.PayloadString) ? StaticBranchTracing.StripOuterParens(firstMech.PayloadString) : "";
+            kind = string.IsNullOrEmpty(sub) ? "Enchant" : $"Enchant ({sub})";
+        }
+        else if (pfx == "cast")
+        {
+            string sub = !string.IsNullOrEmpty(firstMech.PayloadString) ? StaticBranchTracing.StripOuterParens(firstMech.PayloadString) : "";
+            kind = string.IsNullOrEmpty(sub) ? "Cast" : $"Cast ({sub})";
+        }
+        else if (pfx == "facade")
+        {
+            kind = "Facade";
+        }
+        else if (pfx == "sidesc")
+        {
+            kind = "Description";
+        }
+        else if (pfx == "t")
+        {
+            string sub = firstMech.PayloadString ?? "";
+            kind = string.IsNullOrEmpty(sub) ? "Trait" : $"Trait ({sub})";
+        }
+        else if (pfx == "learn" || pfx == "abilitydata")
+        {
+            string sub = firstMech.PayloadString ?? "";
+            kind = string.IsNullOrEmpty(sub) ? "Ability" : $"Ability ({sub})";
+        }
+        else
+        {
+            string payload = firstMech.PayloadString ?? "";
+            if (ItemDomainRules.TogItems.Contains(payload))
+            {
+                kind = $"Toggle ({payload})";
+            }
+            else if (!string.IsNullOrEmpty(payload))
+            {
+                kind = payload;
+            }
+            else
+            {
+                kind = "Item";
+            }
+        }
+
+        return !string.IsNullOrEmpty(side) ? $"{side} {kind}" : kind;
     }
 
 }

@@ -116,6 +116,7 @@ public class ItemUI : RootUI
     private bool _needsRebuild = false;
     private bool _pendingCompile = false;
     private float _compileTimer = 0f;
+    private ItemData _sourceItem;
 
     private void Awake()
     {
@@ -170,6 +171,78 @@ public class ItemUI : RootUI
                 ExecuteAutoCompile();
             }
         }
+    }
+
+    public void NavigateToThisTab()
+    {
+        GameObject myPanel = _rootCanvasRect != null ? _rootCanvasRect.gameObject : null;
+
+        // 1. Locate the top navigation tabs and select the Item tab
+        var allNavTabs = UnityEngine.Object.FindObjectsOfType<NavigationTabsUI>(true);
+        foreach (var nav in allNavTabs)
+        {
+            // Match by panel hierarchy first
+            if (myPanel != null && nav.SelectTabByPanel(myPanel))
+            {
+                return;
+            }
+
+            // Match by tab label ("Item" / "Items")
+            if (nav.SelectTabByName("Item"))
+            {
+                return;
+            }
+        }
+
+        // 2. Fallback: activate wrapper directly if no navigation bar was found
+        if (_rootCanvasRect != null)
+        {
+            _rootCanvasRect.gameObject.SetActive(true);
+            _rootCanvasRect.SetAsLastSibling();
+        }
+    }
+    public void OpenItemForEditing(ItemData item)
+    {
+        if (item == null) return;
+        _sourceItem = item;
+
+        // Ensure name is meaningful
+        if (string.IsNullOrEmpty(item.unityName) || item.unityName.Equals("New Item", StringComparison.OrdinalIgnoreCase))
+        {
+            item.unityName = item.GetDeterministicName();
+        }
+
+        if (ModPackage.Instance != null)
+        {
+            ModPackage.Instance.LoadEntityForEditing(item);
+        }
+
+        ItemData activeClone = ModPackage.Instance?.GetActiveEntity<ItemData>() ?? item;
+        LoadItemIntoUI(activeClone);
+
+        if (_savedNameInputField != null)
+        {
+            _savedNameInputField.SetTextWithoutNotify(activeClone.unityName ?? activeClone.entityName ?? activeClone.GetDeterministicName());
+        }
+
+        PopulateLoadDropdown();
+        if (_loadDropdown != null && ModPackage.Instance != null)
+        {
+            int idx = -1;
+            if (ModPackage.Instance?.CustomItems != null)
+            {
+                for (int i = 0; i < ModPackage.Instance.CustomItems.Count; i++)
+                {
+                    if (ModPackage.Instance.CustomItems[i] == item)
+                    {
+                        idx = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        NavigateToThisTab();
     }
 
     private void OnModDataChangedHandler(object sender)
@@ -585,7 +658,6 @@ public class ItemUI : RootUI
         ItemData activeClone = ModPackage.Instance?.GetActiveEntity<ItemData>();
         if (activeClone == null || MainCanvasContent == null) return;
 
-        // <-- ADDED: Write the UI input text back to the backend data before saving
         if (_savedNameInputField != null)
         {
             activeClone.unityName = _savedNameInputField.text;
@@ -596,10 +668,17 @@ public class ItemUI : RootUI
         {
             string compiledString = ItemSyntaxCompiler.CompileZone(rootZone.Entrants.Cast<EntityCard>());
             activeClone.Parse(compiledString);
+
+            // Sync the source item instance from the entity as well
+            if (_sourceItem != null && _sourceItem != activeClone)
+            {
+                _sourceItem.unityName = activeClone.unityName;
+                _sourceItem.entityName = activeClone.entityName;
+                _sourceItem.Parse(compiledString);
+            }
         }
 
         ModPackage.Instance.SaveActiveEntity<ItemData>();
-
         PopulateLoadDropdown();
         ModPackage.Instance.NotifyActiveEntityChanged<ItemData>(this);
     }
@@ -613,19 +692,18 @@ public class ItemUI : RootUI
     public void LoadItemIntoUI(ItemData item)
     {
         ClearWorkspace();
-
+        if (_savedNameInputField != null && item != null)
+        {
+            string nameToShow = !string.IsNullOrEmpty(item.unityName) && !item.unityName.Equals("New Item", StringComparison.OrdinalIgnoreCase)
+                ? item.unityName
+                : (!string.IsNullOrEmpty(item.entityName) ? item.entityName : item.GetDeterministicName());
+            _savedNameInputField.SetTextWithoutNotify(nameToShow);
+        }
         ReorderableZone rootZone = MainCanvasContent.GetComponent<ReorderableZone>();
         if (rootZone == null) return;
-
-        // 1. Build Root UI Context
         ReorderableZone targetZone = BuildRootEquippableCard(item, rootZone);
-
-        // 2. Unroll nested compiler wrappers
         List<ItemMechanic> mechanics = GetUnrolledMechanics(item);
-
-        // 3. Process Mechanics Pipeline
         ProcessMechanicsList(mechanics, targetZone);
-
         RefreshSidebar();
         AutoCompile();
     }

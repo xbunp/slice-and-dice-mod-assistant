@@ -226,6 +226,9 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     // =====================================================================
     // STATE TO VIEW
     // =====================================================================
+    // =====================================================================
+    // STATE TO VIEW
+    // =====================================================================
     protected virtual void OnStateChanged(object sender)
     {
         if (object.ReferenceEquals(sender, this))
@@ -234,7 +237,16 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             return;
         }
 
-        if (sender != null) return;
+        // If an item was edited in ItemUI, refresh entity custom item absorption
+        if (sender is ItemUI && CurrentEntity != null)
+        {
+            var customItems = CurrentEntity.GetAllCustomItems();
+            foreach (var item in customItems)
+            {
+                CurrentEntity.RemoveCustomItem(item);
+                CurrentEntity.AddCustomItem(item);
+            }
+        }
 
         if (!IsTabVisible())
         {
@@ -866,14 +878,14 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         rt.offsetMax = new Vector2(0f, -topOffset);
     }
     protected void AppendCollectionSelector<U>(
-            List<GridRowSpec> layout, string label, string uniqueKey,
-            IReadOnlyList<U> availableChoices, List<string> currentActiveItems,
-            Func<U, string> getKey, Func<U, string> getDisplay,
-            Action<U> onAdd, Action<string> onRemove)
+                List<GridRowSpec> layout, string label, string uniqueKey,
+                IReadOnlyList<U> availableChoices, List<string> currentActiveItems,
+                Func<U, string> getKey, Func<U, string> getDisplay,
+                Action<U> onAdd, Action<string> onRemove,
+                Action<string> onEdit = null)
     {
         List<string> dropdownOptions = new List<string> { "" };
         dropdownOptions.AddRange(availableChoices.Select(getDisplay));
-
         layout.Add(new GridRowSpec(
             GridCellSpec.CreateLabel(label, 0.30f),
             GridCellSpec.CreateFilteredDropdown($"Selector_{uniqueKey}", "", 0.70f, dropdownOptions.ToArray(), (idx) =>
@@ -884,7 +896,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 }
             })
         ));
-
         if (currentActiveItems != null)
         {
             for (int i = 0; i < currentActiveItems.Count; i++)
@@ -892,11 +903,23 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 string activeItemName = currentActiveItems[i];
                 string rowKey = $"Active_{uniqueKey}_{i}_{activeItemName}";
                 string delKey = $"Del_{uniqueKey}_{i}_{activeItemName}";
+                string editKey = $"Edit_{uniqueKey}_{i}_{activeItemName}";
 
-                layout.Add(new GridRowSpec(
-                    GridCellSpec.CreateLabel(rowKey, activeItemName, 0.80f),
-                    GridCellSpec.CreateButton(delKey, "[X]", 0.20f, () => onRemove?.Invoke(activeItemName))
-                ));
+                if (onEdit != null)
+                {
+                    layout.Add(new GridRowSpec(
+                        GridCellSpec.CreateLabel(rowKey, activeItemName, 0.68f),
+                        GridCellSpec.CreateButton(editKey, "→", 0.14f, () => onEdit?.Invoke(activeItemName)),
+                        GridCellSpec.CreateButton(delKey, "[X]", 0.18f, () => onRemove?.Invoke(activeItemName))
+                    ));
+                }
+                else
+                {
+                    layout.Add(new GridRowSpec(
+                        GridCellSpec.CreateLabel(rowKey, activeItemName, 0.80f),
+                        GridCellSpec.CreateButton(delKey, "[X]", 0.20f, () => onRemove?.Invoke(activeItemName))
+                    ));
+                }
             }
         }
     }
@@ -1542,6 +1565,15 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
         if (_needsRebuild && IsTabVisible())
         {
             _needsRebuild = false;
+            if (CurrentEntity != null)
+            {
+                var customItems = CurrentEntity.GetAllCustomItems();
+                foreach (var item in customItems)
+                {
+                    CurrentEntity.RemoveCustomItem(item);
+                    CurrentEntity.AddCustomItem(item);
+                }
+            }
             RebuildStatsUI();
             RebuildDiceScrollView();
         }
@@ -1649,54 +1681,31 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     protected string GetCustomItemDisplayName(ItemData item)
     {
         if (item == null) return "Unknown Item";
-        if (!string.IsNullOrWhiteSpace(item.unityName)) return item.unityName;
-        if (!string.IsNullOrWhiteSpace(item.entityName)) return item.entityName;
-
-        // Format a concise name for Hats
-        var hatMech = item.Mechanics?.FirstOrDefault(m => string.Equals(m.Prefix, "hat", StringComparison.OrdinalIgnoreCase));
-        if (hatMech != null)
-        {
-            string targets = hatMech.Targets != null && hatMech.Targets.Count > 0 ? string.Join(".", hatMech.Targets) : "mid";
-            string hatName = (hatMech.PayloadData as EntityData)?.entityName;
-            if (string.IsNullOrEmpty(hatName))
-            {
-                if (hatMech.PayloadData is HeroData hd && !string.IsNullOrEmpty(hd.baseReplica)) hatName = hd.baseReplica;
-                else if (hatMech.PayloadData is MonsterData md && !string.IsNullOrEmpty(md.baseMonster)) hatName = md.baseMonster;
-                else hatName = "Hat";
-            }
-            return $"{targets}.hat.({hatName})";
-        }
-
-        string exported = item.Export();
-        exported = StaticBranchTracing.StripOuterParens(exported);
-        return string.IsNullOrEmpty(exported) ? "Unnamed Item" : exported;
+        if (!string.IsNullOrWhiteSpace(item.unityName) && !item.unityName.Equals("New Item", StringComparison.OrdinalIgnoreCase))
+            return item.unityName;
+        if (!string.IsNullOrWhiteSpace(item.entityName))
+            return item.entityName;
+        return item.GetDeterministicName();
     }
     protected void AppendCustomItemsSelector(List<GridRowSpec> layout)
     {
         List<ItemData> activeCustomItems = CurrentEntity.GetAllCustomItems();
-
         List<string> displayList = new List<string>();
         Dictionary<string, ItemData> displayToItemMap = new Dictionary<string, ItemData>();
-
         for (int i = 0; i < activeCustomItems.Count; i++)
         {
             var item = activeCustomItems[i];
             string displayName = GetCustomItemDisplayName(item);
-
-            // Ensure unique label key in the UI
             string uniqueDisplay = displayName;
             int counter = 2;
             while (displayToItemMap.ContainsKey(uniqueDisplay))
             {
                 uniqueDisplay = $"{displayName} ({counter++})";
             }
-
             displayToItemMap[uniqueDisplay] = item;
             displayList.Add(uniqueDisplay);
         }
-
         var availableItems = ModPackage.Instance?.CustomItems ?? new List<ItemData>();
-
         AppendCollectionSelector<ItemData>(
             layout: layout,
             label: "Add Custom Item:",
@@ -1711,7 +1720,6 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                 clonedItem.Parse(templateItem.Export());
                 clonedItem.entityName = templateItem.entityName;
                 clonedItem.unityName = templateItem.unityName;
-
                 CurrentEntity.AddCustomItem(clonedItem);
                 NotifyStateChanged();
                 RebuildStatsUI();
@@ -1726,7 +1734,35 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     RebuildStatsUI();
                     RebuildDiceScrollView();
                 }
+            },
+            onEdit: (displayKey) =>
+            {
+                if (displayToItemMap.TryGetValue(displayKey, out ItemData itemToEdit))
+                {
+                    SendItemToItemUI(itemToEdit);
+                }
             }
         );
+    }
+    protected void SendItemToItemUI(ItemData itemToEdit)
+    {
+        if (itemToEdit == null) return;
+        if (ItemUI.Instance == null)
+        {
+            Debug.LogWarning("[EntityUI] ItemUI.Instance is not loaded.");
+            return;
+        }
+
+        // 1. Ensure item is tracked in the loaded mod pool
+        if (ModPackage.Instance != null && ModPackage.Instance.CustomItems != null)
+        {
+            if (!ModPackage.Instance.CustomItems.Contains(itemToEdit))
+            {
+                ModPackage.Instance.loadedMod.SaveEntity(null, itemToEdit);
+            }
+        }
+
+        // 2. Open and focus item in ItemUI
+        ItemUI.Instance.OpenItemForEditing(itemToEdit);
     }
 }
