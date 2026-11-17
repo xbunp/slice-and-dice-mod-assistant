@@ -103,7 +103,7 @@ heropool.
 
 heropool.
 
-((replica.Statue.n.DejaVu.col.v.hp.6.tier.2.sd.15-3:92-1:91-1:93-1:90-1:44-1.i.(left.k.dejavu#facade.pos122:0).i.(rightmost.k.singleuse#facade.Can7:0).img.Ludus.hsv.-26:26:-18.draw.Sudul:-5:0).i.learn.sthief.abilitydata.(Fey.n.Recall.sd.15-1:0:0:0:76-3.i.(left.sticker.(all.left.hat.(Fey.sd.15-2.i.(left.k.singleuse#k.dejavu#facade.pos122:0)))#k.singleuse).img.spe36.hsv.71:-16:14))
+((replica.Statue.n.DejaVu.col.v.hp.6.tier.2.sd.15-3:112-1:30-1:52-1:91-1:44-1.i.(left.k.dejavu#facade.pos122:0).i.(rightmost.k.singleuse#facade.Can7:0).img.Ludus.hsv.-26:26:-18.draw.Sudul:-5:0).i.learn.sthief.abilitydata.(Fey.n.Recall.sd.15-1:0:0:0:76-2.i.(ritemx.539ce9a).i.(left.sticker.(all.left.hat.(Fey.sd.15-2.i.(left.k.singleuse#k.dejavu#facade.pos122:0)))).img.spe36.hsv.71:-16:14))
 +
 ((replica.Curator.n.Paxin.col.v.hp.8.tier.2.sd.15-1:15-2:0:0:38-1:177-1.i.(left.k.paxin#k.doubleuse#facade.PEP9:0).i.(mid.k.pair#facade.Bal14:0).i.(topbot.facade.bas0:82:0:-11).i.(rightmost.k.shield#k.selfshield#k.paxin#facade.Can25:18:68:42).draw.Stoic:-9:1.p.923434:d32ae3:17.p.d3a992:d3d1a8:29).i.learn.sthief.abilitydata.(Fey.n.Pax.sd.15-1:0:136-3:8.i.(left.sticker.(ritemx.16e.mrg.k.paxin)#sidesc.[orange]Target ally:[cu] Set all sides to 1 and add [light]pax[cu][violet]in[cu] this turn)))
 +
@@ -441,7 +441,7 @@ heropool.
 +
 (((replica.b3.75.n.ManaGain.hp.8.tier.3.sd.86-1:125-1.i.(left.k.engine#k.pain#facade.Can13:-5:29:11).i.(mid.k.managain#facade.pos160:0:10:19).i.(right.hat.(Fey.sd.18-1.i.(right.mid.hat.(Fey.sd.179.i.(mid.sticker.(Faerie Dust.splice.(left.hat.(Fey.sd.76-2)))#togtime#togtarg))#facade.Ber68:0).i.(togpip#togkey))).i.(topbot.mid.hat.(Fey.sd.53-1.i.(mid.sticker.(t.jinx.ea.sThief.abilitydata.(Fey.n.New Ability.sd.76-1:0:0:0:76-1))#togtime#togfri#k.singleuse#facade.DgK20:10:16:14).i.(togpip#togkey))).hsv.11:0:-45.draw.Shade:5:6.p.fd4dd3:74dfff:43.p.6a4484:0097ff:57.hsv.-2:13:0.p.34beff:00ffd5:17).doc.[ite79][orange]While I am alive:[cu][n]All enemies give:[n][hp-plus][p][blue]1 mana[cu] on death).i.t.jinx.alliteme.ritemx.15)
 +
-(((replica.Statue.n.Fizz.col.b.hp.8.tier.3.sd.39-3:77-1:93-1:93-1:0:76.i.(left.k.fizz#facade.the23:-5:14:3).i.(mid.k.fizz#facade.har101:-6:0:0).i.(topbot.k.fizz#facade.The45:54:5:23).i.(rightmost.sticker.(k.fizz.mrg.eye of horus.m.-1)#k.fizz#facade.Ber75:0:0:69).i.(right.hat.(Fey.sd.0:0:0:0:112-2.i.(left.cast.Scald).i.(right.k.cantrip#k.singleuse#facade.OkN22:-6:0:53#sidesc.Target damaged ally [pips] heal).i.(togtarg))).img.Roulette.p.15c483:5dbdff:28.p.f7c1d6:deeef0:06.p.b07363:50b7ff:17).i.learn.sthief.abilitydata.(Fey.n.Soda.sd.15-1:0:0:0:76-1.i.(left.cast.Vine).img.Void.draw.Ale13:1:-1)))
+((replica.Statue.n.Fizz.col.b.hp.8.tier.3.sd.39-3:77-1:93-1:93-1:0:76.i.(mid.k.flurry#facade.har101:-6:0:0).i.(rightmost.sticker.(k.fizz.mrg.eye of horus.m.-1)#ritemx.dae9#facade.Ber75:0:0:69).i.(left.k.fizz#facade.the23:-5:14:3).i.(topbot.k.fizz#facade.The45:54:5:23).i.(right.hat.(Fey.sd.0:0:0:0:112-2.i.(left.cast.Scald).i.(right.k.cantrip#k.singleuse#facade.OkN22:-6:0:53#sidesc.Target damaged ally [pips] heal).i.(togtarg))).img.Roulette.p.15c483:5dbdff:28.p.f7c1d6:deeef0:06.p.b07363:50b7ff:17).i.learn.sthief.abilitydata.(Fey.n.Soda.sd.15-1:0:0:0:76-1.i.(left.cast.Vine).img.Void.draw.Ale13:1:-1))
 +
 (((replica.Jumble.n.Fluctuate.col.b.hp.10.tier.3.sd.15-4:15-3:56-2:56-2:103-1:103-1.hsv.73:0:1).i.(t.(Jumble))))
 
@@ -460,7 +460,7 @@ heropool.
 +
 ((replica.Prince.n.Inspired.col.n.hp.5.tier.1.sd.33-1:33-1:0:0:56-1:56-1.i.(left.k.growth#facade.Spi24:8:0:22).i.(right.k.growth#k.inspired#facade.Sea8:0).i.(rightmost.k.inspired#facade.Can23:0).p.a6812a:55b451:15))
 +
-((replica.Statue.n.Undrgrwth.hp.5.tier.1.sd.16-1:151:103-2:44:95:91.i.(left.k.undergrowth#facade.har17:0).i.(mid.k.undergrowth).i.(top.k.undergrowth#facade.pos149:0).i.(bot.k.singleuse#facade.Can7:0).img.Tinder.thue.9e693d:71:29))
+(replica.Statue.n.Undrgrwth.hp.5.tier.1.sd.16-1:0:103-2:44:91-1:95.i.(bot.k.singleuse#facade.Can7:0).i.(left.k.undergrowth#facade.har17:0).i.(mid.hat.(Fey.sd.56-2:151.i.(left.k.shield).i.(mid.k.undergrowth#facade.Mut73:4:0:0).i.(togpip#togkey))).i.(top.k.undergrowth#facade.pos149:0).img.Tinder.thue.9e693d:71:29)
 +
 (((replica.Statue.n.Poison.hp.4.tier.1.sd.47-1:91-1:0:0:0:104-1.i.(rightmost.k.cleanse).i.(right.hat.(Fey.sd.53-1:177:0:0:123.i.(right.facade.Yca35:0:22:5).i.(togpip#togkey#Pendulum#togtarg))).img.Scoundrel.p.2b7284:008b59:17)))
 
@@ -622,7 +622,7 @@ heropool.
 +
 (((replica.Statue.n.ManaCost.col.p.hp.6.tier.1.sd.15-2:0:93-3:93-3:103-3.i.(left.k.manacost#k.onesie#k.descend#facade.Mut67:0).i.(topbot.k.manacost#k.onesie#facade.Eme153:0).i.(right.k.manacost#k.onesie#k.regen#facade.Mut74:0).i.(mid.hat.(Fey.sd.0-1.i.(left.facade.bas15:0).i.(mid.sticker.(k.manacost.mrg.k.onesie.mrg.Eye of Horus)#facade.pos52:0:31:31))).img.Paladin.hsv.0:0:-99.draw.Wisp:0:1.p.3453ff:9400a9:29).i.learn.sthief.abilitydata.(Fey.n.Sap.sd.15-1.i.(left.sticker.(ritemx.15)#togfri#k.exert).img.spe46.hsv.56:99:25)))
 +
-(((replica.Statue.n.Scared.col.p.hp.7.tier.1.sd.15-3.i.(left.k.scared#facade.pos140:0).i.(mid.hat.(Fey.sd.15-1.i.(mid.sticker.(k.scared)#facade.pos74:0).i.(left.k.boost).i.(togpip#togkey))).img.Eme20.hsv.0:0:-63.draw.Eme20:-4:0).i.learn.sthief.abilitydata.(Fey.n.Fear.sd.181-3:0:8:8.i.(left.k.fierce).img.Void.draw.kas116:2:1.hsv.17:0:0)))
+((replica.Statue.n.Scared.col.p.hp.7.tier.1.sd.15-3:0:0:0:15-1:103-1.i.(right.k.scared#facade.pos140:0).i.(left.k.scared#facade.pos140:0).i.(rightmost.k.scared#k.terminal#k.treble#facade.pos141:0).i.(mid.hat.(Fey.sd.15-1.i.(left.k.boost).i.(mid.sticker.(k.scared)#facade.pos74:0).i.(togpip#togkey))).img.Eme20.hsv.0:0:-63.draw.Eme20:-4:0).i.learn.sthief.abilitydata.(Fey.n.Fear.sd.181-3:0:8:8.i.(left.k.fierce).img.Void.draw.kas116:2:1.hsv.17:0:0))
 +
 (((replica.Statue.n.GrpDecay.col.p.hp.10.tier.1.sd.36-1:36-1:0:0:53-1:53-1.i.(left2.k.groupdecay#k.mandatory#facade.Spi18:38:-26:16).i.(right2.k.groupdecay#k.mandatory#facade.har12:-13:1:-6).img.Zombie.p.624631:5834a7:05).i.learn.sthief.abilitydata.(Fey.n.Spore.sd.15-1:0:13-2:13-1.i.(top.cast.DSVarhest).i.(left.cast.Spore).i.(top.cast.DSVarhest)).i.(t.(Zombie)).doc.[sym4] [orange]I die:[cu] if I take [light]4 or more damage[cu] in a single attack))
 +

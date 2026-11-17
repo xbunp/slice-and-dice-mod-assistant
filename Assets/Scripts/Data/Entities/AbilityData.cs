@@ -45,7 +45,7 @@ public static class AbilityDomainRules
     public static bool IsAbilityOnlyKeywordItem(string itemToken)
     {
         if (string.IsNullOrWhiteSpace(itemToken)) return false;
-        string clean = itemToken.Trim();
+        string clean = StaticBranchTracing.StripOuterParens(itemToken.Trim());
         return AbilityOnlyKeywords.Values.Any(v => string.Equals(v, clean, StringComparison.OrdinalIgnoreCase));
     }
     public static readonly HashSet<string> AbilityKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -258,22 +258,15 @@ public abstract class AbilityData : HeroData
     protected override void ParseCore(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return;
-        CleanData(); // not sure if this is really needed.
-
+        CleanData();
         string core = StripPrefix(data);
         core = StaticBranchTracing.StripOuterParens(core);
-
-        // 2. Extract standard string chunks (isolate global tags if present)
         List<string> chunks = StaticBranchTracing.TopLevelSplit(core, '&');
         string mainPayload = StaticBranchTracing.StripOuterParens(chunks[0]);
-
-        // 3. Tokenize by dot notation (without pre-splitting by '#' so items parse correctly)
         List<string> tokens = StaticBranchTracing.TopLevelSplit(mainPayload, '.');
-
         if (tokens.Count > 0)
         {
             string firstTokenLower = tokens[0].ToLower();
-            // 4. Safely extract base template (e.g. Fey, sthief, etc)
             if (!AbilityDomainRules.AbilityKeys.Contains(firstTokenLower) && !ItemDomainRules.MechanicPrefixes.Contains(firstTokenLower))
             {
                 baseReplica = ExtractBaseIdentifier(tokens[0]);
@@ -284,12 +277,23 @@ public abstract class AbilityData : HeroData
                 baseReplica = "Fey";
             }
         }
-
-        // 5. Route through unified parsing pipeline (defined in EntityData)
         ExtractKnowledge(tokens, _itemPipeline, processTraitsAndCollections: true);
         ExecuteItemPipeline();
 
-        // 6. Post-process structural constraints
+        // STRICT INVARIANT: Only set entityName if an explicit .n. tag was defined in the data
+        if (string.IsNullOrEmpty(entityName) || entityName.Contains(".") || entityName.StartsWith("("))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(data, @"\.n\.([^\.\#\)]+)");
+            if (match.Success)
+            {
+                entityName = match.Groups[1].Value.Trim();
+            }
+            else
+            {
+                entityName = null; // Do NOT synthesize a name. Absence of name must remain absent.
+            }
+        }
+
         if (this is SpellData spell)
         {
             if (spell.diceSides != null && spell.diceSides.Length > 4 && spell.diceSides[4] != null)
@@ -378,8 +382,14 @@ public abstract class AbilityData : HeroData
                 {
                     e = $"i.{e}";
                 }
-                if (e.StartsWith("i.", StringComparison.OrdinalIgnoreCase) &&
-                    AbilityDomainRules.IsAbilityOnlyKeywordItem(e.Substring(2)))
+
+                // Strip i. and parens to inspect the true token
+                string check = e;
+                if (check.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+                    check = check.Substring(2);
+                check = StaticBranchTracing.StripOuterParens(check.Trim());
+
+                if (AbilityDomainRules.IsAbilityOnlyKeywordItem(check))
                 {
                     deferredAbilityKeywordPayloads.Add(e);
                 }
@@ -496,7 +506,6 @@ public abstract class AbilityData : HeroData
         if (face.sideItems != null && face.sideItems.Count > 0) return true; // <-- ADD THIS
         return false;
     }
-
     public static AbilityData CreateAbility(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
@@ -577,7 +586,6 @@ public abstract class AbilityData : HeroData
         tactic.Parse(clean);
         return tactic;
     }
-
     private static bool TryStripLearnAbilityPrefix(string clean, out string stripped)
     {
         stripped = clean;
@@ -600,7 +608,6 @@ public abstract class AbilityData : HeroData
 
         return false;
     }
-
     public static string StripPrefix(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return string.Empty;
@@ -611,7 +618,6 @@ public abstract class AbilityData : HeroData
         }
         return clean;
     }
-
     public static AbilityData CreateSpellOrTactic(string data)
     {
         if (string.IsNullOrWhiteSpace(data)) return null;
@@ -630,7 +636,6 @@ public abstract class AbilityData : HeroData
         result.Parse(data);
         return result;
     }
-
     public void DebugAbilityCompact(string indent = "")
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -686,6 +691,55 @@ public abstract class AbilityData : HeroData
         }
 
         UnityEngine.Debug.Log(sb.ToString());
+    }
+
+    /// <summary>
+    /// Returns the clean display name of the ability, never returning raw syntax chains or export brackets.
+    /// </summary>
+    public string GetCleanName()
+    {
+        // 1. If entityName is populated, ensure it is not raw syntax
+        if (!string.IsNullOrWhiteSpace(entityName))
+        {
+            string clean = entityName.Trim();
+            if (!clean.StartsWith("(") && !clean.Contains(".sd.") && !clean.Contains("abilitydata.") && !clean.Contains("learn."))
+            {
+                return clean;
+            }
+            // If raw syntax leaked into entityName, extract the .n. tag if present
+            var match = System.Text.RegularExpressions.Regex.Match(clean, @"\.n\.([^\.\#\)]+)");
+            if (match.Success)
+            {
+                return match.Groups[1].Value.Trim();
+            }
+        }
+
+        // 2. Hardcoded Orb check
+        if (this is OrbData orb && orb.isHardcoded && !string.IsNullOrWhiteSpace(orb.hardcodedAbilityName))
+        {
+            return orb.hardcodedAbilityName;
+        }
+
+        // 3. Stock ability check via base replica
+        if (!string.IsNullOrEmpty(baseReplica) && !baseReplica.Equals("Fey", StringComparison.OrdinalIgnoreCase) && !baseReplica.Equals("Statue", StringComparison.OrdinalIgnoreCase))
+        {
+            if (ExternalGameRegistry.IsValidAbility(baseReplica))
+                return baseReplica;
+        }
+
+        // 4. Deterministic fallback based on ability kind & effect
+        string typeLabel = this is SpellData ? "Spell" :
+                           this is TacticData ? "Tactic" :
+                           this is OnHitData ? "On Hit" :
+                           this is TriggerHPData ? "Trigger HP" :
+                           this is OrbData ? "Orb" : "Ability";
+
+        if (diceSides != null && diceSides.Length > 0 && diceSides[0] != null && diceSides[0].effectID != 0)
+        {
+            return $"{typeLabel} (Effect {diceSides[0].effectID})";
+        }
+
+        return typeLabel;
     }
 }
 

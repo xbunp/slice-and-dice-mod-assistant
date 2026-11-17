@@ -1195,7 +1195,17 @@ public class ItemData : SDData
                 ModifierData mod = new ModifierData(); mod.Parse(core); mech.PayloadData = mod;
             }
         }
-        else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata") { mech.PayloadData = AbilityData.CreateSpellOrTactic(core); }
+        else if (mech.Prefix == "cast" || mech.Prefix == "abilitydata")
+        {
+            // Do not unpack carrier-prefixed expressions into naked ability models
+            if (!core.StartsWith("sthief.", StringComparison.OrdinalIgnoreCase) &&
+                !core.StartsWith("tthief.", StringComparison.OrdinalIgnoreCase) &&
+                !core.StartsWith("learn.", StringComparison.OrdinalIgnoreCase) &&
+                !core.StartsWith("abilitydata.", StringComparison.OrdinalIgnoreCase))
+            {
+                mech.PayloadData = AbilityData.CreateSpellOrTactic(core);
+            }
+        }
         else if (mech.Prefix == "sticker") { ItemData item = new ItemData(); item.Parse(core); mech.PayloadData = item; }
         else if (mech.Prefix == "t")
         {

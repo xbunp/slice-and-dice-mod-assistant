@@ -393,11 +393,9 @@ public abstract class EntityData : SDData, IPayloadContainer
                             Unpack = preserveUnpackFlag
                         };
 
-                        // Safely re-hydrate nested entities so they conform to the intrinsic payload standard
-                        if (leg.PayloadData is EntityData ed)
+                        if (leg.Prefix == "hat" && leg.PayloadData is EntityData ed)
                         {
                             string safeHat = ed.ExportAsHat();
-                            // Let the entity define itself, just ensure it's safely bracketed for the AST
                             flat.RawPayloadString = safeHat.StartsWith("(") ? safeHat : $"({safeHat})";
                         }
                         else if (leg.PayloadData is SDData sd)

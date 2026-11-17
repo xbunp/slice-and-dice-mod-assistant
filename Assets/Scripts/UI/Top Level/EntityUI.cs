@@ -1035,33 +1035,60 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     }
     protected void AppendCustomAbilitiesSelector(List<GridRowSpec> layout, List<string> customAbilityNames)
     {
-        AppendCollectionSelector<string>(
-            layout: layout, label: "Add Custom Ability:", uniqueKey: "CustomAbility",
-            availableChoices: customAbilityNames,
-            currentActiveItems: CurrentEntity.customAbilityData?.Select(a => a.entityName).ToList() ?? new List<string>(),
-            getKey: (name) => name, getDisplay: (name) => name,
-            onAdd: (abilityName) => {
-                bool alreadyExists = CurrentEntity.customAbilityData?.Any(a => a.entityName == abilityName) ?? false;
-                if (!alreadyExists)
+        List<AbilityData> activeAbilities = CurrentEntity.customAbilityData?.ToList() ?? new List<AbilityData>();
+        List<string> displayList = new List<string>();
+        Dictionary<string, AbilityData> displayToAbilityMap = new Dictionary<string, AbilityData>();
+
+        for (int i = 0; i < activeAbilities.Count; i++)
+        {
+            var ab = activeAbilities[i];
+            string displayName = ab.GetCleanName();
+            string uniqueDisplay = displayName;
+            int counter = 2;
+            while (displayToAbilityMap.ContainsKey(uniqueDisplay))
+            {
+                uniqueDisplay = $"{displayName} ({counter++})";
+            }
+            displayToAbilityMap[uniqueDisplay] = ab;
+            displayList.Add(uniqueDisplay);
+        }
+
+        var availableAbilities = ModPackage.Instance?.CustomAbilities ?? new List<AbilityData>();
+
+        AppendCollectionSelector<AbilityData>(
+            layout: layout,
+            label: "Add Custom Ability:",
+            uniqueKey: "CustomAbility",
+            availableChoices: availableAbilities,
+            currentActiveItems: displayList,
+            getKey: (ab) => ab.GetCleanName(),
+            getDisplay: (ab) => ab.GetCleanName(),
+            onAdd: (template) =>
+            {
+                AbilityData clonedAbility = AbilityData.CreateAbility(template.Export());
+                if (clonedAbility != null)
                 {
-                    var template = ModPackage.Instance.CustomAbilities.FirstOrDefault(a => a.entityName == abilityName);
-                    if (template != null)
-                    {
-                        AbilityData clonedAbility = AbilityData.CreateAbility(template.Export());
-                        if (clonedAbility != null)
-                        {
-                            clonedAbility.entityName = template.entityName;
-                            CurrentEntity.AddCustomAbility(clonedAbility);
-                            NotifyStateChanged();
-                            RebuildStatsUI();
-                        }
-                    }
+                    clonedAbility.entityName = template.GetCleanName();
+                    CurrentEntity.AddCustomAbility(clonedAbility);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
                 }
             },
-            onRemove: (abilityName) => {
-                CurrentEntity.RemoveCustomAbility(abilityName);
-                NotifyStateChanged();
-                RebuildStatsUI();
+            onRemove: (displayKey) =>
+            {
+                if (displayToAbilityMap.TryGetValue(displayKey, out AbilityData abilityToRemove))
+                {
+                    CurrentEntity.RemoveCustomAbility(abilityToRemove.entityName);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onEdit: (displayKey) =>
+            {
+                if (displayToAbilityMap.TryGetValue(displayKey, out AbilityData abilityToEdit))
+                {
+                    SendAbilityToAbilityUI(abilityToEdit);
+                }
             }
         );
     }
@@ -1117,13 +1144,22 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
     }
     protected void AppendOrbSelectors(List<GridRowSpec> layout, List<string> customAbilityNames)
     {
-        // Base Orbs
+        // -----------------------------------------------------------------
+        // 1. BASE ORBS (Hardcoded vanilla game triggers - delete only)
+        // -----------------------------------------------------------------
         AppendCollectionSelector<string>(
-            layout: layout, label: "Add Base Orb:", uniqueKey: "BaseOrb",
+            layout: layout,
+            label: "Add Base Orb:",
+            uniqueKey: "BaseOrb",
             availableChoices: OrbData.ValidBaseOrbs.ToList(),
-            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && o.isHardcoded).Select(o => o.hardcodedAbilityName).ToList() ?? new List<string>(),
-            getKey: (name) => name, getDisplay: (name) => name,
-            onAdd: (orbName) => {
+            currentActiveItems: CurrentEntity.customOrbs?
+                .Where(o => o != null && o.isHardcoded)
+                .Select(o => o.hardcodedAbilityName)
+                .ToList() ?? new List<string>(),
+            getKey: (name) => name,
+            getDisplay: (name) => name,
+            onAdd: (orbName) =>
+            {
                 if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
                 bool alreadyExists = CurrentEntity.customOrbs.Any(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase));
                 if (!alreadyExists)
@@ -1135,7 +1171,8 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
                     RebuildStatsUI();
                 }
             },
-            onRemove: (orbName) => {
+            onRemove: (orbName) =>
+            {
                 if (CurrentEntity.customOrbs == null) return;
                 var target = CurrentEntity.customOrbs.FirstOrDefault(o => o != null && o.isHardcoded && string.Equals(o.hardcodedAbilityName, orbName, StringComparison.OrdinalIgnoreCase));
                 if (target != null && CurrentEntity.customOrbs.Remove(target))
@@ -1146,46 +1183,80 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
             }
         );
 
-        // Custom Orbs
-        AppendCollectionSelector<string>(
-            layout: layout, label: "Add Custom Orb:", uniqueKey: "CustomOrb",
-            availableChoices: customAbilityNames,
-            currentActiveItems: CurrentEntity.customOrbs?.Where(o => o != null && !o.isHardcoded).Select(o => o.entityName).ToList() ?? new List<string>(),
-            getKey: (name) => name, getDisplay: (name) => name,
-            onAdd: (abilityName) => {
+        // -----------------------------------------------------------------
+        // 2. CUSTOM ORBS (Custom Ability triggers - supports [→] Edit & [X] Delete)
+        // -----------------------------------------------------------------
+        List<OrbData> activeCustomOrbs = CurrentEntity.customOrbs?
+            .Where(o => o != null && !o.isHardcoded)
+            .ToList() ?? new List<OrbData>();
+
+        List<string> orbDisplayList = new List<string>();
+        Dictionary<string, OrbData> displayToOrbMap = new Dictionary<string, OrbData>();
+
+        for (int i = 0; i < activeCustomOrbs.Count; i++)
+        {
+            var orb = activeCustomOrbs[i];
+            string displayName = orb.GetCleanName();
+            string uniqueDisplay = displayName;
+            int counter = 2;
+            while (displayToOrbMap.ContainsKey(uniqueDisplay))
+            {
+                uniqueDisplay = $"{displayName} ({counter++})";
+            }
+            displayToOrbMap[uniqueDisplay] = orb;
+            orbDisplayList.Add(uniqueDisplay);
+        }
+
+        var availableAbilities = ModPackage.Instance?.CustomAbilities ?? new List<AbilityData>();
+
+        AppendCollectionSelector<AbilityData>(
+            layout: layout,
+            label: "Add Custom Orb:",
+            uniqueKey: "CustomOrb",
+            availableChoices: availableAbilities,
+            currentActiveItems: orbDisplayList,
+            getKey: (ab) => ab.GetCleanName(),
+            getDisplay: (ab) => ab.GetCleanName(),
+            onAdd: (template) =>
+            {
                 if (CurrentEntity.customOrbs == null) CurrentEntity.customOrbs = new List<OrbData>();
-                bool alreadyExists = CurrentEntity.customOrbs.Any(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
+                bool alreadyExists = CurrentEntity.customOrbs.Any(o => o != null && !o.isHardcoded && string.Equals(o.GetCleanName(), template.GetCleanName(), StringComparison.OrdinalIgnoreCase));
                 if (!alreadyExists)
                 {
-                    var template = ModPackage.Instance.CustomAbilities?.FirstOrDefault(a => string.Equals(a.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
-                    if (template != null)
+                    OrbData clonedOrb = new OrbData();
+                    clonedOrb.Parse(template.Export());
+                    clonedOrb.entityName = template.GetCleanName();
+
+                    if (template is OrbData templateOrb)
                     {
-                        OrbData clonedOrb = new OrbData();
-                        clonedOrb.Parse(template.Export());
-                        clonedOrb.entityName = template.entityName;
-                        if (template is OrbData templateOrb)
-                        {
-                            clonedOrb.isHardcoded = templateOrb.isHardcoded;
-                            clonedOrb.carrierPrefix = templateOrb.carrierPrefix;
-                        }
-                        else
-                        {
-                            clonedOrb.isHardcoded = false;
-                            clonedOrb.carrierPrefix = "sthief.abilitydata";
-                        }
-                        CurrentEntity.AddCustomAbility(clonedOrb);
-                        NotifyStateChanged();
-                        RebuildStatsUI();
+                        clonedOrb.isHardcoded = templateOrb.isHardcoded;
+                        clonedOrb.carrierPrefix = templateOrb.carrierPrefix;
                     }
-                }
-            },
-            onRemove: (abilityName) => {
-                if (CurrentEntity.customOrbs == null) return;
-                var target = CurrentEntity.customOrbs.FirstOrDefault(o => o != null && !o.isHardcoded && string.Equals(o.entityName, abilityName, StringComparison.OrdinalIgnoreCase));
-                if (target != null && CurrentEntity.customOrbs.Remove(target))
-                {
+                    else
+                    {
+                        clonedOrb.isHardcoded = false;
+                        clonedOrb.carrierPrefix = "sthief.abilitydata";
+                    }
+
+                    CurrentEntity.AddCustomAbility(clonedOrb);
                     NotifyStateChanged();
                     RebuildStatsUI();
+                }
+            },
+            onRemove: (displayKey) =>
+            {
+                if (displayToOrbMap.TryGetValue(displayKey, out OrbData orbToRemove))
+                {
+                    CurrentEntity.customOrbs.Remove(orbToRemove);
+                    NotifyStateChanged();
+                    RebuildStatsUI();
+                }
+            },
+            onEdit: (displayKey) =>
+            {
+                if (displayToOrbMap.TryGetValue(displayKey, out OrbData orbToEdit))
+                {
+                    SendAbilityToAbilityUI(orbToEdit);
                 }
             }
         );
@@ -1764,5 +1835,17 @@ public abstract class EntityUI<T> : RootUI where T : EntityData, new()
 
         // 2. Open and focus item in ItemUI
         ItemUI.Instance.OpenItemForEditing(itemToEdit);
+    }
+
+    protected void SendAbilityToAbilityUI(AbilityData abilityToEdit)
+    {
+        if (abilityToEdit == null) return;
+        if (AbilityUI.Instance == null)
+        {
+            Debug.LogWarning("[EntityUI] AbilityUI.Instance is not loaded.");
+            return;
+        }
+
+        AbilityUI.Instance.OpenAbilityForEditing(abilityToEdit);
     }
 }

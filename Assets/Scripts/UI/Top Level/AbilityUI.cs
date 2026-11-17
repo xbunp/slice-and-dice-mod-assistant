@@ -64,6 +64,13 @@ public class AbilityUI : RootUI
         }
     }
 
+    public static AbilityUI Instance { get; private set; }
+    private AbilityData _sourceAbility;
+    private void Awake()
+    {
+        Instance = this;
+    }
+
     #region Smart Solver Prototype
 
     // --- SMART SOLVER (ADVANCED MODE) STATE ---
@@ -113,7 +120,8 @@ public class AbilityUI : RootUI
     }
     private void UpdateVisualsOnly()
     {
-        if (previewName != null) previewName.text = CurrentAbility.entityName;
+        if (previewName != null) previewName.text = CurrentAbility.GetCleanName();
+
         var drawVis = CurrentAbility.visuals?.FirstOrDefault(v => v.Type == VisualType.Draw && !string.IsNullOrWhiteSpace(v.RawValue));
         if (previewIcon != null)
         {
@@ -158,6 +166,7 @@ public class AbilityUI : RootUI
     }
     public override void Initialize(FullScreenUIGenerator uiGeneratorRef)
     {
+        Instance = this;
         uiGenerator = uiGeneratorRef;
         if (iconPicker == null) iconPicker = UnityEngine.Object.FindObjectOfType<IconPickerModal>(true);
         EntityUIHelpers.Initialize();
@@ -335,7 +344,7 @@ public class AbilityUI : RootUI
     {
         if (statsUI == null || abilityDataUI == null) return;
         isDrawingUI = true;
-        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentAbility.entityName);
+        if (statsUI.Inputs.TryGetValue("Name", out var nameIn)) nameIn.SetTextWithoutNotify(CurrentAbility.GetCleanName());
         if (statsUI.Inputs.TryGetValue("OverrideName", out var overNameIn)) overNameIn.SetTextWithoutNotify(CurrentAbility.imageOverride);
         if (statsUI.Sliders.TryGetValue("HeroSliH", out var shH)) shH.SetValueWithoutNotify(CurrentAbility.h);
         if (statsUI.Sliders.TryGetValue("HeroSliS", out var shS)) shS.SetValueWithoutNotify(CurrentAbility.s);
@@ -1351,6 +1360,14 @@ public class AbilityUI : RootUI
     {
         ModPackage.Instance.SaveActiveEntity<AbilityData>();
         AbilityData savedAbility = ModPackage.Instance.GetActiveEntity<AbilityData>();
+
+        // Sync the source ability on the entity if edited from one
+        if (_sourceAbility != null && _sourceAbility != savedAbility)
+        {
+            _sourceAbility.Parse(savedAbility.Export());
+            _sourceAbility.entityName = savedAbility.GetCleanName();
+        }
+
         var abilitiesList = ModPackage.Instance.CustomAbilities as List<AbilityData>;
         int newIndex = abilitiesList?.IndexOf(savedAbility) ?? -1;
         if (newIndex >= 0) _currentPoolIndex = newIndex + 1;
@@ -1575,5 +1592,66 @@ public class AbilityUI : RootUI
         if (isX) vis.x = offset;
         else vis.y = offset;
         NotifyStateChanged();
+    }
+
+    public void OpenAbilityForEditing(AbilityData ability)
+    {
+        if (ability == null) return;
+        _sourceAbility = ability;
+
+        // 1. Ensure ability is registered in the mod pool
+        if (ModPackage.Instance != null && ModPackage.Instance.CustomAbilities != null)
+        {
+            if (!ModPackage.Instance.CustomAbilities.Contains(ability))
+            {
+                ModPackage.Instance.loadedMod.SaveEntity(null, ability);
+            }
+            ModPackage.Instance.LoadEntityForEditing<AbilityData>(ability);
+        }
+
+        // 2. Select this ability in the pool dropdown
+        if (ModPackage.Instance?.CustomAbilities != null)
+        {
+            int idx = -1;
+            for (int i = 0; i < ModPackage.Instance.CustomAbilities.Count; i++)
+            {
+                if (ModPackage.Instance.CustomAbilities[i] == ability)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            _currentPoolIndex = idx >= 0 ? idx + 1 : 0;
+        }
+
+        // 3. Rebuild UI views
+        RebuildStatsUI();
+        RebuildAbilityScrollView();
+
+        // 4. Switch tabs to AbilityUI
+        NavigateToThisTab();
+    }
+    public void NavigateToThisTab()
+    {
+        GameObject myPanel = generatedScreen?.RootWrapper != null ? generatedScreen.RootWrapper.gameObject : gameObject;
+
+        var allNavTabs = UnityEngine.Object.FindObjectsOfType<NavigationTabsUI>(true);
+        foreach (var nav in allNavTabs)
+        {
+            if (myPanel != null && nav.SelectTabByPanel(myPanel))
+            {
+                return;
+            }
+            if (nav.SelectTabByName("Ability") || nav.SelectTabByName("Abilities") || nav.SelectTabByName("Spell") || nav.SelectTabByName("Spells"))
+            {
+                return;
+            }
+        }
+
+        if (generatedScreen?.RootWrapper != null)
+        {
+            generatedScreen.RootWrapper.gameObject.SetActive(true);
+            generatedScreen.RootWrapper.SetAsLastSibling();
+        }
     }
 }
