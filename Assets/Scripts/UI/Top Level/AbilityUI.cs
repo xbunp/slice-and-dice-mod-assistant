@@ -779,10 +779,12 @@ public class AbilityUI : RootUI
         ));
         var abilityOnlyKeywords = AbilityDomainRules.AbilityOnlyKeywords;
         var activeKeywordKeys = CurrentAbility.items
-            ?.Where(i => abilityOnlyKeywords.Values.Any(v => string.Equals(v, i, StringComparison.OrdinalIgnoreCase)))
-            .Select(i => abilityOnlyKeywords.FirstOrDefault(x => string.Equals(x.Value, i, StringComparison.OrdinalIgnoreCase)).Key)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList() ?? new List<string>();
+                    ?.Select(i => AbilityDomainRules.TryGetAbilityOnlyKeywordItem(i, out string tok)
+                        ? AbilityDomainRules.AbilityOnlyKeywords.FirstOrDefault(kv => string.Equals(kv.Value, tok, StringComparison.OrdinalIgnoreCase)).Key
+                        : null)
+                    .Where(k => k != null)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
         AppendCollectionSelector<string>(
             layout: layout,
             label: "Add Ability-Only Keyword:",

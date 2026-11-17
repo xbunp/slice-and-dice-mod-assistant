@@ -39,7 +39,14 @@ public static class AbilityDomainRules
     {
         itemToken = null;
         if (string.IsNullOrWhiteSpace(keyword)) return false;
-        string normalized = keyword.Trim().Replace(" ", "").Replace("_", "");
+        string clean = StaticBranchTracing.StripOuterParens(keyword.Trim());
+
+        // 1. Check if it's already an item token value (e.g. "ritemx.539ce9a")
+        var match = AbilityOnlyKeywords.Values.FirstOrDefault(v => string.Equals(v, clean, StringComparison.OrdinalIgnoreCase));
+        if (match != null) { itemToken = match; return true; }
+
+        // 2. Check if it's a keyword name (e.g. "Deplete", "singlecast")
+        string normalized = clean.Replace(" ", "").Replace("_", "").Replace(".", "");
         return NormalizedAbilityOnlyKeywords.TryGetValue(normalized, out itemToken);
     }
     public static bool IsAbilityOnlyKeywordItem(string itemToken)
@@ -280,6 +287,18 @@ public abstract class AbilityData : HeroData
         ExtractKnowledge(tokens, _itemPipeline, processTraitsAndCollections: true);
         ExecuteItemPipeline();
 
+        // Single source of truth: extract ability keywords from customPayloads into items
+        for (int i = customPayloads.Count - 1; i >= 0; i--)
+        {
+            string token = customPayloads[i].Export().Replace("i.", "").Trim('(', ')', ' ');
+            if (AbilityDomainRules.TryGetAbilityOnlyKeywordItem(token, out string canonical))
+            {
+                if (!items.Contains(canonical, StringComparer.OrdinalIgnoreCase))
+                    items.Add(canonical);
+                customPayloads.RemoveAt(i);
+            }
+        }
+
         // STRICT INVARIANT: Only set entityName if an explicit .n. tag was defined in the data
         if (string.IsNullOrEmpty(entityName) || entityName.Contains(".") || entityName.StartsWith("("))
         {
@@ -379,44 +398,19 @@ public abstract class AbilityData : HeroData
                 string e = cp.Export();
                 if (string.IsNullOrEmpty(e)) continue;
                 if (cp.Type == PayloadType.Item && !e.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
-                {
                     e = $"i.{e}";
-                }
-
-                // Strip i. and parens to inspect the true token
-                string check = e;
-                if (check.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
-                    check = check.Substring(2);
-                check = StaticBranchTracing.StripOuterParens(check.Trim());
-
-                if (AbilityDomainRules.IsAbilityOnlyKeywordItem(check))
-                {
-                    deferredAbilityKeywordPayloads.Add(e);
-                }
-                else
-                {
-                    sb.Append($".{e}");
-                }
+                sb.Append($".{e}");
             }
         }
         string faceModifiers = BuildFaceModifiers(includeInlineFacades: true);
         if (!string.IsNullOrEmpty(faceModifiers)) sb.Append(faceModifiers);
-
-        // Emit non-ability-keyword items first, then ability-only keywords AFTER all face modifiers and payloads
         if (items != null)
         {
-            foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x) && !AbilityDomainRules.IsAbilityOnlyKeywordItem(x)))
+            foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x)))
             {
-                sb.Append($".i.{itm}");
+                string clean = StaticBranchTracing.StripOuterParens(itm.Trim());
+                sb.Append($".i.({clean})");
             }
-            foreach (var itm in items.Where(x => !string.IsNullOrWhiteSpace(x) && AbilityDomainRules.IsAbilityOnlyKeywordItem(x)))
-            {
-                sb.Append($".i.{itm}");
-            }
-        }
-        foreach (var deferred in deferredAbilityKeywordPayloads)
-        {
-            sb.Append($".{deferred}");
         }
 
         // Enforce exact visual order: .img.<img|Void> -> .draw.<sprite>:<x>:<y> -> .hsv.<h>:<s>:<v>
