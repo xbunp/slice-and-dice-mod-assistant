@@ -365,7 +365,16 @@ public abstract class EntityData : SDData, IPayloadContainer
                             var chainsToAbsorb = remainingChainedKeywords.Where(k => !string.IsNullOrEmpty(k)).ToList();
                             if (chainsToAbsorb.Count > 0)
                             {
-                                shatteredPayload = $"({shatteredPayload}#{string.Join("#", chainsToAbsorb)})";
+                                if (leg.Prefix == "sticker" && IsKeywordToken(shatteredPayload) && chainsToAbsorb.All(IsKeywordToken))
+                                {
+                                    var allKeywords = new List<string> { FormatKeywordToken(shatteredPayload) };
+                                    allKeywords.AddRange(chainsToAbsorb.Select(FormatKeywordToken));
+                                    shatteredPayload = $"({string.Join(".mrg.", allKeywords)})";
+                                }
+                                else
+                                {
+                                    shatteredPayload = $"({shatteredPayload}#{string.Join("#", chainsToAbsorb)})";
+                                }
                                 remainingChainedKeywords.Clear();
                             }
                         }
@@ -887,11 +896,20 @@ public abstract class EntityData : SDData, IPayloadContainer
                 if (mech.ChainedKeywords != null && mech.ChainedKeywords.Count > 0)
                 {
                     // If the payload had chained keywords (#k.selfshield) that got absorbed into the mechanic,
-                    // re-stitch them with '#' so the sticker payload remains intact.
+                    // re-stitch them with '#' or '.mrg.' so the payload remains intact.
                     var payloadChains = mech.ChainedKeywords.Where(k => !string.IsNullOrEmpty(k)).ToList();
                     if (payloadChains.Count > 0)
                     {
-                        fullPayload = $"({fullPayload}#{string.Join("#", payloadChains)})";
+                        if (lowerPrefix == "sticker" && IsKeywordToken(fullPayload) && payloadChains.All(IsKeywordToken))
+                        {
+                            var allKeywords = new List<string> { FormatKeywordToken(fullPayload) };
+                            allKeywords.AddRange(payloadChains.Select(FormatKeywordToken));
+                            fullPayload = $"({string.Join(".mrg.", allKeywords)})";
+                        }
+                        else
+                        {
+                            fullPayload = $"({fullPayload}#{string.Join("#", payloadChains)})";
+                        }
                         // Clear them from chained keywords so they don't also get added to face.keywords
                         mech.ChainedKeywords.Clear();
                     }
@@ -1164,7 +1182,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         string prefix = faceType.ToString().ToLower();
         bool applyStickerRules = faceType == DiceSideData.DiceFaceType.Sticker;
-
         // If the face is an Enchant with a target override, divert it to sticker format
         if (faceType == DiceSideData.DiceFaceType.Enchant && payloadTarget.HasValue)
         {
@@ -1172,18 +1189,21 @@ public abstract class EntityData : SDData, IPayloadContainer
             payloadStr = $"(self.{payloadStr})";
             applyStickerRules = true;
         }
-
         string formattedPayload = payloadStr?.Trim() ?? "";
+
+        // Combine keywords via .mrg. for sticker faces
+        if (applyStickerRules && TryFormatStickerKeywordMerge(formattedPayload, out string mergedKeywords))
+        {
+            formattedPayload = mergedKeywords;
+        }
 
         // Check if the payload is already enclosed in outer parentheses using the existing StripOuterParens helper
         bool alreadyEnclosed = formattedPayload.StartsWith("(") && formattedPayload.EndsWith(")")
             && StaticBranchTracing.StripOuterParens(formattedPayload) != formattedPayload;
-
         if (!alreadyEnclosed && (formattedPayload.Contains("#") || formattedPayload.Contains(".")))
         {
             formattedPayload = $"({formattedPayload})";
         }
-
         string innerPayloadStr = $"{prefix}.{formattedPayload}";
         string hatWrapperFmt = null;
         bool hasTogtime = face.togtime;
@@ -2051,5 +2071,56 @@ public abstract class EntityData : SDData, IPayloadContainer
                 face.sideMechanics.RemoveAll(m => m.LegacyItemPayload == itemToRemove);
             }
         }
+    }
+
+    public static bool IsKeywordToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return false;
+        string clean = StaticBranchTracing.StripOuterParens(token.Trim());
+        if (clean.Equals("togtime", StringComparison.OrdinalIgnoreCase) ||
+            clean.Equals("togfri", StringComparison.OrdinalIgnoreCase) ||
+            clean.Equals("togtarg", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (clean.StartsWith("k.", StringComparison.OrdinalIgnoreCase))
+        {
+            string afterK = clean.Substring(2);
+            return !string.IsNullOrWhiteSpace(afterK);
+        }
+        return ExternalGameRegistry.IsValidKeyword(clean);
+    }
+    public static string FormatKeywordToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return token;
+        string clean = StaticBranchTracing.StripOuterParens(token.Trim());
+        if (clean.StartsWith("k.", StringComparison.OrdinalIgnoreCase))
+            return clean.ToLowerInvariant();
+        return $"k.{clean.ToLowerInvariant()}";
+    }
+    public static bool TryFormatStickerKeywordMerge(string payload, out string formatted)
+    {
+        formatted = payload;
+        if (string.IsNullOrWhiteSpace(payload)) return false;
+        string clean = StaticBranchTracing.StripOuterParens(payload.Trim());
+
+        // If it already uses .mrg. and has no '#', preserve user input as-is
+        if (clean.IndexOf(".mrg.", StringComparison.OrdinalIgnoreCase) >= 0 && clean.IndexOf('#') < 0)
+        {
+            return false;
+        }
+        if (clean.IndexOf('#') < 0)
+        {
+            return false;
+        }
+
+        var parts = StaticBranchTracing.TopLevelSplit(clean, '#');
+        if (parts.Count < 2) return false;
+
+        // ONLY merge if every constituent part is a valid keyword
+        if (!parts.All(IsKeywordToken)) return false;
+
+        var formattedParts = parts.Select(FormatKeywordToken);
+        formatted = $"({string.Join(".mrg.", formattedParts)})";
+        return true;
     }
 }
