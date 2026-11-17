@@ -541,7 +541,7 @@ public abstract class AbilityData : HeroData
         if (probe.diceSides != null && probe.diceSides.Length > 4)
         {
             var face5 = probe.diceSides[4];
-            if (face5 != null && face5.effectID == 76 && face5.pips > 0) isSpell = true;
+            if (face5 != null && face5.effectID == 76) isSpell = true;
         }
         if (isSpell)
         {
@@ -740,23 +740,19 @@ public abstract class AbilityData : HeroData
 [System.Serializable]
 public class SpellData : AbilityData
 {
-    [Header("Spell Properties")]
-    public int manaCost = 1;
-
-    protected override string ExportInner()
+    public int manaCost
     {
-        bool isBaseAbility = ExternalGameRegistry.IsValidAbility(baseReplica);
-        bool hasCustomMana = diceSides[4] != null && (diceSides[4].effectID != 0 || diceSides[4].pips != 0);
-
-        // Prevents base spells from having `.sd.0:0:0:0:76-1` forcibly appended, 
-        // which would ruin the string matching check
-        if (!isBaseAbility || hasCustomMana)
+        get => (diceSides != null && diceSides.Length > 4 && diceSides[4] != null)
+            ? diceSides[4].pips
+            : 0;
+        set
         {
-            if (diceSides[4] == null) diceSides[4] = new DiceSideData();
-            if (diceSides[4].effectID == 0) diceSides[4].effectID = 76;
-            diceSides[4].pips = manaCost;
+            if (diceSides != null && diceSides.Length > 4 && diceSides[4] != null)
+            {
+                diceSides[4].effectID = 76;
+                diceSides[4].pips = Mathf.Max(0, value);
+            }
         }
-        return base.ExportInner();
     }
 
     public DiceSideData ManaCostSide
@@ -769,7 +765,24 @@ public class SpellData : AbilityData
     {
         InitializeDiceFaces();
         diceSides[4].effectID = 76;
-        diceSides[4].pips = manaCost;
+        diceSides[4].pips = 1; // Default for brand new spells created in UI
+    }
+
+    protected override string ExportInner()
+    {
+        bool isBaseAbility = ExternalGameRegistry.IsValidAbility(baseReplica);
+        if (!isBaseAbility)
+        {
+            if (diceSides[4] == null) diceSides[4] = new DiceSideData();
+            // Only set a default if face 4 has no effect defined at all.
+            // NEVER mutate or overwrite already defined diceSides!
+            if (diceSides[4].effectID == 0)
+            {
+                diceSides[4].effectID = 76;
+                diceSides[4].pips = 1;
+            }
+        }
+        return base.ExportInner();
     }
 }
 

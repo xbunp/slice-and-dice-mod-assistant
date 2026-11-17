@@ -103,7 +103,7 @@ heropool.
 
 heropool.
 
-((replica.Statue.n.DejaVu.col.v.hp.6.tier.2.sd.15-3:112-1:30-1:52-1:91-1:44-1.i.(left.k.dejavu#facade.pos122:0).i.(rightmost.k.singleuse#facade.Can7:0).img.Ludus.hsv.-26:26:-18.draw.Sudul:-5:0).i.learn.sthief.abilitydata.(Fey.n.Recall.sd.15-1:0:0:0:76-2.i.(ritemx.539ce9a).i.(left.sticker.(all.left.hat.(Fey.sd.15-2.i.(left.k.singleuse#k.dejavu#facade.pos122:0)))).img.spe36.hsv.71:-16:14))
+((replica.Statue.n.DejaVu.col.v.hp.6.tier.2.sd.15-3:112-1:30-1:52-1:91-1:44-1.i.(left.k.dejavu#facade.pos122:0).i.(rightmost.k.singleuse#facade.Can7:0).img.Ludus.hsv.-26:26:-18.draw.Sudul:-5:0).i.learn.sthief.abilitydata.(Fey.n.Recall.sd.15-1:0:0:0:76-2.i.(left.sticker.(all.left.hat.(Fey.sd.15-2.i.(left.k.singleuse#k.dejavu#facade.pos122:0)))).i.(ritemx.539ce9a).img.spe36.hsv.71:-16:14))
 +
 ((replica.Curator.n.Paxin.col.v.hp.8.tier.2.sd.15-1:15-2:0:0:38-1:177-1.i.(left.k.paxin#k.doubleuse#facade.PEP9:0).i.(mid.k.pair#facade.Bal14:0).i.(topbot.facade.bas0:82:0:-11).i.(rightmost.k.shield#k.selfshield#k.paxin#facade.Can25:18:68:42).draw.Stoic:-9:1.p.923434:d32ae3:17.p.d3a992:d3d1a8:29).i.learn.sthief.abilitydata.(Fey.n.Pax.sd.15-1:0:136-3:8.i.(left.sticker.(ritemx.16e.mrg.k.paxin)#sidesc.[orange]Target ally:[cu] Set all sides to 1 and add [light]pax[cu][violet]in[cu] this turn)))
 +
@@ -475,7 +475,7 @@ heropool.
 +
 (((replica.Statue.n.Poison.hp.7.tier.2.sd.91-2:47-1:0:0:53-1:103-7.i.(rightmost.k.poison#k.onesie#facade.the24:0).img.Carrier.hsv.3:28:6)))
 +
-(((replica.Statue.n.Wither.hp.8.tier.2.sd.187-3:103-10:0:187-2:103-6.i.(bot.k.wither#k.managain#facade.Spi21:62:0:0).i.(left.k.wither#k.managain#facade.Spi21:62:0:0).i.(mid.k.wither#k.threesy#facade.Dog18:35:7:-44).i.(right.k.wither#k.onesie#facade.Dog18:35:7:-44).i.(top.hat.(Fey.sd.15-2:0:117.i.(left.k.wither).i.(top.facade.bas117:22:56:-8).i.(togpip#togkey))).i.(rightmost.hat.(Fey.sd.136-1:0:0:0:0:187-1.i.(rightmost.k.wither#facade.pos179:0:65:-4).i.(togunt))).img.rmon.1c.hsv.25:10:5).i.(learn.sthief.abilitydata.(Fey.n.Leak.sd.184-1:0:0:0:76-2.i.(left.k.wither#k.exert).img.2e4000WP7OA0oa0ffMjM6gwjwg4Mw0MhM0wM3g2x2g3w1w1w1w3j1j3wixiw3MhM1MhM4x3x6MwhwMff))))
+((replica.Statue.n.Wither.hp.8.tier.2.sd.28-2:59-2:0:187-3.i.(left.k.wither#facade.Spi65:-22:0:0).i.(mid.k.wither#k.onesie#facade.bas59:24:0:-11).i.(top.hat.(Fey.sd.15-2:0:117.i.(left.k.wither).i.(top.facade.bas117:22:56:-8).i.(togpip#togkey))).i.(bot.k.wither#k.managain#facade.Spi21:62:0:0).i.(right.hat.(Fey.sd.187-1:0:0:0:112-2.i.(left.k.wither).i.(right.facade.bas112:32:0:0#sidesc.Heal [pips] [blue]manaGain[cu][comma][n]1 [grey]self[cu][green]wither[cu]).i.(togunt))).i.(rightmost.hat.(Fey.sd.136-1:0:0:0:0:187-1.i.(rightmost.k.wither#facade.pos179:0:65:-4).i.(togunt))).img.rmon.1c.hsv.25:10:5).i.learn.sthief.abilitydata.(Fey.n.Leak.sd.184-1:0:0:0:76.i.(left.k.wither#k.exert).i.(k.exert).i.(mid.k.exert).i.(ritemx.539ce9a).img.2e4000WP7OA0oa0ffMjM6gwjwg4Mw0MhM0wM3g2x2g3w1w1w1w3j1j3wixiw3MhM1MhM4x3x6MwhwMff))
 +
 (((replica.Fate.n.Weaken.col.n.hp.5.tier.2.sd.131-2:0:181-1:0:80-2.i.(left.k.weaken#k.exert#facade.OkN27:0).i.(mid.hat.(Fey.sd.187-1:110-2.i.(left.mid.hat.(Fey.sd.186.i.(mid.sticker.(Eye of Horus.m.-1)#togtime#togtarg))).i.(mid.k.boost#facade.bas110:59:0:0#sidesc.[pips] [red]regen[cu] [blue]boost[cu][comma] then 1 [violet]perma[cu][grey]self[cu][green]weaken[cu]).i.(togunt))).i.(top.k.weaken#k.singleuse#k.fizz#facade.Yca76:0).i.(bot.hat.(Fey.i.(left.mid.hat.(Fey.sd.186.i.(mid.sticker.(Eye of Horus)#togtime#togtarg))).i.(bot.sticker.(Eye of Horus.m.-1)#togtime#facade.Mut57:0#sidesc.Target ally: 1 [violet]perma[cu][green]weaken[cu][comma] then 1 [grey]self[cu][violet]permaBoost[cu]).i.(togunt))).hsv.-64:-11:-2.p.8a7f84:388045:07).i.(learn.Chill)))
 +
@@ -733,7 +733,7 @@ heropool.
 +
 ((replica.Armorer.n.Smith.col.w.hp.7.tier.2.sd.39-4:0:0:0:75-1:75-1.i.(left.k.smith#k.onesie#facade.Spi132:0).i.(right.k.wham#k.singleuse#facade.Yca69:0).i.(mid.mid.hat.(Fey.sd.187-1:187-1.i.(left.k.smith#k.stasis).i.(mid.mid.hat.(Fey.sd.186.i.(mid.sticker.(Gauntlet#Kite Shield.splice.Eye of Horus)#togtarg))#ritemx.dae9#facade.ite11:0#sidesc.Target self 1).i.(togpip#togkey))).i.(topbot.mid.hat.(Fey.sd.56-2.i.(left.k.shield).i.(mid.sticker.(Iron Pendant)#togtime#facade.eba65:0).i.(togpip#togkey))).p.a2abb3:c4bb98:01))
 +
-((replica.Coffin.n.Patient.col.w.hp.8.tier.2.sd.56-2:69-1:23-2:23-2:109-1.i.(left.k.patient#k.treble#facade.eba62:0:-59:0).i.(mid.k.patient#facade.Lem38:0:-60:-12).i.(topbot.k.patient#k.critical#facade.OkN2:0:-18:9).i.(right.k.patient#facade.bas109:91:-27:11).img.Grandma.p.788490:b7ae89:23))
+(replica.Coffin.n.Patient.col.w.hp.9.tier.2.sd.56-2:69-1:0:0:109-2.i.(right.k.patient#facade.bas109:91:-27:11).i.(left.k.patient#k.treble#facade.eba62:0:-59:0).i.(mid.k.patient#facade.Lem38:0:-60:-12).i.(topbot.mid.hat.(Fey.sd.0:23-3.i.(mid.k.patient#facade.OkN2:0:-18:9).i.((left.hat.(Troll.sd.8))#togvis))).img.Grandma.p.788490:b7ae89:23)
 +
 ((replica.Enchanter.n.Pristine.col.w.hp.7.tier.2.sd.28-2:0:103-2:103-2:107-1:187-1.i.(topbot.k.pristine#k.cruel#facade.Dog20:4:21:9).i.(right.k.pristine#facade.pos105:0).i.(rightmost.k.singleuse#k.regen#facade.Che10:0).i.(mid.hat.(Fey.sd.0:158-1.i.(Blindfold#k.pristine#k.mandatory#facade.har59:0:43:-12))).p.ff7610:f1e5b5:24))
 +

@@ -955,8 +955,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             var face = diceSides[i];
             if (face == null) continue;
             List<string> chunks = new List<string>();
-            bool hasHatWrapper = ProcessFacePayload(face, chunks);
-
+            ProcessFacePayload(face, chunks);
             // Blindfold strips inherent keywords and must precede keywords/facades
             bool hasFlatBlindfold = face.sideMechanics.Any(m =>
                 m.LegacyItemPayload == null &&
@@ -967,27 +966,18 @@ public abstract class EntityData : SDData, IPayloadContainer
             {
                 chunks.Add("Blindfold");
             }
-
             // Process native properties, decoupled entirely from Legacy Side Items
             ProcessIntrinsicFaceKeywords(face, chunks);
             ProcessFaceFacades(face, chunks, includeInlineFacades);
             ProcessFaceDescription(face, chunks);
             ProcessFaceStasis(face, chunks);
-
             if (chunks.Count > 0)
             {
-                if (hasHatWrapper)
-                {
-                    int hatIdx = chunks.FindIndex(c => c.StartsWith("hat.", StringComparison.OrdinalIgnoreCase));
-                    if (hatIdx >= 0) chunks[hatIdx] = "mid." + chunks[hatIdx];
-                    else chunks[0] = "mid." + chunks[0];
-                }
                 string templateString = string.Join("#", chunks);
                 int faceMask = 1 << i;
                 if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
                 else groupedModifiers[templateString] = faceMask;
             }
-
             // GATHER STRUCTURAL INTACT SIDE ITEMS FROM THE AST BRIDGE
             if (face.sideMechanics != null)
             {
@@ -1001,7 +991,6 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
 
-        // 1. Export inherent grouped string properties
         // 1. Export inherent grouped string properties
         foreach (var kvp in groupedModifiers)
         {
