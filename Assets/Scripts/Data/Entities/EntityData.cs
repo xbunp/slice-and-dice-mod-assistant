@@ -2024,7 +2024,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         // 4. Default: No isolated source face detected (generic hero like Cultist)
         return null;
     }
-
     public string BuildFaceModifiers(bool includeInlineFacades)
     {
         StringBuilder modSb = new StringBuilder();
