@@ -1465,6 +1465,11 @@ public abstract class EntityData : SDData, IPayloadContainer
                     depth += peek.Count(c => c == '(') - peek.Count(c => c == ')');
                     if (depth <= 0 && EntityDomainRules.CommonMetadataKeys.Contains(peek))
                     {
+                        // Do not treat "draw" as an entity metadata key if it's the payload of "learn"
+                        if (k > 0 && string.Equals(stream.GetRawList()[startIndex + k - 1], "learn", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
                         length = k;
                         break;
                     }
@@ -1622,15 +1627,24 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
         // 6. Base Abilities (Learn)
+        // 6. Base Abilities (Learn)
         if (isHero && hero.baseAbilityData != null)
         {
             foreach (var ab in hero.baseAbilityData)
             {
                 if (!string.IsNullOrEmpty(ab))
                 {
-                    AbilityData abilityPayload = AbilityData.CreateAbility(ab);
                     ItemData learnItem = new ItemData();
-                    learnItem.Mechanics.Add(new ItemMechanic { Prefix = "learn", PayloadData = abilityPayload });
+                    // If it's a known base ability or a standalone identifier, export as plain string
+                    if (ExternalGameRegistry.IsValidAbility(ab) || (!ab.Contains("(") && !ab.Contains(".")))
+                    {
+                        learnItem.Mechanics.Add(new ItemMechanic { Prefix = "learn", PayloadString = ab });
+                    }
+                    else
+                    {
+                        AbilityData abilityPayload = AbilityData.CreateAbility(ab);
+                        learnItem.Mechanics.Add(new ItemMechanic { Prefix = "learn", PayloadData = abilityPayload });
+                    }
                     RouteItemPayload(learnItem, isHero, innerHeroPayloads, outerPayloads);
                 }
             }

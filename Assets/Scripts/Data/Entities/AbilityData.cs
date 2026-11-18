@@ -306,7 +306,16 @@ public abstract class AbilityData : HeroData
         if (tokens.Count > 0)
         {
             string firstTokenLower = tokens[0].ToLower();
-            if (!AbilityDomainRules.AbilityKeys.Contains(firstTokenLower) && !ItemDomainRules.MechanicPrefixes.Contains(firstTokenLower))
+
+            // Check if the token is a recognized ability name (e.g. "Draw") before checking AbilityKeys
+            bool isPropertyKey = AbilityDomainRules.AbilityKeys.Contains(firstTokenLower);
+            if (ExternalGameRegistry.IsValidAbility(tokens[0]))
+            {
+                isPropertyKey = false;
+            }
+
+            // 4. Safely extract base template (e.g. Fey, sthief, etc)
+            if (!isPropertyKey && !ItemDomainRules.MechanicPrefixes.Contains(firstTokenLower))
             {
                 baseReplica = ExtractBaseIdentifier(tokens[0]);
                 tokens.RemoveAt(0);
