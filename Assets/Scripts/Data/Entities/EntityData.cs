@@ -64,6 +64,24 @@ public static class EntityDomainRules
                 }
                 continue;
             }
+
+            // Consume modifier suffixes like .mn.<name> on gifts/modifiers
+            if (endIndex > startIndex && (peek == "mn" || peek == "part" || peek == "modtier"))
+            {
+                endIndex++;
+                if (endIndex < tokens.Count)
+                {
+                    endIndex++;
+                }
+                continue;
+            }
+            if (endIndex > startIndex && peek == "spirit")
+            {
+                endIndex++;
+                continue;
+            }
+            // -------------------
+
             // Standard single-token payloads (like t.Beefy)
             if (endIndex == startIndex)
             {
@@ -1610,6 +1628,7 @@ public abstract class EntityData : SDData, IPayloadContainer
             }
         }
         // 5. Blessings
+        // 5. Blessings
         if (isHero && blessings != null)
         {
             foreach (var bl in blessings)
@@ -1620,13 +1639,14 @@ public abstract class EntityData : SDData, IPayloadContainer
                     string exported = blessMod.ExportInternal(false);
                     if (!string.IsNullOrEmpty(exported))
                     {
-                        if (!exported.StartsWith("(")) exported = $"({exported})";
+                        bool isAlreadyWrapped = exported.StartsWith("(") && exported.EndsWith(")") &&
+                                                StaticBranchTracing.StripOuterParens(exported) != exported;
+                        if (!isAlreadyWrapped) exported = $"({exported})";
                         outerPayloads.Add($"gift.{exported}");
                     }
                 }
             }
         }
-        // 6. Base Abilities (Learn)
         // 6. Base Abilities (Learn)
         if (isHero && hero.baseAbilityData != null)
         {

@@ -37,24 +37,21 @@ public static class ModifierDomainRules
     {
         int endIndex = startIndex;
         int depth = 0;
-        int parenDepth = 0; // Track parenthesis depth to prevent premature breaks
+        int parenDepth = 0;
         while (endIndex < tokens.Count)
         {
             string peek = tokens[endIndex].ToLower();
             parenDepth += peek.Count(c => c == '(') - peek.Count(c => c == ')');
-
             if (ModifierStartTokens.Contains(peek)) depth++;
             else if (ModifierEndTokens.Contains(peek)) depth--;
-
             endIndex++;
-
             if (depth == 0) break;
-
-            // If we are at the top level, and we encounter a token that clearly belongs to the entity
             if (parenDepth <= 0 && endIndex < tokens.Count)
             {
                 string next = tokens[endIndex].ToLower();
-                if (next == "i" || next == "t" || next == "doc" || next == "mn" || next == "bal" || EntityDomainRules.CommonMetadataKeys.Contains(next))
+                if (EntityDomainRules.CommonMetadataKeys.Contains(next) ||
+                    EntityDomainRules.CommonCollectionKeys.Contains(next) ||
+                    next == "bal")
                 {
                     break;
                 }
@@ -190,7 +187,7 @@ public class ModifierData : SDData
             string lastLower = tokens.Last().ToLower();
             if (lastLower == "spirit")
             {
-                IsSpirit = true;    
+                IsSpirit = true;
                 tokens.RemoveAt(tokens.Count - 1);
                 continue;
             }
@@ -237,6 +234,31 @@ public class ModifierData : SDData
             {
                 break;
             }
+        }
+
+        // UNWRAP PARENTHESIZED COMPOUND BODY (if suffixes like .mn. wrapped the body in parens)
+        string remainingBody = string.Join(".", tokens);
+        string strippedBody = StaticBranchTracing.StripOuterParens(remainingBody);
+        if (strippedBody != remainingBody)
+        {
+            var chainParts = StaticBranchTracing.TopLevelSplit(strippedBody, '&');
+            if (chainParts.Count > 1)
+            {
+                ParseSingleModifier(chainParts[0]);
+                ChainedModifier = new ModifierData();
+                ChainedModifier.Parse(string.Join("&", chainParts.Skip(1)));
+                return;
+            }
+            var spliceParts = StaticBranchTracing.TopLevelSplit(strippedBody, '.');
+            int spliceIdx = spliceParts.FindIndex(p => p.Equals("splice", StringComparison.OrdinalIgnoreCase));
+            if (spliceIdx != -1)
+            {
+                ParseSingleModifier(string.Join(".", spliceParts.Take(spliceIdx)));
+                SplicedModifier = new ModifierData();
+                SplicedModifier.Parse(string.Join(".", spliceParts.Skip(spliceIdx + 1)));
+                return;
+            }
+            tokens = StaticBranchTracing.TopLevelSplit(strippedBody, '.');
         }
 
         // FORWARD PASS
@@ -625,6 +647,10 @@ public class ModifierData : SDData
             if (!string.IsNullOrEmpty(DocDescription)) suffixedBlock += $".doc.{DocDescription}";
             if (IsSpirit && ActionType != ModifierActionType.MonsterSpirit) suffixedBlock += ".spirit";
             string result = StaticBranchTracing.SafeBracket(suffixedBlock);
+            if (!isRoot && (!result.StartsWith("(") || !result.EndsWith(")") || StaticBranchTracing.StripOuterParens(result) == result))
+            {
+                result = $"({result})";
+            }
             UnityEngine.Debug.Log($"[MODIFIER EXPORT RESULT (NON-ROOT WITH SUFFIXES)]: '{result}'");
             return result;
         }
