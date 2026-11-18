@@ -19,21 +19,21 @@ public static class AbilityDomainRules
     public const string DefaultCarrier = "sthief";
     public static readonly Dictionary<string, string> AbilityOnlyKeywords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        { "Channel", "ritemx.302ea5e.part.0" },
-        { "Cooldown", "k.exert" },
-        { "Deplete", "ritemx.539ce9a" },
-        { "Future", "ritemx.dae9" },
-        { "Spell Rescue", "ritemx.62e8" },
-        { "Single Cast", "k.singleuse" }
+        { "Channel", "left.ritemx.302ea5e.part.0" },
+        { "Cooldown", "left.k.exert" },
+        { "Deplete", "left.ritemx.539ce9a" },
+        { "Future", "left.ritemx.dae9" },
+        { "Spell Rescue", "left.ritemx.62e8" },
+        { "Single Cast", "left.k.singleuse" }
     };
     private static readonly Dictionary<string, string> NormalizedAbilityOnlyKeywords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        { "channel", "ritemx.302ea5e.part.0" },
-        { "cooldown", "k.exert" },
-        { "deplete", "ritemx.539ce9a" },
-        { "future", "ritemx.dae9" },
-        { "spellrescue", "ritemx.62e8" },
-        { "singlecast", "k.singleuse" }
+        { "channel", "left.ritemx.302ea5e.part.0" },
+        { "cooldown", "left.k.exert" },
+        { "deplete", "left.ritemx.539ce9a" },
+        { "future", "left.ritemx.dae9" },
+        { "spellrescue", "left.ritemx.62e8" },
+        { "singlecast", "left.k.singleuse" }
     };
     public static bool TryGetAbilityOnlyKeywordItem(string keyword, out string itemToken)
     {
@@ -41,13 +41,45 @@ public static class AbilityDomainRules
         if (string.IsNullOrWhiteSpace(keyword)) return false;
         string clean = StaticBranchTracing.StripOuterParens(keyword.Trim());
 
-        // 1. Check if it's already an item token value (e.g. "ritemx.539ce9a")
+        if (clean.StartsWith("i.", StringComparison.OrdinalIgnoreCase))
+            clean = clean.Substring(2).Trim();
+        clean = StaticBranchTracing.StripOuterParens(clean);
+
+        // 1. Check if it's already an item token value (e.g. "ritemx.539ce9a", "left.k.exert")
         var match = AbilityOnlyKeywords.Values.FirstOrDefault(v => string.Equals(v, clean, StringComparison.OrdinalIgnoreCase));
         if (match != null) { itemToken = match; return true; }
 
-        // 2. Check if it's a keyword name (e.g. "Deplete", "singlecast")
+        // 2. Backward compatibility: handle unprefixed/legacy variants
+        if (string.Equals(clean, "k.exert", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(clean, "exert", StringComparison.OrdinalIgnoreCase))
+        {
+            itemToken = AbilityOnlyKeywords["Cooldown"];
+            return true;
+        }
+        if (string.Equals(clean, "k.singleuse", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(clean, "singleuse", StringComparison.OrdinalIgnoreCase))
+        {
+            itemToken = AbilityOnlyKeywords["Single Cast"];
+            return true;
+        }
+
+        // 3. Check if it's a keyword name (e.g. "Deplete", "singlecast", "cooldown")
         string normalized = clean.Replace(" ", "").Replace("_", "").Replace(".", "");
-        return NormalizedAbilityOnlyKeywords.TryGetValue(normalized, out itemToken);
+        if (NormalizedAbilityOnlyKeywords.TryGetValue(normalized, out itemToken))
+            return true;
+
+        if (normalized.Equals("exert", StringComparison.OrdinalIgnoreCase))
+        {
+            itemToken = AbilityOnlyKeywords["Cooldown"];
+            return true;
+        }
+        if (normalized.Equals("singleuse", StringComparison.OrdinalIgnoreCase))
+        {
+            itemToken = AbilityOnlyKeywords["Single Cast"];
+            return true;
+        }
+
+        return false;
     }
     public static bool IsAbilityOnlyKeywordItem(string itemToken)
     {
@@ -298,6 +330,16 @@ public abstract class AbilityData : HeroData
                 customPayloads.RemoveAt(i);
             }
         }
+
+        // Canonicalize any existing ability items (converts legacy k.exert -> left.k.exert)
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (AbilityDomainRules.TryGetAbilityOnlyKeywordItem(items[i], out string canonical))
+            {
+                items[i] = canonical;
+            }
+        }
+        items = items.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         // STRICT INVARIANT: Only set entityName if an explicit .n. tag was defined in the data
         if (string.IsNullOrEmpty(entityName) || entityName.Contains(".") || entityName.StartsWith("("))
