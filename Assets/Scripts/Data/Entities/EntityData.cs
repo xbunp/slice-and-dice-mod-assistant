@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using static DiceSideData;
 
 public static class EntityDomainRules
 {
@@ -145,9 +146,8 @@ public abstract class EntityData : SDData, IPayloadContainer
 
     public DiceSideData[] diceSides = new DiceSideData[6];
 
-    // Change from [SerializeField] public List<SpellData> customSpells;
-    [System.NonSerialized] // Tells Unity's serializer to ignore this field
-    [JsonProperty]         // Tells Newtonsoft to keep serializing this field
+    [System.NonSerialized] 
+    [JsonProperty]         
     [SerializeField] public List<OnHitData> customOnHits;
 
     [System.NonSerialized]
@@ -959,87 +959,6 @@ public abstract class EntityData : SDData, IPayloadContainer
     /// FACE BUILDING //////////
     ////////////////////////////
 
-    public string BuildFaceModifiers(bool includeInlineFacades)
-    {
-        StringBuilder modSb = new StringBuilder();
-        var groupedModifiers = new Dictionary<string, int>();
-
-        // TRACKING FOR LEGACY ITEMS: Track the ItemData reference to prevent duplicates across multiple faces
-        HashSet<ItemData> processedSideItems = new HashSet<ItemData>();
-        List<ItemData> itemsToExport = new List<ItemData>();
-
-        for (int i = 0; i < 6; i++)
-        {
-            var face = diceSides[i];
-            if (face == null) continue;
-            List<string> chunks = new List<string>();
-            ProcessFacePayload(face, chunks);
-            // Blindfold strips inherent keywords and must precede keywords/facades
-            bool hasFlatBlindfold = face.sideMechanics.Any(m =>
-                m.LegacyItemPayload == null &&
-                string.IsNullOrEmpty(m.Prefix) &&
-                string.Equals(m.RawPayloadString, "blindfold", StringComparison.OrdinalIgnoreCase)
-            );
-            if (hasFlatBlindfold)
-            {
-                chunks.Add("Blindfold");
-            }
-            // Process native properties, decoupled entirely from Legacy Side Items
-            ProcessIntrinsicFaceKeywords(face, chunks);
-            ProcessFaceFacades(face, chunks, includeInlineFacades);
-            ProcessFaceDescription(face, chunks);
-            ProcessFaceStasis(face, chunks);
-            if (chunks.Count > 0)
-            {
-                string templateString = string.Join("#", chunks);
-                int faceMask = 1 << i;
-                if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
-                else groupedModifiers[templateString] = faceMask;
-            }
-            // GATHER STRUCTURAL INTACT SIDE ITEMS FROM THE AST BRIDGE
-            if (face.sideMechanics != null)
-            {
-                foreach (var m in face.sideMechanics)
-                {
-                    if (m.LegacyItemPayload != null && processedSideItems.Add(m.LegacyItemPayload))
-                    {
-                        itemsToExport.Add(m.LegacyItemPayload);
-                    }
-                }
-            }
-        }
-
-        // 1. Export inherent grouped string properties
-        foreach (var kvp in groupedModifiers)
-        {
-            string templateString = kvp.Key;
-            List<string> optimalAliases = DiceTargetHelper.GetBestAliasCombination(kvp.Value);
-            foreach (string alias in optimalAliases)
-            {
-                string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, alias) : templateString;
-
-                // If it contains complex syntax, preserve verbatim without passing through ItemData.Parse
-                string rawModifier = $"{alias}.{resolvedMod}";
-                if (rawModifier.StartsWith("(") && rawModifier.EndsWith(")"))
-                {
-                    modSb.Append($".i.{rawModifier}");
-                }
-                else
-                {
-                    modSb.Append($".i.({rawModifier})");
-                }
-            }
-        }
-
-        // 2. Export bridged structural objects (Legacy Items)
-        foreach (var item in itemsToExport)
-        {
-            ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = item };
-            modSb.Append($".{modifier.Export()}");
-        }
-
-        return modSb.ToString();
-    }
     private void ProcessIntrinsicFaceKeywords(DiceSideData face, List<string> chunks)
     {
         var flatKeywords = new List<string>();
@@ -1132,130 +1051,6 @@ public abstract class EntityData : SDData, IPayloadContainer
         {
             chunks.Add("k.stasis");
         }
-    }
-    private bool ProcessFacePayload(DiceSideData face, List<string> chunks)
-    {
-        var m = face.sideMechanics.FirstOrDefault(x =>
-            x.Prefix == "sticker" || x.Prefix == "cast" || x.Prefix == "enchant" || x.Prefix == "hat"
-        );
-        if (m == null || string.IsNullOrWhiteSpace(m.RawPayloadString))
-            return false;
-        string payloadStr = m.RawPayloadString.Trim();
-
-        DiceSideData.DiceFaceType fType;
-        if (m.Prefix == "hat")
-        {
-            fType = payloadStr.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)
-                ? DiceSideData.DiceFaceType.Egg
-                : DiceSideData.DiceFaceType.Hat;
-        }
-        else if (m.Prefix == "cast") fType = DiceSideData.DiceFaceType.Cast;
-        else if (m.Prefix == "enchant") fType = DiceSideData.DiceFaceType.Enchant;
-        else fType = DiceSideData.DiceFaceType.Sticker;
-
-        if (fType == DiceSideData.DiceFaceType.Egg)
-        {
-            return ProcessEggPayload(face, payloadStr, chunks);
-        }
-        else if (fType == DiceSideData.DiceFaceType.Hat)
-        {
-            return ProcessHatFacePayload(face, payloadStr, chunks);
-        }
-        else
-        {
-            return ProcessStandardPayload(face, payloadStr, fType, m.PayloadTargetOverride, chunks);
-        }
-    }
-    private bool ProcessHatFacePayload(DiceSideData face, string payloadStr, List<string> chunks)
-    {
-        string stripped = StaticBranchTracing.StripOuterParens(payloadStr.Trim());
-        // Clean out any rogue egg prefix if present on a non-egg Hat
-        if (stripped.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-            stripped = stripped.Substring(4).Trim();
-
-        chunks.Add($"hat.({stripped})");
-        return true;
-    }
-    private bool ProcessStandardPayload(DiceSideData face, string payloadStr, DiceSideData.DiceFaceType faceType, DiceSideData.PayloadTarget? payloadTarget, List<string> chunks)
-    {
-        string prefix = faceType.ToString().ToLower();
-        bool applyStickerRules = faceType == DiceSideData.DiceFaceType.Sticker;
-        // If the face is an Enchant with a target override, divert it to sticker format
-        if (faceType == DiceSideData.DiceFaceType.Enchant && payloadTarget.HasValue)
-        {
-            prefix = "sticker";
-            payloadStr = $"(self.{payloadStr})";
-            applyStickerRules = true;
-        }
-        string formattedPayload = payloadStr?.Trim() ?? "";
-
-        // Combine keywords via .mrg. for sticker faces
-        if (applyStickerRules && TryFormatStickerKeywordMerge(formattedPayload, out string mergedKeywords))
-        {
-            formattedPayload = mergedKeywords;
-        }
-
-        // Check if the payload is already enclosed in outer parentheses using the existing StripOuterParens helper
-        bool alreadyEnclosed = formattedPayload.StartsWith("(") && formattedPayload.EndsWith(")")
-            && StaticBranchTracing.StripOuterParens(formattedPayload) != formattedPayload;
-        if (!alreadyEnclosed && (formattedPayload.Contains("#") || formattedPayload.Contains(".")))
-        {
-            formattedPayload = $"({formattedPayload})";
-        }
-        string innerPayloadStr = $"{prefix}.{formattedPayload}";
-        string hatWrapperFmt = null;
-        bool hasTogtime = face.togtime;
-
-        if (applyStickerRules)
-        {
-            if (hasTogtime)
-                innerPayloadStr += "#togtime";
-
-            if (payloadTarget.HasValue)
-            {
-                switch (payloadTarget.Value)
-                {
-                    case DiceSideData.PayloadTarget.Enemy:
-                        innerPayloadStr += "#togfri";
-                        chunks.Add(innerPayloadStr);
-                        break;
-                    case DiceSideData.PayloadTarget.AllAllies:
-                        hatWrapperFmt = "Fey.sd.179.i.mid." + innerPayloadStr + "#togtarg";
-                        break;
-                    case DiceSideData.PayloadTarget.AllEnemies:
-                        hatWrapperFmt = "Fey.sd.179.i.mid." + innerPayloadStr + "#togtarg#togfri";
-                        break;
-                    case DiceSideData.PayloadTarget.Everyone:
-                        hatWrapperFmt = "Fey.sd.185.i.mid." + innerPayloadStr + "#togtarg";
-                        break;
-                    case DiceSideData.PayloadTarget.Self:
-                        hatWrapperFmt = "Fey.sd.186.i.mid." + innerPayloadStr + "#togtarg";
-                        break;
-                    case DiceSideData.PayloadTarget.Ally:
-                    case DiceSideData.PayloadTarget.None:
-                    default:
-                        chunks.Add(innerPayloadStr);
-                        break;
-                }
-            }
-            else
-            {
-                chunks.Add(innerPayloadStr);
-            }
-        }
-        else
-        {
-            if (hasTogtime && faceType == DiceSideData.DiceFaceType.Enchant)
-                innerPayloadStr += "#togtime";
-            chunks.Add(innerPayloadStr);
-        }
-
-        if (hatWrapperFmt != null)
-        {
-            chunks.Add($"hat.({hatWrapperFmt})");
-            return true;
-        }
-        return false;
     }
     private void ProcessFaceFacades(DiceSideData face, List<string> chunks, bool includeInlineFacades)
     {
@@ -2136,5 +1931,317 @@ public abstract class EntityData : SDData, IPayloadContainer
         var formattedParts = parts.Select(FormatKeywordToken);
         formatted = $"({string.Join(".mrg.", formattedParts)})";
         return true;
+    }
+
+    //////////////////////////////////////////////////
+    ///
+    // ============================================================================================
+    // CRITICAL ENGINE RULE - DO NOT REFACTOR AWAY OR SILENTLY SIMPLIFY:
+    // In Slice & Dice hat syntax:
+    //   - '<dest>.hat.(<entity>)' copies <dest> face of <entity> onto <dest> face of bearer.
+    //   - '<dest>.<source>.hat.(<entity>)' copies <source> face of <entity> onto <dest> face of bearer.
+    //
+    // DO NOT HARDCODE 'mid' OR ANY OTHER FACE.
+    // Sides can be left, mid, top, bot, right, rightmost (strictly indexed via DiceTargetHelper.FaceNames).
+    //
+    // If the effect on the hat entity lives on <source> (e.g. 'mid' in 'Fey.sd.186.i.mid.sticker...'),
+    // and the bearer's destination face is <dest> (e.g. 'left'), the compiler MUST emit:
+    //   '<dest>.<source>.hat.(...)'  ->  e.g. 'left.mid.hat.(...)'
+    // When <dest> == <source>, the engine shorthand '<dest>.hat.(...)' is used.
+    // ============================================================================================
+    public static string DetermineHatSourceFace(string hatPayload, out string cleanedPayload)
+    {
+        cleanedPayload = hatPayload;
+        if (string.IsNullOrWhiteSpace(hatPayload)) return null;
+
+        string clean = StaticBranchTracing.StripOuterParens(hatPayload.Trim());
+
+        // 1. Check if the payload explicitly starts with a side prefix before "hat." or at the root:
+        //    e.g. "mid.hat.(...)", "top.hat.(...)", "mid.(...)"
+        foreach (var side in DiceTargetHelper.FaceNames)
+        {
+            string sideHatPrefix = $"{side}.hat.";
+            if (clean.StartsWith(sideHatPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                cleanedPayload = clean.Substring(sideHatPrefix.Length).Trim();
+                cleanedPayload = StaticBranchTracing.StripOuterParens(cleanedPayload);
+                return side.ToLowerInvariant();
+            }
+
+            string sideDotPrefix = $"{side}.(";
+            if (clean.StartsWith(sideDotPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                cleanedPayload = clean.Substring(side.Length + 1).Trim();
+                return side.ToLowerInvariant();
+            }
+        }
+
+        cleanedPayload = clean;
+
+        // 2. Inspect the hat entity body for inline item/sticker face targets:
+        //    e.g. ".i.mid.", ".i.top.", ".i.bot.", ".i.right.", ".i.rightmost.", ".i.left."
+        //    Matches redirect wrappers ("Fey.sd.186.i.mid.sticker...") or arbitrary custom hat entities.
+        foreach (var side in DiceTargetHelper.FaceNames)
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(clean, $@"(?:^|\.)i\.\(?{side}\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                return side.ToLowerInvariant();
+            }
+        }
+
+        // 3. Inspect dice side definitions (.sd.<faces>) if present:
+        //    e.g. "Fey.sd.0:187-1:0:0:0:0" or "Fey.sd.186:0:55:0:0:0"
+        var sdMatch = System.Text.RegularExpressions.Regex.Match(clean, @"(?:\.sd\.|^sd\.)([0-9\-\:]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (sdMatch.Success)
+        {
+            string[] faces = sdMatch.Groups[1].Value.Split(':');
+            bool face0IsRedirect = false;
+            if (faces.Length > 0 && int.TryParse(faces[0].Split('-')[0], out int f0Effect))
+            {
+                if (f0Effect == 179 || f0Effect == 185 || f0Effect == 186)
+                    face0IsRedirect = true;
+            }
+
+            int firstNonZero = -1;
+            int nonZeroCount = 0;
+            var faceNamesList = DiceTargetHelper.FaceNames.ToList();
+            for (int f = (face0IsRedirect ? 1 : 0); f < Math.Min(faces.Length, faceNamesList.Count); f++)
+            {
+                string faceStr = faces[f];
+                if (faceStr != "0" && faceStr != "0-0" && !string.IsNullOrEmpty(faceStr))
+                {
+                    if (firstNonZero == -1) firstNonZero = f;
+                    nonZeroCount++;
+                }
+            }
+
+            if (nonZeroCount == 1 && firstNonZero >= 0 && firstNonZero < faceNamesList.Count)
+            {
+                return faceNamesList[firstNonZero].ToLowerInvariant();
+            }
+        }
+
+        // 4. Default: No isolated source face detected (generic hero like Cultist)
+        return null;
+    }
+
+    public string BuildFaceModifiers(bool includeInlineFacades)
+    {
+        StringBuilder modSb = new StringBuilder();
+        var groupedModifiers = new Dictionary<string, int>();
+        // TRACKING FOR LEGACY ITEMS: Track the ItemData reference to prevent duplicates across multiple faces
+        HashSet<ItemData> processedSideItems = new HashSet<ItemData>();
+        List<ItemData> itemsToExport = new List<ItemData>();
+        for (int i = 0; i < 6; i++)
+        {
+            var face = diceSides[i];
+            if (face == null) continue;
+            List<string> chunks = new List<string>();
+            ProcessFacePayload(face, i, chunks);
+            // Blindfold strips inherent keywords and must precede keywords/facades
+            bool hasFlatBlindfold = face.sideMechanics.Any(m =>
+                m.LegacyItemPayload == null &&
+                string.IsNullOrEmpty(m.Prefix) &&
+                string.Equals(m.RawPayloadString, "blindfold", StringComparison.OrdinalIgnoreCase)
+            );
+            if (hasFlatBlindfold)
+            {
+                chunks.Add("Blindfold");
+            }
+            // Process native properties, decoupled entirely from Legacy Side Items
+            ProcessIntrinsicFaceKeywords(face, chunks);
+            ProcessFaceFacades(face, chunks, includeInlineFacades);
+            ProcessFaceDescription(face, chunks);
+            ProcessFaceStasis(face, chunks);
+            if (chunks.Count > 0)
+            {
+                string templateString = string.Join("#", chunks);
+                int faceMask = 1 << i;
+                if (groupedModifiers.ContainsKey(templateString)) groupedModifiers[templateString] |= faceMask;
+                else groupedModifiers[templateString] = faceMask;
+            }
+            // GATHER STRUCTURAL INTACT SIDE ITEMS FROM THE AST BRIDGE
+            if (face.sideMechanics != null)
+            {
+                foreach (var m in face.sideMechanics)
+                {
+                    if (m.LegacyItemPayload != null && processedSideItems.Add(m.LegacyItemPayload))
+                    {
+                        itemsToExport.Add(m.LegacyItemPayload);
+                    }
+                }
+            }
+        }
+        // 1. Export inherent grouped string properties
+        foreach (var kvp in groupedModifiers)
+        {
+            string templateString = kvp.Key;
+            List<string> optimalAliases = DiceTargetHelper.GetBestAliasCombination(kvp.Value);
+            foreach (string alias in optimalAliases)
+            {
+                string resolvedMod = templateString.Contains("{0}") ? string.Format(templateString, alias) : templateString;
+                // If it contains complex syntax, preserve verbatim without passing through ItemData.Parse
+                string rawModifier = $"{alias}.{resolvedMod}";
+                if (rawModifier.StartsWith("(") && rawModifier.EndsWith(")"))
+                {
+                    modSb.Append($".i.{rawModifier}");
+                }
+                else
+                {
+                    modSb.Append($".i.({rawModifier})");
+                }
+            }
+        }
+        // 2. Export bridged structural objects (Legacy Items)
+        foreach (var item in itemsToExport)
+        {
+            ModifierData modifier = new ModifierData { ActionType = ModifierActionType.GiveItem, ItemPayload = item };
+            modSb.Append($".{modifier.Export()}");
+        }
+        return modSb.ToString();
+    }
+    private bool ProcessFacePayload(DiceSideData face, int faceIndex, List<string> chunks)
+    {
+        var m = face.sideMechanics.FirstOrDefault(x =>
+            x.Prefix == "sticker" || x.Prefix == "cast" || x.Prefix == "enchant" || x.Prefix == "hat"
+        );
+        if (m == null || string.IsNullOrWhiteSpace(m.RawPayloadString))
+            return false;
+        string payloadStr = m.RawPayloadString.Trim();
+        DiceSideData.DiceFaceType fType;
+        if (m.Prefix == "hat")
+        {
+            fType = payloadStr.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)
+                ? DiceSideData.DiceFaceType.Egg
+                : DiceSideData.DiceFaceType.Hat;
+        }
+        else if (m.Prefix == "cast") fType = DiceSideData.DiceFaceType.Cast;
+        else if (m.Prefix == "enchant") fType = DiceSideData.DiceFaceType.Enchant;
+        else fType = DiceSideData.DiceFaceType.Sticker;
+        if (fType == DiceFaceType.Egg)
+        {
+            return ProcessEggPayload(face, payloadStr, chunks);
+        }
+        else if (fType == DiceFaceType.Hat)
+        {
+            return ProcessHatFacePayload(face, faceIndex, payloadStr, chunks);
+        }
+        else
+        {
+            return ProcessStandardPayload(face, faceIndex, payloadStr, fType, m.PayloadTargetOverride, chunks);
+        }
+    }
+    private bool ProcessHatFacePayload(DiceSideData face, int faceIndex, string payloadStr, List<string> chunks)
+    {
+        string stripped = StaticBranchTracing.StripOuterParens(payloadStr.Trim());
+        // Clean out any rogue egg prefix if present on a non-egg Hat
+        if (stripped.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+            stripped = stripped.Substring(4).Trim();
+
+        string sourceSide = DetermineHatSourceFace(stripped, out string cleanPayload);
+        var faceNamesList = DiceTargetHelper.FaceNames.ToList();
+        string destSide = (faceIndex >= 0 && faceIndex < faceNamesList.Count) ? faceNamesList[faceIndex] : "left";
+
+        // If source side is distinct from destination side, emit <source>.hat.(<payload>)
+        // BuildFaceModifiers will prepend <dest>. to produce <dest>.<source>.hat.(<payload>)
+        if (!string.IsNullOrEmpty(sourceSide) && !string.Equals(sourceSide, destSide, StringComparison.OrdinalIgnoreCase))
+        {
+            chunks.Add($"{sourceSide}.hat.({cleanPayload})");
+        }
+        else
+        {
+            chunks.Add($"hat.({cleanPayload})");
+        }
+        return true;
+    }
+    private bool ProcessStandardPayload(DiceSideData face, int faceIndex, string payloadStr, DiceSideData.DiceFaceType faceType, DiceSideData.PayloadTarget? payloadTarget, List<string> chunks)
+    {
+        string prefix = faceType.ToString().ToLower();
+        bool applyStickerRules = faceType == DiceSideData.DiceFaceType.Sticker;
+        // If the face is an Enchant with a target override, divert it to sticker format
+        if (faceType == DiceSideData.DiceFaceType.Enchant && payloadTarget.HasValue)
+        {
+            prefix = "sticker";
+            payloadStr = $"(self.{payloadStr})";
+            applyStickerRules = true;
+        }
+        string formattedPayload = payloadStr?.Trim() ?? "";
+        // Combine keywords via .mrg. for sticker faces
+        if (applyStickerRules && TryFormatStickerKeywordMerge(formattedPayload, out string mergedKeywords))
+        {
+            formattedPayload = mergedKeywords;
+        }
+        // Check if the payload is already enclosed in outer parentheses using the existing StripOuterParens helper
+        bool alreadyEnclosed = formattedPayload.StartsWith("(") && formattedPayload.EndsWith(")")
+            && StaticBranchTracing.StripOuterParens(formattedPayload) != formattedPayload;
+        if (!alreadyEnclosed && (formattedPayload.Contains("#") || formattedPayload.Contains(".")))
+        {
+            formattedPayload = $"({formattedPayload})";
+        }
+        string innerPayloadStr = $"{prefix}.{formattedPayload}";
+        string hatWrapperFmt = null;
+        bool hasTogtime = face.togtime;
+        if (applyStickerRules)
+        {
+            if (hasTogtime)
+                innerPayloadStr += "#togtime";
+            if (payloadTarget.HasValue)
+            {
+                switch (payloadTarget.Value)
+                {
+                    case DiceSideData.PayloadTarget.Enemy:
+                        innerPayloadStr += "#togfri";
+                        chunks.Add(innerPayloadStr);
+                        break;
+                    case DiceSideData.PayloadTarget.AllAllies:
+                        hatWrapperFmt = "Fey.sd.179.i.mid." + innerPayloadStr + "#togtarg";
+                        break;
+                    case DiceSideData.PayloadTarget.AllEnemies:
+                        hatWrapperFmt = "Fey.sd.179.i.mid." + innerPayloadStr + "#togtarg#togfri";
+                        break;
+                    case DiceSideData.PayloadTarget.Everyone:
+                        hatWrapperFmt = "Fey.sd.185.i.mid." + innerPayloadStr + "#togtarg";
+                        break;
+                    case DiceSideData.PayloadTarget.Self:
+                        hatWrapperFmt = "Fey.sd.186.i.mid." + innerPayloadStr + "#togtarg";
+                        break;
+                    case DiceSideData.PayloadTarget.Ally:
+                    case DiceSideData.PayloadTarget.None:
+                    default:
+                        chunks.Add(innerPayloadStr);
+                        break;
+                }
+            }
+            else
+            {
+                chunks.Add(innerPayloadStr);
+            }
+        }
+        else
+        {
+            if (hasTogtime && faceType == DiceSideData.DiceFaceType.Enchant)
+                innerPayloadStr += "#togtime";
+            chunks.Add(innerPayloadStr);
+        }
+
+        if (hatWrapperFmt != null)
+        {
+            string sourceSide = DetermineHatSourceFace(hatWrapperFmt, out string cleanWrapper);
+            var faceNamesList = DiceTargetHelper.FaceNames.ToList();
+            string destSide = (faceIndex >= 0 && faceIndex < faceNamesList.Count) ? faceNamesList[faceIndex] : "left";
+
+            // If source side is distinct from destination side, emit <source>.hat.(<payload>)
+            // BuildFaceModifiers will prepend <dest>. to produce <dest>.<source>.hat.(<payload>)
+            if (!string.IsNullOrEmpty(sourceSide) && !string.Equals(sourceSide, destSide, StringComparison.OrdinalIgnoreCase))
+            {
+                chunks.Add($"{sourceSide}.hat.({cleanWrapper})");
+            }
+            else
+            {
+                chunks.Add($"hat.({cleanWrapper})");
+            }
+            return true;
+        }
+        return false;
     }
 }
