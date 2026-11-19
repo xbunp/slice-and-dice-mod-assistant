@@ -674,7 +674,6 @@ public static class BaseItemMetadataRegistry
         "Banana Peel",
         "Bandana",
         "Banned",
-        "Basilisk Scale",
         "Bent Fork",
         "Bent Spoon",
         "Bent Spork",
@@ -685,11 +684,9 @@ public static class BaseItemMetadataRegistry
         "Bismuth",
         "Blindfold",
         "Blood Amulet",
-        "Blue Skink",
         "Boarhide Bracers",
         "Bond Certificate",
         "Bonesaw",
-        "Boots of Speed",
         "Botany",
         "Bowl",
         "Braids",
@@ -751,8 +748,6 @@ public static class BaseItemMetadataRegistry
         "Demonic Deal",
         "Diamond Ring",
         "Diamond Skull",
-        "Diving Suit",
-        "Doll",
         "Dolphin",
         "Doom Blade",
         "Door",
@@ -837,7 +832,6 @@ public static class BaseItemMetadataRegistry
         "Kite Shield",
         "Knife Bag",
         "Knot",
-        "Ladder",
         "Lawnmower",
         "Lead Boots",
         "Leaden Handle",
@@ -864,7 +858,6 @@ public static class BaseItemMetadataRegistry
         "Memory",
         "Metal Studs",
         "Mini Crossbow",
-        "Mirror Mask",
         "Mithril Shields",
         "Monocle",
         "Monster Grin",
@@ -1075,11 +1068,12 @@ public static class BaseItemMetadataRegistry
     {
         if (string.IsNullOrWhiteSpace(expression)) return false;
 
-        // Split by standard syntax delimiters to extract the item name safely
-        string[] tokens = expression.Split(new[] { '.', '#', '(', ')', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        // Do NOT split on spaces (' '), because multi-word item names like "Olympian Trident"
+        // are normalized to "olympiantrident" in NormalizedDiceAffectingItems.
+        string[] tokens = expression.Split(new[] { '.', '#', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var token in tokens)
         {
-            if (IsDiceFaceAffecting(token))
+            if (IsDiceFaceAffecting(token.Trim()))
             {
                 return true;
             }
