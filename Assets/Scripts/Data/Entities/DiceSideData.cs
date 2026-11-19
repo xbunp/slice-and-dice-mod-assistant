@@ -199,6 +199,177 @@ public class DiceSideData
         }
     }
 
+    // ============================================================================================
+    // CRITICAL ENGINE RULE - EGG vs HAT FACE TYPES:
+    // In Slice & Dice syntax, an Egg summon IS mechanically a Hat (it uses the 'hat' keyword to copy
+    // a face from an summoned entity).
+    // An Egg is distinguished by the 'egg.' payload prefix inside the hat expression: e.g. hat.(egg.(replica.Statue))
+    //
+    // CRITICAL: Egg only has Summon sides on its left 3 faces (specifically 'mid' is guaranteed).
+    // The top, bottom, and rightmost faces of an Egg are BLANK.
+    // Export pipelines MUST target '<dest>.mid.hat.(egg.(...))' so summon works on all 6 faces!
+    // ============================================================================================
+    public DiceFaceType faceType
+    {
+        get
+        {
+            var m = PrimaryPayloadMechanic;
+            if (m != null)
+            {
+                if (m.Prefix == "hat")
+                {
+                    if (!string.IsNullOrEmpty(m.RawPayloadString))
+                    {
+                        string clean = StaticBranchTracing.StripOuterParens(m.RawPayloadString.Trim());
+                        // Strip any multiplier prefix (e.g. x2.) before checking for egg.
+                        if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
+                        {
+                            int dotIdx = clean.IndexOf('.');
+                            if (dotIdx > 0 && dotIdx < 3) clean = clean.Substring(dotIdx + 1).Trim();
+                        }
+                        if (clean.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                            return DiceFaceType.Egg;
+                    }
+                    return DiceFaceType.Hat;
+                }
+                if (m.Prefix == "cast") return DiceFaceType.Cast;
+                if (m.Prefix == "enchant") return DiceFaceType.Enchant;
+                return DiceFaceType.Sticker;
+            }
+            var leg = LegacyPrimaryPayloadMechanic;
+            if (leg != null)
+            {
+                if (leg.Prefix == "hat")
+                {
+                    if (!string.IsNullOrEmpty(leg.PayloadString))
+                    {
+                        string clean = StaticBranchTracing.StripOuterParens(leg.PayloadString.Trim());
+                        if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
+                        {
+                            int dotIdx = clean.IndexOf('.');
+                            if (dotIdx > 0 && dotIdx < 3) clean = clean.Substring(dotIdx + 1).Trim();
+                        }
+                        if (clean.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                            return DiceFaceType.Egg;
+                    }
+                    return DiceFaceType.Hat;
+                }
+                if (leg.Prefix == "cast") return DiceFaceType.Cast;
+                if (leg.Prefix == "enchant") return DiceFaceType.Enchant;
+                return DiceFaceType.Sticker;
+            }
+            return DiceFaceType.Base;
+        }
+        set
+        {
+            FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
+
+            // Base explicitly clears all payload mechanics
+            if (value == DiceFaceType.Base)
+            {
+                var m = PrimaryPayloadMechanic;
+                if (m != null) sideMechanics.Remove(m);
+                RemoveLegacyMechanic(x => x.Prefix == "sticker" || x.Prefix == "cast" || x.Prefix == "enchant" || x.Prefix == "hat");
+                return;
+            }
+
+            // Both Egg and Hat map to the game engine's 'hat' prefix
+            string targetPrefix = value switch
+            {
+                DiceFaceType.Egg => "hat",
+                DiceFaceType.Hat => "hat",
+                DiceFaceType.Cast => "cast",
+                DiceFaceType.Enchant => "enchant",
+                _ => "sticker"
+            };
+
+            var existing = PrimaryPayloadMechanic;
+            if (existing != null)
+            {
+                existing.Prefix = targetPrefix;
+                // Only format egg prefixes if explicitly transitioning to/from Egg
+                if (value == DiceFaceType.Egg && !string.IsNullOrEmpty(existing.RawPayloadString) && !existing.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                {
+                    existing.RawPayloadString = $"egg.{existing.RawPayloadString}";
+                }
+                else if (value != DiceFaceType.Egg && !string.IsNullOrEmpty(existing.RawPayloadString))
+                {
+                    if (existing.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                        existing.RawPayloadString = existing.RawPayloadString.Substring(4);
+                    existing.RawPayloadString = existing.RawPayloadString.Replace("#blindfold", "");
+                }
+            }
+            else
+            {
+                // Create the active payload node
+                sideMechanics.Add(new MechanicNode { Prefix = targetPrefix, RawPayloadString = value == DiceFaceType.Egg ? "egg." : "" });
+            }
+        }
+    }
+    public string payload
+    {
+        get
+        {
+            var m = PrimaryPayloadMechanic;
+            if (m != null)
+            {
+                if (m.Prefix == "hat")
+                {
+                    string clean = StaticBranchTracing.StripOuterParens(m.RawPayloadString ?? "");
+                    if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
+                    {
+                        int dotIdx = clean.IndexOf('.');
+                        if (dotIdx > 0 && dotIdx < 3) clean = clean.Substring(dotIdx + 1).Trim();
+                    }
+                    if (clean.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                        return clean.Substring(4);
+                }
+                return m.RawPayloadString ?? "";
+            }
+            var leg = LegacyPrimaryPayloadMechanic;
+            if (leg != null)
+            {
+                if (leg.Prefix == "hat")
+                {
+                    string clean = StaticBranchTracing.StripOuterParens(leg.PayloadString ?? "");
+                    if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
+                    {
+                        int dotIdx = clean.IndexOf('.');
+                        if (dotIdx > 0 && dotIdx < 3) clean = clean.Substring(dotIdx + 1).Trim();
+                    }
+                    if (clean.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                        return clean.Substring(4);
+                }
+                return leg.PayloadString ?? "";
+            }
+            return "";
+        }
+        set
+        {
+            FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
+            var m = PrimaryPayloadMechanic;
+            if (m == null)
+            {
+                if (string.IsNullOrEmpty(value)) return;
+                m = new MechanicNode { Prefix = faceType == DiceFaceType.Egg || faceType == DiceFaceType.Hat ? "hat" : "sticker" };
+                sideMechanics.Add(m);
+            }
+
+            // ONLY enforce egg. if the face type is explicitly Egg
+            if (m.Prefix == "hat" && faceType == DiceFaceType.Egg)
+            {
+                if (!string.IsNullOrEmpty(value) && !value.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+                    m.RawPayloadString = $"egg.{value}";
+                else
+                    m.RawPayloadString = value ?? "";
+            }
+            else
+            {
+                m.RawPayloadString = value ?? "";
+            }
+        }
+    }
+
     public string sidesc
     {
         get
@@ -290,122 +461,7 @@ public class DiceSideData
             }
         }
     }
-    public DiceFaceType faceType
-    {
-        get
-        {
-            var m = PrimaryPayloadMechanic;
-            if (m != null)
-            {
-                if (m.Prefix == "hat")
-                {
-                    if (!string.IsNullOrEmpty(m.RawPayloadString) && m.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-                        return DiceFaceType.Egg;
-                    return DiceFaceType.Hat;
-                }
-                if (m.Prefix == "cast") return DiceFaceType.Cast;
-                if (m.Prefix == "enchant") return DiceFaceType.Enchant;
-                return DiceFaceType.Sticker;
-            }
-            var leg = LegacyPrimaryPayloadMechanic;
-            if (leg != null)
-            {
-                if (leg.Prefix == "hat")
-                {
-                    if (!string.IsNullOrEmpty(leg.PayloadString) && leg.PayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-                        return DiceFaceType.Egg;
-                    return DiceFaceType.Hat;
-                }
-                if (leg.Prefix == "cast") return DiceFaceType.Cast;
-                if (leg.Prefix == "enchant") return DiceFaceType.Enchant;
-                return DiceFaceType.Sticker;
-            }
-            return DiceFaceType.Base;
-        }
-        set
-        {
-            FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
-            // Base explicitly clears all payload mechanics
-            if (value == DiceFaceType.Base)
-            {
-                var m = PrimaryPayloadMechanic;
-                if (m != null) sideMechanics.Remove(m);
-                RemoveLegacyMechanic(x => x.Prefix == "sticker" || x.Prefix == "cast" || x.Prefix == "enchant" || x.Prefix == "hat");
-                return;
-            }
-            string targetPrefix = value switch
-            {
-                DiceFaceType.Egg => "hat",
-                DiceFaceType.Hat => "hat",
-                DiceFaceType.Cast => "cast",
-                DiceFaceType.Enchant => "enchant",
-                _ => "sticker"
-            };
-            var existing = PrimaryPayloadMechanic;
-            if (existing != null)
-            {
-                existing.Prefix = targetPrefix;
-                // Only format egg prefixes if explicitly transitioning to/from Egg
-                if (value == DiceFaceType.Egg && !string.IsNullOrEmpty(existing.RawPayloadString) && !existing.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-                {
-                    existing.RawPayloadString = $"egg.{existing.RawPayloadString}";
-                }
-                else if (value != DiceFaceType.Egg && !string.IsNullOrEmpty(existing.RawPayloadString))
-                {
-                    if (existing.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-                        existing.RawPayloadString = existing.RawPayloadString.Substring(4);
-                    existing.RawPayloadString = existing.RawPayloadString.Replace("#blindfold", "");
-                }
-            }
-            else
-            {
-                // Create the active payload node
-                sideMechanics.Add(new MechanicNode { Prefix = targetPrefix, RawPayloadString = value == DiceFaceType.Egg ? "egg." : "" });
-            }
-        }
-    }
-    public string payload
-    {
-        get
-        {
-            var m = PrimaryPayloadMechanic;
-            if (m != null)
-            {
-                if (m.Prefix == "hat" && m.RawPayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) return m.RawPayloadString.Substring(4);
-                return m.RawPayloadString;
-            }
-            var leg = LegacyPrimaryPayloadMechanic;
-            if (leg != null)
-            {
-                if (leg.Prefix == "hat" && leg.PayloadString.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)) return leg.PayloadString.Substring(4);
-                return leg.PayloadString;
-            }
-            return "";
-        }
-        set
-        {
-            FlattenLegacyPayloadsForEdit(); // Isolate this face before modifying!
-            var m = PrimaryPayloadMechanic;
-            if (m == null)
-            {
-                if (string.IsNullOrEmpty(value)) return;
-                m = new MechanicNode { Prefix = "sticker" };
-                sideMechanics.Add(m);
-            }
-            // ONLY enforce egg. if the face type is explicitly Egg
-            if (m.Prefix == "hat" && faceType == DiceFaceType.Egg)
-            {
-                if (!string.IsNullOrEmpty(value) && !value.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
-                    m.RawPayloadString = $"egg.{value}";
-                else
-                    m.RawPayloadString = value ?? "";
-            }
-            else
-            {
-                m.RawPayloadString = value ?? "";
-            }
-        }
-    }
+
     public PayloadTarget? payloadTarget
     {
         get

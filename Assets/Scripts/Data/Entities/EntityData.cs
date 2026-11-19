@@ -933,7 +933,13 @@ public abstract class EntityData : SDData, IPayloadContainer
 
                 if (lowerPrefix == "hat")
                 {
-                    bool isEgg = fullPayload.StartsWith("egg.", StringComparison.OrdinalIgnoreCase);
+                    string strippedEggCheck = StaticBranchTracing.StripOuterParens(fullPayload.Trim());
+                    if (strippedEggCheck.StartsWith("x", StringComparison.OrdinalIgnoreCase) && strippedEggCheck.Length > 1 && char.IsDigit(strippedEggCheck[1]))
+                    {
+                        int dot = strippedEggCheck.IndexOf('.');
+                        if (dot > 0 && dot < 3) strippedEggCheck = strippedEggCheck.Substring(dot + 1).Trim();
+                    }
+                    bool isEgg = strippedEggCheck.StartsWith("egg.", StringComparison.OrdinalIgnoreCase);
                     diceSides[faceIdx].faceType = isEgg ? DiceSideData.DiceFaceType.Egg : DiceSideData.DiceFaceType.Hat;
                     diceSides[faceIdx].payload = fullPayload;
                 }
@@ -1099,20 +1105,48 @@ public abstract class EntityData : SDData, IPayloadContainer
         }
     }
 
-    private bool ProcessEggPayload(DiceSideData face, string payloadStr, List<string> chunks)
+    // ============================================================================================
+    // CRITICAL ENGINE RULE - EGG SUMMON SIDES (ALARM BELL WARNING - DO NOT REMOVE / REFACTOR):
+    // ============================================================================================
+    // In Slice & Dice, the 'Egg' monster/hero entity ONLY has summon dice sides on its left 3 faces.
+    // Specifically, the 'mid' face is GUARANTEED to be a valid summon face.
+    //
+    // The top, bottom, and rightmost faces of an Egg are BLANK / NON-SUMMON faces in-game.
+    //
+    // In Slice & Dice hat syntax:
+    //   - '<dest>.hat.(<entity>)'         -> copies <dest> face of <entity> onto <dest>
+    //   - '<dest>.<source>.hat.(<entity>)' -> copies <source> face of <entity> onto <dest>
+    //
+    // If you emit '<dest>.hat.(egg.(<entity>))' without specifying '<source>', the engine defaults
+    // to '<source> = <dest>'.
+    // Consequently, setting an Egg summon on top, bot, or rightmost will copy the Egg's top/bot/rightmost
+    // face, which is completely BLANK and BROKEN in-game!
+    //
+    // To ensure Egg summon sides function on EVERY face (left, mid, top, bot, right, rightmost),
+    // the source face MUST ALWAYS be explicitly targeted as 'mid':
+    //   '<dest>.mid.hat.(egg.(<entity>))'
+    //
+    // BuildFaceModifiers automatically prepends '<dest>.' to chunks.
+    // Therefore, ProcessEggPayload MUST ALWAYS emit 'mid.hat.(...)' - NEVER naked 'hat.(...)':
+    //   Example outputs:
+    //     - top face       -> .i.(top.mid.hat.(egg.(replica.Statue)))
+    //     - left face      -> .i.(left.mid.hat.(egg.(replica.Statue)))
+    //     - mid face       -> .i.(mid.mid.hat.(egg.(replica.Statue)))   [redundant but valid & required]
+    //     - bot face       -> .i.(bot.mid.hat.(egg.(replica.Statue)))
+    //     - right face     -> .i.(right.mid.hat.(egg.(replica.Statue)))
+    //     - rightmost face -> .i.(rightmost.mid.hat.(egg.(replica.Statue)))
+    // ============================================================================================
+    private bool ProcessEggPayload(DiceSideData face, int faceIndex, string payloadStr, List<string> chunks)
     {
         bool hasBlindfold = payloadStr.EndsWith("#blindfold", StringComparison.OrdinalIgnoreCase);
         string cleanSummon = hasBlindfold ? payloadStr.Substring(0, payloadStr.Length - 10) : payloadStr;
-
         string fullSummonExport = cleanSummon;
-
         // Only look up if it's a simple, unbracketed name typed by the user directly in the UI
         if (ModPackage.Instance != null && !cleanSummon.Contains("("))
         {
             string searchName = cleanSummon;
             if (searchName.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
                 searchName = searchName.Substring(4).Trim();
-
             var summonHero = ModPackage.Instance.Heroes?.FirstOrDefault(
                 h => string.Equals(h.entityName, searchName, StringComparison.OrdinalIgnoreCase));
             if (summonHero != null)
@@ -1129,10 +1163,8 @@ public abstract class EntityData : SDData, IPayloadContainer
                 }
             }
         }
-
         string stripped = StaticBranchTracing.StripOuterParens(fullSummonExport);
         string xMultStr = "";
-
         // Extract existing multiplier if present so it doesn't double up
         if (stripped.StartsWith("x", StringComparison.OrdinalIgnoreCase) && stripped.Length > 1 && char.IsDigit(stripped[1]))
         {
@@ -1143,98 +1175,45 @@ public abstract class EntityData : SDData, IPayloadContainer
                 stripped = stripped.Substring(dotIdx + 1).Trim();
             }
         }
-
         // Face pips override the multiplier naturally
         if (face.pips >= 2 && face.pips <= 9)
         {
             xMultStr = $"x{face.pips}.";
         }
-
-        // Ensure the egg. prefix is present
+        // Ensure the egg. prefix is present and the inner entity is cleanly formatted
         if (!stripped.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
         {
-            stripped = $"egg.{stripped}";
-        }
-
-        chunks.Add($"hat.({xMultStr}{stripped})");
-
-        if (hasBlindfold)
-        {
-            chunks.Add("blindfold");
-        }
-
-        return true;
-    }
-    private bool ProcessStandardPayload(DiceSideData face, string payloadStr, List<string> chunks)
-    {
-        // If payloadStr is complex, ItemData self-brackets on export.
-        string prefix = face.faceType.ToString().ToLower();
-
-        bool applyStickerRules = face.faceType == DiceSideData.DiceFaceType.Sticker;
-
-        // If the face is an Enchant with a target override, divert it to sticker format
-        if (face.faceType == DiceSideData.DiceFaceType.Enchant && face.payloadTarget.HasValue)
-        {
-            prefix = "sticker";
-            payloadStr = $"(self.{payloadStr})";
-            applyStickerRules = true;
-        }
-
-        string innerPayloadStr = $"{prefix}.{payloadStr}";
-        string hatWrapperFmt = null;
-
-        if (applyStickerRules)
-        {
-            if (face.togtime)
-                innerPayloadStr += "#togtime";
-
-            if (face.payloadTarget.HasValue)
+            if (!stripped.StartsWith("(") && stripped.Contains("."))
             {
-                switch (face.payloadTarget.Value)
-                {
-                    case DiceSideData.PayloadTarget.Enemy:
-                        innerPayloadStr += "#togfri";
-                        chunks.Add(innerPayloadStr);
-                        break;
-                    case DiceSideData.PayloadTarget.AllAllies:
-                        hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg";
-                        break;
-                    case DiceSideData.PayloadTarget.AllEnemies:
-                        hatWrapperFmt = "Fey.sd.179.i.{0}." + innerPayloadStr + "#togtarg#togfri";
-                        break;
-                    case DiceSideData.PayloadTarget.Everyone:
-                        hatWrapperFmt = "Fey.sd.185.i.{0}." + innerPayloadStr + "#togtarg";
-                        break;
-                    case DiceSideData.PayloadTarget.Self:
-                        hatWrapperFmt = "Fey.sd.186.i.{0}." + innerPayloadStr + "#togtarg";
-                        break;
-                    case DiceSideData.PayloadTarget.Ally:
-                    case DiceSideData.PayloadTarget.None:
-                    default:
-                        chunks.Add(innerPayloadStr);
-                        break;
-                }
+                stripped = $"egg.({stripped})";
             }
             else
             {
-                chunks.Add(innerPayloadStr);
+                stripped = $"egg.{stripped}";
             }
         }
         else
         {
-            if (face.togtime && face.faceType == DiceSideData.DiceFaceType.Enchant)
-                innerPayloadStr += "#togtime";
-            chunks.Add(innerPayloadStr);
+            string afterEgg = stripped.Substring(4).Trim();
+            if (!afterEgg.StartsWith("(") && afterEgg.Contains("."))
+            {
+                stripped = $"egg.({afterEgg})";
+            }
         }
 
-        if (hatWrapperFmt != null)
+        // ========================================================================================
+        // CRITICAL ENGINE RULE: Always emit 'mid.hat.(...)' - NEVER naked 'hat.(...)'!
+        // The destination face (e.g. top, bot, rightmost) will be prepended by BuildFaceModifiers,
+        // resulting in '<dest>.mid.hat.(egg.(...))'.
+        // ========================================================================================
+        chunks.Add($"mid.hat.({xMultStr}{stripped})");
+        if (hasBlindfold && !chunks.Any(c => string.Equals(c, "blindfold", StringComparison.OrdinalIgnoreCase)))
         {
-            chunks.Add($"hat.({hatWrapperFmt})");
-            return true; // Target overrides successfully utilized a hat wrapper
+            chunks.Add("blindfold");
         }
-
-        return false;
+        return true;
     }
+
     protected void ExtractKnowledge(List<string> tokens, List<ItemData> itemPipeline, bool processTraitsAndCollections = true)
     {
         var stream = new TokenStream(tokens);
@@ -1953,8 +1932,20 @@ public abstract class EntityData : SDData, IPayloadContainer
     {
         cleanedPayload = hatPayload;
         if (string.IsNullOrWhiteSpace(hatPayload)) return null;
-
         string clean = StaticBranchTracing.StripOuterParens(hatPayload.Trim());
+
+        // CRITICAL: Egg entities strictly provide summon dice on the 'mid' face!
+        string checkEgg = clean;
+        if (checkEgg.StartsWith("x", StringComparison.OrdinalIgnoreCase) && checkEgg.Length > 1 && char.IsDigit(checkEgg[1]))
+        {
+            int dotIdx = checkEgg.IndexOf('.');
+            if (dotIdx > 0 && dotIdx < 3) checkEgg = checkEgg.Substring(dotIdx + 1).Trim();
+        }
+        if (checkEgg.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanedPayload = clean;
+            return "mid";
+        }
 
         // 1. Check if the payload explicitly starts with a side prefix before "hat." or at the root:
         //    e.g. "mid.hat.(...)", "top.hat.(...)", "mid.(...)"
@@ -2110,16 +2101,23 @@ public abstract class EntityData : SDData, IPayloadContainer
         DiceSideData.DiceFaceType fType;
         if (m.Prefix == "hat")
         {
-            fType = payloadStr.StartsWith("egg.", StringComparison.OrdinalIgnoreCase)
+            string clean = StaticBranchTracing.StripOuterParens(payloadStr);
+            if (clean.StartsWith("x", StringComparison.OrdinalIgnoreCase) && clean.Length > 1 && char.IsDigit(clean[1]))
+            {
+                int dot = clean.IndexOf('.');
+                if (dot > 0 && dot < 3) clean = clean.Substring(dot + 1).Trim();
+            }
+            fType = (face.faceType == DiceSideData.DiceFaceType.Egg || clean.StartsWith("egg.", StringComparison.OrdinalIgnoreCase))
                 ? DiceSideData.DiceFaceType.Egg
                 : DiceSideData.DiceFaceType.Hat;
         }
         else if (m.Prefix == "cast") fType = DiceSideData.DiceFaceType.Cast;
         else if (m.Prefix == "enchant") fType = DiceSideData.DiceFaceType.Enchant;
         else fType = DiceSideData.DiceFaceType.Sticker;
+
         if (fType == DiceFaceType.Egg)
         {
-            return ProcessEggPayload(face, payloadStr, chunks);
+            return ProcessEggPayload(face, faceIndex, payloadStr, chunks);
         }
         else if (fType == DiceFaceType.Hat)
         {
