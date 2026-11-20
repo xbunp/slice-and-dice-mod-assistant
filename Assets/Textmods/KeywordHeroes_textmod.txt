@@ -1,10 +1,5 @@
 =(heropool.fey.part.0)&Hidden.mn.Clear Heropool,
 
-
-
-allitem.learn.sthief.abilitydata.(Fey.n.Death Spell.sd.34-100:0:0:0:76.img.spe37.hsv.68:0:0).mn.Death Spell,
-
-
 (party.((replica.Statue.n.Keyword Heroes.col.j.hp.30.tier.4.sd.101-1:107-4:18-5:157:107:72-2.i.(top.k.rainbow#facade.har47:0).i.(right.k.rainbow#facade.Lem209:0).i.(rightmost.k.managain#k.death#facade.Med3:0).i.(bot.facade.Lem211:0).img.Jumble.hsv.5:19:1.p.100317:003bff:38.p.af905c:da0096:03.p.1e834e:28b040:19).i.(learn.Light).i.(learn.Hack))&hidden).mn.Placeholder Party,
 
 1.ph.4   [sin][light]K[cu][yellow]e[cu][purple]y[cu][orange]w[cu][blue]o[cu][grey]r[cu][green]d [cu][red]H[cu][violet]e[cu][light]r[cu][yellow]o[cu][purple]e[cu][orange]s[cu][sin][nh]
@@ -12,7 +7,6 @@ allitem.learn.sthief.abilitydata.(Fey.n.Death Spell.sd.34-100:0:0:0:76.img.spe37
 [yellow](e[dot]g[dot] [purple]Inflict[cu][light]Bones[cu] is in [purple]Purple[cu] because [purple]Purple[cu] is only in [purple]32 keywords[cu] vs [light]White[cu] with [light]46[cu])[dot][cu].mn.Intro Text,
 
 1.ph.4   [sin][red]Attention![cu][sin][nh]Due to [purple]bugs[cu] in the current version of [light]Slice and Dice 3[dot]3[dot]12[comma][cu] not all heroes are offered from the full hero pool[dot][nh]It is recommended that you include a [blue]blue hero[cu] in your party in order to be offered more choices[comma] and I [light]advise against making mono-colored parties[cu] as they will run out of heroes from the pool[dot][nh][green]Have fun![cu].mn.Intro Text,
-
 
 ((0.x5.ph.s[b][yellow]PICK 5 HEROES![cu][b][nh] [grey]Keywords ordered left to right in order of rarity:[cu][cu]
 @1[light]White[cu]
@@ -856,6 +850,7 @@ heropool.
 
 
 
+allitem.learn.sthief.abilitydata.(Fey.n.Death Spell.sd.34-100:0:0:0:76.img.spe37.hsv.68:0:0).mn.Death Spell,
 
 
 
